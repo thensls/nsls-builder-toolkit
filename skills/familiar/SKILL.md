@@ -4,6 +4,22 @@ version: 1.0.3
 description: Use when the user references past on-screen activity, needs work summaries or status updates, wants to recall or reconstruct what happened, document, asks about decisions made, communication patterns, or time spent, or when brainstorming and planning would benefit from recent screen context.
 ---
 
+## Before You Enable This
+
+This skill uses screen capture data to help you recall what you worked on.
+It records what's on your screen. This is powerful for daily summaries,
+activity reconstruction, and work journals — but it means your screen
+activity is being stored locally.
+
+**This is 100% optional.** The close-day skill works fine without it
+(it uses calendar, Slack, and email instead). Only enable familiar if
+you're comfortable with screen recording and find it valuable.
+
+To enable: Install the Familiar app from https://familiar.app and grant screen recording permission.
+To disable: Quit the Familiar app. The close-day skill will use other sources (calendar, Slack, email) instead.
+
+---
+
 # Familiar Stills Markdown
 
 ## Purpose
