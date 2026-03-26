@@ -1,0 +1,8 @@
+{
+  "name": "nsls-builder-toolkit",
+  "description": "NSLS automation builder toolkit — skills for tracking, designing, deploying, and documenting automations",
+  "author": {
+    "name": "NSLS",
+    "email": "kprentiss@nsls.org"
+  }
+}
