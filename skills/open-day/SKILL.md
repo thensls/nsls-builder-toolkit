@@ -1,6 +1,12 @@
 ---
 name: open-day
-description: Morning routine — pulls calendar, Asana tasks, overdue items, and yesterday's carry-overs to set daily priorities. Trigger phrases: open day, start day, morning, good morning, what's on my plate, what do I have today
+description: >-
+  Morning planning routine — pulls Google Calendar events, Asana tasks,
+  overdue items, and yesterday's carry-overs to set daily priorities and
+  populate the Morning Check-in in today's Obsidian daily note. Use when the
+  user says "open day", "start my day", "morning", "good morning", "what's on
+  my plate", "what do I have today", "plan my day", "daily planning", or opens
+  a new session in the morning. Requires Google Calendar and Asana access.
 ---
 
 # Open Day

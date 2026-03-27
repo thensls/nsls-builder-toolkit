@@ -1,9 +1,12 @@
 ---
 name: pydoc-pipeline
 description: >-
-  Generate documentation from Python code. This skill should be used when
-  the user says "generate docs", "document this code", "pydoc", "create API
-  reference", or is working in a Python repo that needs documentation.
+  Generate documentation from Python code automatically. Extracts docstrings,
+  function signatures, class hierarchies, and module structure into clean
+  markdown docs. Use when the user says "generate docs", "document this code",
+  "pydoc", "create API reference", "write documentation", "autodoc", or is
+  working in a Python repo that needs documentation. Handles single files,
+  modules, and entire packages.
 ---
 
 # pydoc-pipeline

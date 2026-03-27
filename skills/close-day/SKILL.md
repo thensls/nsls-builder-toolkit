@@ -17,7 +17,7 @@ Synthesize Kevin's full day from seven data sources into a daily note and projec
 | Source | What It Covers | Access Method |
 |--------|---------------|---------------|
 | **Google Calendar** | Meetings scheduled, attendees, times | `gcal_list_events` MCP tool |
-| **Familiar** | Screen activity — apps used, window titles, URLs, time distribution | Bash: scan `/Users/k/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md` frontmatter |
+| **Familiar** | Screen activity — apps used, window titles, URLs, time distribution | Bash: scan `$HOME/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md` frontmatter |
 | **Fathom** | Meeting summaries, topics, action items, decisions | Bash: Python script calling Fathom API (see below) |
 | **Sent Email** | Approvals, decisions, outbound communications | `gmail_search_messages` MCP tool (`from:me after:YYYY/M/DD before:YYYY/M/DD+1`) |
 | **Sent Slack** | Conversations, decisions, coordination, context | `slack_search_public_and_private` MCP tool (`from:<@U07TS8X7T7X> on:YYYY-MM-DD`) |
@@ -57,20 +57,20 @@ Scan today's sessions using bash. Do NOT read every OCR file — extract frontma
 
 ```bash
 # Step 1: Get top-level app counts
-grep -h "^app:" /Users/k/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null \
+grep -h "^app:" $HOME/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null \
   | sort | uniq -c | sort -rn
 
 # Step 2: Break down Chrome by window title (the key insight — "Chrome" alone is useless)
 # Use awk to pair app=Chrome with window_title_raw from the same file's frontmatter
 awk '/^app: Google Chrome/{found=1} found && /^window_title_raw:/{print; found=0}' \
-  /Users/k/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null \
+  $HOME/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null \
   | sort | uniq -c | sort -rn
 
 # Step 3: Session and capture counts + active hours
-echo "Sessions: $(ls -d /Users/k/familiar/stills-markdown/session-YYYY-MM-DDT* 2>/dev/null | wc -l)"
-echo "Captures: $(find /Users/k/familiar/stills-markdown/session-YYYY-MM-DDT* -name '*.md' 2>/dev/null | wc -l)"
-FIRST=$(ls /Users/k/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null | head -1 | xargs basename | sed 's/.md//')
-LAST=$(ls /Users/k/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null | tail -1 | xargs basename | sed 's/.md//')
+echo "Sessions: $(ls -d $HOME/familiar/stills-markdown/session-YYYY-MM-DDT* 2>/dev/null | wc -l)"
+echo "Captures: $(find $HOME/familiar/stills-markdown/session-YYYY-MM-DDT* -name '*.md' 2>/dev/null | wc -l)"
+FIRST=$(ls $HOME/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null | head -1 | xargs basename | sed 's/.md//')
+LAST=$(ls $HOME/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null | tail -1 | xargs basename | sed 's/.md//')
 echo "Active: $FIRST to $LAST"
 ```
 

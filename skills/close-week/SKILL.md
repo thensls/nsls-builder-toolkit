@@ -42,7 +42,7 @@ Extract from each:
 ```bash
 for d in Mon Tue Wed Thu Fri; do
   DATE=$(date -v-${offset}d +%Y-%m-%d)  # compute each day
-  grep -h "^app:" /Users/k/familiar/stills-markdown/session-${DATE}T*/*.md 2>/dev/null \
+  grep -h "^app:" $HOME/familiar/stills-markdown/session-${DATE}T*/*.md 2>/dev/null \
     | sort | uniq -c | sort -rn
 done
 ```
@@ -51,7 +51,7 @@ And Chrome breakdown:
 ```bash
 for d in Mon-Fri dates; do
   awk '/^app: Google Chrome/{found=1} found && /^window_title_raw:/{print; found=0}' \
-    /Users/k/familiar/stills-markdown/session-${DATE}T*/*.md 2>/dev/null
+    $HOME/familiar/stills-markdown/session-${DATE}T*/*.md 2>/dev/null
 done | sort | uniq -c | sort -rn
 ```
 

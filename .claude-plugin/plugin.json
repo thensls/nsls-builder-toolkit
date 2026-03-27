@@ -1,8 +1,20 @@
 {
   "name": "nsls-builder-toolkit",
-  "description": "NSLS automation builder toolkit — skills for tracking, designing, deploying, and documenting automations",
+  "version": "2.1.0",
+  "description": "NSLS automation builder toolkit — 19 skills for tracking, designing, deploying, presenting, and documenting automations across two brands (NSLS + Society)",
   "author": {
     "name": "NSLS",
     "email": "kprentiss@nsls.org"
-  }
+  },
+  "repository": "https://github.com/thensls/nsls-builder-toolkit",
+  "keywords": [
+    "nsls",
+    "automation",
+    "slides",
+    "google-workspace",
+    "obsidian",
+    "deployment",
+    "focus-group",
+    "web-research"
+  ]
 }

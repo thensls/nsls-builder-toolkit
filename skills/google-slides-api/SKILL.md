@@ -1,9 +1,13 @@
 ---
 name: google-slides-api
 description: >-
-  Programmatically edit Google Slides using the google-apis-slides_v1 Ruby gem.
-  Use when modifying an existing presentation via API — adding slides, tables,
-  text, styling. Not for creating from scratch (use board-deck skill instead).
+  Programmatically edit existing Google Slides presentations using the Ruby
+  Slides API gem. Add slides, insert tables, update text, apply styling, and
+  manipulate slide elements via API. Use when the user says "edit my slides",
+  "add a slide to the presentation", "update the Google Slides deck",
+  "insert a table in slides", "modify slide content", or provides a Google
+  Slides URL to edit. Not for creating presentations from scratch — use
+  nsls-slides or frontend-slides for that.
 category: google
 version: 1.0.0
 when_to_use: Editing existing Google Slides presentations via API — inserting slides, tables, updating cell content, fixing formatting

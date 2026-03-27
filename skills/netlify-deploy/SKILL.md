@@ -215,7 +215,7 @@ After capturing screenshots, check each slide for:
 
 After visual review:
 
-1. Fix issues in the source file (`/Users/k/Desktop/presentation.html` or equivalent)
+1. Fix issues in the source file (`~/Desktop/presentation.html` or equivalent)
 2. Re-copy to deploy dir: `cp source.html /tmp/site-deploy/index.html`
 3. Re-deploy: `NETLIFY_AUTH_TOKEN=... NETLIFY_SITE_ID=... netlify deploy --dir=. --prod`
 4. Wait ~10-15s for CDN propagation, then re-screenshot

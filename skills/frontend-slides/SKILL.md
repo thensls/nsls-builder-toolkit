@@ -978,7 +978,7 @@ The netlify-deploy skill will:
 4. Report any visual issues found
 
 **Key things to hand off to netlify-deploy:**
-- Path to the final HTML file (e.g., `/Users/k/Desktop/presentation.html`)
+- Path to the final HTML file (e.g., `~/Desktop/presentation.html`)
 - Number of slides (so the Playwright loop knows how many to screenshot)
 - The Netlify site URL/ID if already created, or ask user if they want a new site
 

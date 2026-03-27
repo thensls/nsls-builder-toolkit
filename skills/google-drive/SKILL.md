@@ -1,6 +1,12 @@
 ---
 name: google-drive
-description: Google Drive file management — upload, download, share, search, organize files and folders. Includes upload-and-convert for creating native Google Docs from .docx files with rich formatting.
+description: >-
+  Google Drive file management — upload, download, share, search, organize
+  files and folders. Converts .docx to native Google Docs with formatting.
+  Use when the user says "upload to Drive", "share this file", "put this in
+  Google Docs", "convert to Google Doc", "create a folder", "find file in
+  Drive", or any Google Drive operation. Also triggers on drive.google.com
+  URLs. For reading/editing Google Docs content, use the gws skill instead.
 category: productivity
 version: 2.0.0
 key_capabilities: upload-and-convert, resolve-folder, upload, download, share, search, create-folder, move, copy, delete
