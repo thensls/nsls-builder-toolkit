@@ -6,6 +6,10 @@
         {
           "type": "command",
           "command": "cd \"$HOME/.claude/local-plugins/nsls-builder-toolkit\" && git pull origin main --quiet 2>/dev/null || true"
+        },
+        {
+          "type": "command",
+          "command": "bash \"$HOME/.claude/local-plugins/nsls-builder-toolkit/hooks/sync-pointers.sh\" 2>/dev/null || true"
         }
       ]
     }
