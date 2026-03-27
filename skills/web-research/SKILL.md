@@ -30,7 +30,18 @@ git clone https://github.com/PleasePrompto/google-ai-mode-skill google-ai-mode
 
 On first use, the skill automatically creates a Python venv, installs dependencies, and downloads Chrome. No manual setup needed after the clone.
 
-**First-run note:** The first search may trigger a Google CAPTCHA. If so, re-run with `--show-browser`, solve the CAPTCHA once in the browser window, and all future searches will work headlessly.
+### First-Run Setup (one time only)
+
+Your first search will likely trigger a Google CAPTCHA. This is normal — Google doesn't recognize the new browser yet. Here's how to clear it:
+
+1. Claude will run the search and get a CAPTCHA error (exit code 2)
+2. When that happens, tell Claude: **"run it again with --show-browser"**
+3. A Chrome window will open on your screen showing the Google CAPTCHA
+4. Solve the CAPTCHA (click the checkbox, pick the images, etc.)
+5. The search will complete automatically in the browser
+6. Close the browser window — you're done
+
+After this, Google remembers your browser. All future searches run headlessly with no CAPTCHA. You only do this once.
 
 ## How to Search
 
