@@ -30,24 +30,63 @@ else
   git clone "$REPO_URL" "$PLUGIN_DIR" --quiet
 fi
 
-## Enable plugin in settings.json if not already enabled
+## Enable plugins in settings.json
 SETTINGS="$HOME/.claude/settings.json"
-PLUGIN_KEY="nsls-builder-toolkit@local"
+
+# Plugins to enable: the toolkit + recommended marketplace plugins
+PLUGINS_TO_ENABLE=(
+  "nsls-builder-toolkit@local"
+  "superpowers@claude-plugins-official"
+  "compound-engineering@every-marketplace"
+)
 
 if [ -f "$SETTINGS" ]; then
-  if grep -q "$PLUGIN_KEY" "$SETTINGS" 2>/dev/null; then
-    echo "  Plugin already enabled in settings.json"
-  else
-    python3 -c "
+  python3 -c "
 import json
+plugins = $( printf '%s\n' "${PLUGINS_TO_ENABLE[@]}" | python3 -c "import sys,json; print(json.dumps([l.strip() for l in sys.stdin]))" )
 with open('$SETTINGS') as f: cfg = json.load(f)
-cfg.setdefault('enabledPlugins', {})['$PLUGIN_KEY'] = True
-with open('$SETTINGS', 'w') as f: json.dump(cfg, f, indent=2)
-    " && echo "  Plugin enabled in settings.json" \
-      || echo "  Note: Manually add '\"$PLUGIN_KEY\": true' to enabledPlugins in ~/.claude/settings.json"
+ep = cfg.setdefault('enabledPlugins', {})
+added = []
+for p in plugins:
+    if p not in ep or not ep[p]:
+        ep[p] = True
+        added.append(p)
+if added:
+    with open('$SETTINGS', 'w') as f: json.dump(cfg, f, indent=2)
+    for a in added: print(f'  Enabled: {a}')
+else:
+    print('  All plugins already enabled')
+  " 2>/dev/null || echo "  Note: Could not update settings.json automatically"
+else
+  echo "  Note: No settings.json found — plugins will be enabled on first use"
+fi
+
+## Install marketplace plugins if claude CLI is available
+if command -v claude &>/dev/null; then
+  echo ""
+  echo "Installing recommended plugins..."
+
+  # Superpowers (official marketplace)
+  if ! grep -q "superpowers@claude-plugins-official" "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null; then
+    echo "  Installing superpowers..."
+    claude plugins add superpowers 2>/dev/null || echo "  Note: Install superpowers manually with 'claude plugins add superpowers'"
+  else
+    echo "  superpowers already installed"
+  fi
+
+  # Compound Engineering (every marketplace)
+  if ! grep -q "compound-engineering@every-marketplace" "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null; then
+    echo "  Installing compound-engineering..."
+    claude plugins add compound-engineering --marketplace https://github.com/EveryInc/compound-engineering-plugin 2>/dev/null \
+      || echo "  Note: Install compound-engineering manually — see https://github.com/EveryInc/compound-engineering-plugin"
+  else
+    echo "  compound-engineering already installed"
   fi
 else
-  echo "  Note: No settings.json found — plugin will be enabled on first use"
+  echo ""
+  echo "Recommended plugins (install manually if not already installed):"
+  echo "  claude plugins add superpowers"
+  echo "  claude plugins add compound-engineering  (from https://github.com/EveryInc/compound-engineering-plugin)"
 fi
 
 ## Create slash-command pointer skills in ~/.claude/skills/
