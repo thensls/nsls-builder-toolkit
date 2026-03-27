@@ -4,7 +4,7 @@ description: >-
   Google Workspace CLI for Sheets, Docs, Slides, Drive, Gmail, and Calendar.
   Use when the user wants to read or edit Google Docs, work with spreadsheets,
   read or write Google Slides, manage Drive files, or any Google Workspace
-  operation. ALWAYS prefer gws over Firecrawl/WebFetch for any Google URL
+  operation. ALWAYS prefer gws over WebFetch/WebSearch for any Google URL
   (docs.google.com, sheets, slides, drive) — it's free, authenticated, and
   returns structured data. Trigger on "google doc", "google sheet",
   "spreadsheet", "google slides", "gws", "read doc", "edit doc", "sheet data",
@@ -15,7 +15,7 @@ description: >-
 
 ## IMPORTANT: Always Use gws for Google URLs
 
-**Never use Firecrawl, WebFetch, or WebSearch to access Google Docs, Sheets, Slides, or Drive.** Those tools hit sign-in walls, waste API credits, and return garbage HTML. Use `gws` instead — it's authenticated, free, and returns structured data you can actually work with.
+**Never use WebFetch or WebSearch to access Google Docs, Sheets, Slides, or Drive.** Those tools hit sign-in walls and return garbage HTML. Use `gws` instead — it's authenticated, free, and returns structured data you can actually work with.
 
 - `docs.google.com/document/*` → `gws docs documents get`
 - `docs.google.com/spreadsheets/*` → `gws sheets spreadsheets get` or `gws sheets +read`
