@@ -1,6 +1,11 @@
 ---
 name: frontend-slides
-description: Create stunning, animation-rich HTML presentations from scratch or by converting PowerPoint files. Use when the user wants to build a presentation, convert a PPT/PPTX to web, or create slides for a talk/pitch. Helps non-designers discover their aesthetic through visual exploration rather than abstract choices.
+description: >-
+  Create stunning, animation-rich HTML presentations from scratch or by
+  converting PowerPoint files. Supports NSLS and Society brands. Use when the
+  user wants to build an HTML presentation, convert a PPT/PPTX to web, or
+  create slides for a talk/pitch. Always ask whether the presentation should
+  be NSLS branded, Society branded, or custom styled.
 ---
 
 # Frontend Slides Skill
@@ -245,6 +250,80 @@ After generating, recommend the user test at these sizes:
 
 ---
 
+## Brand Selection (Ask First)
+
+**Before anything else, ask the user:**
+> "Do you want this to be NSLS branded, Society branded, or custom styled?"
+
+- **NSLS** — the honor society brand (nsls.org). Navy/teal/gold, Lexend Deca + Avenir.
+- **Society** — the new brand (Society by the NSLS). Cream/yellow, HW Cigars + Inter.
+- **Custom** — proceed to the normal style discovery flow (Phase 2).
+
+If the user picks NSLS or Society, **skip Phase 2 (Style Discovery)** entirely and use the brand tokens below as CSS custom properties.
+
+### NSLS Brand CSS Tokens
+
+```css
+:root {
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #E5F5F8;
+    --bg-dark: #18315A;
+    --text-primary: #33475B;
+    --text-secondary: #425B76;
+    --text-on-dark: #FFFFFF;
+    --accent: #0091AE;
+    --accent-secondary: #EEB117;
+    --font-display: 'Lexend Deca', sans-serif;
+    --font-body: 'Avenir', 'Avenir Next', system-ui, sans-serif;
+}
+```
+
+Google Fonts link: `<link href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;500;600;700&display=swap" rel="stylesheet">`
+
+**NSLS section divider slides**: Use `--bg-dark` (#18315A navy) background with white text and `--accent-secondary` (#EEB117 gold) accent line.
+
+**NSLS content slides**: White background, `--text-primary` (#33475B blue-gray) text, `--accent` (#0091AE teal) for links/highlights.
+
+### Society Brand CSS Tokens
+
+```css
+:root {
+    --bg-primary: #FAF8EE;
+    --bg-secondary: #FFFFFF;
+    --bg-dark: #201414;
+    --text-primary: #201414;
+    --text-secondary: #C8BDAF;
+    --text-on-dark: #FAF8EE;
+    --accent: #F2DA4E;
+    --accent-secondary: #969BDE;
+    --font-display: 'HW Cigars Medium', serif;
+    --font-body: 'Inter', sans-serif;
+}
+```
+
+Google Fonts link (Inter only — HW Cigars is a purchased font, must be self-hosted or installed locally): `<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">`
+
+For HW Cigars in HTML, use `@font-face` with a local() fallback:
+```css
+@font-face {
+    font-family: 'HW Cigars Medium';
+    src: local('HW Cigars Medium');
+    font-weight: normal;
+}
+```
+
+**Society section divider slides**: Use `--accent` (#F2DA4E yellow) or `--bg-dark` (#201414 espresso) backgrounds.
+
+**Society content slides**: Cream background, espresso text, yellow accent rules.
+
+**Additional Society accent colors** (for variety in section slides, quotes, cards):
+- Lavender: `#969BDE`
+- Pink: `#F3AEE6`
+- Green: `#9BD778`
+- Taupe: `#C8BDAF`
+
+---
+
 ## Phase 0: Detect Mode
 
 First, determine what the user wants:
@@ -299,6 +378,8 @@ If user has content, ask them to share it (text, bullet points, images, etc.).
 ---
 
 ## Phase 2: Style Discovery (Visual Exploration)
+
+**Skip this phase if the user chose NSLS or Society brand.** Use the brand tokens from the Brand Selection section above and proceed directly to Phase 3.
 
 **CRITICAL: This is the "show, don't tell" phase.**
 
