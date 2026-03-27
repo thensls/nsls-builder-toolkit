@@ -30,6 +30,26 @@ else
   git clone "$REPO_URL" "$PLUGIN_DIR" --quiet
 fi
 
+## Enable plugin in settings.json if not already enabled
+SETTINGS="$HOME/.claude/settings.json"
+PLUGIN_KEY="nsls-builder-toolkit@local"
+
+if [ -f "$SETTINGS" ]; then
+  if grep -q "$PLUGIN_KEY" "$SETTINGS" 2>/dev/null; then
+    echo "  Plugin already enabled in settings.json"
+  else
+    python3 -c "
+import json
+with open('$SETTINGS') as f: cfg = json.load(f)
+cfg.setdefault('enabledPlugins', {})['$PLUGIN_KEY'] = True
+with open('$SETTINGS', 'w') as f: json.dump(cfg, f, indent=2)
+    " && echo "  Plugin enabled in settings.json" \
+      || echo "  Note: Manually add '\"$PLUGIN_KEY\": true' to enabledPlugins in ~/.claude/settings.json"
+  fi
+else
+  echo "  Note: No settings.json found — plugin will be enabled on first use"
+fi
+
 echo ""
 echo "NSLS Builder Toolkit installed!"
 echo ""
