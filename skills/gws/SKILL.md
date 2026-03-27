@@ -1,32 +1,54 @@
 ---
 name: gws
 description: >-
-  Google Workspace Sheets CLI for reading, writing, and formatting Google
-  Sheets. This skill should be used when the user wants to work with
-  spreadsheets, create sheets, read data from Google Sheets, write data,
-  format cells, or automate spreadsheet operations. Trigger on "spreadsheet",
-  "google sheets", "gws", "sheet data", "read sheet", "write to sheet".
+  Google Workspace CLI for Sheets, Docs, Slides, Drive, Gmail, and Calendar.
+  Use when the user wants to read or edit Google Docs, work with spreadsheets,
+  read or write Google Slides, manage Drive files, or any Google Workspace
+  operation. ALWAYS prefer gws over Firecrawl/WebFetch for any Google URL
+  (docs.google.com, sheets, slides, drive) — it's free, authenticated, and
+  returns structured data. Trigger on "google doc", "google sheet",
+  "spreadsheet", "google slides", "gws", "read doc", "edit doc", "sheet data",
+  "read sheet", "write to sheet", "google drive".
 ---
 
 # gws — Google Workspace CLI
 
+## IMPORTANT: Always Use gws for Google URLs
+
+**Never use Firecrawl, WebFetch, or WebSearch to access Google Docs, Sheets, Slides, or Drive.** Those tools hit sign-in walls, waste API credits, and return garbage HTML. Use `gws` instead — it's authenticated, free, and returns structured data you can actually work with.
+
+- `docs.google.com/document/*` → `gws docs documents get`
+- `docs.google.com/spreadsheets/*` → `gws sheets spreadsheets get` or `gws sheets +read`
+- `docs.google.com/presentation/*` → `gws slides presentations get`
+- `drive.google.com/*` → `gws drive files get`
+
 ## What This Does
 
-Wraps the `gws` CLI to interact with Google Sheets (and other Google Workspace services) from the command line. Use it any time you need to read data from a sheet, write or append rows, create a new spreadsheet, format cells, or run batch updates.
+Wraps the `gws` CLI to interact with all Google Workspace services from the command line. Supports Sheets, Docs, Slides, Drive, Gmail, Calendar, and more.
 
-The CLI follows a consistent pattern: `gws <service> <resource> [sub-resource] <method> [flags]`. For Sheets, the service is always `sheets`.
+The CLI follows a consistent pattern: `gws <service> <resource> [sub-resource] <method> [flags]`.
 
-Full reference: `/Users/k/nsls-skills/nsls-builder-toolkit/skills/gws/references/gws-reference.md`
+Full reference: `references/gws-reference.md` (relative to this skill)
 
 ---
 
-## Prerequisites
+## Prerequisites — Auto-Install
 
-The `gws` binary must be at `~/bin/gws` or on your PATH. It is sourced from:
+If `gws` is not on the PATH, install it:
 
-- GitHub: https://github.com/googleworkspace/cli
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/googleworkspace/cli/releases/latest/download/google-workspace-cli-installer.sh | sh
+```
 
-If that repo doesn't exist or the binary isn't available, message Kevin in Slack for the binary.
+This installs the latest release from https://github.com/googleworkspace/cli.
+
+After install, authenticate:
+
+```bash
+gws auth login
+```
+
+This opens a browser for Google OAuth2. Credentials are stored at `~/.config/gws`.
 
 ---
 
@@ -202,14 +224,111 @@ gws sheets spreadsheets values update --dry-run \
 
 **`sheetId` in batchUpdate is an integer, not the spreadsheet ID.** Get it from `spreadsheets get` — it's `sheets[].properties.sheetId` (usually 0 for the first tab).
 
-**Use `gws schema` to explore the full API surface.**
+---
+
+## Google Docs
+
+### Read a document
+
 ```bash
-gws schema sheets.spreadsheets.values.update --resolve-refs
-gws schema sheets.spreadsheets.batchUpdate --resolve-refs
+# Get full document structure (JSON with content, styles, positions)
+gws docs documents get --params '{"documentId": "DOC_ID"}'
+
+# Extract plain text from a doc
+gws docs documents get --params '{"documentId": "DOC_ID"}' | tail -n +2 | python3 -c "
+import json, sys
+doc = json.load(sys.stdin)
+for elem in doc.get('body', {}).get('content', []):
+    if 'paragraph' in elem:
+        for e in elem['paragraph'].get('elements', []):
+            print(e.get('textRun', {}).get('content', ''), end='')
+"
 ```
 
-**Exit codes:**
+The document ID is the long string between `/d/` and `/edit` in the URL:
+`https://docs.google.com/document/d/DOC_ID/edit`
+
+### Edit a document (find and replace)
+
+```bash
+gws docs documents batchUpdate --params '{"documentId": "DOC_ID"}' --json '{
+  "requests": [
+    {
+      "replaceAllText": {
+        "containsText": {"text": "old text", "matchCase": true},
+        "replaceText": "new text"
+      }
+    }
+  ]
+}'
+```
+
+### Edit a document (insert/delete by position)
+
+Use `insertText` and `deleteContentRange` with character indices from the document structure:
+
+```bash
+gws docs documents batchUpdate --params '{"documentId": "DOC_ID"}' --json '{
+  "requests": [
+    {"deleteContentRange": {"range": {"startIndex": 100, "endIndex": 150}}},
+    {"insertText": {"location": {"index": 100}, "text": "New content here"}}
+  ]
+}'
+```
+
+**Important:** When mixing inserts and deletes in one batch, process from end to start so indices don't shift.
+
+---
+
+## Google Slides
+
+### Read a presentation
+
+```bash
+gws slides presentations get --params '{"presentationId": "PRES_ID"}'
+```
+
+### Create a presentation
+
+```bash
+gws slides presentations create --json '{"title": "My Presentation"}'
+```
+
+---
+
+## Google Drive
+
+### List files
+
+```bash
+gws drive files list --params '{"pageSize": 10, "q": "name contains '\''report'\''"}'
+```
+
+### Download/export a file
+
+```bash
+# Export a Google Doc as PDF
+gws drive files export --params '{"fileId": "FILE_ID", "mimeType": "application/pdf"}' --output doc.pdf
+```
+
+---
+
+## Explore the Full API
+
+Use `gws schema` to discover any method across all services:
+
+```bash
+gws schema docs.documents.batchUpdate --resolve-refs
+gws schema sheets.spreadsheets.values.update --resolve-refs
+gws schema slides.presentations.get --resolve-refs
+gws schema drive.files.list --resolve-refs
+```
+
+---
+
+## Exit Codes
+
 - `0` — success
 - `1` — API error (Google returned an error response)
-- `2` — auth error (credentials missing or expired)
+- `2` — auth error (credentials missing or expired — re-run `gws auth login`)
 - `3` — validation error (bad arguments)
