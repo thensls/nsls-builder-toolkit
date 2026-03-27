@@ -1,3 +1,11 @@
+---
+name: log
+description: >-
+  Log session progress to Obsidian project notes — captures what was built,
+  decided, and what's next. Run at end of working sessions. Trigger on /log,
+  "log this", "save progress", "update the project doc", "obsidian log".
+---
+
 # Obsidian Project Logger
 
 Log progress, decisions, plans, and next steps from a working session into the correct Obsidian project file. Works for any project — skill files, new ideas, ongoing builds.
