@@ -1,32 +1,46 @@
 ---
 name: nsls-slides
 description: >-
-  Generate on-brand NSLS/Society PowerPoint presentations and upload them to
-  Google Drive as Google Slides. Uses Society brand fonts (HW Cigars + Inter)
-  and color palette. Trigger phrases: nsls slides, make a presentation, create
-  slides, build a deck, society presentation, nsls deck, pptx
+  Generate on-brand NSLS or Society PowerPoint presentations and upload them to
+  Google Drive as Google Slides. Supports two brands: NSLS (honor society —
+  Lexend Deca + Avenir, navy/teal/gold) and Society (by the NSLS — HW Cigars +
+  Inter, cream/yellow). Always ask the user which brand before creating slides.
+  Trigger phrases: nsls slides, make a presentation, create slides, build a
+  deck, society presentation, nsls deck, pptx
 category: nsls
-version: 1.0.0
+version: 2.0.0
 key_capabilities: pptx_creator.py, upload-and-convert
-when_to_use: Generating branded NSLS/Society slide decks, presentations, pitch decks
+when_to_use: Generating branded NSLS or Society slide decks, presentations, pitch decks
 ---
 
 # NSLS Slides Skill
 
 ## Purpose
 
-Generate branded NSLS/Society PowerPoint presentations from structured JSON content
+Generate branded PowerPoint presentations from structured JSON content
 and upload them to Google Drive as native Google Slides.
+
+**Before creating any slides, ask the user:**
+> "Do you want this to be NSLS branded, or Society branded?"
+
+- **NSLS** — the honor society brand (nsls.org). Navy/teal/gold, Lexend Deca + Avenir.
+- **Society** — the new brand (Society by the NSLS). Cream/yellow, HW Cigars + Inter.
+
+Pass `--brand nsls` or `--brand society` to `pptx_creator.py`.
 
 **Pipeline** (mirrors the `.docx` → Google Doc workflow exactly):
 1. Claude generates slide content as JSON
-2. `pptx_creator.py` builds a branded `.pptx`
+2. `pptx_creator.py --brand {nsls|society}` builds a branded `.pptx`
 3. `drive_manager.rb upload-and-convert` uploads + converts to Google Slides
 4. Returns the Google Slides URL
 
+---
+
 ## Brand Tokens
 
-### Colors
+### Society Brand (default — `--brand society`)
+
+#### Colors
 
 | Name      | Hex       | Usage                          |
 |-----------|-----------|--------------------------------|
@@ -38,23 +52,46 @@ and upload them to Google Drive as native Google Slides.
 | green     | `#9BD778` | Accent                         |
 | taupe     | `#C8BDAF` | Accent, neutral warmth         |
 
-### Typography
+#### Typography
 
-| Role      | Font              | Size  | Leading | Tracking |
-|-----------|-------------------|-------|---------|----------|
-| Logotype  | HW Cigars SemiBold| —     | —       | —        |
-| Headline  | HW Cigars Medium  | 70pt  | 70pt    | -5       |
-| Subhead   | Inter Regular     | 25pt  | 28pt    | 0        |
-| Body      | Inter Regular     | 10pt  | 15pt    | 0        |
-| Buttons   | Inter Regular     | 10pt  | —       | +5       |
+| Role      | Font              | Size  |
+|-----------|-------------------|-------|
+| Headline  | HW Cigars Medium  | 70pt  |
+| Logotype  | HW Cigars SemiBold| —     |
+| Body      | Inter Regular     | 10pt  |
 
-*Note: pptx_creator.py uses proportionally scaled sizes optimized for slide legibility.*
+**Fonts**: HW Cigars — purchased from Heavyweight type foundry, installed at `~/Library/Fonts/`. Inter — free Google font.
 
-### Fonts
+**Valid `bg` values**: `cream`, `yellow`, `lavender`, `pink`, `green`, `taupe`, `espresso`
 
-- **HW Cigars**: Purchased from Heavyweight type foundry. Installed at `~/Library/Fonts/`.
-  Files: `HW Cigars Medium.otf`, `HW Cigars SemiBold.otf`
-- **Inter**: Free Google variable font. Use system name `"Inter"`.
+---
+
+### NSLS Brand (`--brand nsls`)
+
+#### Colors
+
+| Name      | Hex       | Usage                          |
+|-----------|-----------|--------------------------------|
+| white     | `#FFFFFF` | Primary background             |
+| navy      | `#18315A` | Dark backgrounds, accent       |
+| darkblue  | `#425B76` | Secondary text / backgrounds   |
+| bluegray  | `#33475B` | Primary text                   |
+| teal      | `#0091AE` | Links, CTA accent              |
+| gold      | `#EEB117` | Honor society gold accent      |
+| lightblue | `#E5F5F8` | Light accent backgrounds       |
+| nearblack | `#191919` | Near-black text                |
+
+#### Typography
+
+| Role      | Font         | Size  |
+|-----------|-------------|-------|
+| Headline  | Lexend Deca | 70pt  |
+| Logotype  | Lexend Deca | —     |
+| Body      | Avenir      | 10pt  |
+
+**Fonts**: Lexend Deca — free Google font. Avenir — macOS system font.
+
+**Valid `bg` values**: `white`, `navy`, `darkblue`, `bluegray`, `teal`, `gold`, `lightblue`, `nearblack`
 
 ## Slide Layouts
 
@@ -130,16 +167,20 @@ Claude drafts the slide structure as JSON. Work with Kevin to define:
 ### Step 2 — Generate the .pptx (and optionally a PDF)
 
 ```bash
-# PPTX only
+# Society brand (default)
 echo '<json>' | /tmp/brand-env/bin/python3 \
   ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
-  --output /tmp/presentation.pptx
+  --brand society --output /tmp/presentation.pptx
 
-# PPTX + PDF (PDF renders HW Cigars correctly everywhere, including Google Drive)
+# NSLS brand
 echo '<json>' | /tmp/brand-env/bin/python3 \
   ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
-  --output /tmp/presentation.pptx \
-  --pdf
+  --brand nsls --output /tmp/presentation.pptx
+
+# Add --pdf for font-safe PDF export (works with either brand)
+echo '<json>' | /tmp/brand-env/bin/python3 \
+  ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
+  --brand society --output /tmp/presentation.pptx --pdf
 ```
 
 **Font rendering by format:**

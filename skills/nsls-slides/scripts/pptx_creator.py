@@ -59,7 +59,8 @@ from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE
 
 # ── Brand Tokens ────────────────────────────────────────────────────────────
 
-COLORS = {
+# --- Society brand (by the NSLS) — Cigars + Inter, cream/yellow palette ---
+SOCIETY_COLORS = {
     "cream":    RGBColor(0xFA, 0xF8, 0xEE),  # #FAF8EE — primary background
     "espresso": RGBColor(0x20, 0x14, 0x14),  # #201414 — primary text / dark bg
     "yellow":   RGBColor(0xF2, 0xDA, 0x4E),  # #F2DA4E
@@ -70,18 +71,15 @@ COLORS = {
     "white":    RGBColor(0xFF, 0xFF, 0xFF),
 }
 
-# Backgrounds where espresso text has low contrast — use cream text instead
-DARK_BGS = {"espresso"}
+SOCIETY_DARK_BGS = {"espresso"}
 
-FONTS = {
+SOCIETY_FONTS = {
     "headline": "HW Cigars Medium",
     "logotype": "HW Cigars SemiBold",
     "body":     "Inter",
 }
 
-# Fonts to embed in the PPTX binary (Inter is a Google Font — no embedding needed)
-# style: "regular" | "bold" | "italic" | "boldItalic"
-EMBED_FONTS = [
+SOCIETY_EMBED_FONTS = [
     {
         "typeface": "HW Cigars Medium",
         "style":    "regular",
@@ -93,6 +91,51 @@ EMBED_FONTS = [
         "path":     os.path.expanduser("~/Library/Fonts/HW Cigars SemiBold.otf"),
     },
 ]
+
+# --- NSLS brand (honor society) — Lexend Deca + Avenir, navy/teal/gold palette ---
+NSLS_COLORS = {
+    "white":     RGBColor(0xFF, 0xFF, 0xFF),  # #FFFFFF — primary background
+    "navy":      RGBColor(0x18, 0x31, 0x5A),  # #18315A — dark bg / accent
+    "darkblue":  RGBColor(0x42, 0x5B, 0x76),  # #425B76 — secondary text / bg
+    "bluegray":  RGBColor(0x33, 0x47, 0x5B),  # #33475B — primary text
+    "teal":      RGBColor(0x00, 0x91, 0xAE),  # #0091AE — links / CTA accent
+    "gold":      RGBColor(0xEE, 0xB1, 0x17),  # #EEB117 — honor society gold
+    "lightblue": RGBColor(0xE5, 0xF5, 0xF8),  # #E5F5F8 — light accent bg
+    "nearblack": RGBColor(0x19, 0x19, 0x19),  # #191919 — near-black text
+}
+
+NSLS_DARK_BGS = {"navy", "darkblue", "bluegray", "nearblack"}
+
+NSLS_FONTS = {
+    "headline": "Lexend Deca",
+    "logotype": "Lexend Deca",
+    "body":     "Avenir",
+}
+
+NSLS_EMBED_FONTS = []  # Lexend Deca and Avenir are system/Google fonts — no embedding needed
+
+# --- Active brand (set by --brand flag, defaults to Society) ---
+COLORS = SOCIETY_COLORS
+DARK_BGS = SOCIETY_DARK_BGS
+FONTS = SOCIETY_FONTS
+EMBED_FONTS = SOCIETY_EMBED_FONTS
+
+
+def set_brand(brand_name):
+    """Switch the active brand tokens. Called from main() based on --brand flag."""
+    global COLORS, DARK_BGS, FONTS, EMBED_FONTS
+    if brand_name == "nsls":
+        COLORS = NSLS_COLORS
+        DARK_BGS = NSLS_DARK_BGS
+        FONTS = NSLS_FONTS
+        EMBED_FONTS = NSLS_EMBED_FONTS
+    elif brand_name == "society":
+        COLORS = SOCIETY_COLORS
+        DARK_BGS = SOCIETY_DARK_BGS
+        FONTS = SOCIETY_FONTS
+        EMBED_FONTS = SOCIETY_EMBED_FONTS
+    else:
+        raise ValueError(f"Unknown brand: {brand_name!r}. Use 'nsls' or 'society'.")
 
 # OOXML namespace constants for font embedding
 _PRES_NS     = "http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -206,19 +249,36 @@ def new_presentation():
     return prs
 
 
-def blank_slide(prs, bg="cream"):
+def _default_bg():
+    """Return the brand's default background color name."""
+    return "cream" if "cream" in COLORS else "white"
+
+
+def _light_text():
+    """Return the brand's light text color (for dark backgrounds)."""
+    return COLORS.get("cream", COLORS.get("white"))
+
+
+def _dark_text():
+    """Return the brand's dark text color (for light backgrounds)."""
+    return COLORS.get("espresso", COLORS.get("bluegray", COLORS.get("nearblack")))
+
+
+def blank_slide(prs, bg=None):
     """Add a completely blank slide with a solid brand background."""
+    if bg is None:
+        bg = _default_bg()
     blank_layout = prs.slide_layouts[6]  # index 6 = Blank in default template
     slide = prs.slides.add_slide(blank_layout)
     fill = slide.background.fill
     fill.solid()
-    fill.fore_color.rgb = COLORS.get(bg, COLORS["cream"])
+    fill.fore_color.rgb = COLORS.get(bg, COLORS[_default_bg()])
     return slide
 
 
 def text_color_for_bg(bg):
-    """Return espresso for light backgrounds, cream for dark."""
-    return COLORS["cream"] if bg in DARK_BGS else COLORS["espresso"]
+    """Return light text for dark backgrounds, dark text for light."""
+    return _light_text() if bg in DARK_BGS else _dark_text()
 
 
 def add_textbox(slide, left, top, width, height, text,
@@ -257,8 +317,15 @@ def add_bullets(slide, left, top, width, height, items,
     return txBox
 
 
-def add_rule(slide, left, top, width, color_key="yellow"):
+def _accent_color():
+    """Return the brand's accent color name (yellow for Society, gold for NSLS)."""
+    return "yellow" if "yellow" in COLORS else "gold"
+
+
+def add_rule(slide, left, top, width, color_key=None):
     """Add a thin horizontal rule (1.5pt tall colored rectangle)."""
+    if color_key is None:
+        color_key = _accent_color()
     shape = slide.shapes.add_shape(
         MSO_AUTO_SHAPE_TYPE.RECTANGLE,
         left, top, width, RULE_H,
@@ -276,7 +343,7 @@ def build_title_slide(prs, data):
 
     Fields: headline (str), subhead (str, optional)
     """
-    slide = blank_slide(prs, bg="cream")
+    slide = blank_slide(prs)
     headline = data.get("headline", "")
     subhead = data.get("subhead", "")
 
@@ -288,7 +355,7 @@ def build_title_slide(prs, data):
         text=headline,
         font_name=FONTS["headline"],
         size=Pt(56),
-        color=COLORS["espresso"],
+        color=_dark_text(),
         align=PP_ALIGN.LEFT,
     )
 
@@ -301,7 +368,7 @@ def build_title_slide(prs, data):
             text=subhead,
             font_name=FONTS["body"],
             size=Pt(20),
-            color=COLORS["espresso"],
+            color=_dark_text(),
             align=PP_ALIGN.LEFT,
         )
 
@@ -314,7 +381,7 @@ def build_section_slide(prs, data):
 
     Fields: text (str), bg (color key, default "yellow")
     """
-    bg = data.get("bg", "yellow")
+    bg = data.get("bg", _accent_color())
     slide = blank_slide(prs, bg=bg)
     text = data.get("text", "")
 
@@ -337,7 +404,7 @@ def build_content_slide(prs, data):
 
     Fields: title (str), body (str, optional), bullets (list[str], optional)
     """
-    slide = blank_slide(prs, bg="cream")
+    slide = blank_slide(prs)
     title = data.get("title", "")
     body = data.get("body", "")
     bullets = data.get("bullets", [])
@@ -350,7 +417,7 @@ def build_content_slide(prs, data):
         text=title,
         font_name=FONTS["headline"],
         size=Pt(32),
-        color=COLORS["espresso"],
+        color=_dark_text(),
     )
 
     # Yellow rule below title
@@ -367,7 +434,7 @@ def build_content_slide(prs, data):
             text=body,
             font_name=FONTS["body"],
             size=Pt(17),
-            color=COLORS["espresso"],
+            color=_dark_text(),
         )
         content_top += Inches(1.3)
         content_h -= Inches(1.3)
@@ -380,7 +447,7 @@ def build_content_slide(prs, data):
             items=bullets,
             font_name=FONTS["body"],
             size=Pt(17),
-            color=COLORS["espresso"],
+            color=_dark_text(),
         )
 
     return slide
@@ -392,7 +459,7 @@ def build_two_column_slide(prs, data):
 
     Fields: title (str), left (str), right (str)
     """
-    slide = blank_slide(prs, bg="cream")
+    slide = blank_slide(prs)
     title = data.get("title", "")
     left_text = data.get("left", "")
     right_text = data.get("right", "")
@@ -408,7 +475,7 @@ def build_two_column_slide(prs, data):
         text=title,
         font_name=FONTS["headline"],
         size=Pt(32),
-        color=COLORS["espresso"],
+        color=_dark_text(),
     )
 
     add_rule(slide, left=MH, top=Inches(1.6), width=CW)
@@ -423,7 +490,7 @@ def build_two_column_slide(prs, data):
         text=left_text,
         font_name=FONTS["body"],
         size=Pt(16),
-        color=COLORS["espresso"],
+        color=_dark_text(),
     )
 
     add_textbox(
@@ -433,7 +500,7 @@ def build_two_column_slide(prs, data):
         text=right_text,
         font_name=FONTS["body"],
         size=Pt(16),
-        color=COLORS["espresso"],
+        color=_dark_text(),
     )
 
     return slide
@@ -445,7 +512,7 @@ def build_quote_slide(prs, data):
 
     Fields: text (str), attribution (str, optional), bg (color key, default "yellow")
     """
-    bg = data.get("bg", "yellow")
+    bg = data.get("bg", _accent_color())
     slide = blank_slide(prs, bg=bg)
     text = data.get("text", "")
     attribution = data.get("attribution", "")
@@ -538,9 +605,13 @@ def main():
     )
     parser.add_argument("--input",  "-i", help="JSON input file (default: stdin)")
     parser.add_argument("--output", "-o", required=True, help="Output .pptx path")
+    parser.add_argument("--brand", "-b", choices=["society", "nsls"], default="society",
+                        help="Brand: 'society' (Cigars+Inter, cream/yellow) or 'nsls' (Lexend Deca+Avenir, navy/teal/gold)")
     parser.add_argument("--pdf", action="store_true",
                         help="Also export a PDF via Keynote (fonts render correctly everywhere)")
     args = parser.parse_args()
+
+    set_brand(args.brand)
 
     if args.input:
         with open(args.input) as f:
