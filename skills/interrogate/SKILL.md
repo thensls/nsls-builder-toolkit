@@ -1,0 +1,216 @@
+---
+name: interrogate
+description: >-
+  Interrogate a project or automation idea until goals, scope, risks, audience,
+  and trade-offs are crystal clear. Produces an Obsidian project file, DESIGN.md,
+  and Automation Tracker registration. Use when the user says "interrogate this",
+  "new project", "new automation", "I have an idea", "help me scope this",
+  "define this project", "what should I build", or is starting something new
+  and needs to think it through before building. Also use when a builder wants
+  to register an automation they've built but hasn't documented it yet.
+---
+
+# Interrogate
+
+Interrogate the user relentlessly about every aspect of their project or automation until you reach a shared understanding. Walk down each branch of the decision tree — goals, scope, audience, stakeholders, dependencies, risks, metrics — resolving them one by one.
+
+If a question can be answered by checking existing project docs or dashboards, have the user point you there and treat those as the source of truth instead.
+
+**This skill does not write code.** It produces three outputs:
+1. An **Obsidian project home note** (if the user uses Obsidian)
+2. A **DESIGN.md** file (for automations with user-facing interactions)
+3. An **Automation Tracker registration** (via the register-automation skill)
+
+---
+
+## Step 1: Establish Context
+
+Ask these first — one at a time, not a wall of questions:
+
+1. **"What are you building?"** — Get a plain-language description. No jargon.
+2. **"Who is it for?"** — Specific people or roles, not "the team." How many? What's their tech comfort?
+3. **"What problem does it solve?"** — What's painful today? What does the user currently do manually?
+
+If the user already has a repo, scan it:
+```bash
+# Check for existing docs
+ls README.md DESIGN.md CLAUDE.md docs/ 2>/dev/null
+git remote -v 2>/dev/null
+```
+
+If they have existing docs, read them and skip questions they already answer.
+
+---
+
+## Step 2: Walk the Decision Tree
+
+Go through each branch. Ask one question, wait for the answer, then follow up or move to the next branch. Don't rush.
+
+### Goals
+- What does success look like in 30 days? 90 days?
+- What's the single most important outcome?
+- How will you know it's working? (Not "metrics" — what would you observe?)
+
+### Scope
+- **Stage**: Is this an idea, prototype, production tool, or something already running?
+- **Department**: Which NSLS department owns this? (People/HR, Client Services, Marketing, Finance, SLT, Product, Engineering)
+- **Reach**: Personal (just you), Team (your department), Department+ (cross-team), Org-wide?
+- What's explicitly NOT in scope? (This prevents scope creep later)
+
+### Audience / Customers
+For each user segment:
+- Who are they? (role, name if known, count)
+- When do they encounter this? (trigger, context, mindset)
+- What do they actually do? (their actions, not the system's)
+- What do they see back? (output, confirmation, result)
+
+### Stakeholders & Collaborators
+- Who else cares about this? (manager, sponsor, DRI)
+- Who needs to approve before it ships?
+- Who will maintain it after you move on?
+
+### Dependencies
+- What systems does this connect to? (Airtable, Slack, Google Workspace, Railway, etc.)
+- What access do you need that you don't have?
+- Is anything blocking you from starting today?
+
+### Risks & Trade-offs
+- What could go wrong? (data quality, user confusion, breaking existing workflows)
+- What are you choosing NOT to do, and why?
+- What's the rollback plan if it doesn't work?
+
+### Metrics
+- How will you measure adoption? (concrete: "X of Y people use it weekly")
+- How will you measure satisfaction? (concrete: response rate, feedback, opt-out rate)
+- What's a red flag that means you should stop or pivot?
+
+---
+
+## Step 3: Synthesize and Confirm
+
+After the interrogation, present a summary back to the user:
+
+```
+Here's what I understand:
+
+**Project**: [name]
+**Problem**: [one sentence]
+**Solution**: [one sentence]
+**Audience**: [who, how many]
+**Scope**: [stage, department, reach]
+**Success looks like**: [observable outcome]
+**Key risk**: [biggest thing that could go wrong]
+**Dependencies**: [systems, access, people]
+
+Does this look right? What did I miss?
+```
+
+Wait for confirmation. Iterate if needed.
+
+---
+
+## Step 4: Write the Outputs
+
+After the user confirms, produce all three outputs.
+
+### 4A: Obsidian Project Home Note
+
+Check if the user has an Obsidian vault:
+```bash
+[ -d "$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents" ] && echo "obsidian" || echo "no-obsidian"
+```
+
+If yes, create the project home note. Use the template from the `/log` skill:
+
+```
+~/Library/Mobile Documents/iCloud~md~obsidian/Documents/KP/20-projects/[slug]/[slug].md
+```
+
+**Frontmatter fields** (map from interrogation answers):
+
+```yaml
+---
+title: "[Project Name]"
+aliases:
+  - "[Short Name]"
+type: project
+collaborators:
+  - "[[Collaborator Name]]"
+repos:
+  - "thensls/[repo-name]"
+status: [idea | active | paused | done]
+priority: [1-5, where 1 is highest]
+energy: [low | medium | high]
+domain: [nsls | personal-productivity | slt-ops | people-ops | personal]
+department: "[Department Name]"
+tags:
+  - [relevant-tag]
+blocked-by: [dependency or empty]
+next-action: "[First concrete step]"
+last-touched: [today's date YYYY-MM-DD]
+---
+```
+
+**Body sections:**
+- **What This Is** — from Step 1 answers
+- **Current Phase** — from scope/stage
+- **Key Decisions** — from trade-offs discussed
+- **Open Questions** — anything unresolved from the interrogation
+
+Also create the first session log at `sessions/YYYY-MM-DD.md`.
+
+### 4B: DESIGN.md
+
+If the automation has user-facing interactions (Slack messages, emails, web UI, scheduled prompts), generate a DESIGN.md.
+
+Read the full template at: `~/.claude/local-plugins/nsls-builder-toolkit/skills/product-design/references/design-md-template.md`
+
+Map interrogation answers to template sections:
+- **What This Is** ← Step 1 problem/solution
+- **Customers** ← Step 2 audience segments
+- **UX Principles** ← derive from audience context and risks (4-7 principles)
+- **What This Should NOT Become** ← Step 2 scope exclusions and risks
+- **Interaction Surface** ← Step 2 audience "what do they do / what do they see"
+- **Measuring Success** ← Step 2 metrics
+
+If the automation is purely backend (no user interaction), skip DESIGN.md and note why.
+
+### 4C: Register in Automation Tracker
+
+Use the `register-automation` skill to register or update the automation in Airtable. Map fields:
+
+| Interrogation answer | Tracker field |
+|---------------------|---------------|
+| Project name | `name` |
+| Plain-language description | `description` |
+| Department | `department` |
+| Stage (idea/prototype/production) | `stage` |
+| Reach (personal/team/dept/org) | `scope` |
+| GitHub repo URL | `github_repo_url` |
+| Builder name | `builder_name` |
+| DESIGN.md exists | `design_intent: true` |
+
+If the user doesn't want to register yet (it's just an idea), skip this step and note it as a next action.
+
+---
+
+## Step 5: Present and Confirm
+
+Show the user what was created:
+
+```
+Created:
+- Obsidian project: 20-projects/[slug]/[slug].md
+- DESIGN.md: [repo path]/DESIGN.md (if applicable)
+- Automation Tracker: [registered / skipped — register when ready]
+
+Next action: [first concrete step from the interrogation]
+```
+
+---
+
+## Tone
+
+Be thorough but not tedious. If the user gives a long answer that covers multiple branches, acknowledge what's covered and skip those questions. If they say "I don't know yet," that's a valid answer — note it as an open question and move on.
+
+The goal is shared understanding, not a form to fill out.
