@@ -30,13 +30,28 @@ from pathlib import Path
 import httpx
 
 FATHOM_BASE = "https://api.fathom.ai/external/v1"
-MEETINGS_URL = (
+MEETINGS_URL_BASE = (
     f"{FATHOM_BASE}/meetings"
     "?calendar_invitees_domains_type=all"
     "&include_action_items=true"
     "&include_summary=true"
-    "&created_after=2023-01-01"
 )
+
+
+def build_meetings_url(after_date: str | None = None, before_date: str | None = None) -> str:
+    """Build Fathom meetings URL with date-scoped params.
+
+    When dates are provided, uses created_after/created_before API params
+    to avoid paginating through all meetings since 2023.
+    """
+    url = MEETINGS_URL_BASE
+    if after_date:
+        url += f"&created_after={after_date}T00:00:00Z"
+    else:
+        url += "&created_after=2023-01-01"
+    if before_date:
+        url += f"&created_before={before_date}T23:59:59Z"
+    return url
 
 CACHE_DIR = Path.home() / ".cache" / "person-intelligence"
 CACHE_FILE = CACHE_DIR / ".meeting-cache.json"
@@ -90,11 +105,15 @@ def save_cached_meetings(meetings: list[dict]) -> None:
     )
 
 
-def fetch_all_meetings(api_key: str) -> list[dict]:
-    """Fetch all meetings from Fathom (paginated, with retry on 429)."""
+def fetch_all_meetings(api_key: str, after_date: str | None = None, before_date: str | None = None) -> list[dict]:
+    """Fetch meetings from Fathom (paginated, with retry on 429).
+
+    When after_date/before_date are provided, the API call is date-scoped
+    to avoid paginating through all meetings since 2023.
+    """
     headers = {"X-Api-Key": api_key}
     meetings = []
-    url = MEETINGS_URL
+    url = build_meetings_url(after_date, before_date)
     cursor = None
     page = 0
 
@@ -134,11 +153,13 @@ def fetch_all_meetings(api_key: str) -> list[dict]:
     return meetings
 
 
-def fetch_all_meetings_cached(api_key: str) -> list[dict]:
-    cached = load_cached_meetings()
-    if cached is not None:
-        return cached
-    return fetch_all_meetings(api_key)
+def fetch_all_meetings_cached(api_key: str, after_date: str | None = None, before_date: str | None = None) -> list[dict]:
+    # Only use cache for full (unscoped) fetches
+    if not after_date and not before_date:
+        cached = load_cached_meetings()
+        if cached is not None:
+            return cached
+    return fetch_all_meetings(api_key, after_date, before_date)
 
 
 def fetch_transcript(api_key: str, recording_id) -> list[dict]:
@@ -295,8 +316,17 @@ def main():
 
     api_key = get_api_key()
 
+    # Scope API call by date when possible to avoid full pagination
+    api_after = args.after if args.after else None
+    api_before = None
+    if args.date:
+        # Single day: scope API to just that day
+        api_after = args.date
+        from datetime import date as date_type, timedelta
+        api_before = (date_type.fromisoformat(args.date) + timedelta(days=1)).isoformat()
+
     print("Fetching meetings from Fathom...", file=sys.stderr)
-    all_meetings = fetch_all_meetings_cached(api_key)
+    all_meetings = fetch_all_meetings_cached(api_key, after_date=api_after, before_date=api_before)
     print(f"Total meetings returned: {len(all_meetings)}", file=sys.stderr)
 
     # Filter to 1:1s with this person
@@ -304,7 +334,7 @@ def main():
         m for m in all_meetings if is_1on1_match(m, emails, exclude_tokens)
     ]
 
-    # Apply --after filter
+    # Apply --after filter (client-side, in case API doesn't support exact date matching)
     if args.after:
         meetings = [
             m
