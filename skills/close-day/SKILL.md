@@ -489,7 +489,17 @@ This seeds the next day with the AI-suggested priorities so Kevin sees them firs
 
 If the file already exists (Kevin or `/open-day` already created it), do NOT overwrite. Instead, check if it has the AI suggestion sections. If not, insert them after `## Morning Check-in`.
 
-### Step 9: Confirm
+### Step 9: Write sentinel file
+
+After successfully writing the daily note, write the sentinel so the 10 PM automated run skips:
+
+```bash
+touch /tmp/close-day-YYYY-MM-DD.done
+```
+
+This prevents the launchd auto-close-day from re-running if Kevin already ran `/close-day` manually.
+
+### Step 10: Confirm
 
 Report: "Daily note written to `01-daily/YYYY-MM-DD.md`. Seeded tomorrow's note at `01-daily/YYYY-MM-DD+1.md`. Updated session logs for: [project list]. Asana: [N] completed, [N] updated, [N] created."
 
