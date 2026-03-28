@@ -312,20 +312,33 @@ Generate in this format (matching Kevin's existing `01-daily/` structure):
 
 ## End of Day
 - Energy:
-- Tomorrow's top 3:
-  1.
-  2.
-  3.
+
+### AI Suggested: Tomorrow's Top 3 (strategic, high-leverage, Kevin-only)
+1. **[Highest-impact item]** — [Why only Kevin can do this. What it blocks or unlocks.]
+2. **[Second item]** — [Strategic rationale.]
+3. **[Third item]** — [Strategic rationale.]
+
+### AI Suggested: Delegate These
+1. **[Task]** → [Person] — [Why they're the right owner. What Kevin's role becomes (review/approve).]
+2. **[Task]** → [Person] — [Rationale.]
+3. **[Task]** → [Person] — [Rationale.]
+
+### My Top 3 (Kevin fills in)
+1.
+2.
+3.
 ```
 
 **Rules:**
 - Keep the Work Log to concrete outputs, not activities. "Imported 40-file board knowledge base to Obsidian" not "worked on Obsidian."
 - Meeting bullets come from Fathom summaries — pull only the 1-2 most important takeaways, not the full summary.
 - Time Distribution uses **categorized captures, not raw app names**. Chrome captures are broken down by window title into meaningful categories (Gmail, YouTube, Airtable, Google Docs, etc.) and presented as flat peers alongside Slack, Warp, Obsidian, etc. Never show "Google Chrome: X%" — that's useless. Round to whole numbers. Only show categories with ≥1% of total captures. Always **exclude Charles Schwab** captures from the report and totals.
-- Leave "Energy" and "Tomorrow's top 3" blank for Kevin to fill in manually.
 - The `## Morning Check-in` section from Kevin's template is NOT auto-generated — that's for the start of day.
 - **Sent Email:** Include approvals, decisions, and delegations as Work Log bullets. Skip routine replies that don't represent a decision or action.
 - **Sent Slack:** Summarize by conversation thread/topic, not individual messages. Skip trivial messages ("ok", "thanks", single emoji). Focus on decisions, coordination, and substantive discussions. Group DMs with personal contacts (family) should be noted briefly or omitted — Kevin can decide. Flag any coaching/leadership conversations as those are often important context.
+- **AI Suggested Top 3:** Generate 3 strategic priorities for tomorrow based on carry-overs, meeting action items, deadlines, and Asana. Filter for items that are (a) high-impact/high-leverage, (b) fit Kevin's unique skills as CEO — relationship decisions, strategic judgment calls, cross-team visibility, contract/legal calls. Explain *why* each is Kevin-only and what it blocks/unlocks.
+- **AI Suggested Delegate:** Generate 3 important items someone else could own. Name the person and why they're the right fit. Kevin's role becomes review/approve, not execute. Look for: operational tasks with a clear domain owner, first-draft work where Kevin adds value in editing not creating, technical setup that doesn't require strategic judgment.
+- **My Top 3:** Always left blank for Kevin to fill in manually after reviewing the AI suggestions. Kevin may adopt, modify, or completely replace the AI suggestions.
 
 ### Step 4: Present draft to Kevin
 
@@ -432,9 +445,53 @@ Then confirm with `mcp__claude_ai_Asana__create_task_confirm` using workspace `6
 
 Kevin approves, modifies, or skips before any Asana writes happen.
 
-### Step 8: Confirm
+### Step 8: Seed tomorrow's daily note
 
-Report: "Daily note written to `01-daily/YYYY-MM-DD.md`. Updated session logs for: [project list]. Asana: [N] completed, [N] updated, [N] created."
+Check if tomorrow's note exists at `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/KP/01-daily/YYYY-MM-DD+1.md`. If it does NOT exist, create it with this template:
+
+```markdown
+# YYYY-MM-DD+1 — [Day of Week]
+
+## Morning Check-in
+- Energy:
+
+### AI Suggested: Tomorrow's Top 3 (from last night's close)
+1. **[Item 1 from today's AI suggestions]**
+2. **[Item 2]**
+3. **[Item 3]**
+
+### AI Suggested: Delegate These
+1. **[Item 1]** → [Person]
+2. **[Item 2]** → [Person]
+3. **[Item 3]** → [Person]
+
+### My Top 3
+1.
+2.
+3.
+
+## Active Projects
+\```dataview
+TABLE WITHOUT ID link(file.link, title) AS "Project", next-action AS "Next Action", collaborators AS "With"
+FROM "20-projects"
+WHERE type = "project" AND status = "active"
+SORT priority ASC
+\```
+
+## Work Log
+-
+
+## End of Day
+- Energy:
+```
+
+This seeds the next day with the AI-suggested priorities so Kevin sees them first thing in the morning. He overwrites "My Top 3" with his actual priorities during `/open-day` or manually.
+
+If the file already exists (Kevin or `/open-day` already created it), do NOT overwrite. Instead, check if it has the AI suggestion sections. If not, insert them after `## Morning Check-in`.
+
+### Step 9: Confirm
+
+Report: "Daily note written to `01-daily/YYYY-MM-DD.md`. Seeded tomorrow's note at `01-daily/YYYY-MM-DD+1.md`. Updated session logs for: [project list]. Asana: [N] completed, [N] updated, [N] created."
 
 ---
 
