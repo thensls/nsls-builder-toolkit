@@ -94,24 +94,42 @@ Check for a weekly plan note:
 
 If it exists, extract the `## Next Week Priorities` or `## This Week's Focus` section. These are the strategic priorities for the week.
 
+**2e. AI suggestions from close-day (if seeded)**
+
+Check if today's daily note already exists and contains AI suggestions from last night's `/close-day`:
+
+Look for `### AI Suggested: Tomorrow's Top 3` and `### AI Suggested: Delegate These` sections in the daily note. If found, extract both lists — these are the AI's overnight strategic recommendations.
+
 ### Step 3: Draft Morning Check-in
 
-Present to Kevin:
+Present to Kevin. If AI suggestions were seeded by close-day, show them first as a starting point:
 
 ```markdown
 ## Morning Check-in
+
+### Last Night's AI Suggestions (from /close-day)
+**Top 3:**
+1. [AI suggestion 1 — with rationale from close-day]
+2. [AI suggestion 2]
+3. [AI suggestion 3]
+
+**Delegate:**
+1. [Delegate item 1] → [Person]
+2. [Delegate item 2] → [Person]
+3. [Delegate item 3] → [Person]
 
 ### Today's Meetings ([count])
 - **HH:MM** — [Title] (with [key attendees])
   - Prep: [if external/board/candidate, note what to prepare]
 - **HH:MM** — [Title]
 
-### Suggested Top 3
+### Morning Top 3 (fresh from Asana + calendar + carry-overs)
 1. [P1 Asana task or carry-over — explain why it's #1]
 2. [Next most important — from Asana, carry-over, or week plan]
 3. [Third — balance strategic and tactical]
 
 *Based on: [N] overdue Asana tasks, [N] carry-overs from yesterday, week plan priorities.*
+*AI suggestions from close-day shown above for comparison — adopt, modify, or replace.*
 
 ### Overdue ([count])
 - [ ] [Task] (due [date]) — [project]
@@ -123,6 +141,8 @@ Present to Kevin:
 - [ ] [Carry-overs not in top 3]
 ```
 
+If NO AI suggestions were seeded (close-day wasn't run, or this is a fresh week), skip the "Last Night's AI Suggestions" section and just show the regular "Morning Top 3".
+
 **Priority inference for Top 3:**
 1. Anything with an external deadline today (meeting prep, deliverable due)
 2. P1 Asana tasks that are overdue
@@ -132,7 +152,9 @@ Present to Kevin:
 
 ### Step 4: Kevin reviews and adjusts
 
-Kevin sets his actual Top 3 and energy level. The suggestions are a starting point.
+Kevin sets his actual Top 3 and energy level. The AI and morning suggestions are starting points — Kevin may adopt, modify, or completely replace them.
+
+After Kevin confirms his Top 3, write them to the `### My Top 3` section of the daily note.
 
 ### Step 5: Write daily note
 
@@ -169,6 +191,37 @@ The daily note should include:
 ```
 
 The `## Work Log`, `## Projects Touched`, `## Carrying Over`, and `## End of Day` sections are left empty — `/close-day` fills those in.
+
+### Step 6: Track priority alignment (if AI suggestions existed)
+
+If today's note had AI suggestions from close-day AND Kevin set his own Top 3, compare them and append a record to:
+```
+~/Library/Mobile Documents/iCloud~md~obsidian/Documents/KP/03-meta/priority-alignment.md
+```
+
+Create this file if it doesn't exist, with this header:
+```markdown
+# Priority Alignment Tracker
+
+Tracks how often the AI's overnight strategic suggestions match Kevin's morning priorities. Over time, this reveals whether the AI is reading the right signals — and where Kevin's judgment diverges.
+
+| Date | AI #1 | AI #2 | AI #3 | Kevin #1 | Kevin #2 | Kevin #3 | Adopted | Modified | Replaced |
+|------|-------|-------|-------|----------|----------|----------|---------|----------|----------|
+```
+
+For each day, append one row. Classification rules:
+- **Adopted**: Kevin's item is essentially the same as the AI suggestion (same task, same intent)
+- **Modified**: Kevin kept the spirit but changed scope, timing, or framing (e.g., AI said "draft contract" → Kevin said "review contract draft from legal")
+- **Replaced**: Kevin chose something entirely different
+
+Count the totals: e.g., `2 adopted, 0 modified, 1 replaced`
+
+Example row:
+```
+| 2026-03-28 | Contract w/ IP carve-outs | Julia follow-up after vacation | Cash in cushions table | Contract w/ IP carve-outs | Review Chris's SNHU deck (Sat delivery) | Julia scheduling post-vacation | 2 | 1 | 0 |
+```
+
+**Do NOT block the morning flow for this.** If Kevin is in a hurry, skip the tracker and catch up on the next `/close-day` or `/open-day`. The tracker is a background signal, not a gate.
 
 ### Day-of-Week Additions
 
