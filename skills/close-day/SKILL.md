@@ -134,7 +134,7 @@ if not key:
 
 TARGET_DATE = '$DATE'  # will be replaced by skill
 headers = {'X-Api-Key': key}
-url = 'https://api.fathom.ai/external/v1/meetings?include_summary=true&include_action_items=true&created_after=2023-01-01'
+url = f'https://api.fathom.ai/external/v1/meetings?include_summary=true&include_action_items=true&created_after={TARGET_DATE}T00:00:00Z&created_before={TARGET_DATE}T23:59:59Z'
 meetings = []
 cursor = None
 
@@ -148,7 +148,7 @@ while True:
     cursor = data.get('next_cursor') if isinstance(data, dict) else None
     if not cursor: break
 
-todays = [m for m in meetings if (m.get('scheduled_start_time') or '')[:10] == TARGET_DATE]
+todays = meetings  # already date-scoped by API params
 
 for m in sorted(todays, key=lambda x: x.get('scheduled_start_time', '')):
     title = m.get('title', 'Unknown')
@@ -175,7 +175,7 @@ for m in sorted(todays, key=lambda x: x.get('scheduled_start_time', '')):
 "
 ```
 
-**IMPORTANT: Fathom API is slow (paginated, all meetings since 2023).** If the board-kb cache is fresh (< 6 hours), check `~/board-kb/.meeting-cache.json` first and filter from there — much faster. But the cache only has board/Cory meetings. For full daily coverage, use the API directly. Consider caching the full list locally.
+**Fathom API is now date-scoped** — uses `created_after` and `created_before` params to fetch only the target day's meetings. This is fast (< 5 seconds) instead of paginating through all meetings since 2023.
 
 **1d. Sent Email — outbound communications**
 
