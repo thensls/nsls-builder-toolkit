@@ -51,65 +51,165 @@ gcal_list_events(
 ```
 Extract: meeting title, start/end time, attendees (if `condenseEventDetails=false`).
 
-**1b. Familiar — screen activity distribution (with Chrome breakdown)**
+**1b. Familiar — screen activity, time tracking, and work categorization**
 
-Scan today's sessions using bash. Do NOT read every OCR file — extract frontmatter only for speed:
+This step produces three outputs: (1) app/tool time distribution, (2) total active work hours, and (3) a work-category breakdown by department/function.
+
+**Builder profile:** Before categorizing, read the builder's profile from their Obsidian vault at `[vault_path]/50-reference/builder-profile.md`. This file defines:
+- `time_categories` — the work categories to use (varies by role: executive, department lead, manager, IC)
+- `time_tracking_mode` — what summary line to produce (doing-vs-orchestrating, deep-vs-meetings, etc.)
+- `data_sources` — which integrations are available (familiar, fathom, slack, etc.)
+
+If no builder profile exists, fall back to the **Executive / SLT preset** categories (Coding/Building, Management/People, Product Management, Marketing/Sales, Admin/Ops, Learning/Research) — this is the default for backwards compatibility with Kevin's setup.
+
+**IMPORTANT — Fathom dependency:** Step 1c (Fathom) must complete before the work categorization in this step, because Fathom meeting summaries are used to categorize Zoom/Meet time into the correct work category. Run the data collection (bash commands below) in parallel with Fathom, but defer the categorization logic until Fathom results are available. If the builder profile has `fathom: false`, skip the Fathom dependency and categorize meetings by window title only.
+
+**Phase 1: Collect raw data (run in parallel with Fathom)**
 
 ```bash
 # Step 1: Get top-level app counts
 grep -h "^app:" $HOME/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null \
   | sort | uniq -c | sort -rn
 
-# Step 2: Break down Chrome by window title (the key insight — "Chrome" alone is useless)
-# Use awk to pair app=Chrome with window_title_raw from the same file's frontmatter
+# Step 2: Break down Chrome by window title
 awk '/^app: Google Chrome/{found=1} found && /^window_title_raw:/{print; found=0}' \
   $HOME/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null \
   | sort | uniq -c | sort -rn
 
-# Step 3: Session and capture counts + active hours
-echo "Sessions: $(ls -d $HOME/familiar/stills-markdown/session-YYYY-MM-DDT* 2>/dev/null | wc -l)"
-echo "Captures: $(find $HOME/familiar/stills-markdown/session-YYYY-MM-DDT* -name '*.md' 2>/dev/null | wc -l)"
-FIRST=$(ls $HOME/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null | head -1 | xargs basename | sed 's/.md//')
-LAST=$(ls $HOME/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null | tail -1 | xargs basename | sed 's/.md//')
-echo "Active: $FIRST to $LAST"
+# Step 3: Break down Slack by window title (channel/DM names)
+awk '/^app: Slack/{found=1} found && /^window_title_raw:/{print; found=0}' \
+  $HOME/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null \
+  | sort | uniq -c | sort -rn
+
+# Step 4: Break down Warp by window title (Claude Code session names)
+awk '/^app: Warp/{found=1} found && /^window_title_raw:/{print; found=0}' \
+  $HOME/familiar/stills-markdown/session-YYYY-MM-DDT*/*.md 2>/dev/null \
+  | sort | uniq -c | sort -rn
+
+# Step 5: Session timestamps for time calculation
+for s in $HOME/familiar/stills-markdown/session-YYYY-MM-DDT*/; do
+  first=$(ls "$s"*.md 2>/dev/null | head -1 | xargs basename | sed 's/.md//')
+  last=$(ls "$s"*.md 2>/dev/null | tail -1 | xargs basename | sed 's/.md//')
+  count=$(ls "$s"*.md 2>/dev/null | wc -l | tr -d ' ')
+  echo "$first|$last|$count"
+done
 ```
 
-**Chrome window title categorization rules:**
-Categorize each Chrome window title into one of these buckets by pattern matching:
+**Phase 2: Calculate active work time**
+
+Use this algorithm to compute total active work hours from session data:
+
+1. **Filter cron/screensaver noise:** Remove sessions with ≤3 captures AND duration < 30 seconds. These are typically automated wake-ups (often appearing at :29 or :59 past the hour every 30 min).
+2. **Merge into work blocks:** Walk through remaining sessions chronologically. If the gap between the end of one session and the start of the next is ≤ 20 minutes, merge them into one continuous work block. Gaps ≤ 20 min represent short breaks (bathroom, coffee, thinking) — not leaving the desk. Include the gap time in the block duration.
+3. **Filter trivial blocks:** Remove work blocks shorter than 5 minutes total — these are brief screen glances, not real work.
+4. **Sum work block durations** = total active work hours.
+
+Present work blocks as a compact list:
+```
+Work blocks: 03:31–11:50 (8.3h), 12:24–17:41 (5.3h)
+Total active: 13.6 hours
+```
+
+**Phase 3: Categorize captures into work categories (after Fathom completes)**
+
+Every capture gets assigned to exactly one **work category** based on app + window title. The categories represent Kevin's functional roles:
+
+| Work Category | What maps here |
+|---|---|
+| **Coding / Building** | Warp (terminal/Claude Code), Claude (desktop app), GitHub, Railway, VS Code |
+| **Management / People** | Slack DMs with direct reports, Slack `#nsls-leadership`, Gmail (people-related), Messages, 1:1 meetings (from Fathom), Google Docs that are work journals (e.g. "Journal", "Work Journal") |
+| **Product Management** | Slack product/engineering channels (see list below), Figma, Airtable, Clay, product-related Google Docs, product/strategy meetings (from Fathom) |
+| **Marketing / Sales** | Slack marketing channels (see list below), recruiting tools, marketing Google Docs, sales meetings (from Fathom) |
+| **Admin / Ops** | Obsidian, Asana, Google Calendar, NetSuite, Ramp, billing dashboards, revenue reports, Calendly |
+| **Learning / Research** | YouTube, news sites (NYT, CNN, The Athletic), Reddit, documentation sites, tech blogs |
+| **Personal** | **EXCLUDE from all totals** — Charles Schwab, Chase, Mercury, Monarch, IRS, SBA, any brokerage/bank/tax/loan/personal finance site |
+
+**Slack channel → category mapping:**
+
+Slack window titles follow the pattern: `ChannelOrPerson (DM|Channel) - theNSLS - N new items - Slack`
+
+| Slack pattern | Category |
+|---|---|
+| `(DM)` with a single person name | **Management / People** (default for 1:1 DMs) |
+| `(DM)` with multiple people (group DM) | **Management / People** |
+| Channel contains `marketing`, `lifecycle`, `life-cycle`, `brand`, `content`, `social` | **Marketing / Sales** |
+| Channel contains `product`, `engineering`, `tech`, `dev`, `ai-workbench`, `cs-tech` | **Product Management** |
+| Channel contains `leadership`, `slt`, `executive` | **Management / People** |
+| Channel contains `general`, `random`, `announcements` | **Admin / Ops** |
+| `Threads` | **Management / People** (usually follow-ups on DMs) |
+| `Search` or `Ignite` (different workspace) | **Admin / Ops** |
+
+**Meeting categorization (using Fathom results):**
+
+Zoom window titles just say "Zoom Meeting" and Google Meet shows the meeting name. To categorize meeting time:
+
+1. Match Zoom/Meet capture timestamps against Fathom meeting time ranges.
+2. Use the Fathom meeting title + summary to assign a category:
+   - Titles containing "1:1", "1-1", "check-in", person names → **Management / People**
+   - Titles containing "product", "roadmap", "sprint", "design review" → **Product Management**
+   - Titles containing "marketing", "campaign", "brand", "content" → **Marketing / Sales**
+   - Titles containing "board", "investor", "strategy", "all-hands", "SLT" → **Management / People**
+   - Titles containing "standup", "sync" → check Fathom summary for topic, default to **Product Management**
+3. Zoom/Meet captures that don't match any Fathom meeting → **Meetings (unmatched)** — show separately so Kevin can mentally assign them.
+
+**Chrome window title → category mapping:**
 
 | Pattern in window_title_raw | Category |
 |---|---|
-| `YouTube` | YouTube |
-| `Gmail` or `Leadership and Success Mail` or `gmail.com` | Gmail |
-| `- Airtable` | Airtable |
-| `Meet -` (with 🔊 or without) | Google Meet |
-| `- NetSuite` | NetSuite |
-| `- Google Docs` | Google Docs |
-| `- Google Sheets` | Google Sheets |
-| `Google Calendar` or `endar - Week of` | Google Calendar |
-| `New York Times` or `The Athletic` or `CNN` or news domains | News |
-| `- Google Slides` | Google Slides |
-| `GitHub` or `github.com` | GitHub |
-| `Railway` | Railway |
-| `Figma` | Figma |
-| `Linear` | Linear |
-| `Calendly` | Calendly |
-| `Claude` | Claude (web) |
-| `Fathom` | Fathom |
-| Known project URLs (HS Market Explorer, Dossier Builder, etc.) | Project-specific |
-| `Charles Schwab` or `Schwab` | **EXCLUDE — personal finance** |
-| `chase.com` or `Chase` (bank site, not a person) | **EXCLUDE — personal finance** |
-| `Mercury` (banking app) | **EXCLUDE — personal finance** |
-| `Monarch` | **EXCLUDE — personal finance** |
-| `IRS` or `irs.gov` | **EXCLUDE — personal finance** |
-| `SBA` or `sba.gov` | **EXCLUDE — personal finance** |
-| Any brokerage, bank, tax, loan, or personal finance site | **EXCLUDE — personal finance** |
-| `Ramp` | Ramp (company finance) |
-| `- NetSuite` | NetSuite (company finance) |
+| `YouTube` | Learning / Research |
+| `Gmail` or `Leadership and Success Mail` | Management / People |
+| `- Airtable` | Product Management |
+| `Meet -` (with 🔊 or without) | Meetings — categorize via Fathom (see above) |
+| `- NetSuite` | Admin / Ops |
+| `- Google Docs` | Inspect title: journals/check-ins → Management; product specs → Product; default → Admin / Ops |
+| `- Google Sheets` | Admin / Ops (default) or inspect title for context |
+| `Google Calendar` or `endar - Week of` | Admin / Ops |
+| `New York Times`, `The Athletic`, `CNN`, news domains | Learning / Research |
+| `- Google Slides` | Inspect title: board/strategy decks → Management; product decks → Product |
+| `GitHub` or `github.com` | Coding / Building |
+| `Railway` | Coding / Building |
+| `Figma` | Product Management |
+| `Calendly` | Admin / Ops |
+| `Claude` (web) | Coding / Building |
+| `Fathom` | Admin / Ops |
+| `Ramp` | Admin / Ops |
+| `Charles Schwab`, `Schwab`, `chase.com`, `Chase`, `Mercury`, `Monarch`, `IRS`, `irs.gov`, `SBA`, `sba.gov` | **Personal — EXCLUDE** |
+| Any brokerage, bank, tax, loan, or personal finance site | **Personal — EXCLUDE** |
+| Unknown/other | Admin / Ops (catch-all) |
 
-**IMPORTANT — Personal finance exclusion:** Always exclude ALL personal finance captures (Schwab, Chase, Mercury, Monarch, IRS, SBA, brokerages, banks, tax sites, loan sites, personal investment sites) from the report entirely — subtract from totals before computing percentages. **Company finance tools ARE included** — NetSuite, Ramp, Google Sheets with financial data, etc. are work and should be reported. The distinction is personal vs. company: if Kevin is paying his mortgage, exclude it; if he's reviewing NSLS invoices in NetSuite, include it.
+**IMPORTANT — Personal finance exclusion:** Always exclude ALL personal finance captures from the report and from all totals before computing percentages or hours. Company finance tools (NetSuite, Ramp) ARE included.
 
-Then present Time Distribution as a **flat list** sorted by capture count. Do NOT nest Chrome sub-categories under a "Chrome" parent — instead, show each category (YouTube, Gmail, Airtable, etc.) as a peer alongside Slack, Warp, Obsidian, etc. This gives Kevin actual insight into his day. Only show categories with ≥1% of total captures.
+**Phase 4: Produce the Time Distribution and Time Allocation outputs**
+
+**Time Distribution** (same as before — flat list of tools/apps sorted by capture count):
+Present as a flat list sorted by capture count. Do NOT nest Chrome sub-categories under a "Chrome" parent — instead, show each category (YouTube, Gmail, Airtable, etc.) as a peer alongside Slack, Warp, Obsidian, etc. Only show categories with ≥1% of total captures.
+
+**Time Allocation** (NEW — work category breakdown as a table):
+
+```markdown
+## Time Allocation
+
+| Category | Hours | % | Top tools |
+|---|---|---|---|
+| Management / People | 4.1h | 30% | Slack DMs, Gmail, 1:1s |
+| Coding / Building | 3.1h | 23% | Warp, Claude Code, GitHub |
+| Admin / Ops | 1.7h | 13% | Obsidian, Calendar, NetSuite |
+| Meetings | 1.6h | 12% | Zoom, Google Meet |
+| Product Management | 1.5h | 11% | Figma, Airtable, product docs |
+| Learning / Research | 1.4h | 10% | YouTube, news |
+| Marketing / Sales | 0.1h | 1% | Recruiting |
+
+**Active work: 13.6 hours** (3:31 AM – 5:41 PM)
+Work blocks: 3:31–11:50 (8.3h), 12:24–5:41 (5.3h)
+Doing vs. Orchestrating: 23% hands-on building, 42% managing/meeting, 35% admin/research
+```
+
+The "Doing vs. Orchestrating" line is a quick summary:
+- **Doing** = Coding / Building
+- **Orchestrating** = Management / People + Meetings + Marketing / Sales
+- **Supporting** = Admin / Ops + Learning / Research + Product Management
+
+This gives Kevin a fast read on how much time he spent building things himself vs. directing others vs. overhead.
 
 **1c. Fathom — meeting summaries and action items**
 
@@ -274,13 +374,22 @@ Generate in this format (matching Kevin's existing `01-daily/` structure):
 ```markdown
 # YYYY-MM-DD — [Day of Week]
 
+## Time Allocation
+
+| Category | Hours | % | Top tools |
+|---|---|---|---|
+| [Category] | [X.Xh] | [XX%] | [top 2-3 tools] |
+| ... | | | |
+
+**Active work: [X.X] hours** ([first block start] – [last block end])
+Work blocks: [HH:MM–HH:MM (X.Xh), ...]
+Doing vs. Orchestrating: [X%] hands-on building, [X%] managing/meeting, [X%] admin/research
+
 ## Time Distribution
 - [Category]: [percentage] ([capture count] captures)
 - [Category]: [percentage] ([capture count] captures)
 - ...
 - Other: [percentage] ([count] captures)
-- **Active hours:** [first capture] to [last capture]
-- **Sessions:** [N] Familiar / [N] Claude Code
 
 ## Meetings ([count])
 [For each meeting from Calendar + Fathom:]
@@ -332,7 +441,8 @@ Generate in this format (matching Kevin's existing `01-daily/` structure):
 **Rules:**
 - Keep the Work Log to concrete outputs, not activities. "Imported 40-file board knowledge base to Obsidian" not "worked on Obsidian."
 - Meeting bullets come from Fathom summaries — pull only the 1-2 most important takeaways, not the full summary.
-- Time Distribution uses **categorized captures, not raw app names**. Chrome captures are broken down by window title into meaningful categories (Gmail, YouTube, Airtable, Google Docs, etc.) and presented as flat peers alongside Slack, Warp, Obsidian, etc. Never show "Google Chrome: X%" — that's useless. Round to whole numbers. Only show categories with ≥1% of total captures. Always **exclude Charles Schwab** captures from the report and totals.
+- **Time Allocation** is the new primary time view. It shows work categories (Coding/Building, Management/People, etc.) with estimated hours, percentages, and top tools. The "Doing vs. Orchestrating" summary line gives Kevin a fast read on CEO time allocation. See Step 1b Phase 4 for the full format and category definitions.
+- **Time Distribution** still appears below Time Allocation as a flat tool-level breakdown. Uses categorized captures, not raw app names. Chrome captures are broken down by window title into meaningful categories (Gmail, YouTube, Airtable, Google Docs, etc.) and presented as flat peers alongside Slack, Warp, Obsidian, etc. Never show "Google Chrome: X%" — that's useless. Round to whole numbers. Only show categories with ≥1% of total captures. Always **exclude personal finance** captures from the report and totals.
 - The `## Morning Check-in` section from Kevin's template is NOT auto-generated — that's for the start of day.
 - **Sent Email:** Include approvals, decisions, and delegations as Work Log bullets. Skip routine replies that don't represent a decision or action.
 - **Sent Slack:** Summarize by conversation thread/topic, not individual messages. Skip trivial messages ("ok", "thanks", single emoji). Focus on decisions, coordination, and substantive discussions. Group DMs with personal contacts (family) should be noted briefly or omitted — Kevin can decide. Flag any coaching/leadership conversations as those are often important context.

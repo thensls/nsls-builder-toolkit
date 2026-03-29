@@ -98,15 +98,27 @@ mcp__claude_ai_asana__asana_search_tasks(
 
 **Project Progress:** For each project that appeared in any daily note's `## Projects Touched`, summarize the week's movement. Status = on-track (touched 2+ days or key milestone hit), needs-attention (touched but blocked), stalled (not touched despite being active).
 
-**Time Allocation:** Aggregate Familiar data across all 5 days:
-- Meetings (Google Meet + Zoom captures)
-- Building (Warp + Claude web captures)
-- Communication (Slack + Gmail captures)
-- Deep work (Obsidian + Google Docs + Airtable captures)
-- Content (YouTube + News captures)
-- Other
+**Time Allocation:** Aggregate Familiar data across all 5 (or 7) days using the same work categories and time calculation algorithm from `/close-day`:
 
-Convert to hours (rough: total captures / captures-per-hour based on Familiar's capture interval, typically 1 capture per ~10-15 seconds, so ~240/hr).
+1. Read the builder profile from `[vault_path]/50-reference/builder-profile.md` for time categories. If no profile exists, use the Executive preset (Coding/Building, Management/People, Product Management, Marketing/Sales, Admin/Ops, Learning/Research).
+2. For each day, compute active work hours using the session-merge algorithm (filter cron micro-sessions, merge gaps ≤ 20 min, filter trivial blocks < 5 min).
+3. Categorize captures using the same app/Slack-channel/Chrome/Fathom rules from close-day.
+4. Sum across the week for totals and daily breakdown.
+
+Present as:
+```
+| Day | Hours | Top category | Second category |
+|---|---|---|---|
+| Mon | 12.1h | Management (35%) | Coding (28%) |
+| Tue | 10.4h | Meetings (40%) | Product (22%) |
+| ... | | | |
+| **Week** | **52.3h** | **Management (30%)** | **Coding (25%)** |
+```
+
+Plus the weekly summary line matching the builder's `time_tracking_mode`:
+- `doing-vs-orchestrating`: "Doing vs. Orchestrating: X% building, X% managing/meeting, X% admin/research"
+- `deep-vs-meetings`: "Deep work ratio: X% focused, X% collaboration, X% meetings/admin"
+- `department-balance`: "Department focus: X% [primary], X% [secondary], X% other"
 
 **Priorities vs. Reality:** Pull Monday's Top 3 from the daily note. For each, assess:
 - **Done** — clear evidence in Work Log
@@ -152,6 +164,32 @@ Priorities vs. Reality:
 3. [Monday priority] → [Done/Partial/Missed]
 ```
 
+**Output C: AI-Suggested Next Week Priorities** (seeded into the weekly note for `/plan-week` to pick up)
+
+Generate next week's priorities using the same pattern as close-day's "AI Suggested: Tomorrow's Top 3" but at weekly scope:
+
+```markdown
+### AI Suggested: Next Week's Top 3 (from weekly close)
+1. **[Highest-impact item for next week]** — [Why this week. What it blocks/unlocks. Why only this person can do it.]
+2. **[Second item]** — [Strategic rationale.]
+3. **[Third item]** — [Strategic rationale.]
+
+### AI Suggested: Delegate Next Week
+1. **[Task]** → [Person] — [Why they're the right owner. What the builder's role becomes.]
+2. **[Task]** → [Person] — [Rationale.]
+3. **[Task]** → [Person] — [Rationale.]
+
+### AI Suggested: Stop Doing
+1. **[Activity consuming time without proportional value]** — [Evidence from this week's time data. What to do instead.]
+```
+
+**Rules for weekly AI suggestions:**
+- **Top 3** — filter for items that are (a) high-impact, (b) match the builder's unique role (from builder profile), (c) have been carrying over or are deadline-driven. Use the week's data to identify what stalled and needs CEO/lead attention.
+- **Delegate** — surface tasks that consumed the builder's time but could be owned by someone else. Use Familiar data to find patterns: "You spent 3.2h in Airtable this week — could [person] own the data entry?"
+- **Stop Doing** — NEW for weekly scope. Identify one activity that consumed disproportionate time relative to its impact. Use time allocation data as evidence. This is the coaching equivalent of "you're spending 15% of your week on X — is that the best use of your role?"
+
+These seed into the weekly note so `/plan-week` can reference them alongside its own analysis.
+
 **Rules for quick notes format:**
 - Keep it tight. This goes into a Slack bot journal — not a novel.
 - Lead with achievements, not activities.
@@ -168,7 +206,7 @@ Show both outputs. Ask:
 
 ### Step 5: Write weekly note
 
-Write Output A to `02-weekly/YYYY-[W]WW.md`.
+Write Output A to `02-weekly/YYYY-[W]WW.md`. Include the AI-Suggested Next Week sections at the end — these are picked up by `/plan-week` as a starting point for next week's planning.
 
 ### Step 6: Asana sync
 
