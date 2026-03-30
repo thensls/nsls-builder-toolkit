@@ -202,6 +202,7 @@ Present as a flat list sorted by capture count. Do NOT nest Chrome sub-categorie
 **Active work: 13.6 hours** (3:31 AM – 5:41 PM)
 Work blocks: 3:31–11:50 (8.3h), 12:24–5:41 (5.3h)
 Doing vs. Orchestrating: 23% hands-on building, 42% managing/meeting, 35% admin/research
+**Meeting time (calendar): ~7h across 9 meetings** (50% of active work)
 ```
 
 The "Doing vs. Orchestrating" line is a quick summary:
@@ -210,6 +211,8 @@ The "Doing vs. Orchestrating" line is a quick summary:
 - **Supporting** = Admin / Ops + Learning / Research + Product Management
 
 This gives Kevin a fast read on how much time he spent building things himself vs. directing others vs. overhead.
+
+The **"Meeting time (calendar)"** line is an orthogonal metric — it cross-cuts all categories. A 1:1 with Chris counts as both "Management / People" time AND meeting time. This tells Kevin how much of his day was synchronous vs. async, regardless of topic. Derived from Google Calendar scheduled meeting times (not Familiar captures, which only see Zoom/Meet windows and miss categorized meetings). Solo calendar blocks (e.g., "Weekly processing", "Contract drafting") are excluded — only meetings with other attendees count.
 
 **1c. Fathom — meeting summaries and action items**
 
@@ -384,6 +387,7 @@ Generate in this format (matching Kevin's existing `01-daily/` structure):
 **Active work: [X.X] hours** ([first block start] – [last block end])
 Work blocks: [HH:MM–HH:MM (X.Xh), ...]
 Doing vs. Orchestrating: [X%] hands-on building, [X%] managing/meeting, [X%] admin/research
+**Meeting time (calendar): ~[X]h across [N] meetings** ([X%] of active work)
 
 ## Time Distribution
 - [Category]: [percentage] ([capture count] captures)
