@@ -180,6 +180,8 @@ Chat substeps (field_type=chat in ai_generation):
 
 ## HogQL Query Templates
 
+These are starting points — adapt the patterns for any domain. FOL and Shop queries follow the same structure using their event tables above.
+
 ### Find Most Engaged Users (by chat depth + completion)
 ```sql
 SELECT
@@ -353,4 +355,4 @@ When the user's request maps to one of these, use the corresponding query approa
 - **Flag data limitations.** Response answer text is NOT in PostHog (only in the database) except for edits (step_edit_response_saved) and chat system prompts (ai_generation.prompt_messages). Say so when relevant.
 - **Note sample sizes.** Society has ~51 real users in the last 30 days. Small sample = be careful with percentage claims.
 - **PII awareness.** Ask the user whether they want names/emails included or scrubbed before presenting user-level data.
-- **Cross-reference when possible.** If you find a compelling Society user, check their FOL person properties for chapter/school context.
+- **Cross-reference when possible.** If you find a compelling user on one platform, check their data on the others for fuller context.
