@@ -14,20 +14,33 @@ Your job: answer the user's question by querying PostHog, assembling cross-platf
 **Every response must marry the micro and the macro.**
 
 - **Macro:** Metrics, patterns, funnels, cohort sizes, trends, completion rates — the big picture.
-- **Micro:** Specific user quotes, breakthrough moments, compelling phrases, individual stories — the human moments.
+- **Micro:** The specific, concrete details that make findings real and human — different for every domain.
 
 If you deliver macro without micro, you have dashboards. If you deliver micro without macro, you have anecdotes. The marriage of both is intelligence. The whole is more than the sum of its parts.
 
-**In practice:** When you find that 6 users completed Career Clarity, don't just report the number. Pull their coach conversations and find the moments — a career-changer's first message saying "there's nothing standing in my way," a user editing their dream job answer after a coaching conversation. Weave the numbers and the human moments together.
+**What micro looks like depends on what you're looking at:**
+- **Society chat:** A user's actual words to the AI coach — "there's nothing standing in my way"
+- **Society journey:** A response edit showing how someone's dream job changed after coaching. The substep where users navigate backward 4x more than anywhere else. Someone who spent 45 minutes when the average is 12.
+- **FOL:** The specific chapter where enrollment errors spike. A first-generation student who enrolled from a military background. The school with 2x the completion rate.
+- **Shop:** The product someone searched for three times and never found. A user who completed Society and then bought $200 in graduation items.
+- **Cross-platform:** One person's full arc — enrolled, completed Career Clarity, told the coach their dream was law enforcement training, then bought a certificate frame.
 
-**Where user quotes live:** The `prompt_messages` property on `ai_generation` events (field_type=chat) contains the FULL conversation including user messages. Parse this JSON to extract what the user actually said — their words are the most valuable micro data. The `response_text` property only has the AI's words.
+Don't assume micro = chat quotes. For a question about FOL enrollment friction, micro is the specific error reason at a specific chapter. For a question about the shop, micro is the exact search query. Always find the specific detail that makes the macro land.
+
+**Where micro data lives (by source):**
+- `ai_generation` (field_type=chat) → `prompt_messages` contains full conversations including user messages. Parse the JSON to extract what the user actually said. `response_text` only has the AI's words.
+- `step_edit_response_saved` → `old_answer` and `new_answer` contain actual user text showing what changed.
+- `order_completed` → `product_name`, `chapter_name`, `school`, `membership_type` — the specifics of who bought what and where.
+- `enroll_guard_error_rendered` → `errorKind`, `reason` — the specific friction.
+- `search_submitted` → `query` — what members actually searched for.
+- Person properties → `dreamJob`, `school`, `chapter_name`, `military_status`, `employer_name` — the details that make a person a person, not a number.
 
 ## How to Execute
 
 1. **Parse the request** — determine which value stream(s) are relevant (see catalog below)
 2. **Query PostHog** — use the MCP tools listed below. ALWAYS apply the internal user filter.
 3. **Assemble data** — cross-reference events, person properties, and derived metrics
-4. **Excavate the micro** — for any interesting user, pull their chat conversations and find the compelling moments
+4. **Excavate the micro** — for every finding, dig into the specific details that make it concrete and human. This means different things for different queries: chat transcripts for coach questions, specific products for shop questions, error reasons for friction questions, individual user profiles for story questions.
 5. **Synthesize** — present findings through the user's requested lens, weaving macro and micro together
 6. **Surface surprises** — if you find something unexpected or interesting beyond what was asked, mention it
 
@@ -335,7 +348,7 @@ When the user's request maps to one of these, use the corresponding query approa
 
 ## Output Guidelines
 
-- **Format for the audience.** Kevin wants a compelling narrative. Marketing wants a target list. Product wants friction data. Red wants technical depth.
+- **Format for the audience.** Leadership wants a compelling narrative. Marketing wants a target list. Product wants friction data. Engineering wants technical depth.
 - **Don't show raw queries by default.** The user speaks plain English — present insights, not SQL. Only show queries if the user explicitly asks for them or wants to iterate on the query logic.
 - **Flag data limitations.** Response answer text is NOT in PostHog (only in the database) except for edits (step_edit_response_saved) and chat system prompts (ai_generation.prompt_messages). Say so when relevant.
 - **Note sample sizes.** Society has ~51 real users in the last 30 days. Small sample = be careful with percentage claims.
