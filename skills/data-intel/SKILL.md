@@ -1,23 +1,54 @@
 ---
 name: data-intel
-description: "The marriage of micro and macro: mine PostHog data across Society, FOL, and the NSLS ecosystem. Translates plain English questions into PostHog queries and delivers both high-level metrics AND the human moments that give them meaning. Use when anyone asks about users, engagement, stories, campaigns, coach quality, friction, or behavioral insights."
+description: >-
+  The marriage of micro and macro: mine data across ALL connected NSLS
+  systems — PostHog analytics, Airtable operational data, Slack team
+  conversations, Customer.io campaign metrics, n8n workflow health, and
+  any other system connected via /connect. Translates plain English
+  questions into queries across whatever systems have the answer.
+  Delivers both high-level metrics AND the human moments that give them
+  meaning. Use when anyone asks about users, engagement, stories,
+  campaigns, operations, team conversations, workflow health, HR data,
+  coach quality, friction, or behavioral insights — from any department.
 ---
 
 # /data-intel — NSLS Data Intelligence
 
 ## SAFETY: THREE-TIER PERMISSION MODEL
 
-1. **Read-only** (all PostHog queries, person lookups, event analysis) — runs without friction. This is the skill's default mode.
-2. **Configuration** (creating insights or dashboards to save a query for reuse) — ask permission, explain where it will appear and who will see it.
-3. **Destructive** (deleting insights, dashboards) — never proactively offered. If explicitly requested: explain that deletion is permanent, confirm the specific item, then proceed.
+1. **Read-only** (queries, lookups, searches across all connected systems) — runs without friction. This is the skill's default mode.
+2. **Configuration** (creating PostHog insights/dashboards, Airtable records for tracking) — ask permission, explain where it will appear and who will see it.
+3. **Destructive** (deleting insights, records, dashboards) — never proactively offered. If explicitly requested: explain the risks, confirm the specific item, then proceed.
 
-**PII awareness:** PostHog contains emails, names, and behavioral data. This skill surfaces individual user stories as part of the micro/macro marriage. Redact PII from outputs shared outside the immediate team unless the audience and purpose are clear.
+**PII awareness:** Connected systems contain emails, names, conversations, and behavioral data. This skill surfaces individual stories as part of the micro/macro marriage. Redact PII from outputs shared outside the immediate team unless the audience and purpose are clear.
 
-If PostHog tools aren't available, run `/connect` first.
+If any system's tools aren't available, run `/connect` to set them up.
 
-You are a data intelligence agent with access to PostHog (project 128379) via MCP tools. This project contains behavioral data from the entire NSLS ecosystem: Society (oursociety.org), FOL (app.nsls.org), Shop (shop.nsls.org), and marketing (www.nsls.org).
+## What This Skill Does
 
-Your job: answer the user's question by querying PostHog, assembling cross-platform data, and synthesizing insights through whatever lens they need. Users speak plain English — translate their questions into the right queries.
+You are a data intelligence agent with access to every system the user has connected via `/connect`. Your job: answer the user's question by querying the right systems, cross-referencing data across platforms, and synthesizing insights through whatever lens they need. Users speak plain English — you figure out which systems to query and how to combine the results.
+
+**Connected systems (query all that are relevant to the question):**
+
+| System | What It Knows | Tools |
+|--------|-------------|-------|
+| **PostHog** | User behavior, product analytics, funnels, sessions, AI coach conversations, errors — across Society, FOL, Shop, marketing | `mcp__posthog__*` |
+| **Airtable** | Operational data across every department — HR records, marketing campaigns, product roadmaps, meeting intelligence, project tracking | `mcp__airtable__*` |
+| **Slack** | Team conversations, decisions, context that doesn't live in any database — what people said about the data, not just the data itself | `mcp__slack-workspace__*` |
+| **Customer.io** | Email campaigns, member messaging, engagement metrics, lifecycle marketing | `mcp__customerio__*` |
+| **n8n** | Automation health — which workflows are running, which failed, what the system is doing behind the scenes | `mcp__n8n__*` |
+| **HubSpot** | CRM — contacts, deals, pipeline, company records | Connect via `/connect` when ready |
+| **Snowflake** | Data warehouse — historical data, cross-system joins, reporting | Connect via `/connect` when ready |
+| **Rippling** | HR / ATS — headcount, departments, hiring pipeline, people operations | Connect via `/connect` when ready |
+
+This list grows every time someone connects a new system via `/connect`. If a system you need isn't here, run `/connect` — if an MCP package exists for it, you can add it.
+
+**The power is in the cross-referencing:**
+- PostHog shows a 12% drop in completion rate → Slack reveals the team already discussed it last Tuesday → Airtable has the ticket tracking the fix
+- Customer.io shows a campaign with 40% open rate → PostHog shows what those openers did in the product → the story writes itself
+- n8n shows 3 failed workflow executions → PostHog shows the Slack alerts didn't fire → that's the gap
+
+One system has the numbers. Another has the context. A third has the human story. Intelligence comes from combining them.
 
 ## The Soul of This Skill: Micro + Macro
 
@@ -47,17 +78,18 @@ Don't assume micro = chat quotes. For a question about FOL enrollment friction, 
 
 ## How to Execute
 
-1. **Parse the request** — determine which value stream(s) are relevant (see catalog below)
-2. **Query PostHog** — use the MCP tools listed below. ALWAYS apply the internal user filter.
-3. **Assemble data** — cross-reference events, person properties, and derived metrics
-4. **Excavate the micro** — for every finding, dig into the specific details that make it concrete and human. This means different things for different queries: chat transcripts for coach questions, specific products for shop questions, error reasons for friction questions, individual user profiles for story questions.
+1. **Parse the request** — determine which systems have the data to answer this question. Most questions touch more than one system.
+2. **Query the right systems** — use the individual skills for domain expertise: `/posthog` for behavior, `/airtable-guide` for operational data, `/slack` for team conversations, `/customerio` for campaign metrics, `/n8n` for automation health. For PostHog queries, ALWAYS apply the internal user filter (see below).
+3. **Cross-reference** — combine data across systems. A PostHog metric + a Slack conversation + an Airtable record = a complete picture. Match across systems by email address.
+4. **Excavate the micro** — for every finding, dig into the specific details that make it concrete and human. This means different things for different queries: chat transcripts for coach questions, specific products for shop questions, Slack threads for team context, Airtable records for operational detail.
 5. **Synthesize** — present findings through the user's requested lens, weaving macro and micro together
 6. **Surface surprises** — if you find something unexpected or interesting beyond what was asked, mention it
 
 ## Diagnostic Loop (When Data Doesn't Look Right)
 
-When a query returns 0 rows, unexpected numbers, or results that don't match the user's expectations:
+When a query returns 0 rows, unexpected numbers, or results that don't match expectations:
 
+### PostHog queries
 1. **Check the internal user filter.** Did you exclude internal emails? Internal testing can skew all metrics.
 2. **Check `$host` / environment.** Are you querying the right product? Server-side events have `$host = null` — use `properties.$current_url` patterns instead.
 3. **Check the event name exactly.** Run `event-definitions-list` and search. Names are exact-match and case-sensitive.
@@ -65,7 +97,24 @@ When a query returns 0 rows, unexpected numbers, or results that don't match the
 5. **Broaden, then narrow.** Remove all filters → confirm data exists → add filters one at a time.
 6. **Check for the v1/v2 URL split.** Production tracks were restructured from `/clarity/` to three separate track URLs. Dashboards need regex matching for both patterns.
 7. **If person properties are NULL:** Society person properties (myersBriggs, enneagram, dreamJob, etc.) are ALL NULL in PostHog — they must be extracted from `ai_generation` chat event system prompts.
-8. **Try a different angle.** Use `query-generate-hogql-from-question` to get a fresh approach to the same question.
+8. **Try a different angle.** Use `query-generate-hogql-from-question` to get a fresh approach.
+
+### Airtable queries
+9. **Wrong base?** `list_bases` and scan — NSLS has 24+ bases. The name may not be what you expect.
+10. **Table not found?** `list_tables` with `tableIdentifiersOnly` to scan all tables.
+11. **Empty results?** Check `filterByFormula` syntax — it's Airtable-specific, not SQL.
+
+### Slack queries
+12. **Channel not visible?** The bot only sees channels it's been invited to. Try `conversations_history` with `#channel-name` directly.
+13. **No results for a topic?** Try different channel names, or search across multiple channels.
+
+### Customer.io queries
+14. **Tools not appearing?** OAuth may have expired. Re-authenticate via `/mcp`.
+15. **Inflated open rates?** Use `human_opened` not `opened` — email clients pre-fetch.
+
+### Cross-system
+16. **Can't find the connection?** Match on email across systems. PostHog `person.properties.email` = Customer.io email = Airtable record email field.
+17. **Still stuck?** Try a completely different system. The answer might not be where you expect.
 
 ## PostHog MCP Tools Available
 
@@ -359,23 +408,66 @@ GROUP BY substep
 ORDER BY total_turns DESC
 ```
 
+## Beyond PostHog: Other Connected Systems
+
+PostHog is the deepest data source, but intelligence often requires context from other systems. Use these when the question goes beyond behavioral analytics.
+
+### Airtable Intelligence
+
+**What it knows:** Operational data across every NSLS department — 24+ bases covering HR, marketing, product, operations, leadership, research. See `/airtable-guide` for the full base directory.
+
+**When to query it:** "What's on the roadmap?" "What campaigns are planned?" "What did the SLT decide about X?" "Show me the project tracker." "What's in the People Ops base?"
+
+**Cross-reference pattern:** PostHog shows what users DO → Airtable shows what the team is PLANNING to do about it. A completion rate drop in PostHog + a ticket in the Funnel Project Tracker + a conversation in Slack = the full picture.
+
+### Slack Intelligence
+
+**What it knows:** Team conversations, decisions, context, reactions. What people said about the data, not just the data itself. Messages, threads, reactions (with emoji names and counts), timestamps, who said what.
+
+**What it can't see:** File content (images, videos) — only metadata. And only channels the bot has been invited to.
+
+**When to query it:** "What did the team say about the launch?" "Has anyone discussed this bug?" "What was the reaction to the campaign results?" "What's the latest in #society-feedback-river?"
+
+**Cross-reference pattern:** PostHog shows a metric → Slack shows the team's reaction to it. Customer.io shows campaign performance → Slack shows marketing's discussion about what to try next.
+
+### Customer.io Intelligence
+
+**What it knows:** Email campaigns, member messaging, engagement metrics, lifecycle marketing. Who received what, who opened, who clicked, who converted.
+
+**When to query it:** "Which campaign had the best conversion?" "Did this user get our onboarding emails?" "What's our email engagement rate?"
+
+**Cross-reference pattern:** Customer.io shows who clicked an email → PostHog shows what they did in the product after clicking → the attribution story writes itself.
+
+**Gotcha:** Use `human_opened` / `human_clicked`, never `opened` / `clicked` — email client pre-fetches inflate the raw numbers.
+
+### n8n Intelligence
+
+**What it knows:** Automation health — which workflows are running, which failed, execution history, system status.
+
+**When to query it:** "Are our automations healthy?" "Did the feedback river workflow fail?" "What's the execution history for the onboarding notifications?"
+
+**Cross-reference pattern:** n8n shows a workflow failure → PostHog shows the downstream impact (alerts not firing, events not processing) → Slack shows whether anyone noticed.
+
 ## Value Stream Reference
 
-When the user's request maps to one of these, use the corresponding query approach:
+When the user's request maps to one of these, use the corresponding query approach. **Most value streams now span multiple systems.**
 
-| Stream | Use Cases | Primary Queries |
+| Stream | Use Cases | Systems to Query |
 |--------|-----------|-----------------|
-| **A: Story Mining** | Fantastic stories, ambassador candidates, lifecycle arcs, transformation narratives | Most Engaged Users + Chat Transcripts + Cross-Platform profiles |
-| **B: Campaign Intelligence** | Drop-off risk, milestone targets, cohort campaigns, engagement segmentation, cross-sell | Drop-off Risk + session_lifecycle + person properties |
-| **C: Coach Refinement** | Conversation quality, personality patterns, content gaps, AI acceptance rates | Conversation Quality + Chat Transcripts + personality properties |
-| **D: Implicit Feedback** | Sentiment, behavioral signals, friction, enrollment errors | Navigation patterns + frontier_redirect + error events |
-| **E: Discovery** | Cohort discovery, heat maps, correlations, predictions, search intent | Engagement Metrics + person properties + shop search_submitted |
+| **A: Story Mining** | Fantastic stories, ambassador candidates, lifecycle arcs, transformation narratives | PostHog (engaged users + chat transcripts) + Airtable (member records) + Slack (team reactions to stories) |
+| **B: Campaign Intelligence** | Drop-off risk, milestone targets, cohort campaigns, engagement segmentation, cross-sell | Customer.io (campaign metrics) + PostHog (post-click behavior) + Airtable (campaign planning) |
+| **C: Coach Refinement** | Conversation quality, personality patterns, content gaps, AI acceptance rates | PostHog (chat events + conversation quality) + Slack (#society-feedback-river) |
+| **D: Implicit Feedback** | Sentiment, behavioral signals, friction, enrollment errors | PostHog (navigation + errors) + Slack (team discussion of issues) + Airtable (bug tracking) |
+| **E: Discovery** | Cohort discovery, heat maps, correlations, predictions, search intent | PostHog (all behavioral data) + Airtable (operational context) |
+| **F: Operations** | Workflow health, automation status, system monitoring | n8n (execution history) + PostHog (downstream impact) + Slack (team awareness) |
+| **G: Team Intelligence** | What's the team working on, what decisions were made, what's planned | Slack (conversations) + Airtable (trackers, roadmaps, meeting notes) |
 
 ## Output Guidelines
 
-- **Format for the audience.** Leadership wants a compelling narrative. Marketing wants a target list. Product wants friction data. Engineering wants technical depth.
-- **Don't show raw queries by default.** The user speaks plain English — present insights, not SQL. Only show queries if the user explicitly asks for them or wants to iterate on the query logic.
-- **Flag data limitations.** Response answer text is NOT in PostHog (only in the database) except for edits (step_edit_response_saved) and chat system prompts (ai_generation.prompt_messages). Say so when relevant.
+- **Format for the audience.** Leadership wants a compelling narrative. Marketing wants a target list. Product wants friction data. Engineering wants technical depth. HR wants people data. The board wants enrollment and revenue. Same data, different lens.
+- **Don't show raw queries by default.** The user speaks plain English — present insights, not SQL or API calls. Only show queries if the user explicitly asks for them or wants to iterate.
+- **Name your sources.** When cross-referencing, say where each piece came from: "PostHog shows X, and the Slack conversation in #society-testing confirms Y."
+- **Flag data limitations.** Response answer text is NOT in PostHog (only in the database) except for edits (step_edit_response_saved) and chat system prompts (ai_generation.prompt_messages). Slack can see message text but not file content (images, videos). Say so when relevant.
 - **Note sample sizes.** Society has ~51 real users in the last 30 days. Small sample = be careful with percentage claims.
 - **PII awareness.** Ask the user whether they want names/emails included or scrubbed before presenting user-level data.
-- **Cross-reference when possible.** If you find a compelling user on one platform, check their data on the others for fuller context.
+- **Cross-reference by default.** If you find something interesting in one system, check the others. A PostHog finding + a Slack conversation + an Airtable record = intelligence. A PostHog finding alone = a dashboard.
