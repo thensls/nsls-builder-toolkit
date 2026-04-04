@@ -30,8 +30,8 @@ NSLS runs automation workflows for: Society Feedback River (chat â†’ PII scrub â
 ## NSLS n8n Cloud
 
 - **URL:** `nsls.app.n8n.cloud`
-- **MCP tools require:** `N8N_API_URL` and `N8N_API_KEY` environment variables (configured in `~/.claude.json`)
 - **18 MCP tools available** for the full workflow lifecycle
+- If n8n tools aren't available, run `/connect` to set up the connection.
 
 ## Workflow Discovery
 

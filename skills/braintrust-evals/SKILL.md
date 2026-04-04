@@ -22,15 +22,11 @@ description: >-
 
 ## Purpose
 
-This skill turns LLM evaluation from a one-shot "did it work?" into an iterative process — run an experiment, interpret the scores, diagnose what's wrong, adjust the prompt or model, and re-run until quality meets the bar. Not just how to use Braintrust, but how to think about evaluation. Braintrust is an SDK (not MCP) — see `/connect` for setup details (`npm install braintrust` + `BRAINTRUST_API_KEY` env var).
+This skill turns LLM evaluation from a one-shot "did it work?" into an iterative process — run an experiment, interpret the scores, diagnose what's wrong, adjust the prompt or model, and re-run until quality meets the bar. Not just how to use Braintrust, but how to think about evaluation. If Braintrust isn't set up, run `/connect` — it's an SDK, not MCP.
 
-## Braintrust Setup
-
-Braintrust is an LLM evaluation and observability platform for running experiments, tracking quality, and comparing models.
+## Braintrust Reference
 
 - **NSLS Braintrust project UUID:** `d55fe5d7-73f1-4a1c-9653-aa310c86754d`
-- **API key:** Store in env var `BRAINTRUST_API_KEY`
-- **SDK:** `braintrust` npm package (Node.js) or `braintrust` pip package (Python)
 - **Web UI:** `braintrust.dev` — view experiments, datasets, logs
 - **Docs:** https://www.braintrust.dev/docs
 

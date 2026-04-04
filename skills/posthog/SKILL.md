@@ -23,9 +23,9 @@ description: >-
 
 This skill makes PostHog's full analytical power accessible through conversation — not just running queries, but knowing which queries to run, what the results mean in the NSLS context, and what to try next when the data doesn't look right. If PostHog tools aren't available, run `/connect` first.
 
-## NSLS PostHog Setup
+## NSLS PostHog Landscape
 
-One PostHog project (ID: 128379) covers all NSLS properties:
+One PostHog project (ID: 128379) covers all NSLS properties. If PostHog tools aren't available, run `/connect` to set up the connection.
 
 | Domain | Product |
 |--------|---------|

@@ -15,65 +15,46 @@ description: >-
 ## SAFETY: THREE-TIER PERMISSION MODEL
 
 1. **Read-only** (App API queries — person lookup, campaign metrics, message history) — runs without friction. The App API is read-only by design.
-2. **Configuration** (setting up API keys, modifying local config) — ask permission, explain what changes.
+2. **Configuration** (creating segments, modifying campaign settings) — ask permission, explain what changes.
 3. **Write operations** (Track API — sending events, modifying person attributes) — never proactively offered. The Track API is a separate key and a separate concern. If explicitly requested: explain what will be written to Customer.io, confirm the target person/segment, then proceed.
 
 ## Purpose
 
-This skill turns Customer.io from a campaign dashboard into a queryable intelligence layer — cross-referencing email engagement with product behavior (via PostHog), tracking campaign attribution through the identity chain, and surfacing which messages actually drive action vs. which inflate metrics with prefetch noise. If Customer.io MCP tools aren't available, run `/connect` first. If using curl (no MCP), the App API key setup is below.
+This skill turns Customer.io from a campaign dashboard into a queryable intelligence layer — cross-referencing email engagement with product behavior (via `/posthog`), tracking campaign attribution through the identity chain, and surfacing which messages actually drive action vs. which inflate metrics with prefetch noise. If Customer.io tools aren't available, run `/connect` first.
 
 ## NSLS Customer.io Context
 
 NSLS uses Customer.io for lifecycle marketing: onboarding email sequences, chapter outreach, re-engagement campaigns, and member communications. The workspace (ID: 183998) contains campaigns, segments, and person records for all NSLS members.
 
-## Setup
+## API Reference
 
 - **NSLS Customer.io workspace ID:** 183998
 - **API docs:** https://docs.customer.io/integrations/api/app/
-
-### Get an App API Key
-
-1. Log in to Customer.io
-2. Go to Settings → API Keys → Create App API Key
-3. Store it securely in macOS Keychain:
-
-```bash
-security add-generic-password -a "customerio" -s "customerio-app-api" -w "YOUR_KEY"
-```
-
-### Usage
-
-Retrieve the key at the start of each call:
-```bash
-CIO_KEY=$(security find-generic-password -a "customerio" -s "customerio-app-api" -w)
-```
-
 - **Base URL:** `https://api.customer.io/v1/`
-- **Auth header:** `Authorization: Bearer $CIO_KEY`
 
 ## Person Lookup
 
 **Search by email:**
 ```bash
-curl -s -H "Authorization: Bearer $CIO_KEY" \
+curl -s -H "Authorization: Bearer $APP_API_KEY" \
   "https://api.customer.io/v1/customers?email=user@example.com" | python3 -m json.tool
 ```
 
 **Get profile (attributes):**
 ```bash
-curl -s -H "Authorization: Bearer $CIO_KEY" \
+curl -s -H "Authorization: Bearer $APP_API_KEY" \
   "https://api.customer.io/v1/customers/{cio_id}/attributes" | python3 -m json.tool
 ```
 
 **Get message history:**
 ```bash
-curl -s -H "Authorization: Bearer $CIO_KEY" \
+curl -s -H "Authorization: Bearer $APP_API_KEY" \
   "https://api.customer.io/v1/customers/{cio_id}/messages" | python3 -m json.tool
 ```
 
 **Get activity feed:**
 ```bash
-curl -s -H "Authorization: Bearer $CIO_KEY" \
+curl -s -H "Authorization: Bearer $APP_API_KEY" \
   "https://api.customer.io/v1/customers/{cio_id}/activities?limit=100" | python3 -m json.tool
 ```
 
@@ -89,13 +70,13 @@ Each message carries these metrics: `sent`, `delivered`, `opened`, `prefetch_ope
 
 **List all campaigns:**
 ```bash
-curl -s -H "Authorization: Bearer $CIO_KEY" \
+curl -s -H "Authorization: Bearer $APP_API_KEY" \
   "https://api.customer.io/v1/campaigns" | python3 -m json.tool
 ```
 
 **Get campaign metrics:**
 ```bash
-curl -s -H "Authorization: Bearer $CIO_KEY" \
+curl -s -H "Authorization: Bearer $APP_API_KEY" \
   "https://api.customer.io/v1/campaigns/{campaign_id}/metrics" | python3 -m json.tool
 ```
 
@@ -107,7 +88,7 @@ Key metrics: sent, delivered, opened, human_opened, clicked, human_clicked, conv
 
 **List segments:**
 ```bash
-curl -s -H "Authorization: Bearer $CIO_KEY" \
+curl -s -H "Authorization: Bearer $APP_API_KEY" \
   "https://api.customer.io/v1/segments" | python3 -m json.tool
 ```
 
