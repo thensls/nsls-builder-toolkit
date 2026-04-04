@@ -172,7 +172,7 @@ When a query returns 0 rows, unexpected numbers, or doesn't match what you expec
 
 - **For leadership:** Lead with the insight, not the query. "Completion rate dropped 12% after the track split" not "SELECT count() FROM events WHERE..."
 - **For engineering:** Include the exact HogQL query so they can reproduce and iterate.
-- **For cross-team reports:** Include both the number AND a representative user story (see `/data-intel` for the micro/macro marriage pattern).
+- **For cross-team reports:** Include both the number AND a representative user story (see `/data-intel` for the micro/macro synthesis pattern).
 - **PII awareness:** PostHog contains emails, names, IP addresses. Don't include PII in outputs unless specifically requested and the audience is appropriate.
 
 ## Gotchas & Trapdoors
