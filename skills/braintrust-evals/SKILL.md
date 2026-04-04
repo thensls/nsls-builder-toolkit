@@ -22,7 +22,7 @@ description: >-
 
 ## Purpose
 
-This skill turns LLM evaluation from a one-shot "did it work?" into an iterative process — run an experiment, interpret the scores, diagnose what's wrong, adjust the prompt or model, and re-run until quality meets the bar. Not just how to use Braintrust, but how to think about evaluation. If Braintrust isn't set up, run `/connect` — it's an SDK, not MCP.
+This skill turns LLM evaluation from a one-shot "did it work?" into an iterative process — run an experiment, interpret the scores, diagnose what's wrong, adjust the prompt or model, and re-run until quality meets the bar. Not just how to use Braintrust, but how to think about evaluation. If Braintrust isn't set up, run `/connect` — it's an SDK, not MCP. For cross-system intelligence that pairs eval results with PostHog user behavior, use `/data-intel`.
 
 ## Braintrust Reference
 

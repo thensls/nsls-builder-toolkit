@@ -20,7 +20,7 @@ description: >-
 
 ## Purpose
 
-This skill turns Customer.io from a campaign dashboard into a queryable intelligence layer — cross-referencing email engagement with product behavior (via `/posthog`), tracking campaign attribution through the identity chain, and surfacing which messages actually drive action vs. which inflate metrics with prefetch noise. If Customer.io tools aren't available, run `/connect` first.
+This skill turns Customer.io from a campaign dashboard into a queryable intelligence layer — cross-referencing email engagement with product behavior (via `/posthog`), tracking campaign attribution through the identity chain, and surfacing which messages actually drive action vs. which inflate metrics with prefetch noise. If Customer.io tools aren't available, run `/connect` first. For cross-system intelligence that combines Customer.io with PostHog, Slack, and more, use `/data-intel`.
 
 ## NSLS Customer.io Context
 

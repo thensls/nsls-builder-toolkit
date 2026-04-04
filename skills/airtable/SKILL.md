@@ -20,7 +20,7 @@ description: >-
 
 ## Purpose
 
-This skill turns 24+ scattered Airtable bases into a navigable landscape — knowing which base has the data you need, how tables connect across departments, and how to query records without drowning in context. If Airtable tools aren't available, run `/connect` first.
+This skill turns 24+ scattered Airtable bases into a navigable landscape — knowing which base has the data you need, how tables connect across departments, and how to query records without drowning in context. If Airtable tools aren't available, run `/connect` first. For cross-system intelligence that combines Airtable operational data with PostHog behavior, Slack conversations, and more, use `/data-intel`.
 
 ## NSLS Airtable Landscape
 

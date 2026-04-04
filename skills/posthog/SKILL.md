@@ -21,7 +21,7 @@ description: >-
 
 ## Purpose
 
-This skill makes PostHog's full analytical power accessible through conversation — not just running queries, but knowing which queries to run, what the results mean in the NSLS context, and what to try next when the data doesn't look right. If PostHog tools aren't available, run `/connect` first.
+This skill makes PostHog's full analytical power accessible through conversation — not just running queries, but knowing which queries to run, what the results mean in the NSLS context, and what to try next when the data doesn't look right. If PostHog tools aren't available, run `/connect` first. For cross-system intelligence that combines PostHog with Airtable, Slack, Customer.io, and more, use `/data-intel`.
 
 ## NSLS PostHog Landscape
 

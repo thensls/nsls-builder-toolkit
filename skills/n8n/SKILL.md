@@ -21,7 +21,7 @@ description: >-
 
 ## Purpose
 
-This skill makes n8n workflows queryable and manageable through conversation — not just listing workflows, but understanding what they do in the NSLS context, diagnosing why an execution failed, and knowing the safe way to make changes without breaking live automations. If n8n tools aren't available, run `/connect` first.
+This skill makes n8n workflows queryable and manageable through conversation — not just listing workflows, but understanding what they do in the NSLS context, diagnosing why an execution failed, and knowing the safe way to make changes without breaking live automations. If n8n tools aren't available, run `/connect` first. For cross-system intelligence that combines n8n health with PostHog impact and Slack awareness, use `/data-intel`.
 
 ## NSLS n8n Landscape
 
