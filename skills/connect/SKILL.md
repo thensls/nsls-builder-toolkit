@@ -24,6 +24,8 @@ Run it once per system. The connection persists across sessions. You never enter
 
 **How persistence works:** Tokens and API keys are stored as environment variables in your Claude Code config files. Claude Code loads these on every startup and passes them to each MCP server automatically.
 
+**Update resilience:** Claude Code auto-updates can occasionally reset or restructure settings. If your connections stop working after an update, check that your MCP configs are still in `settings.json` and that `"defaultMode": "auto"` is at the top level (not nested inside another object). Back up your `settings.json` periodically — the MCP configs and permission entries took significant effort to build and cannot be auto-reconstructed.
+
 ## Three-Tier Permission Model
 
 Every operation falls into one of three tiers:
