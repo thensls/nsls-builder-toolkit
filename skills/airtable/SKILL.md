@@ -1,5 +1,5 @@
 ---
-name: airtable-guide
+name: airtable
 description: >-
   Navigate the NSLS Airtable landscape — find the right base, understand table
   structures, query records, and manage data. NSLS has 24+ Airtable bases
