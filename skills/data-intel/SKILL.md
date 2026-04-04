@@ -79,7 +79,7 @@ Don't assume micro = chat quotes. For a question about FOL enrollment friction, 
 ## How to Execute
 
 1. **Parse the request** — determine which systems have the data to answer this question. Most questions touch more than one system.
-2. **Query the right systems** — use the individual skills for domain expertise: `/posthog` for behavior, `/airtable-guide` for operational data, `/slack` for team conversations, `/customerio` for campaign metrics, `/n8n` for automation health. For PostHog queries, ALWAYS apply the internal user filter (see below).
+2. **Query the right systems** — use the individual skills for domain expertise: `/posthog` for behavior, `/airtable` for operational data, `/slack` for team conversations, `/customerio` for campaign metrics, `/n8n` for automation health. For PostHog queries, ALWAYS apply the internal user filter (see below).
 3. **Cross-reference** — combine data across systems. A PostHog metric + a Slack conversation + an Airtable record = a complete picture. Match across systems by email address.
 4. **Excavate the micro** — for every finding, dig into the specific details that make it concrete and human. This means different things for different queries: chat transcripts for coach questions, specific products for shop questions, Slack threads for team context, Airtable records for operational detail.
 5. **Synthesize** — present findings through the user's requested lens, weaving macro and micro together
@@ -414,7 +414,7 @@ PostHog is the deepest data source, but intelligence often requires context from
 
 ### Airtable Intelligence
 
-**What it knows:** Operational data across every NSLS department — 24+ bases covering HR, marketing, product, operations, leadership, research. See `/airtable-guide` for the full base directory.
+**What it knows:** Operational data across every NSLS department — 24+ bases covering HR, marketing, product, operations, leadership, research. See `/airtable` for the full base directory.
 
 **When to query it:** "What's on the roadmap?" "What campaigns are planned?" "What did the SLT decide about X?" "Show me the project tracker." "What's in the People Ops base?"
 
