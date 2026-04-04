@@ -25,11 +25,13 @@ Every skill in the toolkit is an instance of this pattern — `/connect`, `/data
 
 ## The Pattern
 
-Every skill that finds its full shape has these elements. Not every element applies to every skill — but every element should be consciously considered.
+A skill that finds its full shape has considered these elements — not as a checklist to follow blindly, but as dimensions to explore. Some won't apply. Some will matter more than others. The point is conscious consideration, not completeness for its own sake.
 
-### 1. Safety Block (FIRST SECTION — always)
+### 1. Safety Block (FIRST SECTION — when the skill interacts with external systems or modifies anything)
 
-Adapt the three-tier permission model to the skill's domain. See the safety block at the top of this skill (or `/connect` for a detailed example). The safety block goes FIRST — before purpose, before content, before anything. It sets the behavioral contract for the entire skill. Each tier should name the specific operations that fall into it for THIS skill's domain.
+If the skill touches external services, files, or configuration, adapt the three-tier permission model to its domain. See `/connect` for a detailed example. The safety block goes FIRST — before purpose, before content. Each tier should name the specific operations that fall into it for THIS skill's domain. Not every skill needs all three tiers — a purely analytical skill may only need tier 1.
+
+If the skill is purely informational (no tools, no external systems), a safety block may not be needed. Consider it consciously rather than including it by default.
 
 ### 2. Purpose (the soul)
 
@@ -51,14 +53,21 @@ The skill body describes HOW. The frontmatter description captures WHEN. Claude 
 
 ### 4. Macro/Micro Synthesis
 
-Every skill delivers both the big picture AND the grounding details. Macro without micro is a dashboard. Micro without macro is an anecdote. The synthesis — where the whole is greater than the sum of its parts — is intelligence.
+When relevant, a skill delivers both the big picture AND the grounding details. Macro without micro is a dashboard. Micro without macro is an anecdote. The synthesis — where the whole is greater than the sum of its parts — is intelligence.
 
-What micro looks like depends on the domain:
-- `/data-intel`: user quotes, individual engagement patterns, specific error reasons
-- `/connect`: exact config JSON blocks, specific env var names, the precise error message from a failed MCP startup
-- `/posthog`: HogQL dialect gotchas, property name casing, the FunnelsQuery OR limitation
-- `/slack`: channel names, reaction emoji patterns, who said what
-- `/skill-creation`: this list you're reading right now — concrete examples from real skills
+What macro and micro look like depends on the domain:
+
+| Skill | Macro | Micro |
+|-------|-------|-------|
+| `/data-intel` | Completion rates, funnel trends, cohort sizes, cross-system patterns | A user's actual words to the coach, the substep where people navigate backward 4x more, the chapter with 2x the enrollment rate |
+| `/connect` | The three-tier permission model, environment detection, the service registry structure | Exact config JSON blocks, specific env var names, the precise error message from a failed MCP startup |
+| `/posthog` | Dashboard management, funnel analysis, retention curves, experiment design | HogQL dialect gotchas, `$host` is null on server-side events, FunnelsQuery OR limitation |
+| `/slack` | Channel landscape, team communication patterns, decision tracking | Specific channel names, reaction emoji counts, thread timestamps, who said what |
+| `/n8n` | Automation health overview, workflow lifecycle, execution success rates | Telemetry suppression env var, partial vs full update protocol, trigger type limitations |
+| `/airtable` | 24+ bases across departments, cross-base workflows, operational patterns | `filterByFormula` syntax, linked record ID resolution, the Railway proxy for Automation Tracker |
+| `/skill-creation` | The 8 elements, the hierarchy, the fractal | This table you're reading — concrete examples from real skills |
+
+Not every skill needs both. Some skills are primarily macro (big-picture frameworks). Some are primarily micro (reference docs with hard-won details). But always consider whether the other dimension would make the skill stronger.
 
 ### 5. Domain-Specific Micro
 
@@ -74,7 +83,7 @@ You can't write good domain micro from documentation alone. You have to use the 
 
 ### 6. Service Awareness (the hierarchy)
 
-Every skill exists in a hierarchy:
+Skills that interact with external systems exist in a hierarchy:
 
 ```
 /connect          → provides the connections
@@ -88,19 +97,19 @@ Every skill exists in a hierarchy:
 /skill-creation   → the rubric that all skills follow
 ```
 
-Every domain skill should:
+Domain skills that depend on external connections should:
 - Reference `/connect` for setup: "If tools aren't available, run `/connect`"
 - Reference `/data-intel` for cross-system intelligence: "For cross-system analysis, use `/data-intel`"
-- Never duplicate setup instructions that belong in `/connect`
-- Never duplicate cross-system orchestration that belongs in `/data-intel`
+- Avoid duplicating setup instructions that belong in `/connect`
+- Avoid duplicating cross-system orchestration that belongs in `/data-intel`
 
-Setup → `/connect`. Domain expertise → individual skill. Cross-system intelligence → `/data-intel`. Respect the hierarchy.
+The general principle: setup → `/connect`. Domain expertise → individual skill. Cross-system intelligence → `/data-intel`.
 
 ### 7. Diagnostic Loop
 
 **TRY → OBSERVE → DIAGNOSE → ADAPT → TRY AGAIN**
 
-Every skill that interacts with external systems should have a diagnostic loop for when things don't work. Not a static troubleshooting FAQ — a live reasoning process.
+Skills that interact with external systems benefit from a diagnostic loop for when things don't work. Not a static troubleshooting FAQ — a live reasoning process. Not every skill needs one — but if things can fail at runtime, a loop helps.
 
 The loop's character varies by domain:
 - `/connect`: connection loop — try auth method → silent failure → diagnose environment → try different package
@@ -114,7 +123,7 @@ The loop should never let the user stare at a screen that does nothing. It shoul
 
 ### 8. Output Guidelines
 
-Every skill should say how to format output for different audiences:
+Skills that produce output for humans (most of them) benefit from audience-aware formatting:
 - Leadership wants narratives and decisions
 - Engineering wants technical depth and reproducibility
 - Marketing wants target lists and performance comparisons
@@ -151,7 +160,7 @@ When building a new skill right now:
 
 1. **Start with the experience.** What did you just do? What walls did you hit? What did you learn that isn't obvious?
 2. **Draft the frontmatter.** Name and description. The description captures WHEN to invoke.
-3. **Write the safety block FIRST.** Adapt the three-tier model to this domain. What's read-only? What's configuration? What's destructive?
+3. **Consider the safety block.** If the skill touches external systems or modifies anything, adapt the three-tier model to this domain. What's read-only? What's configuration? What's destructive? If it does, put it FIRST.
 4. **Write the purpose.** One paragraph. Why is this skill alive?
 5. **Pour in the domain micro.** Every gotcha, every failure, every non-obvious detail. This is the hard-won knowledge that makes the skill valuable.
 6. **Structure the macro.** Organize the micro into sections that tell a coherent story.
