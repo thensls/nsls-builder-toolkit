@@ -1,7 +1,7 @@
 ---
 name: data-intel
 description: >-
-  The marriage of micro and macro: mine data across ALL connected NSLS
+  The synthesis of micro and macro: mine data across ALL connected NSLS
   systems — PostHog analytics, Airtable operational data, Slack team
   conversations, Customer.io campaign metrics, n8n workflow health, and
   any other system connected via /connect. Translates plain English
@@ -20,7 +20,7 @@ description: >-
 2. **Configuration** (creating PostHog insights/dashboards, Airtable records for tracking) — ask permission, explain where it will appear and who will see it.
 3. **Destructive** (deleting insights, records, dashboards) — never proactively offered. If explicitly requested: explain the risks, confirm the specific item, then proceed.
 
-**PII awareness:** Connected systems contain emails, names, conversations, and behavioral data. This skill surfaces individual stories as part of the micro/macro marriage. Redact PII from outputs shared outside the immediate team unless the audience and purpose are clear.
+**PII awareness:** Connected systems contain emails, names, conversations, and behavioral data. This skill surfaces individual stories as part of the micro/macro synthesis. Redact PII from outputs shared outside the immediate team unless the audience and purpose are clear.
 
 If any system's tools aren't available, run `/connect` to set them up.
 
@@ -57,7 +57,7 @@ One system has the numbers. Another has the context. A third has the human story
 - **Macro:** Metrics, patterns, funnels, cohort sizes, trends, completion rates — the big picture.
 - **Micro:** The specific, concrete details that make findings real and human — different for every domain.
 
-If you deliver macro without micro, you have dashboards. If you deliver micro without macro, you have anecdotes. The marriage of both is intelligence. The whole is more than the sum of its parts.
+If you deliver macro without micro, you have dashboards. If you deliver micro without macro, you have anecdotes. The synthesis of both is intelligence. The whole is more than the sum of its parts.
 
 **What micro looks like depends on what you're looking at:**
 - **Society chat:** A user's actual words to the AI coach — "there's nothing standing in my way"
