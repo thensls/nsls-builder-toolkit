@@ -120,7 +120,7 @@ All tools matching `mcp__posthog__*-get*`, `mcp__posthog__*-list*`, `mcp__postho
 ### Airtable
 
 **What:** Shared databases for tracking work, roadmaps, content.
-**Skills that use it:** `/airtable-guide`
+**Skills that use it:** `/airtable`
 
 #### Connection: stdio with Personal Access Token
 **MCP type:** stdio (npx)
