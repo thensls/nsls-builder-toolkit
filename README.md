@@ -1,6 +1,6 @@
 # NSLS Builder Toolkit
 
-The NSLS Builder Toolkit gives every NSLS employee with Claude Code a set of skills for building, tracking, and deploying automations. Install once, get updates automatically.
+The NSLS Builder Toolkit gives every NSLS employee with Claude Code a set of skills for building, tracking, querying data, and deploying automations. Install once, get updates automatically.
 
 ## Install
 
@@ -8,7 +8,25 @@ The NSLS Builder Toolkit gives every NSLS employee with Claude Code a set of ski
 curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash
 ```
 
-## Included Skills
+## First-Time Setup
+
+After installing, run `/connect` in Claude Code to connect your data systems (PostHog, Airtable, Slack, Customer.io, n8n, and more). Each connection persists across sessions — you only do it once per system.
+
+## Data Intelligence Skills
+
+| Skill | What it does |
+|-------|-------------|
+| **connect** | Connect Claude Code to your external systems — PostHog, Airtable, Slack, and more |
+| **data-intel** | Cross-system intelligence — query any connected system and cross-reference across all of them |
+| **posthog** | Deep PostHog analytics — queries, dashboards, funnels, person lookup, error tracking |
+| **slack** | Read and search NSLS Slack — channels, messages, threads, reactions |
+| **customerio** | Customer.io campaign analytics and member lookup |
+| **n8n** | Manage n8n automation workflows — create, validate, test, debug |
+| **airtable** | Navigate 24+ NSLS Airtable bases — find data, query records, understand structure |
+| **braintrust-evals** | LLM evaluation — run experiments, compare models, track quality |
+| **skill-creation** | The rubric for building new skills that find their full shape |
+
+## Builder Skills
 
 | Skill | What it does |
 |-------|-------------|
@@ -17,15 +35,14 @@ curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/i
 | **nsls-focus-group** | Test ideas with simulated employee panels |
 | **nsls-slides** | Create branded NSLS/Society presentations |
 | **frontend-slides** | Build HTML presentations |
-| **google-docs** | Google Drive file management |
+| **google-drive** | Google Drive file management |
 | **google-slides-api** | Edit existing Google Slides via API |
 | **netlify-deploy** | Deploy and preview static pages |
-| **log** | Log progress to Obsidian project files |
-| **close-day** | End-of-day summary from calendar, Slack, email |
-| **familiar** | Screen capture activity tracking (optional, opt-in) |
 | **pydoc-pipeline** | Generate documentation from Python code |
 | **gws** | Google Workspace Sheets CLI |
 | **deployment-guide** | How to deploy to Railway, Airtable, GAS, Cloudflare |
+| **web-research** | Web research with AI overview extraction |
+| **interrogate** | Scope a new project through structured conversation |
 
 ## Updates
 
