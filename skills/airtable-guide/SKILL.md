@@ -12,7 +12,19 @@ description: >-
 
 # NSLS Airtable Navigation
 
-Find the right base, understand table structures, query records, and manage data across the NSLS Airtable landscape.
+## SAFETY: THREE-TIER PERMISSION MODEL
+
+1. **Read-only** (list bases, list tables, describe table, list/search/get records, list comments) — runs without friction.
+2. **Configuration** (create table, create/update field, create comment, upload attachment) — ask permission, explain what will change. Schema changes affect ALL users of the base instantly.
+3. **Destructive** (delete records) — never proactively offered. If explicitly requested: explain that API deletes are permanent (no recycle bin in the API, though the Airtable web UI has one), confirm which specific records, then proceed.
+
+## Purpose
+
+This skill turns 24+ scattered Airtable bases into a navigable landscape — knowing which base has the data you need, how tables connect across departments, and how to query records without drowning in context. If Airtable tools aren't available, run `/connect` first.
+
+## NSLS Airtable Landscape
+
+Airtable is the operational backbone across every NSLS department — HR tracks people, Marketing tracks campaigns, Product tracks roadmaps, Operations tracks processes, Leadership tracks decisions. The bases below are the starting points, not an exhaustive list — new bases get created regularly.
 
 ## NSLS Base Directory
 
@@ -128,6 +140,21 @@ The Automation Tracker base (`appd5oK1wLVPYZeia`) tracks all NSLS automations an
 - `mcp__airtable__upload_attachment` — attach files to records
 
 **Caution:** Schema changes affect everyone using the base. Always confirm before creating or modifying tables and fields.
+
+## Diagnostic Loop (When Queries Return Wrong Results)
+
+1. **Wrong base?** `list_bases` → scan names. NSLS has 24+ bases — the one you need might be named differently than you expect.
+2. **Table not found?** `list_tables` with `tableIdentifiersOnly` → scan all table names. Tables get renamed.
+3. **Records look empty?** Check the `filterByFormula` syntax — it's Airtable-specific, not SQL. Common mistake: using `=` with a field that has spaces (wrap in `{Field Name}`).
+4. **Linked records show IDs not values?** Linked record fields return record IDs. You need a second query on the linked table to resolve display values.
+5. **Wrong base ID?** The base directory above may be stale. Run `list_bases` to get the current list and compare.
+6. **Too much data?** Use `maxRecords` to limit results. Use `tableIdentifiersOnly` before `full` detail.
+
+## Output Guidelines
+
+- **For someone looking for data:** Lead with where it is: "That data is in the Operations base (`appwbKaXw2K0xoJk6`), table 'Project Tracker', field 'Status'."
+- **For cross-department queries:** Note which bases you pulled from and whether they're connected or separate.
+- **For record results:** Format as a readable table, not raw JSON.
 
 ## Gotchas & Trapdoors
 

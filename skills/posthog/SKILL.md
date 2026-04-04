@@ -13,7 +13,15 @@ description: >-
 
 # PostHog Analytics
 
-Query, analyze, and manage PostHog analytics for any NSLS product.
+## SAFETY: THREE-TIER PERMISSION MODEL
+
+1. **Read-only** (queries, lookups, listing) — runs without friction. No approval needed.
+2. **Configuration** (creating dashboards, insights, feature flags) — ask permission, explain what will be created and where it will be visible.
+3. **Destructive** (deleting insights, dashboards, experiments, feature flags) — never proactively offered. If explicitly requested: explain that deletion is permanent (no recycle bin for insights), confirm which specific item, confirm they understand it cannot be undone, then proceed.
+
+## Purpose
+
+This skill makes PostHog's full analytical power accessible through conversation — not just running queries, but knowing which queries to run, what the results mean in the NSLS context, and what to try next when the data doesn't look right. If PostHog tools aren't available, run `/connect` first.
 
 ## NSLS PostHog Setup
 
@@ -147,6 +155,25 @@ Each product sends its own custom event properties — use `mcp__posthog__proper
 - `mcp__posthog__logs-list-attributes` / `logs-list-attribute-values` — discover what's in the logs
 
 Use these when debugging CDP destinations, checking webhook deliveries, or investigating data pipeline issues.
+
+## Diagnostic Loop (When Queries Return Wrong Results)
+
+When a query returns 0 rows, unexpected numbers, or doesn't match what you expected:
+
+1. **Check the `$host` filter.** Are you filtering for the right product domain? Server-side events have `$host = null`.
+2. **Check the event name.** Run `event-definitions-list` and search — event names are exact-match. `step_start` ≠ `stepStart` ≠ `step-start`.
+3. **Check the date range.** HogQL uses UTC. "Today" for a US user started hours ago in UTC.
+4. **Check the property name.** Run `properties-list` — property names vary by product and event type.
+5. **Broaden, then narrow.** Remove all filters → confirm data exists → add filters one at a time to find which one eliminates results.
+6. **Try `query-generate-hogql-from-question`** to get a different angle on the same question.
+7. **Check if it's a funnel issue.** FunnelsQuery `properties` doesn't support OR groups — use `regex` operator instead.
+
+## Output Guidelines
+
+- **For leadership:** Lead with the insight, not the query. "Completion rate dropped 12% after the track split" not "SELECT count() FROM events WHERE..."
+- **For engineering:** Include the exact HogQL query so they can reproduce and iterate.
+- **For cross-team reports:** Include both the number AND a representative user story (see `/data-intel` for the micro/macro marriage pattern).
+- **PII awareness:** PostHog contains emails, names, IP addresses. Don't include PII in outputs unless specifically requested and the audience is appropriate.
 
 ## Gotchas & Trapdoors
 

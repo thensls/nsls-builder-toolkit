@@ -12,7 +12,19 @@ description: >-
 
 # Customer.io
 
-Query Customer.io for member data, campaign performance, message history, and activity feeds.
+## SAFETY: THREE-TIER PERMISSION MODEL
+
+1. **Read-only** (App API queries — person lookup, campaign metrics, message history) — runs without friction. The App API is read-only by design.
+2. **Configuration** (setting up API keys, modifying local config) — ask permission, explain what changes.
+3. **Write operations** (Track API — sending events, modifying person attributes) — never proactively offered. The Track API is a separate key and a separate concern. If explicitly requested: explain what will be written to Customer.io, confirm the target person/segment, then proceed.
+
+## Purpose
+
+This skill turns Customer.io from a campaign dashboard into a queryable intelligence layer — cross-referencing email engagement with product behavior (via PostHog), tracking campaign attribution through the identity chain, and surfacing which messages actually drive action vs. which inflate metrics with prefetch noise. If Customer.io MCP tools aren't available, run `/connect` first. If using curl (no MCP), the App API key setup is below.
+
+## NSLS Customer.io Context
+
+NSLS uses Customer.io for lifecycle marketing: onboarding email sequences, chapter outreach, re-engagement campaigns, and member communications. The workspace (ID: 183998) contains campaigns, segments, and person records for all NSLS members.
 
 ## Setup
 
@@ -117,6 +129,21 @@ Segments are pre-defined groups of customers based on attributes or behavior. Us
 3. Cross-reference with PostHog `$identify` events (signup = identity established)
 
 **Timezone note:** Customer.io uses UTC for all timestamps.
+
+## Diagnostic Loop (When Lookups Return Empty or Wrong)
+
+1. **Person not found by email?** Try partial match. Check if they were suppressed (deleted people still appear with a suppressed flag). Try searching by `cio_id` if you have it from another source.
+2. **Campaign metrics look inflated?** You're probably looking at `opened` instead of `human_opened`. Email clients pre-fetch images — always use `human_opened` / `human_clicked`.
+3. **UTM attribution missing in PostHog?** Customer.io auto-appends UTM params at the click-tracking redirect, but client-side redirects in the app can strip them. Check PostHog's `$current_url` for the UTM params — they may be on the landing page pageview but not on subsequent pages.
+4. **API returns 401?** The App API key may have expired or been rotated. Generate a new one in Customer.io Settings → API Keys.
+5. **Can't find a campaign?** List all campaigns and search — campaign names in the API may differ from what the marketing team calls them in Slack.
+
+## Output Guidelines
+
+- **For marketing:** Lead with engagement rates (human_opened, human_clicked, converted). Compare against previous campaigns. Flag statistical significance if sample sizes are small.
+- **For product:** Focus on the user journey: which email → which click → what happened in the product (cross-reference with PostHog).
+- **For leadership:** One sentence: "The March onboarding sequence converted 23% of openers into active users, up from 18% in February."
+- **Timezone:** All Customer.io timestamps are UTC. Convert for the audience if needed.
 
 ## Gotchas & Trapdoors
 

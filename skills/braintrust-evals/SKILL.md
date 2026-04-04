@@ -14,7 +14,15 @@ description: >-
 
 # LLM Evaluation with Braintrust
 
-Run LLM evaluations, compare models, build datasets, define scoring functions, and track experiments using the Braintrust platform.
+## SAFETY: THREE-TIER PERMISSION MODEL
+
+1. **Read-only** (viewing experiments, datasets, scores, logs) — runs without friction.
+2. **Configuration** (creating experiments, datasets, scoring functions) — ask permission, explain what will be created. Note: experiment names must be unique — reusing a name overwrites the previous run.
+3. **Destructive** (deleting datasets, overwriting experiments) — never proactively offered. If explicitly requested: explain what will be lost (experiment history, dataset rows), confirm they understand, then proceed.
+
+## Purpose
+
+This skill turns LLM evaluation from a one-shot "did it work?" into an iterative process — run an experiment, interpret the scores, diagnose what's wrong, adjust the prompt or model, and re-run until quality meets the bar. Not just how to use Braintrust, but how to think about evaluation. Braintrust is an SDK (not MCP) — see `/connect` for setup details (`npm install braintrust` + `BRAINTRUST_API_KEY` env var).
 
 ## Braintrust Setup
 
@@ -112,6 +120,22 @@ These patterns apply to any LLM pipeline, not just Braintrust experiments:
 - Braintrust logging wraps your production AI calls to track inputs, outputs, latency, and cost
 - Use logging to build datasets from real production traffic (most representative test cases)
 - Pair with PostHog for user-level analytics — Braintrust tracks the AI call, PostHog tracks what the user did with the result
+
+## Diagnostic Loop (When Scores Are Low or Wrong)
+
+1. **Check schema-prompt alignment.** Does the prompt ask for N items but the schema only allows M? This is the #1 cause of confused output.
+2. **Check key name consistency.** Does the prompt say `"description"` but the parsing code expects `"text"`? Standardize across prompt, schema, and parser.
+3. **Run a single test case manually.** Look at the raw model output before scoring. Is the JSON valid? Is it wrapped in markdown backticks? Strip backticks before parsing.
+4. **Check the scoring rubric.** Vague criteria → inconsistent LLM-as-judge scores. Add concrete examples of each score level.
+5. **Compare against baseline.** Is the score actually low, or did the baseline change? Always compare new experiments against a pinned baseline.
+6. **Check model version.** Model updates can change behavior silently. Pin versions in production and re-run experiments after updates.
+7. **Adjust ONE variable and re-run.** If you change model AND prompt simultaneously, you can't attribute the difference. Change one, measure, then change the next.
+
+## Output Guidelines
+
+- **For leadership:** "Model X is 15% more accurate than Model Y on our evaluation set, at 40% lower cost per call."
+- **For engineering:** Per-case breakdowns, failing test cases with raw input/output, score distributions with variance.
+- **For prompt iteration:** Show the specific test cases that scored lowest, with the model's actual output alongside the expected output, so the prompt author can see exactly where it went wrong.
 
 ## Gotchas & Trapdoors
 

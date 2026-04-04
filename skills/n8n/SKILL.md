@@ -13,7 +13,19 @@ description: >-
 
 # n8n Workflow Management
 
-Manage n8n automation workflows on the NSLS cloud instance.
+## SAFETY: THREE-TIER PERMISSION MODEL
+
+1. **Read-only** (list workflows, get workflow, check executions, health check, search nodes/templates, validate) — runs without friction.
+2. **Configuration** (create workflow, partial update, activate/deactivate, deploy template, autofix) — ask permission, explain what will change and whether it affects a live workflow. Deactivating a workflow stops it from processing real data — confirm first.
+3. **Destructive** (delete workflow, truncate versions, delete datatable/rows, full workflow update) — never proactively offered. If explicitly requested: explain exactly what will be permanently deleted or overwritten, confirm which specific workflow/table, confirm they understand it cannot be undone, then proceed.
+
+## Purpose
+
+This skill makes n8n workflows queryable and manageable through conversation — not just listing workflows, but understanding what they do in the NSLS context, diagnosing why an execution failed, and knowing the safe way to make changes without breaking live automations. If n8n tools aren't available, run `/connect` first.
+
+## NSLS n8n Landscape
+
+NSLS runs automation workflows for: Society Feedback River (chat → PII scrub → Slack), auth alerts, exception notifications, member lifecycle events, and more. The n8n instance at `nsls.app.n8n.cloud` is the automation backbone — changes here affect real users and real notifications.
 
 ## NSLS n8n Cloud
 
@@ -71,15 +83,21 @@ Test with sample payloads that match what the trigger expects.
 
 Templates are a fast way to start — customize after deployment.
 
-## SAFETY RULES (NON-NEGOTIABLE)
+## Diagnostic Loop (When Workflows Fail)
 
-Three tools are **DESTRUCTIVE** and require explicit user approval every time:
+1. **Check execution history:** `n8n_executions` → find the failed run → read the error output.
+2. **Identify the failing node:** The execution error usually names the specific node that failed.
+3. **Check node configuration:** `n8n_get_workflow` → find the failing node → check its config against `get_node` documentation.
+4. **Validate:** `n8n_validate_workflow` → catches connection errors, missing credentials, type mismatches.
+5. **Try autofix:** `n8n_autofix_workflow` for common structural issues.
+6. **Fix and re-validate:** Apply the fix with `n8n_update_partial_workflow` (never full update) → validate again → test.
+7. **If testing fails:** Only webhook/form/chat triggers can be tested via API. Manual and schedule triggers require the n8n web UI.
 
-1. **`n8n_delete_workflow`** — permanently deletes a workflow. Irreversible.
-2. **`n8n_workflow_versions`** — has `truncate` mode that deletes ALL versions. Also has `rollback` and `delete` modes.
-3. **`n8n_manage_datatable`** — has `deleteTable` and `deleteRows` actions.
+## Output Guidelines
 
-**NEVER call these tools without asking the user first.** Even if the user says "clean up," confirm specifically which workflow, version, or table before proceeding.
+- **For the person debugging:** Include the failing node name, the error message, and what you changed.
+- **For status updates:** "The Society Feedback River workflow failed 3 times today — the Slack node lost its credential. Reattached and verified."
+- **For workflow documentation:** List nodes in execution order with what each one does.
 
 ## Gotchas & Trapdoors
 
