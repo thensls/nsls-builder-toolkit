@@ -348,8 +348,12 @@ To use: `npm install braintrust` in your project, set `BRAINTRUST_API_KEY` as an
 
 ### HubSpot
 
-**What:** CRM.
-**No seed yet.** Found in PostHog CDP integrations. If you have HubSpot access, help the `/connect` skill by trying available MCP packages and documenting what works.
+**What:** CRM — 6.9M contacts, chapter management, enrollment pipeline, support tickets.
+**Type:** claude.ai MCP connector (OAuth, not local MCP server)
+**Setup:** Run `/mcp` → select "claude.ai HubSpot" → complete OAuth on HubSpot consent screen → select "View-only" for optional permissions → authorize.
+**Post-setup:** If tools don't appear after auth, check `~/.claude/mcp-needs-auth-cache.json` — remove the HubSpot entry if the OAuth callback was interrupted, then restart Claude Code.
+**Tools available after connection:** get_user_details, get_properties, get_crm_objects, search_crm_objects, search_properties, search_owners
+**Skill:** `/hubspot`
 
 ---
 
