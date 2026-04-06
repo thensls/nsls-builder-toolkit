@@ -101,11 +101,18 @@ Layer 1: INFRASTRUCTURE
                                Detect what's connected, walk through
                                setup for what's missing, handle the
                                failures that will happen along the way.
+
+Layer 0: THE SCHEMA
+└── /system-of-record        — The unified data model made conversational.
+                               9 domains, 95 tables, Person.id as
+                               universal anchor. Knows both the target
+                               schema AND the current fragmented reality.
+                               The foundation everything maps onto.
 ```
 
-**Layer 1** gets the pipes connected. **Layer 2** knows how to use each pipe well — one skill per system, with safety tiers, diagnostic loops, and org-specific gotchas. The seeds are systems with auth available but not yet explored — each one is a `/data-model-discovery` run waiting to happen. **Layer 3** is cross-system intelligence — combining data from multiple Layer 2 skills to answer questions no single system can. **Layer 4** is the meta layer — skills that create new skills, discover unnamed patterns, map new data sources, and find ground truth.
+**Layer 0** is the schema — the unified data model that defines what member data looks like when all systems agree. **Layer 1** gets the pipes connected. **Layer 2** knows how to use each pipe well — one skill per system, with safety tiers, diagnostic loops, and org-specific gotchas. The seeds are systems with auth available but not yet explored — each one is a `/data-model-discovery` run waiting to happen. **Layer 3** is cross-system intelligence — combining data from multiple Layer 2 skills to answer questions no single system can. **Layer 4** is the meta layer — skills that create new skills, discover unnamed patterns, map new data sources, and find ground truth.
 
-They form a cycle: `/data-model-discovery` explores a new system → produces a platform skill (via `/skill-creation` rubric) → feeds into `/data-intel` → which `/investigation` can query for ground truth → and `/full-shape` can use to define patterns nobody's named yet. Every seed that gets connected and explored adds another row to Layer 2 and another dimension to Layer 3.
+They form a cycle: `/data-model-discovery` explores a new system → maps it against `/system-of-record` → produces a platform skill (via `/skill-creation` rubric) → feeds into `/data-intel` → which `/investigation` can query for ground truth → and `/full-shape` can use to define patterns nobody's named yet. Every seed that gets connected and explored adds another row to Layer 2 and another dimension to Layer 3.
 
 ## Builder Skills
 
