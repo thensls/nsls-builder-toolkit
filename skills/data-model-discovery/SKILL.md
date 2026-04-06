@@ -65,7 +65,7 @@ This is where the gold is. Every system has standard properties AND custom prope
 
 ### Phase 4: Relationship Mapping
 
-How does this system connect to everything else?
+How does this system connect to everything else? Map discoveries against `/system-of-record` to identify which SoR domains the new data covers.
 
 1. **Find the join keys.** Email is almost always one. But look for direct ID bridges (like Society's `hubSpotId` → HubSpot's `hs_object_id`), legacy IDs (like `nsls_uid` → Feather), and institutional IDs (like `unitid` → IPEDS).
 2. **Map to existing systems.** For each join key, trace it: where does it come from? Where is it stored? Is it actively maintained or a write-once artifact?
