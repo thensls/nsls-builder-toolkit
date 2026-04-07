@@ -1,6 +1,8 @@
 # NSLS Builder Toolkit
 
-The NSLS Builder Toolkit gives every NSLS employee with Claude Code a set of skills for building, tracking, and deploying automations. Install once, get updates automatically.
+Organization skills for every NSLS builder — building, tracking, deploying, presenting, and researching. Install once, get updates automatically.
+
+Also installs **Superpowers** (planning, debugging, verification) and **Compound Engineering** (brainstorm, plan, review, git) plugins.
 
 ## Install
 
@@ -8,24 +10,39 @@ The NSLS Builder Toolkit gives every NSLS employee with Claude Code a set of ski
 curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash
 ```
 
-## Included Skills
+Then open Claude Code and say `/setup` to connect your tools and optionally install personal productivity skills.
+
+## Org Skills
 
 | Skill | What it does |
 |-------|-------------|
-| **register-automation** | Track your work in the NSLS Automation Tracker |
-| **product-design** | UX guardrail — generate DESIGN.md, review changes, run focus groups |
-| **nsls-focus-group** | Test ideas with simulated employee panels |
-| **nsls-slides** | Create branded NSLS/Society presentations |
-| **frontend-slides** | Build HTML presentations |
-| **google-docs** | Google Drive file management |
-| **google-slides-api** | Edit existing Google Slides via API |
-| **netlify-deploy** | Deploy and preview static pages |
-| **log** | Log progress to Obsidian project files |
-| **close-day** | End-of-day summary from calendar, Slack, email |
-| **familiar** | Screen capture activity tracking (optional, opt-in) |
-| **pydoc-pipeline** | Generate documentation from Python code |
-| **gws** | Google Workspace Sheets CLI |
-| **deployment-guide** | How to deploy to Railway, Airtable, GAS, Cloudflare |
+| **/setup** | Onboarding — connect tools, install personal skills |
+| **/register-automation** | Track your work in the NSLS Automation Tracker |
+| **/product-design** | UX guardrail — DESIGN.md, reviews, focus groups |
+| **/nsls-focus-group** | Test ideas with simulated employee panels |
+| **/nsls-slides** | Branded NSLS/Society presentations |
+| **/frontend-slides** | Build HTML presentations |
+| **/google-drive** | Google Drive file management |
+| **/google-slides-api** | Edit existing Google Slides via API |
+| **/gws** | Google Workspace Sheets CLI |
+| **/netlify-deploy** | Deploy and preview static pages |
+| **/deployment-guide** | How to deploy to Railway, Airtable, GAS, Cloudflare |
+| **/pydoc-pipeline** | Generate documentation from Python code |
+| **/web-research** | Structured web research |
+| **/interrogate** | Deep-dive investigation skill |
+
+## Bundled Plugins
+
+These are installed automatically by the install script:
+
+| Plugin | What it gives you |
+|--------|-------------------|
+| **Superpowers** | `/brainstorm`, `/debug`, `/verify`, `/plan`, `/tdd` |
+| **Compound Engineering** | `/ce:brainstorm`, `/ce:plan`, `/ce:work`, `/ce:review`, `/git-commit` |
+
+## Personal Productivity Skills (Optional)
+
+During `/setup`, you can optionally install personal productivity skills — daily planning, weekly reviews, project logging, relationship tracking. These are Kevin's personal template — fork them, edit them, make them yours. They live in a [separate repo](https://github.com/thensls/nsls-personal-toolkit).
 
 ## Updates
 
@@ -38,7 +55,3 @@ cd ~/.claude/local-plugins/nsls-builder-toolkit && git pull
 ## Request a Skill
 
 Open a [GitHub issue](https://github.com/thensls/nsls-builder-toolkit/issues) or message Kevin in Slack.
-
-## Automation Tracker
-
-Track all NSLS automations: [Open in Airtable](https://airtable.com/appd5oK1wLVPYZeia)
