@@ -25,6 +25,12 @@ The install script sets up three things:
 - Produces durable requirements docs and implementation plans
 - Use `ce:review` for code review (parallel reviewer personas, structured findings)
 
+### Data intelligence (any question about users, systems, or operations)
+- If tools for a system aren't available, run `/connect` to set up the connection
+- Use `/data-intel` for cross-system questions that span multiple services
+- Use individual domain skills (`/posthog`, `/slack`, `/customerio`, `/n8n`, `/airtable`, `/braintrust-evals`) for deep single-system work
+- `/connect` → provides connections. Domain skills → deep expertise. `/data-intel` → orchestrates across all of them.
+
 ### NSLS-specific tasks (always)
 - Use **NSLS Builder Toolkit** skills for anything NSLS-domain: slides, automations, Google Workspace, focus groups, deployment, web research
 - These override generic skills when the task is NSLS-related
