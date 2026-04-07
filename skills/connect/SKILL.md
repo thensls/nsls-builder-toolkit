@@ -122,7 +122,7 @@ All tools matching `mcp__posthog__*-get*`, `mcp__posthog__*-list*`, `mcp__postho
 ### Airtable
 
 **What:** Shared databases for tracking work, roadmaps, content.
-**Skills that use it:** `/airtable`
+**Skills that use it:** `/airtable-guide`
 
 #### Connection: stdio with Personal Access Token
 **MCP type:** stdio (npx)
@@ -273,6 +273,13 @@ Do NOT add: `slack_send_message`, `slack_send_message_draft`, `slack_schedule_me
 **Prerequisite:** Slack workspace admin must create a Slack app. Non-admins cannot do this step — ask your admin.
 
 Use this when: Terminal.app isn't available, org prefers bot-scoped access, or first-party OAuth is broken.
+**What:** Team messaging, channels, search.
+**Skills that use it:** `/slack`
+**Prerequisite:** Slack workspace admin must create a Slack app. Non-admins cannot do this step — ask your admin.
+
+#### Connection: stdio with bot token (VS Code / Cursor)
+**MCP type:** stdio (npx)
+**Auth:** Bot User OAuth Token (`xoxb-`)
 
 1. Go to api.slack.com/apps → Create New App → From scratch
 2. Name: `Claude Code MCP`, Workspace: select yours
@@ -281,6 +288,9 @@ Use this when: Terminal.app isn't available, org prefers bot-scoped access, or f
 5. Install to Workspace → click Allow
 6. Copy the Bot User OAuth Token (starts with `xoxb-`)
 7. Find your Team ID: open Slack in a browser → DevTools → Console → `JSON.parse(localStorage.getItem('localConfig_v2')).teams` → the key is your Team ID (format: `T0XXXXXXXX`)
+4. Install to Workspace → click Allow
+5. Copy the Bot User OAuth Token (starts with `xoxb-`)
+6. Find your Team ID: open Slack in a browser → DevTools → Console → `JSON.parse(localStorage.getItem('localConfig_v2')).teams` → the key is your Team ID (format: `T0XXXXXXXX`)
 
 **Config** (add to `~/.claude.json` under `mcpServers` — name it `slack-workspace`, NOT `slack`):
 ```json
@@ -305,6 +315,24 @@ Use this when: Terminal.app isn't available, org prefers bot-scoped access, or f
 **Auth:** OAuth browser flow
 
 This works natively from claude.ai/code web interface. In VS Code/Cursor, the OAuth flow silently does nothing — use Option A (Terminal) instead.
+**Known issues from setup (9 failures documented):**
+- First-party `claude.ai Slack` connector does NOT work in VS Code/Cursor — OAuth only completes through claude.ai web. If you see "Completing authentication in browser..." and nothing happens, you're in the wrong environment. Use the bot token approach instead.
+- Browser tokens (`xoxc` + `xoxd`) extracted from DevTools don't work outside the browser — `invalid_auth`. Use a bot token.
+- Naming the server `slack` conflicts with the first-party connector — name it `slack-workspace` or anything else.
+- Both `SLACK_MCP_XOXB_TOKEN` AND `SLACK_TEAM_ID` are required. Missing either = silent crash, tools never appear.
+- The env var must be `SLACK_MCP_XOXB_TOKEN` (not `SLACK_MCP_BOT_TOKEN` or `SLACK_BOT_TOKEN`). Wrong name = silent crash.
+- Config must be in `~/.claude.json` global `mcpServers` (not `~/.claude/settings.json`).
+- `channels_list` may not return private channels. Use `conversations_history` with `#channel-name` to access private channels directly.
+- The bot only sees channels it's been invited to. For private channels: `/invite @Claude Code MCP` in the channel. Teammates will see a message: "[You] added an integration to this channel: Claude Code MCP."
+- The bot can see: message text, senders, timestamps, reactions (emoji + counts), threads, file counts. It CANNOT see actual file content (images, videos) — only metadata.
+- Adding scopes later requires clicking "Reinstall to Workspace" on the OAuth & Permissions page.
+- The MCP server caches users and channels on startup. If you invite the bot to a new channel, restart Claude Code to refresh the cache.
+
+#### Connection: First-party OAuth (claude.ai web only)
+**MCP type:** HTTP (remote)
+**Auth:** OAuth browser flow
+
+This ONLY works from claude.ai web. In VS Code/Cursor, the OAuth flow silently does nothing.
 
 1. Type `/mcp` in Claude Code chat → select "claude.ai Slack"
 2. Complete the OAuth flow in your browser
@@ -325,6 +353,7 @@ No config file changes needed. Same user-level access as Option A.
 - **Bot channel invitation visible:** When inviting the bot to a private channel via `/invite @Claude Code MCP`, everyone in the channel sees: "[You] added an integration to this channel: Claude Code MCP."
 - **Bot sees metadata, not files:** The bot can see message text, senders, timestamps, reactions, threads, file counts. It CANNOT see actual file content (images, videos) — only metadata.
 - **Cache refresh:** The korotovsky MCP server caches users and channels on startup. After inviting the bot to a new channel, restart Claude Code to refresh.
+No config file changes needed. But this approach is limited to claude.ai web sessions.
 
 ---
 
@@ -354,6 +383,8 @@ To use: `npm install braintrust` in your project, set `BRAINTRUST_API_KEY` as an
 **Post-setup:** If tools don't appear after auth, check `~/.claude/mcp-needs-auth-cache.json` — remove the HubSpot entry if the OAuth callback was interrupted, then restart Claude Code.
 **Tools available after connection:** get_user_details, get_properties, get_crm_objects, search_crm_objects, search_properties, search_owners
 **Skill:** `/hubspot`
+**What:** CRM.
+**No seed yet.** Found in PostHog CDP integrations. If you have HubSpot access, help the `/connect` skill by trying available MCP packages and documenting what works.
 
 ---
 
