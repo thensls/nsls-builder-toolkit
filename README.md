@@ -1,6 +1,6 @@
 # NSLS Builder Toolkit
 
-The NSLS Builder Toolkit gives every NSLS employee with Claude Code a set of skills for building, tracking, and deploying automations. Install once, get updates automatically.
+The NSLS Builder Toolkit gives every NSLS employee with Claude Code a set of skills for building, tracking, querying data, and deploying automations. Install once, get updates automatically.
 
 ## Install
 
@@ -8,7 +8,113 @@ The NSLS Builder Toolkit gives every NSLS employee with Claude Code a set of ski
 curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash
 ```
 
-## Included Skills
+## First-Time Setup
+
+After installing, run `/connect` in Claude Code to connect your data systems (PostHog, Airtable, Slack, Customer.io, n8n, and more). Each connection persists across sessions — you only do it once per system.
+
+## Data Intelligence Architecture
+
+```
+Layer 4: DISCOVERY / SYNTHESIS
+├── /full-shape              — Find the dimensions of unnamed things.
+│                              Cast the net, explore every angle,
+│                              discover what it IS.
+├── /investigation           — Find ground truth across all sources.
+│                              Query first, explain second. Report
+│                              what you found and where you found it.
+├── /data-model-discovery    — Map what's in a newly connected system.
+│                              Explore objects, properties, join keys,
+│                              and produce a landscape doc + platform
+│                              skill + data-intel integration.
+└── /skill-creation          — The rubric that grows by being used.
+                               Codify a lived process into a
+                               repeatable skill with safety, purpose,
+                               diagnostic loops, and cross-references.
+
+Layer 3: CROSS-SYSTEM ORCHESTRATION
+└── /data-intel              — The synthesis of micro and macro. Join
+                               data across all connected platforms,
+                               translate plain English into cross-system
+                               queries, deliver both high-level metrics
+                               AND the human moments that give them
+                               meaning.
+
+Layer 2: PLATFORM SKILLS (one per data source)
+├── /posthog                 — Query behavioral analytics, build
+│                              dashboards, investigate errors, run
+│                              HogQL, manage feature flags. Knows
+│                              NSLS-specific gotchas and event shapes.
+├── /hubspot                 — Search members by chapter/status, look
+│                              up enrollment history, check induction
+│                              milestones, explore chapter health,
+│                              investigate support tickets. Knows NSLS
+│                              custom properties and Feather sync.
+├── /customerio              — Query campaign performance, message
+│                              history, member lookup, segment analysis.
+│                              Knows prefetch vs human opens, API
+│                              distinctions, cio_id vs id.
+├── /airtable                — Navigate 24+ bases across every
+│                              department. Find the right table, query
+│                              records, understand schema. Knows
+│                              access limitations and change blast
+│                              radius.
+├── /slack                   — Read and search team conversations,
+│                              threads, decisions, reactions. Find
+│                              context that lives in people's words,
+│                              not databases.
+├── /n8n                     — Manage automation workflows. Create,
+│                              validate, test, check executions. Knows
+│                              destructive tool guardrails and trigger
+│                              limitations.
+├── /braintrust-evals        — Run LLM evaluations, compare models,
+│                              build datasets, define scoring. Knows
+│                              prompt-schema alignment failures and
+│                              strict-mode issues.
+├── /gws                     — Google Workspace CLI for Sheets, Docs,
+│                              Slides, Drive, Gmail, and Calendar.
+│                              Read, edit, and manage Google Workspace
+│                              content. Authenticated and free.
+├── /web-research            — Web research via Google AI Mode.
+│                              Synthesized answers with citations from
+│                              100+ sources. Use instead of raw
+│                              WebSearch for any research question.
+│
+│   Seeds (auth available, not yet explored):
+├── /snowflake               — (seed) Data warehouse. Historical data,
+│                              cross-system joins, reporting.
+├── /rippling                — (seed) HR / ATS. Headcount, departments,
+│                              hiring pipeline, people operations.
+├── /asana                   — (seed) Project management. Tasks,
+│                              timelines, team workload.
+├── /atlassian               — (seed) Jira/Confluence. Engineering
+│                              tickets, documentation, sprint tracking.
+├── /notion                  — (seed) Team wiki, docs, databases.
+│                              Structured knowledge and planning.
+├── /figma                   — (seed) Design files, components,
+│                              prototypes. Visual decision history.
+└── /hex                     — (seed) Data notebooks, SQL queries,
+                               shared analytics. Collaborative
+                               data exploration.
+
+Layer 1: INFRASTRUCTURE
+└── /connect                 — The bridge between credentials and data.
+                               Detect what's connected, walk through
+                               setup for what's missing, handle the
+                               failures that will happen along the way.
+
+Layer 0: THE SCHEMA
+└── /system-of-record        — The unified data model made conversational.
+                               9 domains, 95 tables, Person.id as
+                               universal anchor. Knows both the target
+                               schema AND the current fragmented reality.
+                               The foundation everything maps onto.
+```
+
+**Layer 0** is the schema — the unified data model that defines what member data looks like when all systems agree. **Layer 1** gets the pipes connected. **Layer 2** knows how to use each pipe well — one skill per system, with safety tiers, diagnostic loops, and org-specific gotchas. The seeds are systems with auth available but not yet explored — each one is a `/data-model-discovery` run waiting to happen. **Layer 3** is cross-system intelligence — combining data from multiple Layer 2 skills to answer questions no single system can. **Layer 4** is the meta layer — skills that create new skills, discover unnamed patterns, map new data sources, and find ground truth.
+
+They form a cycle: `/data-model-discovery` explores a new system → maps it against `/system-of-record` → produces a platform skill (via `/skill-creation` rubric) → feeds into `/data-intel` → which `/investigation` can query for ground truth → and `/full-shape` can use to define patterns nobody's named yet. Every seed that gets connected and explored adds another row to Layer 2 and another dimension to Layer 3.
+
+## Builder Skills
 
 | Skill | What it does |
 |-------|-------------|
@@ -17,15 +123,14 @@ curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/i
 | **nsls-focus-group** | Test ideas with simulated employee panels |
 | **nsls-slides** | Create branded NSLS/Society presentations |
 | **frontend-slides** | Build HTML presentations |
-| **google-docs** | Google Drive file management |
+| **google-drive** | Google Drive file management |
 | **google-slides-api** | Edit existing Google Slides via API |
 | **netlify-deploy** | Deploy and preview static pages |
-| **log** | Log progress to Obsidian project files |
-| **close-day** | End-of-day summary from calendar, Slack, email |
-| **familiar** | Screen capture activity tracking (optional, opt-in) |
 | **pydoc-pipeline** | Generate documentation from Python code |
 | **gws** | Google Workspace Sheets CLI |
 | **deployment-guide** | How to deploy to Railway, Airtable, GAS, Cloudflare |
+| **web-research** | Web research with AI overview extraction |
+| **interrogate** | Scope a new project through structured conversation |
 
 ## Updates
 
