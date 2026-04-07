@@ -1,10 +1,24 @@
 #!/bin/bash
+# NSLS Builder Toolkit — one-command installer
+#
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash
+#
+# What this does:
+#   1. Installs the NSLS org skills (local plugin)
+#   2. Installs superpowers + compound-engineering plugins (marketplace)
+#   3. Tells you to run /setup to connect your tools
+
 set -euo pipefail
 
 PLUGIN_DIR="$HOME/.claude/local-plugins/nsls-builder-toolkit"
 REPO_URL="https://github.com/thensls/nsls-builder-toolkit.git"
 
-echo "Installing NSLS Builder Toolkit..."
+echo ""
+echo "=== NSLS Builder Toolkit ==="
+echo ""
+
+# --- Prerequisites ---
 
 if ! command -v git &>/dev/null; then
   echo "Error: git is not installed."
@@ -18,97 +32,97 @@ if [ ! -d "$HOME/.claude" ]; then
   exit 1
 fi
 
+# --- Step 1: Install the org toolkit ---
+
+echo "Step 1: Installing org skills..."
 mkdir -p "$HOME/.claude/local-plugins"
 
 if [ -d "$PLUGIN_DIR" ]; then
-  echo "Updating existing installation..."
-  cd "$PLUGIN_DIR"
-  git reset --hard origin/main --quiet 2>/dev/null
-  git pull origin main --quiet
+  echo "  Updating existing installation..."
+  git -C "$PLUGIN_DIR" fetch origin main --quiet 2>/dev/null
+  git -C "$PLUGIN_DIR" reset --hard origin/main --quiet 2>/dev/null
 else
-  echo "Cloning plugin..."
+  echo "  Cloning plugin..."
   git clone "$REPO_URL" "$PLUGIN_DIR" --quiet
 fi
+echo "  Done."
 
-## Enable plugins in settings.json
+# --- Step 2: Enable the local plugin in settings.json ---
+
 SETTINGS="$HOME/.claude/settings.json"
-
-# Plugins to enable: the toolkit + recommended marketplace plugins
-PLUGINS_TO_ENABLE=(
-  "nsls-builder-toolkit@local"
-  "superpowers@claude-plugins-official"
-  "compound-engineering@every-marketplace"
-)
-
 if [ -f "$SETTINGS" ]; then
   python3 -c "
 import json
-plugins = $( printf '%s\n' "${PLUGINS_TO_ENABLE[@]}" | python3 -c "import sys,json; print(json.dumps([l.strip() for l in sys.stdin]))" )
 with open('$SETTINGS') as f: cfg = json.load(f)
 ep = cfg.setdefault('enabledPlugins', {})
-added = []
-for p in plugins:
-    if p not in ep or not ep[p]:
-        ep[p] = True
-        added.append(p)
-if added:
+if 'nsls-builder-toolkit@local' not in ep or not ep['nsls-builder-toolkit@local']:
+    ep['nsls-builder-toolkit@local'] = True
     with open('$SETTINGS', 'w') as f: json.dump(cfg, f, indent=2)
-    for a in added: print(f'  Enabled: {a}')
+    print('  Enabled nsls-builder-toolkit in settings.json')
 else:
-    print('  All plugins already enabled')
-  " 2>/dev/null || echo "  Note: Could not update settings.json automatically"
+    print('  Already enabled in settings.json')
+" 2>/dev/null || echo "  Note: Could not update settings.json — enable the plugin manually in Claude Code"
 else
-  echo "  Note: No settings.json found — plugins will be enabled on first use"
+  echo "  Note: No settings.json found — the plugin will be enabled on first use"
 fi
 
-## Install marketplace plugins if claude CLI is available
+# --- Step 3: Install marketplace plugins ---
+
+echo ""
+echo "Step 2: Installing recommended plugins..."
+
 if command -v claude &>/dev/null; then
-  echo ""
-  echo "Installing recommended plugins..."
-
-  # Superpowers (official marketplace)
-  if ! grep -q "superpowers@claude-plugins-official" "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null; then
-    echo "  Installing superpowers..."
-    claude plugins add superpowers 2>/dev/null || echo "  Note: Install superpowers manually with 'claude plugins add superpowers'"
+  # Superpowers (official marketplace — planning, debugging, verification workflows)
+  if claude plugins list 2>/dev/null | grep -q "superpowers.*enabled"; then
+    echo "  superpowers: already installed"
   else
-    echo "  superpowers already installed"
+    echo "  Installing superpowers..."
+    claude plugins install superpowers 2>/dev/null \
+      && echo "  superpowers: installed" \
+      || echo "  superpowers: auto-install failed — run 'claude plugins install superpowers' manually"
   fi
 
-  # Compound Engineering (every marketplace)
-  if ! grep -q "compound-engineering@every-marketplace" "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null; then
-    echo "  Installing compound-engineering..."
-    claude plugins add compound-engineering --marketplace https://github.com/EveryInc/compound-engineering-plugin 2>/dev/null \
-      || echo "  Note: Install compound-engineering manually — see https://github.com/EveryInc/compound-engineering-plugin"
+  # Compound Engineering (Every marketplace — brainstorm, plan, review, git workflows)
+  if claude plugins list 2>/dev/null | grep -q "compound-engineering.*enabled"; then
+    echo "  compound-engineering: already installed"
   else
-    echo "  compound-engineering already installed"
+    echo "  Adding Every marketplace..."
+    claude plugins marketplace add https://github.com/EveryInc/compound-engineering-plugin.git 2>/dev/null || true
+    echo "  Installing compound-engineering..."
+    claude plugins install compound-engineering@every-marketplace 2>/dev/null \
+      && echo "  compound-engineering: installed" \
+      || echo "  compound-engineering: auto-install failed — see instructions below"
   fi
 else
   echo ""
-  echo "Recommended plugins (install manually if not already installed):"
-  echo "  claude plugins add superpowers"
-  echo "  claude plugins add compound-engineering  (from https://github.com/EveryInc/compound-engineering-plugin)"
+  echo "  The 'claude' CLI was not found in PATH."
+  echo "  After installing Claude Code, run these commands to add the recommended plugins:"
+  echo ""
+  echo "    claude plugins install superpowers"
+  echo "    claude plugins marketplace add https://github.com/EveryInc/compound-engineering-plugin.git"
+  echo "    claude plugins install compound-engineering@every-marketplace"
 fi
 
-## Create slash-command pointer skills in ~/.claude/skills/
-## Local plugins don't surface commands in autocomplete — pointer skills fix this.
-## Each pointer tells Claude to read the full skill from the plugin directory.
-echo "  Creating slash-command pointers..."
+# --- Step 4: Create slash-command pointer skills ---
+
+echo ""
+echo "Step 3: Creating slash-command pointers..."
 SKILLS_DIR="$HOME/.claude/skills"
 mkdir -p "$SKILLS_DIR"
 
+count=0
 for skill_dir in "$PLUGIN_DIR/skills"/*/; do
   skill=$(basename "$skill_dir")
   dest="$SKILLS_DIR/$skill"
-
-  # Skip if user already has a custom skill with this name
-  if [ -d "$dest" ] && ! grep -q "local-plugins/nsls-builder-toolkit" "$dest/SKILL.md" 2>/dev/null; then
-    continue
-  fi
-
-  # Extract name and description from plugin SKILL.md frontmatter
   src="$skill_dir/SKILL.md"
   [ -f "$src" ] || continue
 
+  # Skip if user already has a custom (non-pointer) skill with this name
+  if [ -d "$dest" ] && [ -f "$dest/SKILL.md" ]; then
+    grep -q "local-plugins/nsls-builder-toolkit" "$dest/SKILL.md" 2>/dev/null || continue
+  fi
+
+  # Extract name from frontmatter
   name=$(grep "^name:" "$src" | head -1 | sed 's/name: *//')
   [ -z "$name" ] && continue
 
@@ -136,21 +150,37 @@ description: >-
 
 Read and follow the full skill at \`~/.claude/local-plugins/nsls-builder-toolkit/skills/$skill/SKILL.md\`.
 POINTER
+  count=$((count + 1))
 done
 
-echo "  $(ls "$PLUGIN_DIR/skills/" | wc -l | tr -d ' ') slash commands created"
+echo "  $count skill pointers synced"
+
+# --- Done ---
 
 echo ""
-echo "NSLS Builder Toolkit installed!"
+echo "==============================="
+echo "  NSLS Builder Toolkit installed!"
+echo "==============================="
 echo ""
-echo "Skills included:"
-ls "$PLUGIN_DIR/skills/" | sed 's/^/  \//'
+echo "What you got:"
 echo ""
+echo "  ORG SKILLS (13 skills for building, tracking, deploying):"
+ls "$PLUGIN_DIR/skills/" | sed 's/^/    \//'
+echo ""
+echo "  PLUGINS:"
+echo "    superpowers      — planning, debugging, verification workflows"
+echo "    compound-eng.    — brainstorm, plan, review, git workflows"
+echo ""
+echo "=== NEXT STEP ==="
+echo ""
+echo "  Open Claude Code and say:  /setup"
+echo ""
+echo "  This connects your tools (Slack, Asana, etc.) and optionally"
+echo "  installs personal productivity skills (daily planning, weekly"
+echo "  reviews, project logging — yours to customize)."
 echo "Start a new Claude Code session to use the skills."
 echo "Type /<skill-name> to use any skill (e.g., /posthog, /data-intel, /nsls-slides)."
 echo ""
 echo "First time? Run /connect in Claude Code to connect your data systems."
 echo "(PostHog, Airtable, Slack, Customer.io, n8n, and more)"
 echo ""
-echo "The toolkit auto-updates at the start of each session."
-echo "Do not edit files in $PLUGIN_DIR — changes are managed via GitHub."

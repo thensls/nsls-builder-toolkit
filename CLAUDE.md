@@ -4,11 +4,17 @@
 
 This plugin contains **organization-standard skills** for NSLS builders. These skills are maintained via GitHub PRs — do not edit them locally. Updates flow automatically when `main` is updated.
 
-**Personal productivity skills** (open-day, close-day, close-week, plan-week, log, familiar, person-intelligence, obsidian-setup) are **not** in this plugin. They live in `~/.claude/skills/` and are fully yours to edit, delete, or replace. Kevin shares his as a starter template — fork the pattern, make it your own.
+**Personal productivity skills** (open-day, close-day, close-week, log, familiar, person-intelligence, obsidian-setup) are in a separate plugin: [nsls-personal-toolkit](https://github.com/thensls/nsls-personal-toolkit). Run `/setup` to install them — they're optional and fully yours to edit.
+
+## What Gets Installed
+
+The install script sets up three things:
+
+1. **NSLS Builder Toolkit** (this plugin) — org skills for slides, automations, Google Workspace, focus groups, deployment, web research
+2. **Superpowers** (marketplace plugin) — process discipline: planning, debugging, verification, TDD
+3. **Compound Engineering** (marketplace plugin) — development pipeline: brainstorm, plan, work, review, git
 
 ## Skill Routing by Complexity
-
-You have skills from three sources: **NSLS Builder Toolkit** (organization skills), **Compound Engineering** (development workflows), and **Superpowers** (process discipline). Route tasks to the right one:
 
 ### Quick tasks (< 30 min, single-step)
 - Use **Superpowers** skills: `systematic-debugging`, `verification-before-completion`, `test-driven-development`
@@ -33,9 +39,9 @@ You have skills from three sources: **NSLS Builder Toolkit** (organization skill
 - Use **Compound Engineering**: `git-commit`, `git-commit-push-pr`, `git-clean-gone-branches`
 
 ### Process discipline (always active)
-- **Superpowers** `using-superpowers` fires every session — it ensures skills get checked before acting. Keep this active.
+- **Superpowers** `using-superpowers` fires every session — it ensures skills get checked before acting
 - `verification-before-completion` — always verify before claiming done
-- `finishing-a-development-branch` — merge/PR decision guide (no compound equivalent)
+- `finishing-a-development-branch` — merge/PR decision guide
 
 ## Automation Tracking
 
