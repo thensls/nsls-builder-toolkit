@@ -71,15 +71,18 @@ fi
 echo ""
 echo "Step 2: Installing recommended plugins..."
 
-# Find the claude CLI — it may not be in PATH for curl|bash
+# Find the claude CLI — curl|bash may not inherit the full PATH
 CLAUDE_BIN=""
-if command -v claude &>/dev/null; then
-  CLAUDE_BIN="claude"
-elif [ -x "/usr/local/bin/claude" ]; then
-  CLAUDE_BIN="/usr/local/bin/claude"
-elif [ -x "$HOME/.claude/bin/claude" ]; then
-  CLAUDE_BIN="$HOME/.claude/bin/claude"
-fi
+for candidate in \
+  "$(command -v claude 2>/dev/null)" \
+  "$HOME/.local/bin/claude" \
+  "/usr/local/bin/claude" \
+  "$HOME/.claude/bin/claude"; do
+  if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+    CLAUDE_BIN="$candidate"
+    break
+  fi
+done
 
 if [ -n "$CLAUDE_BIN" ]; then
   # Superpowers (official marketplace — planning, debugging, verification workflows)
