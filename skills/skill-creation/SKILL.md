@@ -168,3 +168,39 @@ When building a new skill right now:
 8. **Add output guidelines.** Who will read this output? What do they need?
 9. **Wire up the hierarchy.** Reference `/connect` for setup, `/data-intel` for cross-system, other domain skills for related expertise.
 10. **Check the full shape.** Walk through every element in The Pattern. Is anything missing? Is anything duplicated from another skill? Did you discover a new element that should be added to the rubric?
+
+## Recommended Creation Flow
+
+This skill is the design rubric — it tells you *what* a good skill looks like. Two other tools handle the *how*. Use all three in sequence:
+
+### Phase 1: Design (this skill — `/skill-creation`)
+Walk through The Pattern above. Consider every element. Pour in domain micro while it's fresh. Produce a draft SKILL.md with the full shape.
+
+### Phase 2: Eval & Iterate (`skill-creator` plugin)
+Once you have a draft, use the `skill-creator` skill to test it:
+- It runs subagents against your skill with real prompts
+- Measures whether the skill produces the right behavior
+- Generates quantitative benchmarks with variance analysis
+- Optimizes the frontmatter description for reliable triggering
+- Iterate until the eval scores stabilize
+
+Run this by saying: "evaluate my skill" or "run evals on this skill" or "optimize this skill's description."
+
+### Phase 3: Quality Gate (`superpowers:writing-skills`)
+Before shipping, run the Superpowers writing-skills pressure test:
+- TDD-for-documentation: write the failure case first, verify the skill prevents it
+- Rationalization-proofing: check that Claude can't talk its way around the skill's rules
+- Adversarial testing: try to break the skill with edge cases
+- Only ship when the skill survives pressure testing
+
+Run this by saying: "review this skill for quality" or "pressure test this skill."
+
+### Why Three Tools?
+
+| Tool | What it answers | When to use |
+|------|----------------|-------------|
+| `/skill-creation` (this) | "What should this skill look like?" | Design phase — while the experience is fresh |
+| `skill-creator` plugin | "Does this skill actually work?" | Eval phase — test with real prompts, measure |
+| `superpowers:writing-skills` | "Can this skill be broken?" | Quality gate — adversarial pressure test before shipping |
+
+Skipping Phase 1 produces a skill that works but lacks depth. Skipping Phase 2 produces a skill that reads well but may not trigger or behave correctly. Skipping Phase 3 produces a skill that works in the happy path but breaks when Claude rationalizes around it.

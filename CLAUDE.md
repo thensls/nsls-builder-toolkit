@@ -51,6 +51,12 @@ The install script sets up three things:
 - **Always use `gws` for Google Docs, Sheets, Slides, Drive URLs** — never WebFetch, WebSearch, or Firecrawl for google.com URLs
 - Use `google-drive` skill for file upload/download/sharing operations
 
+## Skill Creation (3-phase pipeline)
+When building a new skill, use all three tools in sequence:
+1. **`/skill-creation`** (this toolkit) — design rubric: purpose, safety, macro/micro, diagnostics
+2. **`skill-creator`** plugin — eval loop: test with subagents, measure, iterate on description
+3. **`superpowers:writing-skills`** — quality gate: TDD pressure test, rationalization-proofing
+
 ## Presentations
 - Always ask "NSLS branded or Society branded?" before creating slides
 - **NSLS**: Lexend Deca + Avenir, navy/teal/gold
