@@ -71,33 +71,41 @@ fi
 echo ""
 echo "Step 2: Installing recommended plugins..."
 
+# Find the claude CLI — it may not be in PATH for curl|bash
+CLAUDE_BIN=""
 if command -v claude &>/dev/null; then
+  CLAUDE_BIN="claude"
+elif [ -x "/usr/local/bin/claude" ]; then
+  CLAUDE_BIN="/usr/local/bin/claude"
+elif [ -x "$HOME/.claude/bin/claude" ]; then
+  CLAUDE_BIN="$HOME/.claude/bin/claude"
+fi
+
+if [ -n "$CLAUDE_BIN" ]; then
   # Superpowers (official marketplace — planning, debugging, verification workflows)
-  if claude plugins list 2>/dev/null | grep -q "superpowers.*enabled"; then
+  if "$CLAUDE_BIN" plugins list 2>/dev/null | grep -q "superpowers"; then
     echo "  superpowers: already installed"
   else
     echo "  Installing superpowers..."
-    claude plugins install superpowers 2>/dev/null \
-      && echo "  superpowers: installed" \
-      || echo "  superpowers: auto-install failed — run 'claude plugins install superpowers' manually"
+    "$CLAUDE_BIN" plugins install superpowers 2>&1 | tail -1 || true
   fi
 
   # Compound Engineering (Every marketplace — brainstorm, plan, review, git workflows)
-  if claude plugins list 2>/dev/null | grep -q "compound-engineering.*enabled"; then
+  if "$CLAUDE_BIN" plugins list 2>/dev/null | grep -q "compound-engineering"; then
     echo "  compound-engineering: already installed"
   else
     echo "  Adding Every marketplace..."
-    claude plugins marketplace add https://github.com/EveryInc/compound-engineering-plugin.git 2>/dev/null || true
+    "$CLAUDE_BIN" plugins marketplace add https://github.com/EveryInc/compound-engineering-plugin.git 2>&1 | tail -1 || true
     echo "  Installing compound-engineering..."
-    claude plugins install compound-engineering@every-marketplace 2>/dev/null \
-      && echo "  compound-engineering: installed" \
-      || echo "  compound-engineering: auto-install failed — see instructions below"
+    "$CLAUDE_BIN" plugins install compound-engineering@every-marketplace 2>&1 | tail -1 || true
   fi
 else
   echo ""
-  echo "  The 'claude' CLI was not found in PATH."
-  echo "  After installing Claude Code, run these commands to add the recommended plugins:"
+  echo "  Could not find the 'claude' CLI."
+  echo "  After your next Claude Code session, run /setup — it will detect"
+  echo "  missing plugins and give you the install commands."
   echo ""
+  echo "  Or run these manually:"
   echo "    claude plugins install superpowers"
   echo "    claude plugins marketplace add https://github.com/EveryInc/compound-engineering-plugin.git"
   echo "    claude plugins install compound-engineering@every-marketplace"
@@ -173,14 +181,11 @@ echo "    compound-eng.    — brainstorm, plan, review, git workflows"
 echo ""
 echo "=== NEXT STEP ==="
 echo ""
-echo "  Open Claude Code and say:  /setup"
+echo "  1. Start a new Claude Code session (or restart if one is open)"
+echo "     Skills won't appear until the session loads the new plugins."
 echo ""
-echo "  This connects your tools (Slack, Asana, etc.) and optionally"
-echo "  installs personal productivity skills (daily planning, weekly"
-echo "  reviews, project logging — yours to customize)."
-echo "Start a new Claude Code session to use the skills."
-echo "Type /<skill-name> to use any skill (e.g., /posthog, /data-intel, /nsls-slides)."
-echo ""
-echo "First time? Run /connect in Claude Code to connect your data systems."
-echo "(PostHog, Airtable, Slack, Customer.io, n8n, and more)"
+echo "  2. Say:  /setup"
+echo "     This connects your tools (Slack, Asana, etc.) and optionally"
+echo "     installs personal productivity skills (daily planning, weekly"
+echo "     reviews, project logging — yours to customize)."
 echo ""
