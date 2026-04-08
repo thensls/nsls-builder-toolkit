@@ -147,10 +147,29 @@ After installing, run the personal toolkit configuration inline — don't make t
 
 1. **Slack User ID** — already detected in Phase 2, reuse it
 2. **Asana GIDs** — already detected in Phase 2, reuse them
-3. **Airtable API key** — ask the user:
+3. **Fathom API key** — ask the user:
    ```
-   One thing I can't auto-detect: your Airtable API key.
-   This is only needed for /person-intelligence (relationship profiles).
+   Do you use Fathom (fathom.video) for meeting recording?
+
+   If yes, your API key lets /close-day pull today's meeting summaries
+   and /person-intelligence pull 1:1 transcripts.
+
+   To get your key:
+   1. Go to https://fathom.video/settings/api
+   2. Copy your API key
+   3. Paste it here
+
+   Or skip this — /close-day works without it (just won't have meeting summaries).
+   ```
+
+   If provided, validate with a test call:
+   ```bash
+   curl -s -H "X-Api-Key: <key>" "https://api.fathom.ai/external/v1/meetings?created_after=$(date +%Y-%m-%d)T00:00:00Z" | head -c 100
+   ```
+
+4. **Airtable API key** — ask the user:
+   ```
+   Your Airtable API key is only needed for /person-intelligence (relationship profiles).
 
    To create one:
    1. Go to airtable.com/create/tokens
@@ -161,9 +180,9 @@ After installing, run the personal toolkit configuration inline — don't make t
    Or skip this — you can add it later by running /personal-setup.
    ```
 
-4. Write the `.env` file to `~/.claude/local-plugins/nsls-personal-toolkit/.env`
+5. Write the `.env` file to `~/.claude/local-plugins/nsls-personal-toolkit/.env`
 
-5. Confirm:
+6. Confirm:
    ```
    Personal productivity skills installed and configured!
 
