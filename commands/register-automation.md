@@ -1,6 +1,6 @@
 ---
 name: register-automation
-description: Register, update, or check an NSLS automation in the Automation Tracker Airtable base. Use when the user says "register 
+description: Register your work in the NSLS Automation Tracker so the team knows what exists, who built it, and what stage it's in. Also checks status and lists automations.
 ---
 
 Run the `register-automation` skill. Use the Skill tool to invoke it: `Skill(register-automation)`.
