@@ -47,21 +47,58 @@ else
 fi
 echo "  Done."
 
-# --- Step 2: Enable the local plugin in settings.json ---
+# --- Step 2: Enable the local plugin and register the auto-update hook in settings.json ---
 
 SETTINGS="$HOME/.claude/settings.json"
+HOOK_CMD='python3 -c "exec(open(__import__('"'"'pathlib'"'"').Path.home() / '"'"'.claude/local-plugins/nsls-builder-toolkit/hooks/session-start.py'"'"').read())"'
+
 if [ -f "$SETTINGS" ]; then
   python3 -c "
-import json
+import json, sys
+
+HOOK_CMD = 'python3 -c \"exec(open(__import__(\'pathlib\').Path.home() / \'.claude/local-plugins/nsls-builder-toolkit/hooks/session-start.py\').read())\"'
+HOOK_ENTRY = {
+    'type': 'command',
+    'command': HOOK_CMD,
+    'timeout': 15,
+    'statusMessage': 'Syncing builder toolkit...'
+}
+MARKER = 'nsls-builder-toolkit/hooks/session-start.py'
+
 with open('$SETTINGS') as f: cfg = json.load(f)
+
+# Enable plugin
 ep = cfg.setdefault('enabledPlugins', {})
-if 'nsls-builder-toolkit@local' not in ep or not ep['nsls-builder-toolkit@local']:
+if not ep.get('nsls-builder-toolkit@local'):
     ep['nsls-builder-toolkit@local'] = True
-    with open('$SETTINGS', 'w') as f: json.dump(cfg, f, indent=2)
     print('  Enabled nsls-builder-toolkit in settings.json')
 else:
-    print('  Already enabled in settings.json')
-" 2>/dev/null || echo "  Note: Could not update settings.json — enable the plugin manually in Claude Code"
+    print('  Plugin already enabled')
+
+# Register auto-update hook (idempotent)
+hooks = cfg.setdefault('hooks', {})
+session_start = hooks.setdefault('SessionStart', [])
+
+# Find or create the startup matcher entry
+startup_entry = None
+for entry in session_start:
+    if entry.get('matcher', '').startswith('startup'):
+        startup_entry = entry
+        break
+if startup_entry is None:
+    startup_entry = {'matcher': 'startup', 'hooks': []}
+    session_start.insert(0, startup_entry)
+
+hook_list = startup_entry.setdefault('hooks', [])
+already = any(MARKER in h.get('command', '') for h in hook_list)
+if not already:
+    hook_list.insert(0, HOOK_ENTRY)
+    print('  Registered session auto-update hook')
+else:
+    print('  Auto-update hook already registered')
+
+with open('$SETTINGS', 'w') as f: json.dump(cfg, f, indent=2)
+" 2>/dev/null || echo "  Note: Could not update settings.json — add the hook manually"
 else
   echo "  Note: No settings.json found — the plugin will be enabled on first use"
 fi
