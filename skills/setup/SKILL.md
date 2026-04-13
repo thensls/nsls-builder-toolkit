@@ -1,47 +1,31 @@
 ---
 name: setup
 description: >-
-  Onboarding for the NSLS Builder Toolkit. Verifies org tool connections
-  (Slack, Asana, Google Calendar), installs superpowers and compound-engineering
-  plugins if missing, and optionally installs personal productivity skills.
-  Use when first setting up, or when a tool connection seems broken.
+  Onboarding for the NSLS Builder Toolkit. Connects org tools (Slack, Asana,
+  Google Calendar), verifies plugins, checks GCP access, and offers personal
+  productivity setup. Use when first setting up, or when a tool connection
+  seems broken.
 ---
 
 # NSLS Builder Toolkit — Setup
 
 Walk the new builder through getting their tools connected. Detect what's already working and only ask about what's missing. Keep it friendly and fast.
 
-## Phase 1: Check Plugin Health
-
-Check that the three plugin sources are installed and enabled:
-
-1. **NSLS Builder Toolkit** (this plugin) — should be working if they're running /setup
-2. **Superpowers** — check if available by looking for superpowers skills (e.g., `verification-before-completion`, `brainstorming`)
-3. **Compound Engineering** — check if available by looking for compound-engineering skills (e.g., `ce:brainstorm`, `ce:plan`, `ce:review`)
-
-If superpowers or compound-engineering skills aren't showing up, tell the user:
+Show the roadmap upfront so the builder knows the shape:
 
 ```
-It looks like [plugin] isn't installed yet. Run this in your terminal:
+Welcome to the NSLS Builder Toolkit! Let's get you set up.
 
-  claude plugins install superpowers
+This takes about 5 minutes:
+  1. Connect your tools (Slack, Asana, Google Calendar)
+  2. Verify plugins are working
+  3. Check GCP access (if you need it)
+  4. Done — here's what you can do now
 
-  # For compound-engineering:
-  claude plugins marketplace add https://github.com/EveryInc/compound-engineering-plugin.git
-  claude plugins install compound-engineering@every-marketplace
-
-Then restart Claude Code and run /setup again.
+Ready?
 ```
 
-If all three are present, confirm:
-```
-Your plugins are all set:
-  NSLS Builder Toolkit — org skills for building, deploying, presenting
-  Superpowers — planning, debugging, verification workflows
-  Compound Engineering — brainstorm → plan → build → review pipeline
-```
-
-## Phase 2: Check Tool Connections
+## Step 1: Connect Your Tools (~2 min)
 
 Check which MCP integrations are available. Try each one — if it works, check it off. If it fails, note it as missing.
 
@@ -69,11 +53,39 @@ mcp__claude_ai_Google_Calendar__gcal_list_calendars()
 - **Connected**: "Google Calendar is connected"
 - **Not connected**: "Google Calendar isn't connected. Add it in Claude Code settings → MCP Servers → Google Calendar. Used by /open-day for daily schedule."
 
-### Google Cloud Platform (GCP)
+Show a quick summary after checking:
 
-Check if the builder has GCP project creation access. This is needed for automations that use Google APIs (OAuth, Apps Script, service accounts).
+```
+Tool Status:
+  [check or x] Slack
+  [check or x] Asana
+  [check or x] Google Calendar
 
-Ask the user:
+[If any missing]: You can add these anytime in Claude Code settings.
+The org skills that don't need these tools will work fine right now.
+```
+
+Don't block on missing tools — most org skills work without them.
+
+## Step 2: Verify Plugins (~1 min)
+
+Check that superpowers is installed by looking for its skills (e.g., `verification-before-completion`, `brainstorming`).
+
+- **Installed**: "Superpowers plugin is working — you have /brainstorm, /debug, /verify, /plan"
+- **Not installed**:
+  ```
+  Superpowers plugin isn't installed. Run this in your terminal:
+
+    claude plugins install superpowers
+
+  Then restart Claude Code and run /setup again.
+  ```
+
+Do NOT check for compound-engineering — it's an optional power-up, not required.
+
+## Step 3: Check GCP Access (~1 min)
+
+Ask the builder:
 ```
 Do you need to create Google Cloud projects for your automations?
 
@@ -100,57 +112,52 @@ Personal automations (email triage, personal workflows) → your own project.
 Org-owned automations → use the shared nsls-automations project.
 ```
 
-If no or skip: move on — this doesn't block any other setup.
+If no or skip: move on.
 
-### Summary
-
-After checking all tools, show a summary:
+## Step 4: Wrap Up + Pitch Personal Productivity
 
 ```
-Tool Status:
-  [check or x] Slack
-  [check or x] Asana
-  [check or x] Google Calendar
-  [check or x] GCP Access (if requested)
+You're set up! Here's what you can do:
 
-[If any missing]: You can add these anytime in Claude Code settings.
-The org skills that don't need these tools will work fine right now.
+ORG SKILLS:
+  /register-automation  — Track your builds in the Automation Tracker
+  /product-design       — UX guardrail with DESIGN.md and focus groups
+  /nsls-slides          — Branded NSLS/Society presentations
+  /gws                  — Google Workspace operations
+  /web-research         — Structured web research
+  ... type / to see all available skills
 
-[If all connected]: All tools connected. You're ready to build.
+WORKFLOW:
+  Superpowers gives you /brainstorm, /debug, /verify, /plan
+
+OPTIONAL POWER-UPS:
+  Compound Engineering adds advanced planning/review workflows
+  (/ce:brainstorm, /ce:plan, /ce:review). Ask me how to install it.
+
+ORG CONTEXT:
+  Your toolkit includes current org chart, LOPs, and company strategy.
+  Skills can reference these automatically — no setup needed.
+  See: _shared/context/ in the toolkit repo.
 ```
 
-Don't block on missing tools — most org skills work without them. Just let the user know what they'll need for specific skills.
-
-## Phase 3: Offer Personal Productivity Skills
-
-After the org setup is complete, ask:
+Then pitch personal productivity:
 
 ```
-One more thing — would you like to set up personal productivity skills too?
+One more thing — the builders who get the most out of this toolkit
+use the personal productivity skills. They turn Claude into a daily
+co-pilot: morning planning, end-of-day summaries, weekly reviews.
 
-These are separate from the org toolkit. They're Kevin's personal workflow
-template — daily planning, end-of-day summaries, weekly reviews, project
-logging, and relationship tracking.
+Think of it as making work fun again — bringing ease to your day.
 
-They're yours to customize. Edit anything, delete what you don't use,
-or resync with Kevin's template later if he adds something useful.
-
-Skills included:
-  /open-day            — Morning planning (calendar, tasks, priorities)
-  /close-day           — End-of-day summary (what happened, what's next)
-  /close-week          — Friday weekly roll-up
-  /log                 — Log session progress to project notes
-  /familiar            — Recall past screen activity
-  /person-intelligence — Relationship profiles and 1:1 context
-  /obsidian-setup      — Set up an Obsidian knowledge base
-
-Want to install these? (You can always do this later by running the
-personal toolkit installer separately.)
+It takes about 10 minutes to set up. Want to do it now?
+Say /personal-setup anytime if you'd rather do it later.
 ```
 
-### If yes:
+### If yes and personal toolkit is already installed:
+Invoke `/personal-setup` inline — don't make them restart.
 
-Install the personal toolkit by running:
+### If yes and personal toolkit is NOT installed:
+Install the personal toolkit:
 ```bash
 bash -c 'PLUGIN_DIR="$HOME/.claude/local-plugins/nsls-personal-toolkit"; \
   REPO_URL="https://github.com/thensls/nsls-personal-toolkit.git"; \
@@ -177,61 +184,15 @@ print('Enabled nsls-personal-toolkit in settings.json')
 "
 ```
 
-After installing, run the personal toolkit configuration inline — don't make them restart. Follow the same flow as the personal toolkit's `/personal-setup` skill:
+Then tell the builder:
 
-1. **Slack User ID** — already detected in Phase 2, reuse it
-2. **Asana GIDs** — already detected in Phase 2, reuse them
-3. **Fathom API key** — ask the user:
-   ```
-   Do you use Fathom (fathom.video) for meeting recording?
+```
+Personal toolkit installed! You'll need to start a new Claude Code
+session for the skills to load. When you're back, say /personal-setup
+to finish configuration (~10 min).
+```
 
-   If yes, your API key lets /close-day pull today's meeting summaries
-   and /person-intelligence pull 1:1 transcripts.
-
-   To get your key:
-   1. Go to https://fathom.video/settings/api
-   2. Copy your API key
-   3. Paste it here
-
-   Or skip this — /close-day works without it (just won't have meeting summaries).
-   ```
-
-   If provided, validate with a test call:
-   ```bash
-   curl -s -H "X-Api-Key: <key>" "https://api.fathom.ai/external/v1/meetings?created_after=$(date +%Y-%m-%d)T00:00:00Z" | head -c 100
-   ```
-
-4. **Airtable API key** — ask the user:
-   ```
-   Your Airtable API key is only needed for /person-intelligence (relationship profiles).
-
-   To create one:
-   1. Go to airtable.com/create/tokens
-   2. Create a token with scopes: data.records:read, data.records:write, schema.bases:read
-   3. Add access to the People Ops base
-   4. Paste it here (starts with "pat...")
-
-   Or skip this — you can add it later by running /personal-setup.
-   ```
-
-5. Write the `.env` file to `~/.claude/local-plugins/nsls-personal-toolkit/.env`
-
-6. Confirm:
-   ```
-   Personal productivity skills installed and configured!
-
-   Try it out:
-     "open my day" — morning planning
-     "close my day" — end-of-day summary
-
-   These skills live in ~/.claude/local-plugins/nsls-personal-toolkit/
-   Edit anything — they're yours. To pull Kevin's latest template changes:
-     cd ~/.claude/local-plugins/nsls-personal-toolkit
-     git remote add upstream https://github.com/thensls/nsls-personal-toolkit.git
-     git fetch upstream && git diff upstream/main
-
-   You'll need to restart Claude Code for the new skills to appear.
-   ```
+There is currently no way to reload skills without restarting the session. If Claude Code adds a reload command in the future, use that instead.
 
 ### If no:
 
@@ -242,31 +203,9 @@ If you change your mind later, install the personal toolkit with:
   curl -fsSL https://raw.githubusercontent.com/thensls/nsls-personal-toolkit/main/install.sh | bash
 ```
 
-## Phase 4: Wrap Up
-
-```
-Setup complete! Here's what you can do now:
-
-ORG SKILLS (always available):
-  /register-automation  — Track your builds in the Automation Tracker
-  /product-design       — UX guardrail with DESIGN.md and focus groups
-  /nsls-focus-group     — Test ideas with simulated employee panels
-  /nsls-slides          — Branded NSLS/Society presentations
-  /deployment-guide     — How to deploy to Railway, Airtable, GAS, etc.
-  /web-research         — Structured web research
-  /gws                  — Google Workspace operations
-  ... and more — type / to see all available skills
-
-WORKFLOW PLUGINS:
-  Superpowers gives you: /brainstorm, /debug, /verify, /plan
-  Compound Engineering gives you: /ce:brainstorm, /ce:plan, /ce:review
-
-Start building something and use /register-automation to track it!
-```
-
 ## Edge Cases
 
-- **User runs /setup again after everything is configured**: Check state, confirm everything is good, offer to reconfigure the personal toolkit .env if needed.
+- **User runs /setup again after everything is configured**: Check state, confirm everything is good, offer to run /personal-setup if they want to reconfigure.
 - **Git clone fails (network/permissions)**: Show the error, suggest they clone manually and point to the GitHub repo URL.
-- **User isn't an NSLS employee**: The org toolkit still works — skip NSLS-specific Airtable base IDs and note that some skills reference NSLS-specific resources.
-- **Personal toolkit already installed**: Skip the clone, just offer to reconfigure the .env.
+- **User isn't an NSLS employee**: The org toolkit still works — skip NSLS-specific references and note that some skills reference NSLS-specific resources.
+- **Personal toolkit already installed**: Skip the clone, just offer /personal-setup.

@@ -93,15 +93,10 @@ if [ -n "$CLAUDE_BIN" ]; then
     "$CLAUDE_BIN" plugins install superpowers 2>&1 | tail -1 || true
   fi
 
-  # Compound Engineering (Every marketplace — brainstorm, plan, review, git workflows)
-  if "$CLAUDE_BIN" plugins list 2>/dev/null | grep -q "compound-engineering"; then
-    echo "  compound-engineering: already installed"
-  else
-    echo "  Adding Every marketplace..."
-    "$CLAUDE_BIN" plugins marketplace add https://github.com/EveryInc/compound-engineering-plugin.git 2>&1 | tail -1 || true
-    echo "  Installing compound-engineering..."
-    "$CLAUDE_BIN" plugins install compound-engineering@every-marketplace 2>&1 | tail -1 || true
-  fi
+  # Compound Engineering is available as an optional power-up.
+  # Install manually if you want advanced planning/review workflows:
+  #   claude plugins marketplace add https://github.com/EveryInc/compound-engineering-plugin.git
+  #   claude plugins install compound-engineering@every-marketplace
 else
   echo ""
   echo "  Could not find the 'claude' CLI."
@@ -180,7 +175,11 @@ ls "$PLUGIN_DIR/skills/" | sed 's/^/    \//'
 echo ""
 echo "  PLUGINS:"
 echo "    superpowers      — planning, debugging, verification workflows"
-echo "    compound-eng.    — brainstorm, plan, review, git workflows"
+echo ""
+echo "  OPTIONAL POWER-UPS:"
+echo "    compound-engineering — advanced planning/review workflows"
+echo "    Install: claude plugins marketplace add https://github.com/EveryInc/compound-engineering-plugin.git"
+echo "             claude plugins install compound-engineering@every-marketplace"
 echo ""
 echo "=== NEXT STEP ==="
 echo ""

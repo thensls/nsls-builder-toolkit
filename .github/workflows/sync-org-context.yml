@@ -1,0 +1,66 @@
+name: Sync Org Context
+
+on:
+  schedule:
+    # Weekly: Sunday 11 PM ET (Monday 3 AM UTC)
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      sync_target:
+        description: 'What to sync'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - org-chart
+          - lops
+          - strategy
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Determine sync target
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            # Cron runs org-chart every week, lops on even weeks
+            WEEK=$(date +%V)
+            if [ $((WEEK % 2)) -eq 0 ]; then
+              echo "flags=--org-chart --lops" >> $GITHUB_OUTPUT
+            else
+              echo "flags=--org-chart" >> $GITHUB_OUTPUT
+            fi
+          else
+            TARGET="${{ inputs.sync_target }}"
+            if [ "$TARGET" = "all" ]; then
+              echo "flags=--all" >> $GITHUB_OUTPUT
+            else
+              echo "flags=--${TARGET}" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Run sync
+        env:
+          AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
+        run: python3 _shared/scripts/sync_org_context.py ${{ steps.target.outputs.flags }}
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add _shared/context/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            CHANGED=$(git diff --staged --name-only | xargs -I{} basename {} .md | tr '\n' ', ' | sed 's/,$//')
+            git commit -m "sync: ${CHANGED} $(date +%Y-%m-%d)"
+            git push
+          fi
