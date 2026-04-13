@@ -69,6 +69,39 @@ mcp__claude_ai_Google_Calendar__gcal_list_calendars()
 - **Connected**: "Google Calendar is connected"
 - **Not connected**: "Google Calendar isn't connected. Add it in Claude Code settings → MCP Servers → Google Calendar. Used by /open-day for daily schedule."
 
+### Google Cloud Platform (GCP)
+
+Check if the builder has GCP project creation access. This is needed for automations that use Google APIs (OAuth, Apps Script, service accounts).
+
+Ask the user:
+```
+Do you need to create Google Cloud projects for your automations?
+
+This is needed if you're building anything that uses Google APIs — OAuth flows,
+Apps Script triggers, service accounts, etc. If you're just using Claude Code
+with Slack/Asana/Airtable, you can skip this.
+```
+
+If yes:
+```
+To create GCP projects, you need to be in the gcp-builders@nsls.org group.
+Ask Kevin (or any group owner) to add you — it's one command:
+
+  gcloud identity groups memberships add \
+    --group-email="gcp-builders@nsls.org" \
+    --member-email="YOUR_EMAIL@nsls.org" \
+    --roles=MEMBER
+
+Once added, go to console.cloud.google.com/projectcreate and select
+the "Builder Projects" folder as your parent resource. That's where
+you have permission to create projects.
+
+Personal automations (email triage, personal workflows) → your own project.
+Org-owned automations → use the shared nsls-automations project.
+```
+
+If no or skip: move on — this doesn't block any other setup.
+
 ### Summary
 
 After checking all tools, show a summary:
@@ -78,6 +111,7 @@ Tool Status:
   [check or x] Slack
   [check or x] Asana
   [check or x] Google Calendar
+  [check or x] GCP Access (if requested)
 
 [If any missing]: You can add these anytime in Claude Code settings.
 The org skills that don't need these tools will work fine right now.
