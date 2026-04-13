@@ -10,6 +10,10 @@
         {
           "type": "command",
           "command": "bash \"$HOME/.claude/local-plugins/nsls-builder-toolkit/hooks/sync-pointers.sh\" 2>/dev/null || true"
+        },
+        {
+          "type": "command",
+          "command": "bash \"$HOME/.claude/local-plugins/nsls-builder-toolkit/hooks/session-ping.sh\" 2>/dev/null || true"
         }
       ]
     }
