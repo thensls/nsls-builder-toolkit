@@ -136,10 +136,14 @@ def session_ping():
     if PLUGIN_DIR.exists():
         toolkit = "both"
 
+    platform_map = {"darwin": "mac", "win32": "windows", "linux": "linux"}
+    platform = platform_map.get(sys.platform, sys.platform)
+
     payload = json.dumps({
         "builder_email": email,
         "toolkit": toolkit,
         "github_username": github,
+        "platform": platform,
     }).encode()
 
     try:
