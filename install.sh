@@ -216,6 +216,36 @@ done
 
 echo "  $count skill pointers synced"
 
+# --- Step 5: Add 'cc' shortcut ---
+
+echo ""
+echo "Step 4: Adding 'cc' shortcut..."
+
+# Detect shell config file
+SHELL_RC=""
+if [ -f "$HOME/.zshrc" ]; then
+  SHELL_RC="$HOME/.zshrc"
+elif [ -f "$HOME/.bashrc" ]; then
+  SHELL_RC="$HOME/.bashrc"
+elif [ -f "$HOME/.bash_profile" ]; then
+  SHELL_RC="$HOME/.bash_profile"
+fi
+
+if [ -n "$SHELL_RC" ]; then
+  if grep -q "alias cc=" "$SHELL_RC" 2>/dev/null; then
+    echo "  cc shortcut: already configured"
+  else
+    echo "" >> "$SHELL_RC"
+    echo "# Claude Code shortcut" >> "$SHELL_RC"
+    echo "alias cc='claude'" >> "$SHELL_RC"
+    echo "  Added 'cc' shortcut to $(basename "$SHELL_RC") — type cc to launch Claude Code"
+    echo "  (takes effect in new terminal windows, or run: source $SHELL_RC)"
+  fi
+else
+  echo "  Could not find shell config (.zshrc, .bashrc, .bash_profile)"
+  echo "  Add this manually: alias cc='claude'"
+fi
+
 # --- Done ---
 
 echo ""
@@ -232,12 +262,16 @@ echo "  PLUGINS:"
 echo "    superpowers              — planning, debugging, verification workflows"
 echo "    compound-engineering     — brainstorm, plan, build, review pipeline"
 echo ""
+echo "  SHORTCUT:"
+echo "    cc                       — type 'cc' in any terminal to launch Claude Code"
+echo ""
 echo "=== NEXT STEP ==="
 echo ""
-echo "  1. Start a new Claude Code session (or restart if one is open)"
-echo "     Skills won't appear until the session loads the new plugins."
+echo "  1. Open a new terminal window (so the 'cc' shortcut loads)"
 echo ""
-echo "  2. Say:  /setup"
+echo "  2. Type:  cc"
+echo ""
+echo "  3. Say:  /setup"
 echo "     This connects your tools (Slack, Asana, etc.) and optionally"
 echo "     installs personal productivity skills (daily planning, weekly"
 echo "     reviews, project logging — yours to customize)."
