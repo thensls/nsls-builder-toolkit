@@ -113,37 +113,55 @@ CLAUDE_BIN=""
 for candidate in \
   "$(command -v claude 2>/dev/null)" \
   "$HOME/.local/bin/claude" \
+  "$HOME/.claude/bin/claude" \
   "/usr/local/bin/claude" \
-  "$HOME/.claude/bin/claude"; do
+  "/opt/homebrew/bin/claude" \
+  "$HOME/.npm-global/bin/claude" \
+  "$HOME/.nvm/versions/node/*/bin/claude"; do
   if [ -n "$candidate" ] && [ -x "$candidate" ]; then
     CLAUDE_BIN="$candidate"
     break
   fi
 done
 
-if [ -n "$CLAUDE_BIN" ]; then
-  # Superpowers (official marketplace — planning, debugging, verification workflows)
-  if "$CLAUDE_BIN" plugins list 2>/dev/null | grep -q "superpowers"; then
-    echo "  superpowers: already installed"
-  else
-    echo "  Installing superpowers..."
-    "$CLAUDE_BIN" plugins install superpowers 2>&1 | tail -1 || true
-  fi
+# Retry with PATH refresh if not found (native installer may need a moment)
+if [ -z "$CLAUDE_BIN" ]; then
+  eval "$(cat ~/.zshrc 2>/dev/null | grep -E 'export PATH|path=')" 2>/dev/null || true
+  eval "$(cat ~/.bashrc 2>/dev/null | grep -E 'export PATH|path=')" 2>/dev/null || true
+  CLAUDE_BIN="$(command -v claude 2>/dev/null)"
+fi
 
-  # Compound Engineering is available as an optional power-up.
-  # Install manually if you want advanced planning/review workflows:
-  #   claude plugins marketplace add https://github.com/EveryInc/compound-engineering-plugin.git
-  #   claude plugins install compound-engineering@every-marketplace
+install_plugin() {
+  local name="$1"
+  local install_cmd="$2"
+  local marketplace_url="$3"
+
+  if "$CLAUDE_BIN" plugin list 2>/dev/null | grep -q "$name"; then
+    echo "  $name: already installed"
+  else
+    if [ -n "$marketplace_url" ]; then
+      echo "  Adding $name marketplace..."
+      "$CLAUDE_BIN" plugin marketplace add "$marketplace_url" 2>&1 | tail -1 || true
+    fi
+    echo "  Installing $name..."
+    "$CLAUDE_BIN" plugin install "$install_cmd" 2>&1 | tail -1 || true
+  fi
+}
+
+if [ -n "$CLAUDE_BIN" ]; then
+  install_plugin "superpowers" "superpowers" ""
+  install_plugin "compound-engineering" "compound-engineering@every-marketplace" \
+    "https://github.com/EveryInc/compound-engineering-plugin.git"
 else
   echo ""
-  echo "  Could not find the 'claude' CLI."
+  echo "  Could not find the 'claude' CLI in PATH."
   echo "  After your next Claude Code session, run /setup — it will detect"
   echo "  missing plugins and give you the install commands."
   echo ""
   echo "  Or run these manually:"
-  echo "    claude plugins install superpowers"
-  echo "    claude plugins marketplace add https://github.com/EveryInc/compound-engineering-plugin.git"
-  echo "    claude plugins install compound-engineering@every-marketplace"
+  echo "    claude plugin install superpowers"
+  echo "    claude plugin marketplace add https://github.com/EveryInc/compound-engineering-plugin.git"
+  echo "    claude plugin install compound-engineering@every-marketplace"
 fi
 
 # --- Step 4: Create slash-command pointer skills ---
@@ -211,12 +229,8 @@ echo "  ORG SKILLS (13 skills for building, tracking, deploying):"
 ls "$PLUGIN_DIR/skills/" | sed 's/^/    \//'
 echo ""
 echo "  PLUGINS:"
-echo "    superpowers      — planning, debugging, verification workflows"
-echo ""
-echo "  OPTIONAL POWER-UPS:"
-echo "    compound-engineering — advanced planning/review workflows"
-echo "    Install: claude plugins marketplace add https://github.com/EveryInc/compound-engineering-plugin.git"
-echo "             claude plugins install compound-engineering@every-marketplace"
+echo "    superpowers              — planning, debugging, verification workflows"
+echo "    compound-engineering     — brainstorm, plan, build, review pipeline"
 echo ""
 echo "=== NEXT STEP ==="
 echo ""
