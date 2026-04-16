@@ -6,15 +6,18 @@ Usage:
     python3 sync_org_context.py --lops            # Sync LOPs from SLT base
     python3 sync_org_context.py --strategy        # Sync strategy from Google Doc
     python3 sync_org_context.py --all             # Sync everything
+    python3 sync_org_context.py --update-vault    # Update Obsidian people files with org data
 
 Environment:
     AIRTABLE_API_KEY    — Required for --org-chart and --lops
     GOOGLE_DOCS_API_KEY — Optional for --strategy (falls back to gws CLI)
+    OBSIDIAN_VAULT_PATH — Required for --update-vault
 """
 
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.request
@@ -146,6 +149,26 @@ def sync_org_chart():
 
     output = CONTEXT_DIR / "org-chart.md"
     output.write_text("\n".join(lines))
+
+    # Also save JSON for vault updates and programmatic access
+    all_employees = []
+    for dept, emps in departments.items():
+        for e in emps:
+            all_employees.append({**e, "department": dept})
+
+    # Build manages lookup (reverse of manager relationship)
+    manages = {}
+    for e in all_employees:
+        mgr = e.get("manager", "")
+        if mgr:
+            manages.setdefault(mgr, []).append(e["name"])
+
+    for e in all_employees:
+        e["manages"] = sorted(manages.get(e["name"], []))
+
+    json_output = CONTEXT_DIR / "org-chart.json"
+    json_output.write_text(json.dumps(all_employees, indent=2))
+
     print(f"  Wrote {output} ({sum(len(d) for d in departments.values())} employees)", file=sys.stderr)
 
 
@@ -298,15 +321,163 @@ def sync_strategy():
     print(f"  Wrote {output}", file=sys.stderr)
 
 
+def update_vault():
+    """Update Obsidian 30-people/ files with org chart frontmatter."""
+    vault_path = os.environ.get("OBSIDIAN_VAULT_PATH")
+    if not vault_path:
+        # Try reading from personal toolkit .env
+        env_file = Path.home() / ".claude/local-plugins/nsls-personal-toolkit/.env"
+        if env_file.exists():
+            for line in env_file.read_text().splitlines():
+                if line.startswith("OBSIDIAN_VAULT_PATH="):
+                    vault_path = line.split("=", 1)[1].strip()
+                    break
+    if not vault_path:
+        print("Error: OBSIDIAN_VAULT_PATH not set and not found in personal toolkit .env", file=sys.stderr)
+        sys.exit(1)
+
+    people_dir = Path(vault_path) / "30-people"
+    if not people_dir.exists():
+        print(f"Error: {people_dir} does not exist", file=sys.stderr)
+        sys.exit(1)
+
+    json_file = CONTEXT_DIR / "org-chart.json"
+    if not json_file.exists():
+        print("Error: org-chart.json not found. Run --org-chart first.", file=sys.stderr)
+        sys.exit(1)
+
+    employees = json.loads(json_file.read_text())
+    print(f"Updating vault people files ({len(employees)} employees)...", file=sys.stderr)
+
+    created = 0
+    updated = 0
+    for emp in employees:
+        name = emp["name"]
+        if not name:
+            continue
+        filepath = people_dir / f"{name}.md"
+
+        # Fields to merge into frontmatter
+        org_fields = {}
+        if emp.get("title"):
+            org_fields["role"] = emp["title"]
+        if emp.get("department"):
+            org_fields["department"] = emp["department"]
+        if emp.get("email"):
+            org_fields["email"] = emp["email"]
+        if emp.get("slack"):
+            org_fields["slack"] = emp["slack"]
+        if emp.get("manager"):
+            org_fields["reports-to"] = f"\"[[{emp['manager']}]]\""
+        if emp.get("manages"):
+            org_fields["manages"] = [f"\"[[{m}]]\"" for m in emp["manages"]]
+
+        if filepath.exists():
+            content = filepath.read_text()
+            content = _merge_frontmatter(content, org_fields)
+            filepath.write_text(content)
+            updated += 1
+        else:
+            # Create a minimal stub
+            fm_lines = ["---", "type: person", f"org: NSLS"]
+            for k, v in org_fields.items():
+                if isinstance(v, list):
+                    fm_lines.append(f"{k}:")
+                    for item in v:
+                        fm_lines.append(f"  - {item}")
+                else:
+                    fm_lines.append(f"{k}: {v}")
+            fm_lines.append("---")
+            fm_lines.append("")
+            fm_lines.append(f"# {name}")
+            fm_lines.append("")
+            filepath.write_text("\n".join(fm_lines))
+            created += 1
+
+    print(f"  Updated {updated}, created {created} people files", file=sys.stderr)
+
+
+def _merge_frontmatter(content, new_fields):
+    """Merge new fields into existing YAML frontmatter without clobbering other fields."""
+    fm_match = re.match(r"^---\n(.*?)\n---\n", content, re.DOTALL)
+    if not fm_match:
+        # No frontmatter — prepend it
+        fm_lines = ["---"]
+        for k, v in new_fields.items():
+            if isinstance(v, list):
+                fm_lines.append(f"{k}:")
+                for item in v:
+                    fm_lines.append(f"  - {item}")
+            else:
+                fm_lines.append(f"{k}: {v}")
+        fm_lines.append("---")
+        return "\n".join(fm_lines) + "\n" + content
+
+    fm_text = fm_match.group(1)
+    body = content[fm_match.end():]
+
+    # Parse frontmatter lines, preserving order
+    fm_lines = fm_text.split("\n")
+    existing_keys = set()
+    for line in fm_lines:
+        key_match = re.match(r"^(\w[\w-]*):", line)
+        if key_match:
+            existing_keys.add(key_match.group(1))
+
+    # Update existing keys in place, append new ones at the end
+    new_fm_lines = []
+    skip_list_items = False
+    for line in fm_lines:
+        key_match = re.match(r"^(\w[\w-]*):", line)
+        if key_match:
+            key = key_match.group(1)
+            skip_list_items = False
+            if key in new_fields:
+                val = new_fields[key]
+                if isinstance(val, list):
+                    new_fm_lines.append(f"{key}:")
+                    for item in val:
+                        new_fm_lines.append(f"  - {item}")
+                    skip_list_items = True
+                else:
+                    # Don't overwrite role if person-intelligence set a richer one
+                    # and Airtable has it empty
+                    if key == "role" and not val:
+                        new_fm_lines.append(line)
+                    else:
+                        new_fm_lines.append(f"{key}: {val}")
+                continue
+            else:
+                new_fm_lines.append(line)
+        elif skip_list_items and line.startswith("  - "):
+            continue  # skip old list items we're replacing
+        else:
+            skip_list_items = False
+            new_fm_lines.append(line)
+
+    # Append keys that didn't exist yet
+    for k, v in new_fields.items():
+        if k not in existing_keys:
+            if isinstance(v, list):
+                new_fm_lines.append(f"{k}:")
+                for item in v:
+                    new_fm_lines.append(f"  - {item}")
+            else:
+                new_fm_lines.append(f"{k}: {v}")
+
+    return "---\n" + "\n".join(new_fm_lines) + "\n---\n" + body
+
+
 def main():
     parser = argparse.ArgumentParser(description="Sync org context to markdown")
     parser.add_argument("--org-chart", action="store_true", help="Sync org chart")
     parser.add_argument("--lops", action="store_true", help="Sync LOPs")
     parser.add_argument("--strategy", action="store_true", help="Sync strategy doc")
+    parser.add_argument("--update-vault", action="store_true", help="Update Obsidian people files")
     parser.add_argument("--all", action="store_true", help="Sync everything")
     args = parser.parse_args()
 
-    if not any([args.org_chart, args.lops, args.strategy, args.all]):
+    if not any([args.org_chart, args.lops, args.strategy, args.update_vault, args.all]):
         parser.print_help()
         sys.exit(1)
 
@@ -318,6 +489,8 @@ def main():
         sync_lops()
     if args.strategy or args.all:
         sync_strategy()
+    if args.update_vault or args.all:
+        update_vault()
 
     print("Done.", file=sys.stderr)
 
