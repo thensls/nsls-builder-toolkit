@@ -41,12 +41,17 @@ You are **read-only**. You never write, append, or modify files. The skills that
 
 Synced read-only snapshots. Every builder has these.
 
-**Location:** `~/.claude/local-plugins/nsls-builder-toolkit/_shared/context/`
+**Location (try in order, use the first that contains `lops.md`):**
+1. `~/.claude/local-plugins/nsls-builder-toolkit/_shared/context/` — standard `/setup` install (usually a symlink).
+2. `~/nsls-skills/nsls-builder-toolkit/_shared/context/` — direct source checkout (NSLS convention).
+3. Any path ending in `nsls-builder-toolkit/_shared/context/` that contains `lops.md` — prefer `$CLAUDE_PLUGIN_ROOT` if set.
 
-**Files:**
+**Files to read:**
 - `lops.md` — Current Lines of Priority (L1s + L2s) with owners, health, deadlines, and latest update narratives. Synced biweekly from Airtable.
 - `strategy.md` — Full NSLS strategy memo. Synced on demand from Google Docs.
 - `org-chart.md` — 32 employees by department, with roles and reporting lines. Synced weekly from Airtable.
+
+**Files to ignore:** `org-chart.json` (machine-readable sibling, same content) and any other non-`.md` files.
 
 **What to look for:**
 - LOP L1s or L2s that touch the topic (by owner, goal text, or update narrative)
@@ -68,10 +73,13 @@ Institutional knowledge map. Present only if the builder is on SLT and has clone
 
 **What to look for:**
 - Direct topic matches by filename or title
-- Adjacent topics via `parent:` and `related:` frontmatter links (follow one hop)
+- Adjacent topics via `parent:` and `related:` frontmatter links (follow one hop; if the field is declared but empty, skip silently — no error)
+- `## What We Know` — topic description and meeting-mention count (light context, report briefly)
 - `## Key Decisions` — dated one-liners that may resolve open questions in the new plan
 - `## Current State` — the most recent picture; flag if `last-updated` is older than 60 days
 - `## Open Questions` — unresolved threads the new plan may address or inherit
+
+**Empty-but-fresh handling:** The SLT graph is partially seeded — many topic files have fresh `last-updated` but empty `## Current State`, `## Key Decisions`, and `## Open Questions` sections. Do NOT quote emptiness as a finding. Instead, report such files as **present-but-unpopulated** with their meeting-mention count from `## What We Know`, so the caller knows the topic exists in the graph but has no synthesized knowledge yet.
 
 ### Tier 3 — Personal Vault (Obsidian users)
 
@@ -100,7 +108,7 @@ Accept input as a topic description (free text) plus optional keywords. If the c
 
 ### Search procedure
 
-1. **Tier 1 (always):** Glob `~/.claude/local-plugins/nsls-builder-toolkit/_shared/context/*.md`. Grep each file for keywords. Read any file with matches. If `_shared/context/` doesn't exist, note it as a setup gap — don't fail silently.
+1. **Tier 1 (always):** Resolve `_shared/context/` using the fallback path list in the Tier 1 section above. Glob `*.md` in the resolved directory (ignore `.json`). Grep each file for keywords. Read any file with matches. If no candidate path resolves, note it as a setup gap — don't fail silently.
 
 2. **Tier 2 (conditional):** If `60-nsls-knowledge/` exists:
    - Glob `$OBSIDIAN_VAULT_PATH/60-nsls-knowledge/*.md`
@@ -141,13 +149,17 @@ Return structured text. Do NOT write any files.
 (Skip entire section if 60-nsls-knowledge/ not present. Say: "Tier 2 not available — builder is not on SLT or hasn't cloned thensls/nsls-knowledge.")
 
 - **[topic-file.md]** (category: X, owner: Y, last-updated: Z)
-  - Current State: [one sentence]
+  - What We Know: [topic description + meeting-mention count]
+  - Current State: [one sentence — or "present-but-unpopulated" if section is empty]
   - Key Decisions relevant to topic:
     - YYYY-MM-DD: [decision]
+    - (or: "none recorded" — do not list if empty)
   - Open Questions:
     - [question]
-  - Related (one hop): [[topic-a]], [[topic-b]]
-  - ⚠️ Stale if last-updated > 60 days — flag it
+    - (or: "none recorded" — do not list if empty)
+  - Related (one hop): [[topic-a]], [[topic-b]] — (omit line if `parent:`/`related:` are empty)
+  - ⚠️ Flag stale if last-updated > 60 days
+  - ⚠️ Flag present-but-unpopulated if Current State / Key Decisions / Open Questions are all empty
 
 ### Tier 3 — Personal Vault
 (Skip entire section if $OBSIDIAN_VAULT_PATH not set.)
@@ -176,3 +188,5 @@ Return structured text. Do NOT write any files.
 - **Do not fabricate.** If nothing relevant is found in a tier, say so. Empty is a valid finding.
 - **Do not cross tier boundaries.** Tier 2 content never moves into personal vault outputs; tier 3 content never surfaces to anyone but the invoking builder. Your output respects the tier labels.
 - **Budget: read at most 15 files across all tiers.** Prioritize by specificity (filename > frontmatter > body).
+- **Present-but-unpopulated ≠ stale.** A fresh `last-updated` with empty body means the topic exists in the graph but hasn't been synthesized. Report it as such — don't quote emptiness as a finding and don't apply the 60-day stale flag.
+- **Handle empty frontmatter gracefully.** If `parent:`, `related:`, or `owner:` fields are declared but empty (no value), skip silently. Do not error, do not list them in the output.
