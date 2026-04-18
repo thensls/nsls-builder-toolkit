@@ -51,11 +51,15 @@ The install script sets up three things:
 - **Always use `gws` for Google Docs, Sheets, Slides, Drive URLs** — never WebFetch, WebSearch, or Firecrawl for google.com URLs
 - Use `google-drive` skill for file upload/download/sharing operations
 
-## Skill Creation (3-phase pipeline)
-When building a new skill, use all three tools in sequence:
-1. **`/skill-creation`** (this toolkit) — design rubric: purpose, safety, macro/micro, diagnostics
-2. **`skill-creator`** plugin — eval loop: test with subagents, measure, iterate on description
-3. **`superpowers:writing-skills`** — quality gate: TDD pressure test, rationalization-proofing
+## Skill Creation (3-phase cascade)
+When building a new skill, use three tools in sequence. Each tests a different quality axis:
+1. **`/skill-creation`** (this toolkit) — design rubric: purpose, safety, macro/micro, diagnostics, domain-specific gotchas
+2. **`superpowers:writing-skills`** — pressure test: pure-trigger description, rationalization table, Red Flags list, TDD-for-documentation discipline
+3. **`compound-engineering:create-agent-skills`** — spec audit: official frontmatter compliance, Quick Start, line count, writing style
+
+**Optional Phase 4**: For broadly-released skills that need reliable auto-triggering across many sessions, add `skill-creator` plugin for quantitative eval. Skip for personal / time-boxed / Kevin-only skills.
+
+See `/skill-creation` for the full cascade including a worked example (gary-meeting-prep build, 2026-04-18).
 
 ## Presentations
 - Always ask "NSLS branded or Society branded?" before creating slides

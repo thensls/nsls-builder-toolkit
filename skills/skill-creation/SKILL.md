@@ -171,36 +171,66 @@ When building a new skill right now:
 
 ## Recommended Creation Flow
 
-This skill is the design rubric — it tells you *what* a good skill looks like. Two other tools handle the *how*. Use all three in sequence:
+Four tools sit in this space. Each tests a different quality axis. For most skills, use the **three-phase cascade** below (design → pressure test → audit). For broadly-released skills that need quantitative triggering reliability, add a fourth eval phase.
 
-### Phase 1: Design (this skill — `/skill-creation`)
-Walk through The Pattern above. Consider every element. Pour in domain micro while it's fresh. Produce a draft SKILL.md with the full shape.
+### The Three-Phase Cascade (default)
 
-### Phase 2: Eval & Iterate (`skill-creator` plugin)
-Once you have a draft, use the `skill-creator` skill to test it:
-- It runs subagents against your skill with real prompts
-- Measures whether the skill produces the right behavior
-- Generates quantitative benchmarks with variance analysis
-- Optimizes the frontmatter description for reliable triggering
-- Iterate until the eval scores stabilize
+Run these in order. Each phase produces a real edit — not just a review.
 
-Run this by saying: "evaluate my skill" or "run evals on this skill" or "optimize this skill's description."
+**Phase 1: Design — `/skill-creation` (this skill)**
+Walk through The Pattern above. Consider every element. Pour in domain micro while it's fresh. Produce a draft SKILL.md with the full shape — safety, purpose, macro/micro, domain-specific micro, service awareness, diagnostic loop, output guidelines.
 
-### Phase 3: Quality Gate (`superpowers:writing-skills`)
-Before shipping, run the Superpowers writing-skills pressure test:
-- TDD-for-documentation: write the failure case first, verify the skill prevents it
-- Rationalization-proofing: check that Claude can't talk its way around the skill's rules
-- Adversarial testing: try to break the skill with edge cases
-- Only ship when the skill survives pressure testing
+**Phase 2: Pressure test — `superpowers:writing-skills`**
+Run the Superpowers TDD-for-documentation gate:
+- Rewrite the description to be **pure triggering conditions** — no workflow summary (Claude shortcuts workflows it finds in descriptions)
+- Build the rationalization table — every shortcut Claude might take, with explicit counters
+- Add the Red Flags — STOP list so Claude can self-check
+- Close loopholes: "don't keep as reference," "don't adapt while testing"
 
-Run this by saying: "review this skill for quality" or "pressure test this skill."
+This phase catches the class of bug where the skill reads fine but Claude talks its way around it.
 
-### Why Three Tools?
+Run this by saying: "pressure test this skill" or "review this skill for quality."
 
-| Tool | What it answers | When to use |
-|------|----------------|-------------|
-| `/skill-creation` (this) | "What should this skill look like?" | Design phase — while the experience is fresh |
-| `skill-creator` plugin | "Does this skill actually work?" | Eval phase — test with real prompts, measure |
-| `superpowers:writing-skills` | "Can this skill be broken?" | Quality gate — adversarial pressure test before shipping |
+**Phase 3: Spec audit and polish — `compound-engineering:create-agent-skills`**
+Final pass against the official Claude Code skill spec:
+- Frontmatter compliance (name format, description length, field correctness)
+- Standard markdown headings, not XML
+- Under 500 lines, progressive disclosure for heavy reference
+- `disable-model-invocation` for side-effect workflows *only if appropriate* (NSLS memory: usually avoid — makes skills invisible in new sessions)
+- `allowed-tools` if specific tools are needed
+- Imperative/infinitive writing style, not second person
+- Quick Start section, concrete examples, one-level-deep references
 
-Skipping Phase 1 produces a skill that works but lacks depth. Skipping Phase 2 produces a skill that reads well but may not trigger or behave correctly. Skipping Phase 3 produces a skill that works in the happy path but breaks when Claude rationalizes around it.
+Run this by saying: "audit this skill" or "check this skill against the spec."
+
+### Optional Phase 4: Quantitative Eval — `skill-creator` plugin
+
+For skills that will be triggered across many sessions and many users (broadly-released toolkit skills, not personal/time-boxed skills), run the skill-creator eval loop:
+- Subagents run the skill against real prompts
+- Quantitative benchmarks with variance analysis
+- Optimizes the frontmatter description for reliable auto-triggering
+
+Skip this phase when: the skill is Kevin-personal, time-boxed, or used from a narrow set of trigger phrases Kevin controls. Run it when: the skill will be in the broader toolkit or personal-toolkit plugins and needs reliable auto-invoke.
+
+Run this by saying: "evaluate my skill" or "run evals on this skill."
+
+### Why Separate Tools?
+
+| Tool | Quality axis | Sample failure it catches |
+|------|--------------|---------------------------|
+| `/skill-creation` (this) | Shape — is the pattern complete? | Missing wound/gotcha list, no diagnostic loop, generic instead of domain-micro |
+| `superpowers:writing-skills` | Body hardness — does it survive rationalization? | Description summarizes workflow (Claude shortcuts), no rationalization table, no red flags |
+| `compound-engineering:create-agent-skills` | Spec compliance — does it conform to the Claude Code skill format? | XML tags, bad frontmatter, >500 lines, missing Quick Start, second-person drift |
+| `skill-creator` (optional) | Triggering reliability — does it auto-invoke for the right prompts? | Description matches too broadly (invokes for wrong topics) or too narrowly (misses obvious triggers) |
+
+Skipping Phase 1 produces a skill that works but lacks depth. Skipping Phase 2 produces a skill that works in the happy path but breaks under pressure. Skipping Phase 3 produces a skill that violates the spec and may not load correctly. Skipping Phase 4 (when needed) produces a skill that's well-built but doesn't trigger reliably.
+
+### Example: the `gary-meeting-prep` build
+
+Run on 2026-04-18. Kevin's cascade: Phase 1 → 2 → 3 (no Phase 4 — personal skill, narrow trigger set Kevin controls).
+
+- **Phase 1** surfaced: safety tiers, domain-specific wound patterns with dates, Gary's 8 mental models as a table, two-output discipline (brief vs. share-ready), composition over three existing skills.
+- **Phase 2** caught: description was summarizing workflow (the CSO trap — Claude would have shortcut the skill). Added 9-row rationalization table, Red Flags — STOP list with 8 specific violations.
+- **Phase 3** polished: pure-trigger description, Quick Start section, second-person drift fixed, confirmed <500 lines, honored NSLS memory rule against `disable-model-invocation`.
+
+The build took ~30 minutes. A one-phase build would have shipped a skill with a fragile description and no rationalization defenses.
