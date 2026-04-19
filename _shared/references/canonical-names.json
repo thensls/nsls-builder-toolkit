@@ -75,6 +75,8 @@
     "Hannah Stoneburner": {
       "role": "CS — NCO channel lead",
       "full_name_misspellings": ["Hanna Stoneburner", "Hannah Stoneburn"],
+      "first_name_misspellings": ["Hanna"],
+      "last_name_misspellings": ["Stoneburn"],
       "active": true
     },
     "Christine Vinette": {
@@ -96,7 +98,7 @@
     "Lauren Prentiss": {
       "role": "Contractor — product PM",
       "full_name_misspellings": ["Lauren Prentis", "Lauren Prentice"],
-      "last_name_misspellings": [],
+      "last_name_misspellings": ["Prentis", "Prentice"],
       "active": true
     }
   }
