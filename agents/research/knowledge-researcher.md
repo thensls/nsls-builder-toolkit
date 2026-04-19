@@ -51,12 +51,15 @@ Synced read-only snapshots. Every builder has these.
 - `strategy.md` — Full NSLS strategy memo. Synced on demand from Google Docs.
 - `org-chart.md` — 32 employees by department, with roles and reporting lines. Synced weekly from Airtable.
 
-**Files to ignore:** `org-chart.json` (machine-readable sibling, same content) and any other non-`.md` files.
+**Also read (same parent, sibling folder):** `_shared/learnings/*.md` — greppable, PR-gated bucket of team learnings (insights, playbooks, corrections, patterns) written by `/kw:compound`. Every builder has these. Resolve via the same fallback paths as `_shared/context/` but swap `context` for `learnings`.
+
+**Files to ignore:** `org-chart.json` (machine-readable sibling, same content), `_shared/learnings/README.md` (documentation, not a learning), and any other non-`.md` files.
 
 **What to look for:**
 - LOP L1s or L2s that touch the topic (by owner, goal text, or update narrative)
 - Strategic themes in the memo that relate to the topic
 - People who own related work (from org chart) — useful for "who should weigh in"
+- Team learnings whose `tags:` frontmatter overlaps the topic keywords; prioritize `correction` type (these prevent repeated mistakes) and `playbook` type (these offer reusable procedure). Quote the file's `## Implication` section when surfacing.
 
 ### Tier 2 — SLT Knowledge Graph (SLT members only)
 
@@ -108,7 +111,7 @@ Accept input as a topic description (free text) plus optional keywords. If the c
 
 ### Search procedure
 
-1. **Tier 1 (always):** Resolve `_shared/context/` using the fallback path list in the Tier 1 section above. Glob `*.md` in the resolved directory (ignore `.json`). Grep each file for keywords. Read any file with matches. If no candidate path resolves, note it as a setup gap — don't fail silently.
+1. **Tier 1 (always):** Resolve `_shared/context/` using the fallback path list in the Tier 1 section above. Glob `*.md` in the resolved directory (ignore `.json`). Grep each file for keywords. Read any file with matches. Also glob sibling `_shared/learnings/*.md` (skipping `README.md`) and grep both filenames, `tags:` frontmatter, and bodies for keyword matches. If neither directory resolves, note it as a setup gap — don't fail silently.
 
 2. **Tier 2 (conditional):** If `60-nsls-knowledge/` exists:
    - Glob `$OBSIDIAN_VAULT_PATH/60-nsls-knowledge/*.md`
@@ -142,6 +145,9 @@ Return structured text. Do NOT write any files.
   - Latest update: [brief quote or summary, with sync date]
 - **Strategy memo** — [section/theme] — [one-line relevance]
 - **Org chart** — [people likely to own or weigh in] — [why]
+- **Team learnings** — [filename] (type: [insight|playbook|correction|pattern], confidence: [level])
+  - Learning: [the core sentence]
+  - Implication: [quoted from the file's `## Implication` section]
 
 (or: "No tier 1 matches" if nothing relevant)
 
