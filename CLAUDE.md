@@ -45,17 +45,20 @@ The install script sets up three things:
 
 ## PR Review — Macroscope
 
-**Wait for Macroscope before merging PRs that touch knowledge content.** Macroscope catches factual errors that code-only reviewers miss. Specifically required for:
+Macroscope is a code review tool — it pays off when the PR contains claims about APIs, SDKs, query syntax, data system behavior, or other technical facts it can verify against documentation patterns. It has a per-review cost. Use it where it earns its keep.
 
-- `_shared/learnings/**` — team-shareable insights, playbooks, corrections, patterns
-- `_shared/context/**` — synced org context (if edits slip past the sync scripts)
-- `agents/**` and `skills/**` where the content describes APIs, data systems, or domain facts
+**Run Macroscope before merging when the PR contains technical claims.** Examples that qualify:
 
-A wrong fact in these files compounds through `/kw:brainstorm` and `/kw:plan` retrieval every time the loop runs. One Macroscope pass before merge is cheap; hunting down a wrong claim that spread across three plans is not.
+- API behavior notes (request params, response shapes, flags, auth scopes)
+- Query or filter syntax (SQL, HogQL, Airtable formulas, HubSpot associations)
+- SDK or library usage patterns
+- Data-system specs (table schemas, field types, pipelines)
 
-For pure code changes (scripts, install flow, frontmatter-only edits), Macroscope is nice-to-have, not required.
+These live anywhere: `_shared/learnings/` corrections, `agents/` or `skills/` reference material, `docs/` runbooks.
 
-**Precedent:** PR #18 merged with a wrong Airtable claim that Macroscope caught post-merge, requiring follow-up PR #19. Don't repeat.
+**Skip Macroscope when the content is non-technical.** Process playbooks, coaching patterns, org decisions, communication templates — these need human domain review, not a code reviewer.
+
+**Precedent:** PR #18 merged a learning entry with a wrong Airtable API claim. Macroscope caught it post-merge → follow-up PR #19. Running it pre-merge on that kind of content is the right call; running it on every knowledge PR is not.
 
 ## Automation Tracking
 
