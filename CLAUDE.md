@@ -43,6 +43,20 @@ The install script sets up three things:
 - `verification-before-completion` — always verify before claiming done
 - `finishing-a-development-branch` — merge/PR decision guide
 
+## PR Review — Macroscope
+
+**Wait for Macroscope before merging PRs that touch knowledge content.** Macroscope catches factual errors that code-only reviewers miss. Specifically required for:
+
+- `_shared/learnings/**` — team-shareable insights, playbooks, corrections, patterns
+- `_shared/context/**` — synced org context (if edits slip past the sync scripts)
+- `agents/**` and `skills/**` where the content describes APIs, data systems, or domain facts
+
+A wrong fact in these files compounds through `/kw:brainstorm` and `/kw:plan` retrieval every time the loop runs. One Macroscope pass before merge is cheap; hunting down a wrong claim that spread across three plans is not.
+
+For pure code changes (scripts, install flow, frontmatter-only edits), Macroscope is nice-to-have, not required.
+
+**Precedent:** PR #18 merged with a wrong Airtable claim that Macroscope caught post-merge, requiring follow-up PR #19. Don't repeat.
+
 ## Automation Tracking
 
 **Always register automations** with `/register-automation` when you build something new. This feeds the org-wide Automation Tracker so leadership has visibility into what's being built, by whom, and at what stage.
