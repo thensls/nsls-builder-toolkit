@@ -1,0 +1,105 @@
+{
+  "_meta": {
+    "purpose": "Canonical name registry for NSLS people. Any transcript-derived text (Fathom → MI Decisions, Meeting Actions, harvest outputs) should be normalized against this before being written to durable stores or shown to humans.",
+    "usage": "Import via _shared/scripts/name_normalizer.py. Call normalize_names(text) before synthesis or display.",
+    "maintenance": "Add a canonical entry when a new person joins. Add a misspelling when you catch Fathom/Claude mangling a name. Never remove canonicals — mark inactive instead.",
+    "scope_note": "This registry covers people whose names appear in SLT decisions and meeting actions. For the broader org chart, see _shared/context/org-chart.md.",
+    "last-updated": "2026-04-19"
+  },
+  "canonicals": {
+    "Ashleigh Smith": {
+      "role": "SLT — Client Services lead, Core Revenue L1 owner",
+      "full_name_misspellings": ["Ashley Smith", "Ashlee Smith", "Ashely Smith"],
+      "first_name_misspellings": ["Ashley", "Ashlee", "Ashely"],
+      "active": true
+    },
+    "Gary Tuerack": {
+      "role": "SLT — Founder / CEO",
+      "full_name_misspellings": ["Gary Tuerak", "Gary Tureck", "Gary Turek", "Gary Tuerik"],
+      "last_name_misspellings": ["Tuerak", "Tureck", "Turek", "Tuerik"],
+      "active": true
+    },
+    "Michael O'Brien": {
+      "role": "SLT — Marketing",
+      "full_name_misspellings": ["Michael OBrien", "Michael Obrien", "Michael O'Brian", "Michael OBrian"],
+      "last_name_misspellings": ["OBrien", "O'Brian", "OBrian"],
+      "active": true
+    },
+    "Anish Patel": {
+      "role": "SLT — Simplification L1 owner",
+      "full_name_misspellings": ["Aneesh Patel", "Anesh Patel"],
+      "first_name_misspellings": ["Aneesh", "Anesh"],
+      "active": true
+    },
+    "Adam Stone": {
+      "role": "SLT — Marketing, advisor-tracking L2 owner",
+      "full_name_misspellings": [],
+      "active": true
+    },
+    "Kevin Prentiss": {
+      "role": "SLT — COO",
+      "full_name_misspellings": ["Kevin Prentis", "Kevin Prentice"],
+      "last_name_misspellings": ["Prentis", "Prentice"],
+      "active": true
+    },
+    "Heather Darnell": {
+      "role": "HR — Team L1 owner",
+      "full_name_misspellings": ["Heather Darnelle", "Heather Darnel"],
+      "last_name_misspellings": ["Darnelle", "Darnel"],
+      "active": true
+    },
+    "Maryanna Laferriere": {
+      "role": "People — eboard-recruitment criteria owner",
+      "full_name_misspellings": ["Mary Ann Laferriere", "Maryanne Laferriere", "Maryanna Lafferriere"],
+      "first_name_misspellings": ["Mary Ann", "Maryanne", "Mariana"],
+      "last_name_misspellings": ["Lafferriere"],
+      "active": true
+    },
+    "Marissa Curry": {
+      "role": "CS — UPhoenix lead, chapter management overhaul",
+      "full_name_misspellings": ["Marisa Curry", "Melissa Curry"],
+      "first_name_misspellings": ["Marisa"],
+      "active": true
+    },
+    "Royce Rowan": {
+      "role": "Data team",
+      "full_name_misspellings": [],
+      "active": true
+    },
+    "Jordan Tannenbaum": {
+      "role": "Data team",
+      "full_name_misspellings": ["Jordan Tenenbaum", "Jordan Tenenbalm", "Jordan Tannenbalm"],
+      "last_name_misspellings": ["Tenenbaum", "Tenenbalm", "Tannenbalm"],
+      "active": true
+    },
+    "Hannah Stoneburner": {
+      "role": "CS — NCO channel lead",
+      "full_name_misspellings": ["Hanna Stoneburner", "Hannah Stoneburn"],
+      "first_name_misspellings": ["Hanna"],
+      "last_name_misspellings": ["Stoneburn"],
+      "active": true
+    },
+    "Christine Vinette": {
+      "role": "CS — tech support, cs-tech-triage owner",
+      "full_name_misspellings": ["Kristine Vinette", "Christine Vinet"],
+      "last_name_misspellings": ["Vinet"],
+      "active": true
+    },
+    "Angelica Villalobos": {
+      "role": "CS — chapter success",
+      "full_name_misspellings": [],
+      "active": true
+    },
+    "David Adams": {
+      "role": "Tech — automated invitation workflow L2 owner",
+      "full_name_misspellings": [],
+      "active": true
+    },
+    "Lauren Prentiss": {
+      "role": "Contractor — product PM",
+      "full_name_misspellings": ["Lauren Prentis", "Lauren Prentice"],
+      "last_name_misspellings": ["Prentis", "Prentice"],
+      "active": true
+    }
+  }
+}
