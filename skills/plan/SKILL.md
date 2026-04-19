@@ -80,6 +80,7 @@ Before writing anything, present what you found:
 - [L1/L2 name, owner, health, deadline] — [how the plan connects]
 
 **Past learnings:**
+- [`_shared/learnings/` entry — name + type (correction / playbook / insight / pattern)] — [quoted `## Implication`]
 - [tier 2 topic file or tier 3 project] — [the insight]
 
 **Current data:** (if data was pulled)
@@ -303,7 +304,7 @@ Use AskUserQuestion:
 **Question:** "Plan written to `plans/{filename}`. What next?"
 
 **Options:**
-1. **Run `/kw:review`** — Check strategic alignment and data accuracy *(not yet built — skip for now)*
+1. **Run `/kw:review`** — Check strategic alignment and data accuracy before sharing
 2. **Share with stakeholders** — Draft a Slack message or email summarizing the plan
 3. **Register as automation** — If this is an operations playbook, run `/register-automation`
 4. **Refine** — Adjust specific sections
