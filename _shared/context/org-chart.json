@@ -1,19 +1,297 @@
 [
   {
+    "name": "Gregg Gudelinis",
+    "title": "Chapter Success Manager (Gold)",
+    "manager": "Jim Corriveau",
+    "email": "ggudelinis@nsls.org",
+    "slack": "U034ZAPBHAT",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Arianne Stinson",
+    "title": "Chapter Success Manager (Silver)",
+    "manager": "Jim Corriveau",
+    "email": "astinson@nsls.org",
+    "slack": "U0393VBME00",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Isaia Cirillo",
+    "title": "",
+    "manager": "Royce Rowan",
+    "email": "icirillo@nsls.org",
+    "slack": "U09K0NK755M",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Mel Rosal",
+    "title": "Senior Director, Client Services",
+    "manager": "Ashleigh Smith",
+    "email": "mrosal@nsls.org",
+    "slack": "U08K0D2S79D",
+    "department": "Client Services",
+    "manages": [
+      "Jim Corriveau"
+    ]
+  },
+  {
+    "name": "Maryanna Laferriere",
+    "title": "Strategic Chapter Manager, Team Enablement Lead",
+    "manager": "Marissa Curry",
+    "email": "mlaferriere@nsls.org",
+    "slack": "U055Z0RLDE1",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Alyssa Placeres",
+    "title": "Chapter Success Manager (Gold)",
+    "manager": "Jim Corriveau",
+    "email": "aplaceres@nsls.org",
+    "slack": "U07TSQZ4THT",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Tayanee Torres",
+    "title": "Chapter Success Manager (Gold)",
+    "manager": "Jim Corriveau",
+    "email": "ttorres@nsls.org",
+    "slack": "U074E7H9C07",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Linda Condon",
+    "title": "Senior Strategic Chapter Manager",
+    "manager": "Marissa Curry",
+    "email": "lcondon@nsls.org",
+    "slack": "U05KSGWT73R",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Dillon Cook",
+    "title": "Chapter Success Manager (Silver)",
+    "manager": "Jim Corriveau",
+    "email": "dcook@nsls.org",
+    "slack": "U0A2A9Q95JN",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Marissa Curry",
+    "title": "Director, Enterprise Chapter Management",
+    "manager": "Ashleigh Smith",
+    "email": "mcurry@nsls.org",
+    "slack": "UBSGLD1T6",
+    "department": "Client Services",
+    "manages": [
+      "Ally Trachtenberg",
+      "Jakita Cofer",
+      "Karissa Tedesco",
+      "Liliana Gonzalez",
+      "Linda Condon",
+      "Maryanna Laferriere",
+      "Olivia Orend",
+      "Zo\u00eb Wallis"
+    ]
+  },
+  {
+    "name": "Alexis Scott",
+    "title": "Chapter Success Manager (Gold)",
+    "manager": "Jim Corriveau",
+    "email": "ascott@nsls.org",
+    "slack": "U08ABVDPWE5",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Ally Trachtenberg",
+    "title": "Strategic Chapter Manager",
+    "manager": "Marissa Curry",
+    "email": "atrachtenberg@nsls.org",
+    "slack": "U0ANJTQD81L",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Royce Rowan",
+    "title": "Director, Revenue Enablement",
+    "manager": "Ashleigh Smith",
+    "email": "rrowan@nsls.org",
+    "slack": "U01D1JT0MQE",
+    "department": "Client Services",
+    "manages": [
+      "Isaia Cirillo"
+    ]
+  },
+  {
+    "name": "Brielle Alisia",
+    "title": "Chapter Success Manager (Silver)",
+    "manager": "Jim Corriveau",
+    "email": "bjones@nsls.org",
+    "slack": "U091ZV57M29",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Dejeahn Brown",
+    "title": "Chapter Success Manager (Silver)",
+    "manager": "Jim Corriveau",
+    "email": "dbrown@nsls.org",
+    "slack": "U098M2E1M5X",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Karissa Tedesco",
+    "title": "Senior Strategic Chapter Manager",
+    "manager": "Marissa Curry",
+    "email": "ktedesco@nsls.org",
+    "slack": "U02TCTTGLF3",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Zo\u00eb Wallis",
+    "title": "Chapter Manager, First Year Specialist",
+    "manager": "Marissa Curry",
+    "email": "zwallis@nsls.org",
+    "slack": "U0937NH88A2",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Liliana Gonzalez",
+    "title": "Strategic Chapter Manager",
+    "manager": "Marissa Curry",
+    "email": "lgonzalez@nsls.org",
+    "slack": "U02CXBF0Z9P",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Olivia Orend",
+    "title": "Senior Strategic Chapter Manager",
+    "manager": "Marissa Curry",
+    "email": "oorend@nsls.org",
+    "slack": "U02K56Y96LX",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Ashleigh Smith",
+    "title": "Vice President, Client Services",
+    "manager": "Gary Tuerack",
+    "email": "asmith@nsls.org",
+    "slack": "UEWBC2R08",
+    "department": "Client Services",
+    "manages": [
+      "Hannah Stoneburner",
+      "Kimberly Campbell",
+      "Marissa Curry",
+      "Mel Rosal",
+      "Royce Rowan",
+      "Tim Duffy"
+    ]
+  },
+  {
+    "name": "Jakita Cofer",
+    "title": "Senior Strategic Chapter Manager",
+    "manager": "Marissa Curry",
+    "email": "jcofer@nsls.org",
+    "slack": "U03K8GYD6MC",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
+    "name": "Jim Corriveau",
+    "title": "Director of Chapter Management (Mid-Market)",
+    "manager": "Mel Rosal",
+    "email": "jcorriveau@nsls.org",
+    "slack": "U096ZFUQU7M",
+    "department": "Client Services",
+    "manages": [
+      "Alexis Scott",
+      "Alyssa Placeres",
+      "Arianne Stinson",
+      "Brielle Alisia",
+      "Dejeahn Brown",
+      "Dillon Cook",
+      "Gregg Gudelinis",
+      "Tayanee Torres"
+    ]
+  },
+  {
+    "name": "Tim Duffy",
+    "title": "Director, Student Program Development",
+    "manager": "Ashleigh Smith",
+    "email": "tduffy@nsls.org",
+    "slack": "U04M4JFNRU7",
+    "department": "Student Program Development",
+    "manages": []
+  },
+  {
     "name": "Kevin Prentiss",
     "title": "Head of Product & Tech (Interim)",
-    "manager": "",
+    "manager": "Gary Tuerack",
     "email": "kprentiss@nsls.org",
     "slack": "U07TS8X7T7X",
     "department": "Product",
     "manages": [
-      "Heather Darnell"
+      "Chris Higbee",
+      "David Adams",
+      "Heather Darnell",
+      "Juan Maggi",
+      "Lauren Prentiss",
+      "Red Akasha",
+      "Trina Limpert"
     ]
   },
   {
-    "name": "Red Akasha",
+    "name": "Chris Higbee",
     "title": "",
-    "manager": "",
+    "manager": "Kevin Prentiss",
+    "email": "chigbee@nsls.org",
+    "slack": "",
+    "department": "Product",
+    "manages": []
+  },
+  {
+    "name": "Lauren Prentiss",
+    "title": "Product Manager",
+    "manager": "Kevin Prentiss",
+    "email": "lprentiss@nsls.org",
+    "slack": "",
+    "department": "Product",
+    "manages": []
+  },
+  {
+    "name": "Angelica Villalobos",
+    "title": "Business Intelligence and Automation Lead",
+    "manager": "Jordan Tannenbaum",
+    "email": "avillalobos@nsls.org",
+    "slack": "",
+    "department": "Product",
+    "manages": []
+  },
+  {
+    "name": "Trina Limpert",
+    "title": "Product Manager",
+    "manager": "Kevin Prentiss",
+    "email": "tlimpert@nsls.org",
+    "slack": "",
+    "department": "Product",
+    "manages": []
+  },
+  {
+    "name": "Red Akasha",
+    "title": "AI Product Architect",
+    "manager": "Kevin Prentiss",
     "email": "rakasha@nsls.org",
     "slack": "U070WE56UU9",
     "department": "Product",
@@ -30,7 +308,7 @@
   },
   {
     "name": "Tatiana McGrath",
-    "title": "",
+    "title": "Art Director ",
     "manager": "Michael O'Brien",
     "email": "tmcgrath@nsls.org",
     "slack": "U02FSV479GC",
@@ -71,16 +349,20 @@
   {
     "name": "Adam Stone",
     "title": "",
-    "manager": "",
+    "manager": "Gary Tuerack",
     "email": "astone@nsls.org",
     "slack": "U08EVP8CF8A",
     "department": "Marketing",
-    "manages": []
+    "manages": [
+      "Boris Savoie Doyer",
+      "Jordan Tannenbaum",
+      "Michael O'Brien"
+    ]
   },
   {
     "name": "Michael O'Brien",
     "title": "Director of Demand Generation",
-    "manager": "",
+    "manager": "Adam Stone",
     "email": "mobrien@nsls.org",
     "slack": "U015FETV4KW",
     "department": "Marketing",
@@ -93,6 +375,15 @@
       "Michael Adamian",
       "Tatiana McGrath"
     ]
+  },
+  {
+    "name": "Boris Savoie Doyer",
+    "title": "",
+    "manager": "Adam Stone",
+    "email": "bsavoiedoyer@nsls.org",
+    "slack": "U096X7F82MP",
+    "department": "Marketing",
+    "manages": []
   },
   {
     "name": "Devin Lasker",
@@ -123,92 +414,11 @@
   },
   {
     "name": "Noah Camenker",
-    "title": "",
+    "title": "Video and Media Producer",
     "manager": "Tatiana McGrath",
     "email": "ncamenker@nsls.org",
     "slack": "U03ATLQ2BL1",
     "department": "Marketing",
-    "manages": []
-  },
-  {
-    "name": "Isaia Cirillo",
-    "title": "",
-    "manager": "",
-    "email": "icirillo@nsls.org",
-    "slack": "U09K0NK755M",
-    "department": "Unknown",
-    "manages": []
-  },
-  {
-    "name": "David Adams",
-    "title": "",
-    "manager": "",
-    "email": "dadams@nsls.org",
-    "slack": "U0A9KTSG4J2",
-    "department": "Unknown",
-    "manages": []
-  },
-  {
-    "name": "Jordan Tannenbaum",
-    "title": "",
-    "manager": "",
-    "email": "jtannenbaum@nsls.org",
-    "slack": "U0A5FNH2A01",
-    "department": "Unknown",
-    "manages": []
-  },
-  {
-    "name": "Royce Rowan",
-    "title": "",
-    "manager": "",
-    "email": "rrowan@nsls.org",
-    "slack": "U01D1JT0MQE",
-    "department": "Unknown",
-    "manages": []
-  },
-  {
-    "name": "Boris Savoie Doyer",
-    "title": "",
-    "manager": "",
-    "email": "bsavoiedoyer@nsls.org",
-    "slack": "U096X7F82MP",
-    "department": "Unknown",
-    "manages": []
-  },
-  {
-    "name": "Juan Maggi",
-    "title": "",
-    "manager": "",
-    "email": "jmaggi@nsls.org",
-    "slack": "U02G96B39GQ",
-    "department": "Unknown",
-    "manages": []
-  },
-  {
-    "name": "Kimberly Campbell",
-    "title": "",
-    "manager": "",
-    "email": "kcampbell@nsls.org",
-    "slack": "U021ZK0NW07",
-    "department": "Unknown",
-    "manages": []
-  },
-  {
-    "name": "Gary Tuerack",
-    "title": "",
-    "manager": "",
-    "email": "gtuerack@nsls.org",
-    "slack": "U040YTX56DP",
-    "department": "Unknown",
-    "manages": []
-  },
-  {
-    "name": "Hannah Stoneburner",
-    "title": "",
-    "manager": "",
-    "email": "hstoneburner@nsls.org",
-    "slack": "ULHQ9C9MG",
-    "department": "Unknown",
     "manages": []
   },
   {
@@ -242,36 +452,99 @@
     ]
   },
   {
-    "name": "Mel Rosal",
-    "title": "",
-    "manager": "",
-    "email": "mrosal@nsls.org",
-    "slack": "U08K0D2S79D",
-    "department": "Client Services",
+    "name": "Kara Klimuszko",
+    "title": "Member Experience Team Lead",
+    "manager": "Kimberly Campbell",
+    "email": "kklimuszko@nsls.org",
+    "slack": "U01B6B0T831",
+    "department": "Member Experience",
+    "manages": [
+      "Atrayu Polhemus",
+      "Charlie Cabeza de Baca",
+      "Melissa Baggett",
+      "Monica Cerrato",
+      "Nancy Castillo"
+    ]
+  },
+  {
+    "name": "Charlie Cabeza de Baca",
+    "title": "Membership Experience Specialist",
+    "manager": "Kara Klimuszko",
+    "email": "cdonnelly@nsls.org",
+    "slack": "U05DKQE1J3H",
+    "department": "Member Experience",
     "manages": []
   },
   {
-    "name": "Marissa Curry",
-    "title": "",
-    "manager": "",
-    "email": "mcurry@nsls.org",
-    "slack": "UBSGLD1T6",
-    "department": "Client Services",
+    "name": "Atrayu Polhemus",
+    "title": "Membership Experience Specialist",
+    "manager": "Kara Klimuszko",
+    "email": "apolhemus@nsls.org",
+    "slack": "U08E6QG6KUM",
+    "department": "Member Experience",
     "manages": []
   },
   {
-    "name": "Ashleigh Smith",
-    "title": "",
-    "manager": "",
-    "email": "asmith@nsls.org",
-    "slack": "UEWBC2R08",
-    "department": "Client Services",
+    "name": "Nancy Castillo",
+    "title": "Membership Experience Specialist",
+    "manager": "Kara Klimuszko",
+    "email": "ncastillo@nsls.org",
+    "slack": "U05516H7B8A",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Alaynie Smith",
+    "title": "Workforce Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "alsmith@nsls.org",
+    "slack": "U03EDCNTW5B",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Monica Cerrato",
+    "title": "Membership Experience Specialist",
+    "manager": "Kara Klimuszko",
+    "email": "mcerrato@nsls.org",
+    "slack": "U02EG4YQ2UF",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Kimberly Campbell",
+    "title": "Director of Member Experience",
+    "manager": "Ashleigh Smith",
+    "email": "kcampbell@nsls.org",
+    "slack": "U021ZK0NW07",
+    "department": "Member Experience",
+    "manages": [
+      "Alaynie Smith",
+      "Kara Klimuszko"
+    ]
+  },
+  {
+    "name": "Melissa Baggett",
+    "title": "Membership Experience Specialist",
+    "manager": "Kara Klimuszko",
+    "email": "mbaggett@nsls.org",
+    "slack": "U081X01AQA2",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "David Adams",
+    "title": "Vice President of Technology",
+    "manager": "Kevin Prentiss",
+    "email": "dadams@nsls.org",
+    "slack": "U0A9KTSG4J2",
+    "department": "Executive",
     "manages": []
   },
   {
     "name": "Sandra Suarez",
-    "title": "",
-    "manager": "",
+    "title": "Supervisor, Accounts Payable",
+    "manager": "Valerie English",
     "email": "ssuarez@nsls.org",
     "slack": "U09DZ8YQRUZ",
     "department": "Finance",
@@ -279,17 +552,20 @@
   },
   {
     "name": "Anish Patel",
-    "title": "",
-    "manager": "",
+    "title": "Chief Financial Officer",
+    "manager": "Gary Tuerack",
     "email": "apatel@nsls.org",
     "slack": "U04MU8SUEVA",
     "department": "Finance",
-    "manages": []
+    "manages": [
+      "Erin Muskat",
+      "Valerie English"
+    ]
   },
   {
     "name": "Erin Muskat",
-    "title": "",
-    "manager": "",
+    "title": "Senior Director, Financial Planning & Analysis",
+    "manager": "Anish Patel",
     "email": "emuskat@nsls.org",
     "slack": "U08VCAK3L0Z",
     "department": "Finance",
@@ -297,11 +573,87 @@
   },
   {
     "name": "Valerie English",
-    "title": "",
-    "manager": "",
+    "title": "Manager, Accounting",
+    "manager": "Anish Patel",
     "email": "venglish@nsls.org",
     "slack": "U03JPRXN2BV",
     "department": "Finance",
+    "manages": [
+      "Sandra Suarez"
+    ]
+  },
+  {
+    "name": "Jordan Tannenbaum",
+    "title": "Head of Data",
+    "manager": "Adam Stone",
+    "email": "jtannenbaum@nsls.org",
+    "slack": "U0A5FNH2A01",
+    "department": "Business Intelligence",
+    "manages": [
+      "Angelica Villalobos"
+    ]
+  },
+  {
+    "name": "Juan Maggi",
+    "title": "Lead AI/ML Developer & Architect",
+    "manager": "Kevin Prentiss",
+    "email": "jmaggi@nsls.org",
+    "slack": "U02G96B39GQ",
+    "department": "Engineering",
     "manages": []
+  },
+  {
+    "name": "Stephanie Repaci",
+    "title": "Senior Regional Director of Program Development",
+    "manager": "Hannah Stoneburner",
+    "email": "srepaci@nsls.org",
+    "slack": "U01RNQ6LLG6",
+    "department": "Program Development",
+    "manages": []
+  },
+  {
+    "name": "Karina Solis Gonzalez",
+    "title": "Senior Regional Director of Program Development",
+    "manager": "Hannah Stoneburner",
+    "email": "ksolis@nsls.org",
+    "slack": "U03L6UNMEKZ",
+    "department": "Program Development",
+    "manages": []
+  },
+  {
+    "name": "Daniel Harris",
+    "title": "Senior Regional Director of Program Development",
+    "manager": "Hannah Stoneburner",
+    "email": "dharris@nsls.org",
+    "slack": "U03TM7BHK8F",
+    "department": "Program Development",
+    "manages": []
+  },
+  {
+    "name": "Hannah Stoneburner",
+    "title": "Director of Program Development",
+    "manager": "Ashleigh Smith",
+    "email": "hstoneburner@nsls.org",
+    "slack": "ULHQ9C9MG",
+    "department": "Program Development",
+    "manages": [
+      "Daniel Harris",
+      "Karina Solis Gonzalez",
+      "Stephanie Repaci"
+    ]
+  },
+  {
+    "name": "Gary Tuerack",
+    "title": "",
+    "manager": "",
+    "email": "gtuerack@nsls.org",
+    "slack": "U040YTX56DP",
+    "department": "Unknown",
+    "manages": [
+      "Adam Stone",
+      "Anish Patel",
+      "Ashleigh Smith",
+      "Kevin Prentiss"
+    ]
   }
 ]
