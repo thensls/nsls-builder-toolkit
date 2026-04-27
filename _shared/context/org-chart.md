@@ -1,5 +1,5 @@
 # NSLS Org Chart
-_Last synced: 2026-04-20_
+_Last synced: 2026-04-27_
 
 ## Business Intelligence
 
@@ -52,6 +52,7 @@ _Last synced: 2026-04-20_
 |------|-------|---------|-------|-------|
 | Anish Patel | Chief Financial Officer | Gary Tuerack | apatel@nsls.org | U04MU8SUEVA |
 | Erin Muskat | Senior Director, Financial Planning & Analysis | Anish Patel | emuskat@nsls.org | U08VCAK3L0Z |
+| Juan Cardenas | Jr. Staff Accountant | Sandra Suarez | jcardenas@nsls.org | U05BAL618QY |
 | Sandra Suarez | Supervisor, Accounts Payable | Valerie English | ssuarez@nsls.org | U09DZ8YQRUZ |
 | Valerie English | Manager, Accounting | Anish Patel | venglish@nsls.org | U03JPRXN2BV |
 
@@ -92,17 +93,19 @@ _Last synced: 2026-04-20_
 | Danielle Mariani | Senior Culture and Organizational Strategist | Heather Darnell | dmariani@nsls.org | UHXFN781L |
 | Heather Darnell | Director, Human Resources | Kevin Prentiss | hdarnell@nsls.org | U03D1HK963E |
 | Jenna Fontanez | Director, Talent Management | Heather Darnell | jfontanez@nsls.org | U03RR8TKEDA |
+| Joanne Sandoval | Early Talent Acquisition Specialist | Jenna Fontanez | jsandoval@nsls.org |  |
+| Lillian Collazo | Human Resources Generalist | Heather Darnell | lcollazo@nsls.org |  |
 
 ## Product
 
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
-| Angelica Villalobos | Business Intelligence and Automation Lead | Jordan Tannenbaum | avillalobos@nsls.org |  |
-| Chris Higbee |  | Kevin Prentiss | chigbee@nsls.org |  |
+| Angelica Villalobos | Business Intelligence and Automation Lead | Jordan Tannenbaum | avillalobos@nsls.org | U02EQ4E2WDC |
+| Chris Higbee |  | Kevin Prentiss | chigbee@nsls.org | U0A955W2BS4 |
 | Kevin Prentiss | Head of Product & Tech (Interim) | Gary Tuerack | kprentiss@nsls.org | U07TS8X7T7X |
-| Lauren Prentiss | Product Manager | Kevin Prentiss | lprentiss@nsls.org |  |
+| Lauren Prentiss | Product Manager | Kevin Prentiss | lprentiss@nsls.org | U08RN7X685A |
 | Red Akasha | AI Product Architect | Kevin Prentiss | rakasha@nsls.org | U070WE56UU9 |
-| Trina Limpert | Product Manager | Kevin Prentiss | tlimpert@nsls.org |  |
+| Trina Limpert | Product Manager | Kevin Prentiss | tlimpert@nsls.org | U0AJ5H67WET |
 
 ## Program Development
 

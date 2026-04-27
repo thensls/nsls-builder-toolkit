@@ -236,6 +236,57 @@
     "manages": []
   },
   {
+    "name": "Lillian Collazo",
+    "title": "Human Resources Generalist",
+    "manager": "Heather Darnell",
+    "email": "lcollazo@nsls.org",
+    "slack": "",
+    "department": "People Ops",
+    "manages": []
+  },
+  {
+    "name": "Joanne Sandoval",
+    "title": "Early Talent Acquisition Specialist",
+    "manager": "Jenna Fontanez",
+    "email": "jsandoval@nsls.org",
+    "slack": "",
+    "department": "People Ops",
+    "manages": []
+  },
+  {
+    "name": "Jenna Fontanez",
+    "title": "Director, Talent Management",
+    "manager": "Heather Darnell",
+    "email": "jfontanez@nsls.org",
+    "slack": "U03RR8TKEDA",
+    "department": "People Ops",
+    "manages": [
+      "Joanne Sandoval"
+    ]
+  },
+  {
+    "name": "Danielle Mariani",
+    "title": "Senior Culture and Organizational Strategist",
+    "manager": "Heather Darnell",
+    "email": "dmariani@nsls.org",
+    "slack": "UHXFN781L",
+    "department": "People Ops",
+    "manages": []
+  },
+  {
+    "name": "Heather Darnell",
+    "title": "Director, Human Resources",
+    "manager": "Kevin Prentiss",
+    "email": "hdarnell@nsls.org",
+    "slack": "U03D1HK963E",
+    "department": "People Ops",
+    "manages": [
+      "Danielle Mariani",
+      "Jenna Fontanez",
+      "Lillian Collazo"
+    ]
+  },
+  {
     "name": "Kevin Prentiss",
     "title": "Head of Product & Tech (Interim)",
     "manager": "Gary Tuerack",
@@ -257,7 +308,7 @@
     "title": "",
     "manager": "Kevin Prentiss",
     "email": "chigbee@nsls.org",
-    "slack": "",
+    "slack": "U0A955W2BS4",
     "department": "Product",
     "manages": []
   },
@@ -266,7 +317,7 @@
     "title": "Product Manager",
     "manager": "Kevin Prentiss",
     "email": "lprentiss@nsls.org",
-    "slack": "",
+    "slack": "U08RN7X685A",
     "department": "Product",
     "manages": []
   },
@@ -275,7 +326,7 @@
     "title": "Business Intelligence and Automation Lead",
     "manager": "Jordan Tannenbaum",
     "email": "avillalobos@nsls.org",
-    "slack": "",
+    "slack": "U02EQ4E2WDC",
     "department": "Product",
     "manages": []
   },
@@ -284,7 +335,7 @@
     "title": "Product Manager",
     "manager": "Kevin Prentiss",
     "email": "tlimpert@nsls.org",
-    "slack": "",
+    "slack": "U0AJ5H67WET",
     "department": "Product",
     "manages": []
   },
@@ -422,36 +473,6 @@
     "manages": []
   },
   {
-    "name": "Jenna Fontanez",
-    "title": "Director, Talent Management",
-    "manager": "Heather Darnell",
-    "email": "jfontanez@nsls.org",
-    "slack": "U03RR8TKEDA",
-    "department": "People Ops",
-    "manages": []
-  },
-  {
-    "name": "Danielle Mariani",
-    "title": "Senior Culture and Organizational Strategist",
-    "manager": "Heather Darnell",
-    "email": "dmariani@nsls.org",
-    "slack": "UHXFN781L",
-    "department": "People Ops",
-    "manages": []
-  },
-  {
-    "name": "Heather Darnell",
-    "title": "Director, Human Resources",
-    "manager": "Kevin Prentiss",
-    "email": "hdarnell@nsls.org",
-    "slack": "U03D1HK963E",
-    "department": "People Ops",
-    "manages": [
-      "Danielle Mariani",
-      "Jenna Fontanez"
-    ]
-  },
-  {
     "name": "Kara Klimuszko",
     "title": "Member Experience Team Lead",
     "manager": "Kimberly Campbell",
@@ -542,13 +563,24 @@
     "manages": []
   },
   {
+    "name": "Juan Cardenas",
+    "title": "Jr. Staff Accountant",
+    "manager": "Sandra Suarez",
+    "email": "jcardenas@nsls.org",
+    "slack": "U05BAL618QY",
+    "department": "Finance",
+    "manages": []
+  },
+  {
     "name": "Sandra Suarez",
     "title": "Supervisor, Accounts Payable",
     "manager": "Valerie English",
     "email": "ssuarez@nsls.org",
     "slack": "U09DZ8YQRUZ",
     "department": "Finance",
-    "manages": []
+    "manages": [
+      "Juan Cardenas"
+    ]
   },
   {
     "name": "Anish Patel",

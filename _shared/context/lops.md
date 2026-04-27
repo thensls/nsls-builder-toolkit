@@ -1,10 +1,10 @@
 # Lines of Priority (LOPs)
-_Last synced: 2026-04-13_
+_Last synced: 2026-04-27_
 
 ## L1: Simplification/Efficiency
 **Owner**: Anish Patel | **Health**: On Track
 **Goal**: Complete 4 major simplicity initiatives by Q4
-> We're maintaining solid momentum across simplification initiatives, with Drupal transition, Customer.io migration, and partnership agreement work all advancing. The SLT dashboards goal needs clarification—the DRI deferred status reporting and we should confirm the actual timeline and resource commitment for that workstream.
+> We're making solid progress across simplification initiatives, with Drupal transition, marketing automation migration, and advisor tracking all advancing. The SLT dashboards goal lacks substantive progress—we need the DRI to provide concrete updates and commit to Q2 delivery. We should clarify priorities if resource constraints are impacting dashboard development, as this directly supports SLT decision-making.
 
 ### L2: Transition off of Drupal by end of Q3 of 2026
 **Owner**: Kevin Prentiss | **Health**: On Track | **Deadline**: 2026-09-30
@@ -33,15 +33,15 @@ _Last synced: 2026-04-13_
 ## L1: Team
 **Owner**: Heather Darnell | **Health**: At Risk
 **Goal**: Achieve 80% strategic alignment by Q4
-> We're making progress on team foundations, with alignment scoring and compensation leveling advancing on schedule and recruiting partners secured. However, the talent acquisition process review is at risk due to lack of attention and no recent updates. We need SLT clarity on whether this initiative remains a priority or should be deprioritized to focus resources elsewhere.
+> We're making progress on talent acquisition and hiring, but the job framework project is at risk due to incomplete Signal process data needed for validation. We need to decide whether to proceed with the compensation leveling timeline or delay pending Signal rollout completion across all groups.
 
 ### L2: Establish baseline and methodology for the strategic alignment score and rubric
 **Owner**: Heather Darnell | **Health**: On Track | **Deadline**: 2026-06-01
-> Baseline and methodology for strategic alignment score and rubric is progressing well. DRI has prepared a presentation to share with SLT on Tuesday.
+> Initial SLT discussion completed. Finalization underway this week with minor adjustments to L2s based on updated metrics from the associated L1 strategic alignment goal.
 
 ### L2: Complete job framework and compensation leveling project by the end of Q2
-**Owner**: Heather Darnell | **Health**: On Track | **Deadline**: 2026-06-30
-> Job framework is developed and awaiting leadership approval with minor tweaks needed. Salary benchmarking survey contract with Companalyst renews in June, requiring a vendor renewal or migration decision.
+**Owner**: Heather Darnell | **Health**: At Risk | **Deadline**: 2026-06-30
+> Project scope expanded to incorporate Signal (quicknotes) process feedback, which is still rolling out across groups. Insufficient data currently available to validate Signal as a solution. Timeline expected to extend into Q3 due to data gathering requirements.
 
 ### L2: Engage Go Fractional for Product vacancies, Recruiting firm for SLT vacancies with HR support by February
 **Owner**: Kevin Prentiss | **Health**: Hit Goal | **Deadline**: 2026-02-28
@@ -49,14 +49,14 @@ _Last synced: 2026-04-13_
 
 ### L2: Review and improve talent acquisition process by Q2
 **Owner**: Jenna Fontanez | **Health**: On Track | **Deadline**: 2026-06-30
-> Met with Rippling to discuss transitioning to skills-based screening beyond resume review. Planning follow-up meeting next week to evaluate ATS capabilities for adaptive hiring in a rapidly changing job market.
+> DRI and Heather are actively revising the goal to better align with how they can improve the Talent Acquisition process. Goal refinement is in progress.
 
 ## L1: Core Revenue
 **Owner**: Ashleigh Smith | **Health**: At Risk
 **Goal**: Grow core enrollment revenue to $30.7M from $28M 
-> Core Revenue momentum is mixed—enrollment and brand tracking are progressing, but we're at risk on LTV improvement and chapter health protection. The $3 LTV target remains at risk despite ongoing project execution, and enrollment growth may miss its specific L2 goal despite hitting the overall 10.6M threshold. We need SLT clarity on whether the enrollment shortfall requires resource reallocation or revised chapter health priorities.
+> Core Revenue momentum is mixed—while brand initiatives and engagement programs advance on track, we're at risk on enrollment growth and LTV improvement, both critical to hitting our 10.6M market target and revenue expansion. Enrollment remains flat despite being needed for the L1 goal, and the $3 LTV uplift continues to slip. We need to assess whether current enrollment tactics require pivoting or if resource reallocation from on-track initiatives could accelerate these two at-risk areas.
 
-### L2: Grow total enrollment to 10.6 million by prioritizing chapter health to protect existing enrollment and driving new chapter growth.
+### L2: Protect, retain, and grow our serviceable addressable market from 9.9M to 10.6M.
 **Owner**: Ashleigh Smith | **Health**: At Risk | **Deadline**: 2026-12-31
 > Enrollment progress remains unchanged from last update. On track for the L1 goal (10.6M total) but likely to miss this specific L2 goal.
 
@@ -68,7 +68,7 @@ _Last synced: 2026-04-13_
 **Owner**: Michael O'Brien | **Health**: On Track | **Deadline**: 2026-12-31
 > Progress is on track. DRI will dedicate more focus time next week to work through specific details of the brand tracking score development and improvement initiatives.
 
-### L2: Send invitations to 40%+ of 10.6M; 80% needs to be standard invitations (excludes SNHU)
+### L2: Send 4.25M+ invitations to the 10.6M Serviceable Addressable Market; 80% needs to be standard invitations (excludes SNHU)
 **Owner**: Ashleigh Smith | **Health**: On Track | **Deadline**: 2026-12-31
 > Approximately 40k invitations still needed to reach budgeted amount for Spring. Alumni cohort pending, indicating progress is being made toward the 40%+ target of 10.6M.
 
@@ -77,23 +77,23 @@ _Last synced: 2026-04-13_
 > Three stakeholder engagement programs launched: alumni community, Advisor Impact Network, and Director's Circle. Team staffing planned to support strategic programming and help chapters drive higher-value engagement and member success paths.
 
 ## L1: Product Engagement
-**Owner**: Kevin Prentiss | **Health**: At Risk
+**Owner**: Kevin Prentiss | **Health**: On Track
 **Goal**: Establish proof that Society drives superior engagement through baseline establishment and optimization: 50k members on Ignite with Orientation on Society completion >50%, Clarity track completion >25% for members.
-> We're executing well across most engagement initiatives, but Personal Insights completion remains at risk due to velocity concerns with the new authoring tool. We need to validate whether current velocity supports delivering Personal Insights by end of Q1, and if not, clarify scope adjustments or timeline expectations with leadership.
+> We're making strong progress on Product Engagement with five of six goals on track or completed, including Personal Insights shipping early. Dashboard and global nav completion for SNT testing are critical path items; we should monitor their sprint delivery closely to keep the May timeline intact.
 
-### L2: Ability to skip personality test and edit steps by May
+### L2: Ability to skip personality test and edit steps in May
 **Owner**: Kevin Prentiss | **Health**: On Track | **Deadline**: 2026-05-31
 > DRI is taking ownership of the goal to enable skipping the personality test and editing steps by May. No blockers or concerns mentioned at this time.
 
-### L2: SNT testing by May on Society
+### L2: SNT testing in May on Society
 **Owner**: Kevin Prentiss | **Health**: On Track | **Deadline**: 2026-05-31
 > SNT testing progressing well after resolving authoring tool blocker. Dashboard and global nav are the next critical items in sprint plan; if these land on schedule, goal should be achieved.
 
-### L2: AI app notifications by April
+### L2: AI app notifications in April
 **Owner**: Kevin Prentiss | **Health**: On Track | **Deadline**: 2026-04-30
 > Red has a working prototype. Key blocker of clean PostHog implementation has been resolved and is now running properly. Syncing with Boris and Bruno this week to continue progress.
 
-### L2: Testing Onboarding & Orientation on Society by April
+### L2: Testing Onboarding & Orientation on Society in April
 **Owner**: Kevin Prentiss | **Health**: On Track | **Deadline**: 2026-04-30
 > Authoring tool MVP is unblocking the work. Team can now begin iterating and testing onboarding and orientation on Society.
 
@@ -102,5 +102,5 @@ _Last synced: 2026-04-13_
 > No update yet.
 
 ### L2: Personal Insights complete and live by end of Q1
-**Owner**: Kevin Prentiss | **Health**: At Risk | **Deadline**: 2026-03-31
-> Still at risk but completion is very possible. The goal is being tested against velocity with the new authoring tool.
+**Owner**: Kevin Prentiss | **Health**: Hit Goal | **Deadline**: 2026-03-31
+> This was complete and live before the due date. 
