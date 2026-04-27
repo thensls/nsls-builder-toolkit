@@ -27,23 +27,22 @@ The Campus Roadshow pipeline turns Fathom recordings and Airtable survey respons
 ```bash
 source ~/.zshrc   # ensure API keys are loaded
 
-# 1. Generate meeting report + add to index nav (--update-index required for nav)
+# 1. Generate meeting report + add to index nav (timestamps injected automatically)
 python3 Scripts/generate_school.py --slug mott-community-college --update-index
 
-# 2. Inject timestamp links
-python3 Scripts/add_timestamps.py --slug mott-community-college
-
-# 3. Generate survey page (use respondent record ID — see Stage 3 below)
+# 2. Generate survey page (use respondent record ID — see Stage 3 below)
 python3 Scripts/generate_survey.py \
   --airtable-id rec...respondent_id... \
   --slug mott-community-college \
   --school "Mott Community College"
 
-# 4. Deploy
+# 3. Deploy
 cd report && npx vercel --prod
 ```
 
-Read the stage sections below for gotchas before running — especially Stage 3 (Airtable record type) and Stage 2 (excerpt size).
+**Note:** `generate_school.py` now automatically runs `add_timestamps.py` on the new meeting report immediately after writing it. Stage 2 (manual timestamp injection) is no longer a separate step. Run `add_timestamps.py --slug` manually only if re-annotating an existing report.
+
+Read the stage sections below for gotchas — especially Stage 3 (Airtable record type) and Stage 2 (excerpt size).
 
 ---
 
@@ -53,11 +52,10 @@ Five stages, always in this order:
 
 | Stage | Script | What it produces |
 |-------|--------|-----------------|
-| 1. Generate report | `generate_school.py` | Fathom → Claude → per-school meeting HTML |
-| 2. Add timestamps | `add_timestamps.py` | Re-reads report + transcript → injects `?t=` links |
-| 3. Generate survey | `generate_survey.py` | Airtable respondent record → `survey.html` |
-| 4. Update ideas grid | Manual edit of `index.html` | Cross-school product insight cards with attribution |
-| 5. Deploy | `cd report && npx vercel --prod` | Push all changes to production |
+| 1. Generate report | `generate_school.py` | Fathom → Claude → meeting HTML + timestamps (auto) |
+| 2. Generate survey | `generate_survey.py` | Airtable respondent record → `survey.html` |
+| 3. Update ideas grid | Manual edit of `index.html` | Cross-school product insight cards with attribution |
+| 4. Deploy | `cd report && npx vercel --prod` | Push all changes to production |
 
 All scripts live in `Scripts/`. All output lands in `report/schools/{slug}/`.
 
