@@ -89,9 +89,10 @@ print('Div depth (should be 0):', depth)
 ```
 If depth is not 0, find the unclosed div in the `tab-intel` quotes section (search for `<div class="quote-card">` blocks where the closing `</div>` is missing) and add it.
 
-**Check 4 — Verify "NSLS Society Roadshow" badge links home.** Every page should have the badge as a link, not a plain span. `generate_school.py` now generates this correctly, but if a page was generated before this fix, patch it manually:
-- Hub pages (`schools/{slug}/index.html`): `<a href="../../index.html" class="badge" style="text-decoration:none;">NSLS Society Roadshow</a>`
-- Meeting pages (`schools/{slug}/meetings/*.html`): `<a href="../../../index.html" class="header-pill" style="text-decoration:none;">NSLS Society Roadshow</a>`
+**Check 4 — Verify "NSLS Society Roadshow" badge links home with hover animation.** Every page should have the badge as a link (not a plain span) with a smooth color transition on hover. All three scripts generate this correctly. If patching an older page manually:
+- Hub pages (`schools/{slug}/index.html`): `<a href="../../index.html" class="badge" style="text-decoration:none;">NSLS Society Roadshow</a>` — CSS must include `transition:color .2s;` on `.badge` and `a.badge:hover{color:#C96058;}`
+- Meeting pages (`schools/{slug}/meetings/*.html`): `<a href="../../../index.html" class="header-pill" style="text-decoration:none;">NSLS Society Roadshow</a>` — CSS must include `transition:color .2s;` on `.page-header .header-pill` and `a.header-pill:hover{color:#C96058;}` as a **separate rule** (the `.page-header .header-pill` two-class selector has higher specificity than `a:hover`, so the hover rule must be `a.header-pill:hover` to win)
+- Survey pages (`schools/{slug}/survey.html`): `<a href="../../index.html" class="pill" style="text-decoration:none;">NSLS Society Roadshow</a>` — CSS must include `transition:color .2s;` on `.pill` and `a.pill:hover{color:#C96058;}`
 
 **Check 3 — Create survey placeholder if no Airtable ID.** If no survey respondent record exists yet, create a minimal placeholder so the hub link doesn't 404:
 ```html
@@ -147,10 +148,12 @@ python3 Scripts/add_timestamps.py --slug mott-community-college
 
 Fetches the Fathom transcript, calls Claude to suggest `(fragment, keywords)` pairs, scores each against the actual transcript via keyword matching, injects only those with `score >= MIN_SCORE` (default: 3).
 
-**Gotcha — timestamps only appear in Section 1.** `extract_content_html()` sends a character excerpt to Claude. If the report is long, a small excerpt means only the first section gets annotated. Fix: increase the limit at line ~104 in `add_timestamps.py`:
+**Gotcha — timestamps only appear in Section 1.** `extract_content_html()` sends a character excerpt to Claude. If the report is long, a small excerpt means only the first section gets annotated. The current default is 12,000 chars (sufficient for most reports). If a long report still shows gaps, increase the limit at line ~106 in `add_timestamps.py`:
 ```python
-report_excerpt = content_html[:12000]   # was 6000 — bump to 12000+
+report_excerpt = content_html[:16000]   # bump further for very long reports
 ```
+
+**Gotcha — Fathom has two separate IDs.** The API returns `recording_id` (internal integer, used only for transcript fetch) and `url` (the `/calls/{id}` public URL, used for `?t=` timestamp links). These are different numbers for the same recording. `find_recording_id()` uses `recording_id` for transcript fetching and `calls_url` (from `m["url"]`) for timestamp link generation. Never use `recording_id` in `?t=` links — it will produce an access-denied page for recordings not owned by the API key holder.
 
 **Gotcha — Fathom share URL ≠ recordings API ID.** The share URL in the report (`fathom.video/share/xyz`) is not the API recording ID. `find_recording_id()` resolves it via the meetings list API. Never pass the share URL directly to the transcript endpoint.
 
