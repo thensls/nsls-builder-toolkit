@@ -323,7 +323,7 @@ async function findOrCreateUserByIssuerSub({ issuer, sub, claims }) {
       },
     });
   } else {
-    await db.users.update({
+    user = await db.users.update({
       where: { id: user.id },
       data: {
         email: claims.email,
