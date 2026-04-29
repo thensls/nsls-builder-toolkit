@@ -33,13 +33,13 @@ All four handle PKCE, discovery, and the in-app browser handoff correctly. Don't
 import * as AuthSession from 'expo-auth-session';
 import * as SecureStore from 'expo-secure-store';
 
-const discovery = AuthSession.useAutoDiscovery('https://auth.nsls.org');
-const redirectUri = AuthSession.makeRedirectUri({
-  scheme: 'thesocietyapp',
-  path: 'oauth2/callback',
-});
-
 export function useNslsAuth() {
+  const discovery = AuthSession.useAutoDiscovery('https://auth.nsls.org');
+  const redirectUri = AuthSession.makeRedirectUri({
+    scheme: 'thesocietyapp',
+    path: 'oauth2/callback',
+  });
+
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
       clientId: process.env.EXPO_PUBLIC_OIDC_CLIENT_ID!,
