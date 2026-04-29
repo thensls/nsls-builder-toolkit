@@ -124,10 +124,10 @@ When the library doesn't validate for you:
 ```ts
 import { jwtVerify, createRemoteJWKSet, decodeJwt } from 'jose';
 
-async function validateIdToken(idToken: string, discovery: { jwks_uri: string; issuer: string }) {
-  const JWKS = createRemoteJWKSet(new URL(discovery.jwks_uri));
+async function validateIdToken(idToken: string, discovery: AuthSession.DiscoveryDocument) {
+  const JWKS = createRemoteJWKSet(new URL(discovery.discoveryDocument!.jwks_uri!));
   const { payload } = await jwtVerify(idToken, JWKS, {
-    issuer: discovery.issuer,
+    issuer: discovery.discoveryDocument!.issuer!,
     audience: process.env.EXPO_PUBLIC_OIDC_CLIENT_ID,
   });
   // Also verify nonce matches the one stored before the authorize call.
