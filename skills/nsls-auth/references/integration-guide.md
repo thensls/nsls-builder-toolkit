@@ -573,6 +573,16 @@ Use cases:
 
 If userinfo returns `401 invalid_token`, clear the app session and start a fresh login flow.
 
+### 3. Discovery And JWKS
+
+Use discovery and JWKS for protocol metadata and signature validation.
+
+Good uses:
+
+1. resolve the authoritative endpoints
+2. validate ID token signatures
+3. support signing-key rotation without app redeploys
+
 ## Canonical Picture Management For Trusted Clients
 
 This capability is optional. Most downstream apps only need to read `picture`.
@@ -687,16 +697,6 @@ Important behavior:
 3. already-issued ID tokens do not change in place
 
 If the app updates the picture during an existing local session, do not assume the old ID token now reflects the new avatar.
-
-### 3. Discovery And JWKS
-
-Use discovery and JWKS for protocol metadata and signature validation.
-
-Good uses:
-
-1. resolve the authoritative endpoints
-2. validate ID token signatures
-3. support signing-key rotation without app redeploys
 
 ## Session Model
 
