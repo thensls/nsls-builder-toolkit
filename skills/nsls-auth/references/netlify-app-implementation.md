@@ -293,7 +293,7 @@ interface Session { email?: string; sub?: string }
 export default async (req: Request) => {
   const token = readCookie(req, SESSION_COOKIE);
   const session = token ? await verifyCookieJwt<Session>(token) : null;
-  if (session?.email) return; // pass through to origin
+  if (session?.sub) return; // pass through to origin
 
   const url = new URL(req.url);
   return Response.redirect(new URL("/auth/login", url).toString(), 302);
