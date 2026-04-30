@@ -23,7 +23,7 @@
     "footerLogoUri": "https://your-app.example.com/static/footer-logo.png",
     "footerLogoAlt": "NSLS"
   },
-  "client_secret": "GENERATED-AT-REGISTRATION-TIME-DO-NOT-COMMIT",
+  "client_secret": "PASTE-OUTPUT-OF-openssl-rand-hex-32-AT-REGISTRATION-TIME-DO-NOT-COMMIT",
   "token_endpoint_auth_method": "client_secret_post",
   "grant_types": ["authorization_code", "refresh_token"],
   "response_types": ["code"],

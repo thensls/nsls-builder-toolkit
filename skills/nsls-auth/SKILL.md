@@ -92,12 +92,13 @@ Walk this before writing code or proposing a client registration.
 
 ### Web app or native?
 
-| Your app | `application_type` | Auth method | Client secret |
-|---|---|---|---|
-| Server-rendered (Rails, Django, Next.js with API routes) | `web` | `client_secret_post` or `client_secret_basic` | Required, server-only |
-| SPA + BFF (Next.js App Router with server actions, separate backend) | `web` | `client_secret_post` | Required, server-only |
-| SPA, no backend | **STOP** | Add a BFF first | n/a |
-| React Native / Expo / iOS / Android | `native` | `none` | Omitted |
+| Your app | `application_type` | Auth method | Client secret | BFF host |
+|---|---|---|---|---|
+| Server-rendered (Rails, Django, Next.js with API routes) | `web` | `client_secret_post` or `client_secret_basic` | Required, server-only | App's own server |
+| SPA + BFF (Next.js App Router with server actions, separate backend) | `web` | `client_secret_post` | Required, server-only | Vercel / Railway / Cloud Run |
+| Static site on Netlify (presentations, dashboards) | `web` | `client_secret_post` | Required, set as Netlify env var | Netlify Edge Functions — see `references/netlify-app-implementation.md` |
+| SPA, no backend | **STOP** | Add a BFF first | n/a | — |
+| React Native / Expo / iOS / Android | `native` | `none` | Omitted | n/a |
 
 `application_type` is **immutable** after registration. To switch web↔native, the client must be deleted and recreated.
 
@@ -140,11 +141,20 @@ The fastest happy path. See `references/web-app-implementation.md` for full code
    - `last_authenticated_at`, `last_claim_sync_at`
 3. **Set env vars.** Copy `templates/env.template` and fill in values.
 4. **Draft the client-registration JSON.** Copy
-   `templates/web-client-registration.json` and customize. Leave
-   `client_secret` as a placeholder — the admin running the Admin Portal
-   registration generates the real secret and shares it back through a
-   secure channel. Hand the JSON to Kevin or a People-Ops admin; do not
-   register the client and do not generate the secret in the chat.
+   `templates/web-client-registration.json` and customize. Hand the JSON
+   to Kevin or a People-Ops admin to register through the Admin Portal —
+   do not register the client yourself.
+
+   **About the `client_secret`.** Generate the secret locally using
+   `openssl rand -hex 32` and immediately copy the output to a secure
+   vault entry (1Password, Bitwarden). Share the secret with Kevin or the
+   People-Ops admin who will register the client through the Admin Portal
+   via that vault entry — not Slack, not email, not chat. The admin will
+   paste the secret into the client registration form. Do not paste the
+   secret into this chat or commit it anywhere; do not run
+   `netlify env:list --plain` (or any equivalent that prints values to
+   stdout) since that puts the secret into your terminal scrollback and
+   any session transcript.
 5. **Implement the routes.**
    - `GET /auth/login` — start authorization with new `state`,
      `nonce`, PKCE verifier; store all three server-side; redirect to
@@ -281,6 +291,9 @@ This skill teaches a specific integration pattern. Adjacent skills:
   reference for endpoints, claims, scopes, and validation rules.
 - `references/web-app-implementation.md` — code patterns for Node/Express,
   Next.js, FastAPI, Rails. Library recommendations and example handlers.
+- `references/netlify-app-implementation.md` — Netlify Edge Functions
+  pattern for static-site BFFs. Use when the app's UI is a static deck or
+  dashboard hosted on Netlify and you want SSO without moving hosts.
 - `references/native-app-implementation.md` — React Native / Expo
   patterns, secure token storage, custom URI schemes.
 - `references/troubleshooting.md` — expanded diagnostic loop with
