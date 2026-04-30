@@ -145,14 +145,16 @@ The fastest happy path. See `references/web-app-implementation.md` for full code
    to Kevin or a People-Ops admin to register through the Admin Portal —
    do not register the client yourself.
 
-   **About the `client_secret`.** The Admin Portal has a "Generate Secret"
-   button on the client edit screen — the operator clicks it to produce a
-   fresh secret, copies the value once (it isn't shown again), and shares
-   it with the app team through a secure channel (1Password, Bitwarden —
-   not Slack, not email, not chat). Do not paste the secret into this
-   chat or commit it anywhere; do not run `netlify env:list --plain` (or
-   any equivalent that prints values to stdout) since that puts the
-   secret into your terminal scrollback and any session transcript.
+   **About the `client_secret`.** Generate the secret locally using
+   `openssl rand -hex 32` and immediately copy the output to a secure
+   vault entry (1Password, Bitwarden). Share the secret with Kevin or the
+   People-Ops admin who will register the client through the Admin Portal
+   via that vault entry — not Slack, not email, not chat. The admin will
+   paste the secret into the client registration form. Do not paste the
+   secret into this chat or commit it anywhere; do not run
+   `netlify env:list --plain` (or any equivalent that prints values to
+   stdout) since that puts the secret into your terminal scrollback and
+   any session transcript.
 5. **Implement the routes.**
    - `GET /auth/login` — start authorization with new `state`,
      `nonce`, PKCE verifier; store all three server-side; redirect to
