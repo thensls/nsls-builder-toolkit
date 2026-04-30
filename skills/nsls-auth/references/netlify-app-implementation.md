@@ -2,13 +2,13 @@
 
 When the app is a static site on Netlify — typically an HTML deck, a generated dashboard, or a single-file presentation — there is no Node/Rails/Django server to host the OIDC client. Netlify **Edge Functions** are the BFF. The site stays static, four small Edge Functions handle login / callback / logout / gating, and a stateless cookie holds the session.
 
-This pattern was validated end-to-end on the Q1 LOP dashboard (April 2026): static `index.html` + `tree.html` + `data.json` on `nsls-q1-2026.netlify.app`, gated to `@nsls.org` plus a small board allowlist.
+This pattern was validated end-to-end on the Q1 LOP dashboard (April 2026): static `index.html` + `tree.html` + `data.json` on `nsls-q1-2026.netlify.app`, gated to a small allowlist managed at `auth.nsls.org`.
 
 ## When to use this pattern
 
 - App's UI is static — generated HTML, no SSR
 - Already on Netlify and you want to keep deploy speed
-- A small group needs access (e.g. `@nsls.org` + a few external emails)
+- A small group needs access (e.g. `*@nsls.org` plus a few external emails)
 - You don't need refresh tokens (presentations / dashboards are short sessions)
 
 When this pattern is wrong:
@@ -21,7 +21,7 @@ When this pattern is wrong:
 Regular Netlify Functions run on Node. Edge Functions run on Deno with web standards (`Request`, `Response`, `crypto.subtle`, `fetch`). Two reasons to prefer Edge:
 
 1. The gate runs in front of every request and Edge runs at the CDN — single-digit-millisecond overhead vs ~50ms for a regular function cold start
-2. One runtime for all four files keeps shared helpers (`_lib.ts`) trivial — no Node/Deno import-style mismatch
+2. One runtime for all four files keeps shared helpers trivial — no Node/Deno import-style mismatch
 
 ## File layout
 
@@ -31,7 +31,8 @@ your-site/
 ├── netlify.toml            # publish dir + build (existing)
 ├── netlify/
 │   └── edge-functions/
-│       ├── _lib.ts         # OIDC + cookie helpers shared across the others
+│       ├── shared/
+│       │   └── util.ts     # OIDC + cookie helpers shared across the others
 │       ├── auth-login.ts   # GET /auth/login
 │       ├── auth-callback.ts # GET /auth/callback
 │       ├── auth-logout.ts  # GET /auth/logout
@@ -42,21 +43,23 @@ your-site/
 
 `netlify.toml` does **not** need any new entries — Edge Functions use file-based routing via `export const config = { path: "..." }` in each file.
 
+**Why `shared/util.ts` and not `_lib.ts` at the root?** Any `.ts` file at the **root** of `netlify/edge-functions/` is auto-registered as an Edge Function entry point. A leading underscore does **not** opt out. If your shared helper sits at the root, the bundler tries to register it and fails with `Default export must be a function`. Put shared code in a subdirectory — those are not auto-registered, only imported.
+
 ## Decisions
 
 | Decision | Choice | Why |
 |---|---|---|
-| Library | `npm:jose@5` only | ~80 lines of OIDC code; bundles small; readable |
+| Library | `jose@5` via `https://esm.sh/jose@5.x.x` | ~80 lines of OIDC code; bundles small; readable. **Use the `esm.sh` URL form, not `npm:jose@5`** — the npm specifier doesn't reliably resolve in Netlify Edge Function bundling and fails with `Could not resolve "npm:jose@5"`. |
 | Session storage | Stateless JWT in HTTP-only cookie | No external store needed; survives redeploys; SESSION_SECRET signs it |
 | Tx storage (state/nonce/PKCE) | Short-lived signed JWT cookie, 10-min TTL | Survives the redirect to auth.nsls.org and back without a server-side store |
 | Gating mechanism | Edge Function with `path: "/*"`, `excludedPath` for `/auth/*` and public assets | Single declaration point; no per-page wiring |
-| Allowlist | Suffix match on `@nsls.org` plus comma-separated env var of explicit emails | Update via Netlify UI, no redeploy |
+| Allowlist | Per-client "Allowed Users" field on the OIDC client at `auth.nsls.org` (supports wildcards like `*@nsls.org`) | Single source of truth. Updates take effect immediately — no redeploy, no Netlify env touch. App-side allowlist code is unnecessary duplication. |
 
-## `_lib.ts` — shared helpers
+## `shared/util.ts` — shared helpers
 
 ```ts
-// netlify/edge-functions/_lib.ts
-import { SignJWT, jwtVerify, createRemoteJWKSet } from "npm:jose@5";
+// netlify/edge-functions/shared/util.ts
+import { SignJWT, jwtVerify, createRemoteJWKSet } from "https://esm.sh/jose@5.9.6";
 
 const enc = new TextEncoder();
 
@@ -67,10 +70,6 @@ export function env(name: string): string {
   const v = Netlify.env.get(name);
   if (!v) throw new Error(`Missing env var: ${name}`);
   return v;
-}
-
-export function envOptional(name: string, fallback = ""): string {
-  return Netlify.env.get(name) ?? fallback;
 }
 
 let _discovery: any = null;
@@ -150,16 +149,9 @@ export function setCookie(name: string, value: string, opts: { maxAge: number; p
 export function clearCookie(name: string, path = "/"): string {
   return `${name}=; Max-Age=0; Path=${path}; HttpOnly; Secure; SameSite=Lax`;
 }
-
-export function isAllowedEmail(email: unknown): boolean {
-  if (typeof email !== "string" || !email) return false;
-  const e = email.toLowerCase();
-  if (e.endsWith("@nsls.org")) return true;
-  const list = envOptional("BOARD_ALLOWED_EMAILS")
-    .toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
-  return list.includes(e);
-}
 ```
+
+No `isAllowedEmail` helper — access control lives in the OIDC client's Allowed Users field at `auth.nsls.org`. If the user reaches the callback with a valid ID token, they're authorized.
 
 ## `auth-login.ts` — start authorize
 
@@ -167,7 +159,7 @@ export function isAllowedEmail(email: unknown): boolean {
 // netlify/edge-functions/auth-login.ts
 import {
   discover, env, pkceChallenge, randomB64url, setCookie, signCookieJwt, TX_COOKIE,
-} from "./_lib.ts";
+} from "./shared/util.ts";
 
 export default async (_req: Request) => {
   const d = await discover();
@@ -196,15 +188,15 @@ export default async (_req: Request) => {
 export const config = { path: "/auth/login" };
 ```
 
-## `auth-callback.ts` — exchange + validate + allowlist
+## `auth-callback.ts` — exchange + validate
 
 ```ts
 // netlify/edge-functions/auth-callback.ts
-import { jwtVerify } from "npm:jose@5";
+import { jwtVerify } from "https://esm.sh/jose@5.9.6";
 import {
-  clearCookie, discover, env, getJwks, isAllowedEmail, readCookie,
+  clearCookie, discover, env, getJwks, readCookie,
   SESSION_COOKIE, setCookie, signCookieJwt, TX_COOKIE, verifyCookieJwt,
-} from "./_lib.ts";
+} from "./shared/util.ts";
 
 interface Tx { state: string; nonce: string; verifier: string }
 
@@ -251,11 +243,9 @@ export default async (req: Request) => {
     return new Response("Nonce mismatch", { status: 400 });
   }
 
-  if (!isAllowedEmail(payload.email)) {
-    const headers = new Headers({ "Content-Type": "text/html; charset=utf-8" });
-    headers.append("Set-Cookie", clearCookie(TX_COOKIE));
-    return new Response(forbiddenHtml(String(payload.email ?? "")), { status: 403, headers });
-  }
+  // No app-side allowlist check — auth.nsls.org's per-client Allowed Users
+  // field already gated this user before issuing tokens. If they got here,
+  // they're authorized.
 
   const session = await signCookieJwt(
     { sub: payload.sub, email: payload.email, name: payload.name ?? "" },
@@ -268,16 +258,6 @@ export default async (req: Request) => {
   return new Response(null, { status: 302, headers });
 };
 
-function forbiddenHtml(email: string): string {
-  // Minimal branded forbidden page — customize per app.
-  return `<!doctype html><html><head><title>Access denied</title></head>
-<body style="font-family:system-ui;max-width:480px;margin:80px auto;padding:0 24px">
-<h1>Access denied</h1>
-<p><code>${email.replace(/[&<>"']/g, "")}</code> isn't on the allowlist.</p>
-<p><a href="/auth/logout">Sign out and try a different account</a></p>
-</body></html>`;
-}
-
 export const config = { path: "/auth/callback" };
 ```
 
@@ -285,7 +265,7 @@ export const config = { path: "/auth/callback" };
 
 ```ts
 // netlify/edge-functions/auth-logout.ts
-import { clearCookie, discover, env, SESSION_COOKIE } from "./_lib.ts";
+import { clearCookie, discover, env, SESSION_COOKIE } from "./shared/util.ts";
 
 export default async (_req: Request) => {
   const d = await discover();
@@ -305,7 +285,7 @@ export const config = { path: "/auth/logout" };
 
 ```ts
 // netlify/edge-functions/gate.ts
-import { readCookie, SESSION_COOKIE, verifyCookieJwt } from "./_lib.ts";
+import { readCookie, SESSION_COOKIE, verifyCookieJwt } from "./shared/util.ts";
 
 interface Session { email?: string; sub?: string }
 
@@ -326,45 +306,50 @@ export const config = {
 
 ## Required env vars
 
-Set in Netlify UI → Site settings → Environment variables. Edge Functions read `Netlify.env.get(...)` at request time, so changes to `BOARD_ALLOWED_EMAILS` take effect on the next visit — no redeploy.
+Set in Netlify UI → Site settings → Environment variables. Edge Functions read `Netlify.env.get(...)` at request time.
 
 | Var | Example |
 |---|---|
 | `OIDC_ISSUER_URL` | `https://auth.nsls.org` |
 | `OIDC_CLIENT_ID` | `your-app-web` |
-| `OIDC_CLIENT_SECRET` | (the secret the admin pasted into the registration form) |
+| `OIDC_CLIENT_SECRET` | output of "Generate Secret" in the Admin Portal — copy once, store in 1Password, paste into Netlify |
 | `OIDC_REDIRECT_URI` | `https://your-site.netlify.app/auth/callback` |
 | `OIDC_POST_LOGOUT_REDIRECT_URI` | `https://your-site.netlify.app/auth/login?status=signed_out` |
 | `SESSION_SECRET` | output of `openssl rand -base64 48` |
-| `BOARD_ALLOWED_EMAILS` | comma-separated non-`@nsls.org` emails |
 
-## Allowlist patterns
+**Set secrets without leaking them into your shell history or any chat transcript.** For the client secret, copy from the Admin Portal directly into 1Password, then from 1Password into the Netlify UI (or `netlify env:set OIDC_CLIENT_SECRET 'value'` from a terminal). For `SESSION_SECRET`, pipe straight in: `netlify env:set SESSION_SECRET "$(openssl rand -base64 48)" --context production`. **Do not** run `netlify env:list --plain` — it dumps every value, including secrets, to stdout.
 
-The `isAllowedEmail` helper in `_lib.ts` handles the common case: `@nsls.org` plus a small list of board emails. Adapt for your app:
+## Managing access — the auth-side allowlist
+
+The OIDC client at `auth.nsls.org` has an **Allowed Users** field. Edit it directly to control who can sign in.
+
+- One email per line
+- Wildcards work: `*@nsls.org` covers everyone with an NSLS staff email
+- Add specific external emails (board members, contractors) on their own lines
+- Leaving the field blank lets any auth-eligible user authenticate — usually wrong; explicit list is safer
+
+Why this beats an app-side allowlist:
+
+- **Single source of truth.** Two allowlists drift; one doesn't.
+- **No redeploy.** UI edit takes effect on the next sign-in.
+- **Auditable.** Admin Portal changes are logged centrally.
+- **Per-client scoping.** The list applies only to this OIDC client, so adding someone here doesn't expose them to every other NSLS app.
+
+If you need finer-grained authorization than "can sign in / can't" — e.g. admin vs. read-only inside the app — that's app-level role logic, not identity. Request the `roles` scope and decide in your code:
 
 ```ts
-// Only the SLT
-const SLT = ["kprentiss@nsls.org", "anish@nsls.org", /* ... */];
-return SLT.includes(email.toLowerCase());
-
-// Roles-based — request `roles` scope, check in callback
 const roles = (payload.roles as Array<{ value: string }> | undefined) ?? [];
-if (!roles.some((r) => r.value === "admin" || r.value === "staff")) {
-  return forbiddenResponse();
-}
-
-// Multi-domain
-const allowedDomains = ["nsls.org", "thesociety.org"];
-const domain = email.toLowerCase().split("@")[1];
-return allowedDomains.includes(domain);
+const isAdmin = roles.some((r) => r.value === "admin");
 ```
 
 ## Failure modes specific to Netlify
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Login loop after callback | `SESSION_SECRET` changed between login start and callback (e.g. set mid-deploy) | Set the secret once and leave it stable across deploys |
-| `Token exchange failed: 400 invalid_grant` | `OIDC_REDIRECT_URI` env var doesn't byte-match what's registered on the client | Both must be `https://<site>.netlify.app/auth/callback` exactly |
+| Build fails: `Could not resolve "npm:jose@5"` | Netlify Edge Function bundler doesn't reliably resolve `npm:` specifiers | Use `https://esm.sh/jose@5.9.6` (or any pinned 5.x) instead |
+| Build fails: `Default export in '_lib.ts' must be a function` | Any `.ts` at the root of `netlify/edge-functions/` is auto-registered as an entry point — leading underscores don't opt out | Move shared helpers into a subdirectory (`shared/util.ts`); subdirectory files are imported but not auto-registered |
+| Login loop after callback | `SESSION_SECRET` changed between login start and callback (e.g. set mid-deploy, or rotated) | Set the secret once and leave it stable; users mid-flow when you rotate will need to start over |
+| `Token exchange failed: 400 invalid_grant` | `OIDC_REDIRECT_URI` env var doesn't byte-match what's registered on the client | Both must be `https://<site>.netlify.app/auth/callback` exactly — including trailing characters |
 | Edge Function not running on a path you expected to gate | `excludedPath` is too broad, or the path matched another Edge Function first | Order Edge Function declarations by specificity; check with `netlify functions:list --edge` |
 | `Netlify.env.get(...)` returns `undefined` in local dev | Local env vars aren't auto-injected into Edge Functions | Run with `netlify dev` (not `netlify build && netlify serve`) so env vars are wired in |
 | 503 from `auth.nsls.org` discovery | Cold start hit the issuer, transient | Module-level discovery cache (`_discovery`) absorbs subsequent requests |

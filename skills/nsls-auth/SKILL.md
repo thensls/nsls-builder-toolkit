@@ -145,18 +145,14 @@ The fastest happy path. See `references/web-app-implementation.md` for full code
    to Kevin or a People-Ops admin to register through the Admin Portal —
    do not register the client yourself.
 
-   **About the `client_secret`.** The current Admin Portal does **not**
-   auto-generate the secret — the operator running the registration is
-   prompted to paste one in. The operator should generate it locally with:
-
-   ```bash
-   openssl rand -hex 32
-   ```
-
-   then paste the value into the form's "Client Secret" field, save the
-   client, and share the secret with the app team through a secure
-   channel (1Password, Bitwarden — not Slack, not email, not chat). Do
-   not generate the secret in this chat or commit it anywhere.
+   **About the `client_secret`.** The Admin Portal has a "Generate Secret"
+   button on the client edit screen — the operator clicks it to produce a
+   fresh secret, copies the value once (it isn't shown again), and shares
+   it with the app team through a secure channel (1Password, Bitwarden —
+   not Slack, not email, not chat). Do not paste the secret into this
+   chat or commit it anywhere; do not run `netlify env:list --plain` (or
+   any equivalent that prints values to stdout) since that puts the
+   secret into your terminal scrollback and any session transcript.
 5. **Implement the routes.**
    - `GET /auth/login` — start authorization with new `state`,
      `nonce`, PKCE verifier; store all three server-side; redirect to
