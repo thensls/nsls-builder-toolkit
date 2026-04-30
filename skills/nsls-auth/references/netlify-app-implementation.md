@@ -229,7 +229,8 @@ export default async (req: Request) => {
   });
   if (!tokenRes.ok) {
     const body = await tokenRes.text();
-    return new Response(`Token exchange failed: ${tokenRes.status} ${body}`, { status: 502 });
+    console.error(`Token exchange failed: ${tokenRes.status} ${body}`);
+    return new Response("Authentication failed. Please try again or contact support.", { status: 502 });
   }
 
   const { id_token: idToken } = await tokenRes.json();
@@ -292,7 +293,7 @@ interface Session { email?: string; sub?: string }
 export default async (req: Request) => {
   const token = readCookie(req, SESSION_COOKIE);
   const session = token ? await verifyCookieJwt<Session>(token) : null;
-  if (session?.email) return; // pass through to origin
+  if (session?.sub) return; // pass through to origin
 
   const url = new URL(req.url);
   return Response.redirect(new URL("/auth/login", url).toString(), 302);
