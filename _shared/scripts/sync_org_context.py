@@ -28,7 +28,8 @@ CONTEXT_DIR = Path(__file__).resolve().parent.parent / "context"
 
 # Airtable config
 PEOPLE_OPS_BASE = "appnXPTu01esWWbrK"
-SLT_BASE = "appHDEHQA4bvlWwQq"
+SLT_BASE = "appHDEHQA4bvlWwQq"       # SLT Meeting Intelligence (meetings, agenda, coaching)
+LOP_BASE = "appAcnl4o8AQVZR1j"        # NSLS Goals / Level Order Planning (split 2026-05-01)
 EMPLOYEES_TABLE = "tblpa8L4JPnqByINh"
 L1_GOALS_TABLE = "tblFLHHpQUVpLrDjb"
 L2_GOALS_TABLE = "tblpvFlUEy9GJflzB"
@@ -178,11 +179,11 @@ def sync_lops():
 
     # Fetch L1 Goals
     l1_fields = [L1_THEME, L1_SMART, L1_DRI_USER, L1_ACTIVE, L1_YEAR, L1_HEALTH, L1_COMMENT]
-    l1_records = airtable_fetch(SLT_BASE, L1_GOALS_TABLE, fields=l1_fields)
+    l1_records = airtable_fetch(LOP_BASE, L1_GOALS_TABLE, fields=l1_fields)
 
     # Fetch L2 Goals
     l2_fields = [L2_NAME, L2_DRI_USER, L2_L1_GOAL, L2_STATUS, L2_YEAR, L2_HEALTH, L2_COMMENT, L2_DEADLINE]
-    l2_records = airtable_fetch(SLT_BASE, L2_GOALS_TABLE, fields=l2_fields)
+    l2_records = airtable_fetch(LOP_BASE, L2_GOALS_TABLE, fields=l2_fields)
 
     # Index L2s by their L1 parent
     l2_by_l1 = {}

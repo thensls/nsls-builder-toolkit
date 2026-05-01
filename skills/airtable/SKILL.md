@@ -49,6 +49,7 @@ NSLS has 24+ Airtable bases across every department. Here's the current inventor
 | Base ID | Name |
 |---------|------|
 | `appHDEHQA4bvlWwQq` | SLT Meeting Intelligence |
+| `appAcnl4o8AQVZR1j` | NSLS Goals (Level Order Planning) |
 | `appItVHRP0Q9ruV7q` | SLT Meeting Agenda (2024-2025) |
 
 ### Marketing

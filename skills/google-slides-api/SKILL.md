@@ -392,7 +392,7 @@ As of March 2026, the NSLS board deck L2 goals tables use **5 columns**:
 | 3 | OWNER | 10pt | 1063050 | DRI name from Airtable |
 | 4 | DEADLINE | 11pt | 956750 | Date from Airtable |
 
-Pull DRI + deadline from Airtable `appHDEHQA4bvlWwQq`:
+Pull DRI + deadline from Airtable `appAcnl4o8AQVZR1j` (NSLS Goals / LOP base, split 2026-05-01):
 - L2 Goals table: `tblpvFlUEy9GJflzB`, filter `AND({Year}='2026',{Status}='Active')`
 - DRI name: `User (from DRI)` lookup field → array, take `[0]['name']`
 - Deadline: `Deadline` date field (YYYY-MM-DD → format as M/D/YYYY for display)
