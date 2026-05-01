@@ -23,6 +23,7 @@ Then open Claude Code and say `/setup` to connect your tools and optionally inst
 | **/nsls-focus-group** | Test ideas with simulated employee panels |
 | **/nsls-slides** | Branded NSLS/Society presentations |
 | **/frontend-slides** | Build HTML presentations |
+| **/gdoc-build** | Build nicely-formatted NSLS/Society Google Docs — real Word tables, branded headers, headings, code blocks. Survives copy-paste into canonical docs. |
 | **/google-drive** | Google Drive file management |
 | **/google-slides-api** | Edit existing Google Slides via API |
 | **/gws** | Google Workspace Sheets CLI |
@@ -173,6 +174,7 @@ They form a cycle: `/data-model-discovery` explores a new system → maps it aga
 | **nsls-focus-group** | Test ideas with simulated employee panels |
 | **nsls-slides** | Create branded NSLS/Society presentations |
 | **frontend-slides** | Build HTML presentations |
+| **gdoc-build** | Build nicely-formatted NSLS/Society Google Docs (real tables, branded headers) |
 | **google-drive** | Google Drive file management |
 | **google-slides-api** | Edit existing Google Slides via API |
 | **netlify-deploy** | Deploy and preview static pages |
