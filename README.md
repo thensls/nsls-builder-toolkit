@@ -28,9 +28,23 @@ Then open Claude Code and say `/setup` to connect your tools and optionally inst
 | **/gws** | Google Workspace Sheets CLI |
 | **/netlify-deploy** | Deploy and preview static pages |
 | **/deployment-guide** | How to deploy to Railway, Airtable, GAS, Cloudflare |
+| **/nsls-auth** | Wire "Sign in with NSLS" SSO into any NSLS-controlled app via auth.nsls.org (web, mobile, Netlify static sites) |
 | **/pydoc-pipeline** | Generate documentation from Python code |
 | **/web-research** | Structured web research |
 | **/interrogate** | Deep-dive investigation skill |
+
+## Strategy & Knowledge Work
+
+For non-software work — campaigns, strategy docs, briefs, research synthesis. The four `kw:` skills form a pipeline: brain dump → structured plan → reviewed → learnings captured.
+
+| Skill | What it does |
+|-------|-------------|
+| **/kw:brainstorm** | Brain dump and compile NSLS knowledge before structuring a plan. Use after a meeting or when you have scattered inputs that need organizing. |
+| **/kw:plan** | Research what NSLS already knows, then structure a plan grounded in LOPs and past learning. Use after `/kw:brainstorm`. |
+| **/kw:review** | Two-reviewer parallel check on a plan — one audits LOP grounding and goals, the other audits every number for source and freshness. P1/P2/P3 findings before you share. |
+| **/kw:compound** | Extract 1–3 learnings from a finished session and route them to the right tier (personal Obsidian, team `_shared/learnings/`, SLT knowledge graph). |
+
+Use these for strategy/knowledge work. For software features use `/ce:brainstorm` → `/ce:plan` → `/ce:work` → `/ce:review` from the Compound Engineering plugin. For new automations start with `/interrogate`.
 
 ## Bundled Plugins
 
@@ -165,8 +179,10 @@ They form a cycle: `/data-model-discovery` explores a new system → maps it aga
 | **pydoc-pipeline** | Generate documentation from Python code |
 | **gws** | Google Workspace Sheets CLI |
 | **deployment-guide** | How to deploy to Railway, Airtable, GAS, Cloudflare |
+| **nsls-auth** | Wire SSO via auth.nsls.org into any NSLS-controlled app |
 | **web-research** | Web research with AI overview extraction |
 | **interrogate** | Scope a new project through structured conversation |
+| **kw:brainstorm / kw:plan / kw:review / kw:compound** | Strategy & knowledge-work pipeline (non-software) |
 
 ## Updates
 
