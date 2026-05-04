@@ -240,7 +240,7 @@
     "title": "Human Resources Generalist",
     "manager": "Heather Darnell",
     "email": "lcollazo@nsls.org",
-    "slack": "",
+    "slack": "U023CU7BTSM",
     "department": "People Ops",
     "manages": []
   },
@@ -249,7 +249,7 @@
     "title": "Early Talent Acquisition Specialist",
     "manager": "Jenna Fontanez",
     "email": "jsandoval@nsls.org",
-    "slack": "",
+    "slack": "U04UQR9SBFH",
     "department": "People Ops",
     "manages": []
   },
@@ -394,7 +394,8 @@
     "slack": "U08U4FS008H",
     "department": "Marketing",
     "manages": [
-      "Derald Dryman"
+      "Derald Dryman",
+      "Lashaundra Randolph"
     ]
   },
   {
@@ -613,6 +614,15 @@
     "manages": [
       "Sandra Suarez"
     ]
+  },
+  {
+    "name": "Lashaundra Randolph",
+    "title": "Director of Education",
+    "manager": "Joe Cupka",
+    "email": "lrandolph@nsls.org",
+    "slack": "U0322AS36JZ",
+    "department": "Education",
+    "manages": []
   },
   {
     "name": "Jordan Tannenbaum",

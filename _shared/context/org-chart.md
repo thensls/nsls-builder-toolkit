@@ -1,5 +1,5 @@
 # NSLS Org Chart
-_Last synced: 2026-04-27_
+_Last synced: 2026-05-04_
 
 ## Business Intelligence
 
@@ -33,6 +33,12 @@ _Last synced: 2026-04-27_
 | Royce Rowan | Director, Revenue Enablement | Ashleigh Smith | rrowan@nsls.org | U01D1JT0MQE |
 | Tayanee Torres | Chapter Success Manager (Gold) | Jim Corriveau | ttorres@nsls.org | U074E7H9C07 |
 | Zoë Wallis | Chapter Manager, First Year Specialist | Marissa Curry | zwallis@nsls.org | U0937NH88A2 |
+
+## Education
+
+| Name | Title | Manager | Email | Slack |
+|------|-------|---------|-------|-------|
+| Lashaundra Randolph | Director of Education | Joe Cupka | lrandolph@nsls.org | U0322AS36JZ |
 
 ## Engineering
 
@@ -93,8 +99,8 @@ _Last synced: 2026-04-27_
 | Danielle Mariani | Senior Culture and Organizational Strategist | Heather Darnell | dmariani@nsls.org | UHXFN781L |
 | Heather Darnell | Director, Human Resources | Kevin Prentiss | hdarnell@nsls.org | U03D1HK963E |
 | Jenna Fontanez | Director, Talent Management | Heather Darnell | jfontanez@nsls.org | U03RR8TKEDA |
-| Joanne Sandoval | Early Talent Acquisition Specialist | Jenna Fontanez | jsandoval@nsls.org |  |
-| Lillian Collazo | Human Resources Generalist | Heather Darnell | lcollazo@nsls.org |  |
+| Joanne Sandoval | Early Talent Acquisition Specialist | Jenna Fontanez | jsandoval@nsls.org | U04UQR9SBFH |
+| Lillian Collazo | Human Resources Generalist | Heather Darnell | lcollazo@nsls.org | U023CU7BTSM |
 
 ## Product
 
