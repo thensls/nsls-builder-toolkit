@@ -55,7 +55,9 @@ HOOK_CMD='python3 -c "exec(open(__import__('"'"'pathlib'"'"').Path.home() / '"'"
 if [ -f "$SETTINGS" ]; then
   python3 -c "
 import json, sys
+from pathlib import Path
 
+SETTINGS_PATH = Path.home() / '.claude' / 'settings.json'
 HOOK_CMD = 'python3 -c \"exec(open(__import__(\'pathlib\').Path.home() / \'.claude/local-plugins/nsls-builder-toolkit/hooks/session-start.py\').read())\"'
 HOOK_ENTRY = {
     'type': 'command',
@@ -65,7 +67,7 @@ HOOK_ENTRY = {
 }
 MARKER = 'nsls-builder-toolkit/hooks/session-start.py'
 
-with open('$SETTINGS') as f: cfg = json.load(f)
+with open(SETTINGS_PATH, encoding='utf-8') as f: cfg = json.load(f)
 
 # Enable plugin
 ep = cfg.setdefault('enabledPlugins', {})
@@ -97,7 +99,7 @@ if not already:
 else:
     print('  Auto-update hook already registered')
 
-with open('$SETTINGS', 'w') as f: json.dump(cfg, f, indent=2)
+with open(SETTINGS_PATH, 'w', encoding='utf-8') as f: json.dump(cfg, f, indent=2)
 " 2>/dev/null || echo "  Note: Could not update settings.json — add the hook manually"
 else
   echo "  Note: No settings.json found — the plugin will be enabled on first use"
@@ -150,7 +152,7 @@ install_plugin() {
 
 if [ -n "$CLAUDE_BIN" ]; then
   install_plugin "superpowers" "superpowers" ""
-  install_plugin "compound-engineering" "compound-engineering@every-marketplace" \
+  install_plugin "compound-engineering" "compound-engineering@compound-engineering-plugin" \
     "https://github.com/EveryInc/compound-engineering-plugin.git"
 else
   echo ""
@@ -161,7 +163,7 @@ else
   echo "  Or run these manually:"
   echo "    claude plugin install superpowers"
   echo "    claude plugin marketplace add https://github.com/EveryInc/compound-engineering-plugin.git"
-  echo "    claude plugin install compound-engineering@every-marketplace"
+  echo "    claude plugin install compound-engineering@compound-engineering-plugin"
 fi
 
 # --- Step 4: Create slash-command pointer skills ---
@@ -190,7 +192,7 @@ for skill_dir in "$PLUGIN_DIR/skills"/*/; do
   # Extract description (handles >- multiline format)
   desc=$(python3 -c "
 import re, sys
-with open('$src') as f: content = f.read()
+with open('$src', encoding='utf-8') as f: content = f.read()
 fm = re.match(r'^---\n(.*?)\n---', content, re.DOTALL)
 if not fm: sys.exit(0)
 m = re.search(r'description:\s*>-?\s*\n((?:\s+.+\n)*)', fm.group(1))

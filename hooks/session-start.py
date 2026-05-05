@@ -61,14 +61,14 @@ def sync_pointers():
         # Skip if user has a custom (non-pointer) skill
         if dest.is_dir() and dest_skill.exists():
             try:
-                if MARKER not in dest_skill.read_text():
+                if MARKER not in dest_skill.read_text(encoding="utf-8"):
                     continue
             except Exception:
                 continue
 
         # Extract name from frontmatter
         try:
-            content = src.read_text()
+            content = src.read_text(encoding="utf-8")
         except Exception:
             continue
 
@@ -94,7 +94,8 @@ def sync_pointers():
         dest_skill.write_text(
             f"---\nname: {name}\ndescription: >-\n  {desc}\n---\n\n"
             f"Read and follow the full skill at "
-            f"`~/.claude/local-plugins/nsls-builder-toolkit/skills/{skill}/SKILL.md`.\n"
+            f"`~/.claude/local-plugins/nsls-builder-toolkit/skills/{skill}/SKILL.md`.\n",
+            encoding="utf-8",
         )
         created += 1
 
@@ -107,7 +108,7 @@ def read_env(key):
     if not ENV_FILE.exists():
         return ""
     try:
-        for line in ENV_FILE.read_text().splitlines():
+        for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
             if line.startswith(f"{key}="):
                 return line.split("=", 1)[1].strip()
     except Exception:
