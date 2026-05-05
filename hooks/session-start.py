@@ -24,7 +24,13 @@ PLUGIN_DIR = HOME / ".claude" / "local-plugins" / "nsls-builder-toolkit"
 SKILLS_DIR = HOME / ".claude" / "skills"
 ENV_FILE = HOME / ".claude" / "local-plugins" / "nsls-personal-toolkit" / ".env"
 PROXY_URL = "https://web-production-6281e.up.railway.app"
-MARKER = "local-plugins/nsls-builder-toolkit"
+
+# Plugins to sync, in precedence order — earlier entries win on name collision.
+SYNC_PLUGINS = [
+    "nsls-builder-toolkit",
+    "nsls-personal-toolkit",
+]
+MARKERS = tuple(f"local-plugins/{p}" for p in SYNC_PLUGINS)
 
 
 def git_pull():
@@ -39,65 +45,80 @@ def git_pull():
 
 
 def sync_pointers():
-    """Sync skill pointers from plugin to ~/.claude/skills/."""
-    skills_src = PLUGIN_DIR / "skills"
-    if not skills_src.is_dir():
-        return
+    """Sync skill pointers from installed plugins to ~/.claude/skills/.
 
+    Iterates plugins in SYNC_PLUGINS precedence order. On name collision,
+    earlier plugins win (org skills override personal). Skips skills that
+    look user-customized (no managed marker present in the existing pointer).
+    """
     SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    written = set()
     created = 0
 
-    for skill_dir in sorted(skills_src.iterdir()):
-        if not skill_dir.is_dir():
-            continue
-        skill = skill_dir.name
-        src = skill_dir / "SKILL.md"
-        if not src.exists():
+    for plugin_name in SYNC_PLUGINS:
+        plugin_dir = HOME / ".claude" / "local-plugins" / plugin_name
+        skills_src = plugin_dir / "skills"
+        if not skills_src.is_dir():
             continue
 
-        dest = SKILLS_DIR / skill
-        dest_skill = dest / "SKILL.md"
+        for skill_dir in sorted(skills_src.iterdir()):
+            if not skill_dir.is_dir():
+                continue
+            skill = skill_dir.name
 
-        # Skip if user has a custom (non-pointer) skill
-        if dest.is_dir() and dest_skill.exists():
-            try:
-                if MARKER not in dest_skill.read_text(encoding="utf-8"):
+            # Org-wins precedence: skip if a higher-precedence plugin
+            # already wrote this skill in the current run.
+            if skill in written:
+                continue
+
+            src = skill_dir / "SKILL.md"
+            if not src.exists():
+                continue
+
+            dest = SKILLS_DIR / skill
+            dest_skill = dest / "SKILL.md"
+
+            # Skip if the existing file looks user-customized — i.e., no
+            # managed marker for any of our plugins is present.
+            if dest.is_dir() and dest_skill.exists():
+                try:
+                    existing = dest_skill.read_text(encoding="utf-8")
+                    if not any(m in existing for m in MARKERS):
+                        continue
+                except Exception:
                     continue
+
+            try:
+                content = src.read_text(encoding="utf-8")
             except Exception:
                 continue
 
-        # Extract name from frontmatter
-        try:
-            content = src.read_text(encoding="utf-8")
-        except Exception:
-            continue
+            name_match = re.search(r"^name:\s*(.+)", content, re.MULTILINE)
+            if not name_match:
+                continue
+            name = name_match.group(1).strip()
 
-        name_match = re.search(r"^name:\s*(.+)", content, re.MULTILINE)
-        if not name_match:
-            continue
-        name = name_match.group(1).strip()
+            desc = f"{plugin_name} skill: {skill}"
+            fm_match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
+            if fm_match:
+                fm = fm_match.group(1)
+                ml_match = re.search(r"description:\s*>-?\s*\n((?:\s+.+\n)*)", fm)
+                if ml_match:
+                    desc = " ".join(l.strip() for l in ml_match.group(1).strip().split("\n"))
+                else:
+                    sl_match = re.search(r"description:\s*(.+)", fm, re.MULTILINE)
+                    if sl_match:
+                        desc = sl_match.group(1).strip()
 
-        # Extract description
-        desc = f"NSLS Builder Toolkit skill: {skill}"
-        fm_match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-        if fm_match:
-            fm = fm_match.group(1)
-            ml_match = re.search(r"description:\s*>-?\s*\n((?:\s+.+\n)*)", fm)
-            if ml_match:
-                desc = " ".join(l.strip() for l in ml_match.group(1).strip().split("\n"))
-            else:
-                sl_match = re.search(r"description:\s*(.+)", fm, re.MULTILINE)
-                if sl_match:
-                    desc = sl_match.group(1).strip()
-
-        dest.mkdir(parents=True, exist_ok=True)
-        dest_skill.write_text(
-            f"---\nname: {name}\ndescription: >-\n  {desc}\n---\n\n"
-            f"Read and follow the full skill at "
-            f"`~/.claude/local-plugins/nsls-builder-toolkit/skills/{skill}/SKILL.md`.\n",
-            encoding="utf-8",
-        )
-        created += 1
+            dest.mkdir(parents=True, exist_ok=True)
+            dest_skill.write_text(
+                f"---\nname: {name}\ndescription: >-\n  {desc}\n---\n\n"
+                f"Read and follow the full skill at "
+                f"`~/.claude/local-plugins/{plugin_name}/skills/{skill}/SKILL.md`.\n",
+                encoding="utf-8",
+            )
+            written.add(skill)
+            created += 1
 
     if created > 0:
         print(f"{created} skill pointers synced", file=sys.stderr)
