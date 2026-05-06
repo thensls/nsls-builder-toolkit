@@ -217,7 +217,29 @@ def session_ping():
                 pass
 
     if output:
-        print("\n".join(output))
+        # Wrap with a directive prefix so the announcements surface visibly
+        # on every Claude Code surface, not just the terminal CLI.
+        #
+        # Background: hook stdout is added to Claude's context on every
+        # surface (terminal CLI, desktop app, IDE extensions). The CLI
+        # additionally prints stdout to the terminal at session start, so
+        # raw text is naturally visible there. The desktop app does NOT
+        # print hook stdout to the screen — it only injects it as context,
+        # so a bare `print(...)` of an announcement reaches Claude silently
+        # and the user never sees it unless Claude happens to surface it.
+        #
+        # The directive prefix tells Claude to surface the announcement at
+        # the start of its first reply. That makes the announcement
+        # visible on desktop while keeping CLI behavior intact (CLI users
+        # see it in the terminal AND see Claude echo it once — minor
+        # redundancy, acceptable trade for desktop coverage).
+        announcement_block = "\n".join(output)
+        print(
+            "[NSLS Builder Toolkit — surface the following to the user "
+            "verbatim at the start of your first reply, then proceed with "
+            "their request:]\n\n"
+            f"{announcement_block}"
+        )
 
 
 def main():
