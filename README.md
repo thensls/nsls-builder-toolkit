@@ -194,6 +194,17 @@ Skills auto-update when you start a Claude Code session. To update manually:
 cd ~/.claude/local-plugins/nsls-builder-toolkit && git pull
 ```
 
+## Skill Usage Tracking
+
+Every time you invoke a skill (`/open-day`, `/log`, `/learn`, etc.) the toolkit
+posts a deduped event to the Automation Tracker. We use this to measure skill
+breadth and learning velocity across builders — not to grade you. One event
+per builder per skill per day; no payload content is sent.
+
+To opt out, delete the `PreToolUse` block in
+`~/.claude/local-plugins/nsls-builder-toolkit/hooks/hooks.json` after install,
+or set `BUILDER_EMAIL=""` in your personal-toolkit `.env`.
+
 ## Request a Skill
 
 Open a [GitHub issue](https://github.com/thensls/nsls-builder-toolkit/issues) or message Kevin in Slack.
