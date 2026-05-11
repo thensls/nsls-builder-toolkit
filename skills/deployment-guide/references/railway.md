@@ -23,7 +23,53 @@ Message Kevin in Slack: "I need access to Railway to deploy [what you're buildin
 4. Set environment variables before deploying (see below).
 5. Click **Deploy**.
 
-Railway redeploys automatically on every push to the default branch. To deploy a specific branch, change the source branch in the service settings.
+Railway redeploys automatically on every push to the default branch — **but only when the service has a "repo trigger" wired**. Verify this BEFORE shipping the service (see next section). Three NSLS services have been quietly missing this and required manual `railway up` for every deploy until 2026-05-11.
+
+## Verifying Auto-Deploy Is Actually Wired
+
+A service connected via the "New → GitHub Repo" flow gets a `repoTrigger` automatically. Services created another way (CLI `railway up`, "deploy from image", duplicated from another service) often don't — and the silent failure mode is the worst kind: deployments look like they're working because manual deploys still succeed.
+
+After creating a service, verify with the Railway CLI:
+
+```bash
+railway link --project <project-name>
+railway service <service-name>
+# Look for the GitHub icon in `railway status` or in the dashboard's
+# Settings → Source pane. If "Source" says "image" or is empty, the
+# trigger isn't wired.
+```
+
+Or with the Railway GraphQL API:
+
+```bash
+RAILWAY_TOKEN=$(python3 -c "import json; print(json.load(open('$HOME/.railway/config.json'))['user']['token'])")
+curl -s -X POST https://backboard.railway.com/graphql/v2 \
+  -H "Authorization: Bearer $RAILWAY_TOKEN" -H "Content-Type: application/json" \
+  -d '{"query":"query($id:String!){ service(id:$id){ name repoTriggers { edges { node { repository branch } } } } }","variables":{"id":"<SERVICE_ID>"}}'
+```
+
+`repoTriggers.edges` must contain an entry with the right `repository` and `branch`. Empty → no auto-deploy.
+
+**Smoke test the wire** before assuming it works. From the repo:
+
+```bash
+git commit --allow-empty -m "chore: verify Railway auto-deploy is wired"
+git push origin <default-branch>
+```
+
+Within ~30 seconds Railway should start a new deployment with `reason: "deploy"` (not `redeploy`). If nothing happens, the trigger is missing.
+
+To wire a trigger when one is missing:
+
+```bash
+curl -s -X POST https://backboard.railway.com/graphql/v2 \
+  -H "Authorization: Bearer $RAILWAY_TOKEN" -H "Content-Type: application/json" \
+  -d '{"query":"mutation($id:String!,$input:ServiceConnectInput!){ serviceConnect(id:$id, input:$input){ name repoTriggers { edges { node { repository branch } } } } }","variables":{"id":"<SERVICE_ID>","input":{"repo":"thensls/<repo-name>","branch":"<default-branch>"}}}'
+```
+
+Or use the dashboard: **Settings → Source → Connect Repo**, then pick the repo and branch.
+
+There's a one-shot org-wide audit script at `automation-tracker/scripts/audit_railway_repo_triggers.py` that lists every service missing a trigger. Worth running after a flurry of new-service work.
 
 ## Environment Variables
 
