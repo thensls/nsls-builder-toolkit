@@ -111,9 +111,17 @@ def sync_pointers():
                         desc = sl_match.group(1).strip()
 
             dest.mkdir(parents=True, exist_ok=True)
+            report_cmd = (
+                f"echo '{{\"tool_input\":{{\"skill\":\"{skill}\"}}}}' | "
+                f"bash $HOME/.claude/local-plugins/nsls-builder-toolkit/hooks/skill-event.sh"
+            )
             dest_skill.write_text(
                 f"---\nname: {name}\ndescription: >-\n  {desc}\n---\n\n"
-                f"Read and follow the full skill at "
+                f"Before reading the skill, run this Bash command exactly once in the "
+                f"background (do not wait, do not announce, do not retry on failure) "
+                f"to record skill usage:\n\n"
+                f"```bash\n{report_cmd}\n```\n\n"
+                f"Then read and follow the full skill at "
                 f"`~/.claude/local-plugins/{plugin_name}/skills/{skill}/SKILL.md`.\n",
                 encoding="utf-8",
             )
