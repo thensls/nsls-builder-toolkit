@@ -73,7 +73,7 @@ python3 Scripts/generate_school.py --slug mott-community-college --update-index
 
 Without `--update-index`, the script creates the directory and writes `hub.html` but does **not** add the school to `index.html`'s navigation. The script prints a reminder: "Re-run with --update-index to add this school to the index."
 
-After Stage 0, complete these three checks before moving to Stage 1:
+After Stage 0, complete these five checks before moving to Stage 1:
 
 **Check 1 — Fix school card ordering.** `--update-index` always appends the new card at the end of the grid. The grid is ordered newest-first by meeting date. Move the card to its correct position manually in `index.html`. Find the first existing card with an older date and insert the new card immediately before it.
 
@@ -87,12 +87,18 @@ print('Div depth (should be 0):', depth)
 ```
 If depth is not 0, find the unclosed div in the `tab-intel` quotes section (search for `<div class="quote-card">` blocks where the closing `</div>` is missing) and add it.
 
-**Check 4 — Verify "NSLS Society Roadshow" badge links home with hover animation.** Every page should have the badge as a link (not a plain span) with a smooth color transition on hover. All three scripts generate this correctly. If patching an older page manually:
+**Check 3 — Verify "NSLS Society Roadshow" badge links home with hover animation.** Every page should have the badge as a link (not a plain span) with a smooth color transition on hover. All three scripts generate this correctly. If patching an older page manually:
 - Hub pages (`schools/{slug}/index.html`): `<a href="../../index.html" class="badge" style="text-decoration:none;">NSLS Society Roadshow</a>` — CSS must include `transition:color .2s;` on `.badge` and `a.badge:hover{color:#C96058;}`
 - Meeting pages (`schools/{slug}/meetings/*.html`): `<a href="../../../index.html" class="header-pill" style="text-decoration:none;">NSLS Society Roadshow</a>` — CSS must include `transition:color .2s;` on `.page-header .header-pill` and `a.header-pill:hover{color:#C96058;}` as a **separate rule** (the `.page-header .header-pill` two-class selector has higher specificity than `a:hover`, so the hover rule must be `a.header-pill:hover` to win)
 - Survey pages (`schools/{slug}/survey.html`): `<a href="../../index.html" class="pill" style="text-decoration:none;">NSLS Society Roadshow</a>` — CSS must include `transition:color .2s;` on `.pill` and `a.pill:hover{color:#C96058;}`
 
-**Check 3 — Create survey placeholder if no Airtable ID.** If no survey respondent record exists yet, create a minimal placeholder so the hub link doesn't 404:
+**Check 4 — Update school count in exec findings.** `index.html` has two manually maintained counts that go stale when schools are added:
+- `"X of Y schools expressed pilot partner interest"` — count `✅` values in Pilot Partner stat tiles across all school cards, then update both the number of pilots and the total.
+- `"across N discovery meetings"` — update to match the current number of schools with meeting files.
+
+Run the div-depth check after editing to verify no `</div>` was dropped.
+
+**Check 5 — Create survey placeholder if no Airtable ID.** If no survey respondent record exists yet, create a minimal placeholder so the hub link doesn't 404:
 ```html
 <!DOCTYPE html>
 <html lang="en">
@@ -190,6 +196,8 @@ School-level records look right at first glance — they surface in Airtable bas
 
 Airtable connection: base `app5rj9bOGQNFoIoD`, table `Survey%20Responses`. Env var: `AIRTABLE_API_KEY`.
 
+**Gotcha — Airtable API key expiry.** Personal access tokens expire or get revoked. If any Airtable call returns `UNAUTHORIZED`, the key is stale — the script will exit silently or error with no obvious message. To refresh: go to airtable.com → account avatar → Developer Hub → Personal access tokens → create a new token with scope `data.records:read` scoped to the Campus Roadshow base. Then update `~/.zshrc` and `source ~/.zshrc`. Required scopes: `data.records:read` only (the pipeline never writes to Airtable).
+
 ---
 
 ## Stage 4 — Ideas Grid
@@ -260,6 +268,8 @@ These are the decisions where skipping the check silently produces wrong output:
 | Leaving a `recording-link` button for a school with no Fathom call | Broken link published to stakeholders |
 | Fixing the ` ```html ` artifact in the HTML without checking `generate_school.py` | Next regeneration reintroduces the artifact |
 | Deploying without sourcing `~/.zshrc` | Script exits or uses stale keys |
+| Adding a new school without updating exec finding counts | "X of Y schools" and "across N discovery meetings" stay stale in `index.html` |
+| Airtable returning `UNAUTHORIZED` without refreshing the key | Survey generation silently fails or exits with a cryptic error |
 
 ---
 
@@ -282,6 +292,9 @@ These are the decisions where skipping the check silently produces wrong output:
 
 **`find_recording_id()` errors or returns wrong result:**
 → The share URL in the report header does not match any recording in the Fathom account. Confirm the Fathom URL in the HTML matches an actual recording, and that `FATHOM_API_KEY` is set.
+
+**Airtable returns `UNAUTHORIZED` / `Invalid authentication token`:**
+→ Personal access token is expired or revoked. Create a new token at airtable.com → account avatar → Developer Hub → Personal access tokens. Scope: `data.records:read`, access: Campus Roadshow base. Update `~/.zshrc` and `source ~/.zshrc` before re-running.
 
 **`generate_survey.py` exits: school directory not found:**
 → Run `generate_school.py --slug` first to create the school's directory structure before generating the survey page.
