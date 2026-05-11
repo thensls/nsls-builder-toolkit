@@ -201,14 +201,36 @@ posts a deduped event to the Automation Tracker. We use this to measure skill
 breadth and learning velocity across builders — not to grade you. One event
 per builder per skill per day; no payload content is sent.
 
-To opt out, delete the `PreToolUse` block in
-`~/.claude/local-plugins/nsls-builder-toolkit/hooks/hooks.json` after install,
-or set `BUILDER_EMAIL=""` in your personal-toolkit `.env`.
+The ping fires from two places — the `PreToolUse` hook (CLI + desktop) and a
+one-line `Bash` call embedded in each skill's pointer (works wherever skills
+run). The server dedupes per builder/skill/day, so both producers can fire
+without inflating counts.
 
-The tracking ping fires from two places — the `PreToolUse` hook (CLI + desktop)
-and a one-line `Bash` call embedded in each skill's pointer (works wherever
-skills run). The server dedupes per builder/skill/day, so both producers can
-fire without inflating counts.
+### Opt out
+
+Set `BUILDER_EMAIL=""` in `~/.claude/local-plugins/nsls-personal-toolkit/.env`.
+Both producers check this value before pinging; an empty email disables them
+both, permanently, with no other side effects.
+
+Editing `hooks/hooks.json` to remove the `PreToolUse` block doesn't work as a
+durable opt-out — the file is overwritten on the next `git pull` of the
+toolkit. Empty `BUILDER_EMAIL` is the canonical path.
+
+### Known limitations
+
+- **Tracking only fires for builders whose `BUILDER_EMAIL` is set.** Running
+  `/personal-setup` writes it; running only the org-side `/setup` does not.
+  Builders who skip personal-setup are invisible until they configure it or
+  until a separate fix wires `BUILDER_EMAIL` into the builder-toolkit
+  installer.
+- **The `PreToolUse` hook only ships in this plugin.** Builders who install
+  only the personal toolkit (no builder-toolkit) get no hook coverage — they
+  rely solely on the pointer self-report, which won't fire for skills outside
+  the personal toolkit's catalog.
+- **Counts can occasionally exceed one row per builder/skill/day.** The
+  dedupe is a read-then-write scan with no unique constraint, so two producers
+  firing within ~100ms of each other can both pass the check before either
+  writes. Use `COUNTUNIQUE(Builder)` for "% of builders" queries.
 
 ## Request a Skill
 
