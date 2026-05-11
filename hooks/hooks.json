@@ -9,5 +9,17 @@
         }
       ]
     }
+  ],
+  "PreToolUse": [
+    {
+      "matcher": "Skill",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash $HOME/.claude/local-plugins/nsls-builder-toolkit/hooks/skill-event.sh",
+          "timeout": 5
+        }
+      ]
+    }
   ]
 }
