@@ -1,5 +1,5 @@
 # Lines of Priority (LOPs)
-_Last synced: 2026-04-27_
+_Last synced: 2026-05-11_
 
 ## L1: Simplification/Efficiency
 **Owner**: Anish Patel | **Health**: On Track
@@ -10,13 +10,17 @@ _Last synced: 2026-04-27_
 **Owner**: Kevin Prentiss | **Health**: On Track | **Deadline**: 2026-09-30
 > Good progress on key Drupal transition workstreams: dashboard migration, invite automation, and auth service separation are all advancing well.
 
+### L2: Contract simplification (employees + contractors)
+**Owner**: Anish Patel | **Health**: No update
+> No update yet.
+
 ### L2: Move all Society and FOL lifecycle marketing emails to Customer.io by end of 2026
 **Owner**: Adam Stone | **Health**: On Track | **Deadline**: 2026-12-31
 > Team is actively working through migration requirements for both lifecycle and email-only invites. Currently building tracking plans to ensure existing HubSpot functionality transfers and to align tracking across NSLs and Society.
 
 ### L2: Dashboards for SLT and Core Revenue: 2026 data by the end of Q2 and 2025 data by Q4
-**Owner**: Anish Patel | **Health**: On Track | **Deadline**: 2026-06-30
-> No update provided on goal progress. DRI requested task list link rather than providing a status update.
+**Owner**: Anish Patel | **Health**: No update | **Deadline**: 2026-06-30
+> No update yet.
 
 ### L2: Build a repeatable system to track and engage 100% of advisors and E-board members each season.
 **Owner**: Adam Stone | **Health**: On Track | **Deadline**: 2026-06-30
@@ -39,13 +43,17 @@ _Last synced: 2026-04-27_
 **Owner**: Heather Darnell | **Health**: On Track | **Deadline**: 2026-06-01
 > Initial SLT discussion completed. Finalization underway this week with minor adjustments to L2s based on updated metrics from the associated L1 strategic alignment goal.
 
+### L2: Impact Days
+**Owner**: Chelsea Byers | **Health**: No update | **Deadline**: 2026-12-31
+> No update yet.
+
 ### L2: Complete job framework and compensation leveling project by the end of Q2
 **Owner**: Heather Darnell | **Health**: At Risk | **Deadline**: 2026-06-30
 > Project scope expanded to incorporate Signal (quicknotes) process feedback, which is still rolling out across groups. Insufficient data currently available to validate Signal as a solution. Timeline expected to extend into Q3 due to data gathering requirements.
 
-### L2: Engage Go Fractional for Product vacancies, Recruiting firm for SLT vacancies with HR support by February
-**Owner**: Kevin Prentiss | **Health**: Hit Goal | **Deadline**: 2026-02-28
-> Goal achieved. Go Fractional engaged for Product vacancies and recruiting firm secured for SLT vacancies with HR support by February deadline.
+### L2: 25th Anniversary Event
+**Owner**: Chelsea Byers | **Health**: No update | **Deadline**: 2026-10-27
+> No update yet.
 
 ### L2: Review and improve talent acquisition process by Q2
 **Owner**: Jenna Fontanez | **Health**: On Track | **Deadline**: 2026-06-30
@@ -68,6 +76,14 @@ _Last synced: 2026-04-27_
 **Owner**: Michael O'Brien | **Health**: On Track | **Deadline**: 2026-12-31
 > Progress is on track. DRI will dedicate more focus time next week to work through specific details of the brand tracking score development and improvement initiatives.
 
+### L2: Enrollment Funnel Completion Rate (MOFU)
+**Owner**: Adam Stone | **Health**: No update | **Deadline**: 2026-12-31
+> No update yet.
+
+### L2: Invite-to-Enrollment Conversion Rate (TOFU)
+**Owner**: Adam Stone | **Health**: No update | **Deadline**: 2026-12-31
+> No update yet.
+
 ### L2: Send 4.25M+ invitations to the 10.6M Serviceable Addressable Market; 80% needs to be standard invitations (excludes SNHU)
 **Owner**: Ashleigh Smith | **Health**: On Track | **Deadline**: 2026-12-31
 > Approximately 40k invitations still needed to reach budgeted amount for Spring. Alumni cohort pending, indicating progress is being made toward the 40%+ target of 10.6M.
@@ -88,19 +104,3 @@ _Last synced: 2026-04-27_
 ### L2: SNT testing in May on Society
 **Owner**: Kevin Prentiss | **Health**: On Track | **Deadline**: 2026-05-31
 > SNT testing progressing well after resolving authoring tool blocker. Dashboard and global nav are the next critical items in sprint plan; if these land on schedule, goal should be achieved.
-
-### L2: AI app notifications in April
-**Owner**: Kevin Prentiss | **Health**: On Track | **Deadline**: 2026-04-30
-> Red has a working prototype. Key blocker of clean PostHog implementation has been resolved and is now running properly. Syncing with Boris and Bruno this week to continue progress.
-
-### L2: Testing Onboarding & Orientation on Society in April
-**Owner**: Kevin Prentiss | **Health**: On Track | **Deadline**: 2026-04-30
-> Authoring tool MVP is unblocking the work. Team can now begin iterating and testing onboarding and orientation on Society.
-
-### L2: Establish baselines for conversion for email only and combo with print for uninvited segment and alumni by June [Stretch]
-**Owner**: Adam Stone | **Health**: No update
-> No update yet.
-
-### L2: Personal Insights complete and live by end of Q1
-**Owner**: Kevin Prentiss | **Health**: Hit Goal | **Deadline**: 2026-03-31
-> This was complete and live before the due date. 
