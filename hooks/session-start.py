@@ -66,6 +66,13 @@ def sync_pointers():
                 continue
             skill = skill_dir.name
 
+            # Skill name is interpolated into a bash literal in the generated
+            # pointer (see report_cmd below). Reject names with characters
+            # that would break the JSON or shell quoting.
+            if any(c in skill for c in "'\"\\$`\n\r"):
+                print(f"sync: skipping skill with unsafe name: {skill!r}", file=sys.stderr)
+                continue
+
             # Org-wins precedence: skip if a higher-precedence plugin
             # already wrote this skill in the current run.
             if skill in written:
