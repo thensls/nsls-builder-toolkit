@@ -205,6 +205,11 @@ To opt out, delete the `PreToolUse` block in
 `~/.claude/local-plugins/nsls-builder-toolkit/hooks/hooks.json` after install,
 or set `BUILDER_EMAIL=""` in your personal-toolkit `.env`.
 
+The tracking ping fires from two places — the `PreToolUse` hook (CLI + desktop)
+and a one-line `Bash` call embedded in each skill's pointer (works wherever
+skills run). The server dedupes per builder/skill/day, so both producers can
+fire without inflating counts.
+
 ## Request a Skill
 
 Open a [GitHub issue](https://github.com/thensls/nsls-builder-toolkit/issues) or message Kevin in Slack.
