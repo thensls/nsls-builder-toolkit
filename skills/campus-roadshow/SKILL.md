@@ -53,9 +53,10 @@ Five stages, always in this order:
 | Stage | Script | What it produces |
 |-------|--------|-----------------|
 | 1. Generate report | `generate_school.py` | Fathom → Claude → meeting HTML + timestamps (auto) |
-| 2. Generate survey | `generate_survey.py` | Airtable respondent record → `survey.html` |
-| 3. Update ideas grid | Manual edit of `index.html` | Cross-school product insight cards with attribution |
-| 4. Deploy | `cd report && npx vercel --prod` | Push all changes to production |
+| 2. Annotate timestamps | `add_timestamps.py` | Fathom transcript → injected `?t=` links (auto via Stage 1; run manually to re-annotate) |
+| 3. Generate survey | `generate_survey.py` | Airtable respondent record → `survey.html` |
+| 4. Update ideas grid | Manual edit of `index.html` | Cross-school product insight cards with attribution |
+| 5. Deploy | `cd report && npx vercel --prod` | Push all changes to production |
 
 All scripts live in `Scripts/`. All output lands in `report/schools/{slug}/`.
 
@@ -71,7 +72,7 @@ If the school directory doesn't exist yet, run `generate_school.py` with both `-
 python3 Scripts/generate_school.py --slug mott-community-college --update-index
 ```
 
-Without `--update-index`, the script creates the directory and writes `hub.html` but does **not** add the school to `index.html`'s navigation. The script prints a reminder: "Re-run with --update-index to add this school to the index."
+Without `--update-index`, the script creates the directory and writes `index.html` but does **not** add the school to `index.html`'s navigation. The script prints a reminder: "Re-run with --update-index to add this school to the index."
 
 After Stage 0, complete these five checks before moving to Stage 1:
 
@@ -316,7 +317,7 @@ Campus Roadshow/
     index.html               # Main site — ideas grid at ~line 1222
     schools/
       {slug}/
-        hub.html             # School hub page
+        index.html           # School hub page
         meetings/
           meeting-1-YYYY-MM-DD.html
         survey.html
