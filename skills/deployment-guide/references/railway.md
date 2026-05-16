@@ -73,11 +73,62 @@ There's a one-shot org-wide audit script at `automation-tracker/scripts/audit_ra
 
 ## Environment Variables
 
-Never commit secrets to the repo. Set them in Railway instead.
+**Use Doppler. Don't set production env vars directly in Railway.**
 
-In the service dashboard, go to **Variables** and add each key/value pair. Reference them in code as normal environment variables (`os.environ.get('KEY')` in Python, `process.env.KEY` in Node).
+NSLS standard is to source all service secrets from Doppler and let the native Doppler↔Railway integration push them into Railway env vars automatically. This lets non-engineers (Chelsea, future ops owners) manage secrets without Railway admin access — they just need an invite to the Doppler project.
 
-For secrets shared across multiple services (like a shared Airtable token), add them once at the project level under **Shared Variables**.
+### Setup (one-time per service)
+
+1. **Identify or create the Doppler project.** Check existing projects first — services that share infrastructure share a Doppler project. Example: the `slt-coach` Doppler project hosts secrets for both the SLT Coach bot and the agenda-render-service because they share `GOOGLE_SERVICE_ACCOUNT_JSON` and Airtable creds. Only create a new project if the service serves a genuinely different domain.
+
+   ```bash
+   doppler projects                          # list existing projects
+   doppler projects create <name>            # create new if needed
+   ```
+
+2. **Add secrets to the `prd` config.** Use the same names as your `.env.example`.
+
+   ```bash
+   doppler secrets set --project <name> --config prd KEY=value
+   ```
+
+3. **Wire the integration.** In the Doppler dashboard: **Integrations → Railway → Connect**. Authorize, pick the Railway project and service. Doppler now pushes secrets into Railway env vars and keeps them in sync on every change.
+
+4. **Invite the ops owner.** Doppler dashboard → **Project → Access**. Add the ops owner (Chelsea by default) with `Editor` role.
+
+5. **Document the Doppler project name** in the service's CLAUDE.md under "Environment Variables." This is what an inheritor reads to know where to look.
+
+### Local Development
+
+```bash
+# Run locally with dev-config secrets injected:
+doppler run --project <name> --config dev -- python app.py
+
+# Or download to a local .env for the session (don't commit it):
+doppler secrets download --project <name> --config dev --no-file --format env > .env
+```
+
+### Don't
+
+- **Don't set prod env vars directly in Railway.** They drift from Doppler and someone (probably you) will eventually rotate the wrong one.
+- **Don't commit `.env` with real secrets.** Doppler is the only source of truth.
+- **Don't share secrets via Slack, email, or DM.** Add the person to Doppler.
+- **Don't create a new Doppler project for every new service.** Reuse when infrastructure overlaps.
+
+### Existing NSLS Doppler Projects
+
+- `slt-coach` — SLT Coach bot + agenda-render-service. Google service account, Airtable, Anthropic, Fathom, Slack tokens.
+- `rippling-sync` — Rippling HRIS sync job
+- `people-ops` — local dev for people-ops skills
+- `nsls-builder-toolkit` / `nsls-personal-toolkit` — plugin dev
+
+### Services Not Yet on Doppler
+
+Signal (formerly NSLS Coach) and automation-tracker-proxy still use Railway env vars directly. Migrate one at a time when touching them.
+
+### Code Side
+
+Reference secrets as normal environment variables — your code doesn't know they came from Doppler. `os.environ.get('KEY')` in Python, `process.env.KEY` in Node. Doppler's push to Railway means the runtime env is identical to the "set in Railway dashboard" pattern.
 
 ## Procfile Format
 
