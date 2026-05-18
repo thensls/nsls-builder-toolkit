@@ -2,7 +2,7 @@
   {
     "name": "Gregg Gudelinis",
     "title": "Chapter Success Manager (Gold)",
-    "manager": "James Patrick Corriveau",
+    "manager": "James Corriveau",
     "email": "ggudelinis@nsls.org",
     "slack": "U034ZAPBHAT",
     "department": "Client Services",
@@ -11,7 +11,7 @@
   {
     "name": "Arianne Stinson",
     "title": "Chapter Success Manager (Silver)",
-    "manager": "James Patrick Corriveau",
+    "manager": "James Corriveau",
     "email": "astinson@nsls.org",
     "slack": "U0393VBME00",
     "department": "Client Services",
@@ -35,12 +35,12 @@
     "department": "Client Services",
     "manages": [
       "Hannah Stoneburner",
-      "James Patrick Corriveau",
+      "James Corriveau",
       "Marissa Curry"
     ]
   },
   {
-    "name": "Maryanna Petikas Laferriere",
+    "name": "Maryanna Laferriere",
     "title": "Strategic Chapter Manager, Team Enablement Lead",
     "manager": "Marissa Curry",
     "email": "mlaferriere@nsls.org",
@@ -51,7 +51,7 @@
   {
     "name": "Alyssa Placeres",
     "title": "Chapter Success Manager (Gold)",
-    "manager": "James Patrick Corriveau",
+    "manager": "James Corriveau",
     "email": "aplaceres@nsls.org",
     "slack": "U07TSQZ4THT",
     "department": "Client Services",
@@ -60,14 +60,14 @@
   {
     "name": "Tayanee Torres",
     "title": "Chapter Success Manager (Gold)",
-    "manager": "James Patrick Corriveau",
+    "manager": "James Corriveau",
     "email": "ttorres@nsls.org",
     "slack": "U074E7H9C07",
     "department": "Client Services",
     "manages": []
   },
   {
-    "name": "Linda Elizabeth Condon",
+    "name": "Linda Condon",
     "title": "Senior Strategic Chapter Manager",
     "manager": "Marissa Curry",
     "email": "lcondon@nsls.org",
@@ -78,7 +78,7 @@
   {
     "name": "Dillon Cook",
     "title": "Chapter Success Manager (Silver)",
-    "manager": "James Patrick Corriveau",
+    "manager": "James Corriveau",
     "email": "dcook@nsls.org",
     "slack": "U0A2A9Q95JN",
     "department": "Client Services",
@@ -93,19 +93,19 @@
     "department": "Client Services",
     "manages": [
       "Allyson Trachtenberg",
-      "Jakita Larita Cofer",
-      "Karissa Lee Tedesco",
-      "Liliana Veronica Gonzalez",
-      "Linda Elizabeth Condon",
-      "Maryanna Petikas Laferriere",
-      "Olivia Rae Orend",
-      "Zoe Asher Wallis"
+      "Jakita Cofer",
+      "Karissa Tedesco",
+      "Liliana Gonzalez",
+      "Linda Condon",
+      "Maryanna Laferriere",
+      "Olivia Orend",
+      "Zoe Wallis"
     ]
   },
   {
     "name": "Alexis Scott",
     "title": "Chapter Success Manager (Gold)",
-    "manager": "James Patrick Corriveau",
+    "manager": "James Corriveau",
     "email": "ascott@nsls.org",
     "slack": "U08ABVDPWE5",
     "department": "Client Services",
@@ -121,9 +121,9 @@
     "manages": []
   },
   {
-    "name": "Brielle Alisia Jones",
+    "name": "Brielle Jones",
     "title": "Chapter Success Manager (Silver)",
-    "manager": "James Patrick Corriveau",
+    "manager": "James Corriveau",
     "email": "bjones@nsls.org",
     "slack": "U091ZV57M29",
     "department": "Client Services",
@@ -132,14 +132,14 @@
   {
     "name": "Dejeahn Brown",
     "title": "Chapter Success Manager (Silver)",
-    "manager": "James Patrick Corriveau",
+    "manager": "James Corriveau",
     "email": "dbrown@nsls.org",
     "slack": "U098M2E1M5X",
     "department": "Client Services",
     "manages": []
   },
   {
-    "name": "Karissa Lee Tedesco",
+    "name": "Karissa Tedesco",
     "title": "Senior Strategic Chapter Manager",
     "manager": "Marissa Curry",
     "email": "ktedesco@nsls.org",
@@ -148,7 +148,7 @@
     "manages": []
   },
   {
-    "name": "Zoe Asher Wallis",
+    "name": "Zoe Wallis",
     "title": "Chapter Manager, First Year Specialist",
     "manager": "Marissa Curry",
     "email": "zwallis@nsls.org",
@@ -157,7 +157,7 @@
     "manages": []
   },
   {
-    "name": "Liliana Veronica Gonzalez",
+    "name": "Liliana Gonzalez",
     "title": "Strategic Chapter Manager",
     "manager": "Marissa Curry",
     "email": "lgonzalez@nsls.org",
@@ -166,7 +166,7 @@
     "manages": []
   },
   {
-    "name": "Olivia Rae Orend",
+    "name": "Olivia Orend",
     "title": "Senior Strategic Chapter Manager",
     "manager": "Marissa Curry",
     "email": "oorend@nsls.org",
@@ -189,7 +189,7 @@
     ]
   },
   {
-    "name": "Jakita Larita Cofer",
+    "name": "Jakita Cofer",
     "title": "Senior Strategic Chapter Manager",
     "manager": "Marissa Curry",
     "email": "jcofer@nsls.org",
@@ -198,7 +198,7 @@
     "manages": []
   },
   {
-    "name": "James Patrick Corriveau",
+    "name": "James Corriveau",
     "title": "Director of Chapter Management (Mid-Market)",
     "manager": "Melvin Rosal",
     "email": "jcorriveau@nsls.org",
@@ -208,7 +208,7 @@
       "Alexis Scott",
       "Alyssa Placeres",
       "Arianne Stinson",
-      "Brielle Alisia Jones",
+      "Brielle Jones",
       "Dejeahn Brown",
       "Dillon Cook",
       "Gregg Gudelinis",
@@ -216,680 +216,12 @@
     ]
   },
   {
-    "name": "Dylan Shea Blaty",
-    "title": "Design Lead, Product & Growth",
-    "manager": "Adam Lee Stone",
-    "email": "dblaty@nsls.org",
-    "slack": "U0ANJR7P66S",
-    "department": "Marketing",
-    "manages": []
-  },
-  {
-    "name": "Olivia Rigor",
-    "title": "Sr Logistics Coordinator",
-    "manager": "Rachel Porter",
-    "email": "origor@nsls.org",
-    "slack": "U02CDQD2FK8",
-    "department": "Marketing",
-    "manages": []
-  },
-  {
-    "name": "Joshua Hrala",
-    "title": "Senior Demand Generation Manager",
-    "manager": "Michael Donald O'Brien",
-    "email": "jhrala@nsls.org",
-    "slack": "U02EG6LTV4P",
-    "department": "Marketing",
-    "manages": []
-  },
-  {
-    "name": "Tatiana McGrath",
-    "title": "Art Director ",
-    "manager": "Michael Donald O'Brien",
-    "email": "tmcgrath@nsls.org",
-    "slack": "U02FSV479GC",
-    "department": "Marketing",
-    "manages": [
-      "Noah Joseph Camenker"
-    ]
-  },
-  {
-    "name": "Andrew Hesse",
-    "title": "Email Marketing Manager",
-    "manager": "Michael Donald O'Brien",
-    "email": "ahesse@nsls.org",
-    "slack": "U04LPUT7WT1",
-    "department": "Marketing",
-    "manages": []
-  },
-  {
-    "name": "Michael Russell Adamian",
-    "title": "Marketing Operations Coordinator",
-    "manager": "Michael Donald O'Brien",
-    "email": "madamian@nsls.org",
-    "slack": "U05PM53KJ3T",
-    "department": "Marketing",
-    "manages": []
-  },
-  {
-    "name": "Adam Lee Stone",
-    "title": "Digital Marketing",
-    "manager": "Gary Tuerack",
-    "email": "astone@nsls.org",
-    "slack": "U08EVP8CF8A",
-    "department": "Marketing",
-    "manages": [
-      "Boris Savoie Doyer",
-      "Devin J. Lasker",
-      "Dylan Shea Blaty",
-      "Jordyn Michelle Tannenbaum",
-      "Joseph Cupka",
-      "Julia Botz",
-      "Michael Donald O'Brien"
-    ]
-  },
-  {
-    "name": "Michael Donald O'Brien",
-    "title": "Senior Director, Marketing",
-    "manager": "Adam Lee Stone",
-    "email": "mobrien@nsls.org",
-    "slack": "U015FETV4KW",
-    "department": "Marketing",
-    "manages": [
-      "Andrew Hesse",
-      "Joshua Hrala",
-      "Michael Russell Adamian",
-      "Rachel Porter",
-      "Tatiana McGrath"
-    ]
-  },
-  {
-    "name": "Boris Savoie Doyer",
-    "title": "",
-    "manager": "Adam Lee Stone",
-    "email": "bsavoiedoyer@nsls.org",
-    "slack": "U096X7F82MP",
-    "department": "Marketing",
-    "manages": []
-  },
-  {
-    "name": "Rachel Porter",
-    "title": "Senior Logistics Manager",
-    "manager": "Michael Donald O'Brien",
-    "email": "rporter@nsls.org",
-    "slack": "UBT60G04C",
-    "department": "Marketing",
-    "manages": [
-      "Eric Gerbehy",
-      "Olivia Rigor"
-    ]
-  },
-  {
-    "name": "Julia Botz",
-    "title": "Junior UX Designer",
-    "manager": "Adam Lee Stone",
-    "email": "jbotz@nsls.org",
-    "slack": "U094PH0JU03",
-    "department": "Marketing",
-    "manages": []
-  },
-  {
-    "name": "Eric Gerbehy",
-    "title": "Sr Logistics Coordinator",
-    "manager": "Rachel Porter",
-    "email": "egerbehy@nsls.org",
-    "slack": "U02CHG5GJCV",
-    "department": "Marketing",
-    "manages": []
-  },
-  {
-    "name": "Noah Joseph Camenker",
-    "title": "Video and Media Producer",
-    "manager": "Tatiana McGrath",
-    "email": "ncamenker@nsls.org",
-    "slack": "U03ATLQ2BL1",
-    "department": "Marketing",
-    "manages": []
-  },
-  {
-    "name": "Timothy Duffy",
-    "title": "Director, Student Program Development",
-    "manager": "Ashleigh Smith",
-    "email": "tduffy@nsls.org",
-    "slack": "U04M4JFNRU7",
-    "department": "Student Program Development",
-    "manages": []
-  },
-  {
-    "name": "Lillian Crystal Collazo",
-    "title": "HR Generalist",
-    "manager": "Heather Darnell",
-    "email": "lcollazo@nsls.org",
-    "slack": "U023CU7BTSM",
-    "department": "Human Resources",
-    "manages": []
-  },
-  {
-    "name": "Joanne Sandoval",
-    "title": "Early Talent Acquisition Specialist",
-    "manager": "Jenna Fontanez",
-    "email": "jsandoval@nsls.org",
-    "slack": "U04UQR9SBFH",
-    "department": "Human Resources",
-    "manages": []
-  },
-  {
-    "name": "Jenna Fontanez",
-    "title": "Director, Talent Management",
-    "manager": "Heather Darnell",
-    "email": "jfontanez@nsls.org",
-    "slack": "U03RR8TKEDA",
-    "department": "Human Resources",
-    "manages": [
-      "Joanne Sandoval"
-    ]
-  },
-  {
-    "name": "Danielle Mariani",
-    "title": "Senior Culture and Organizational Strategist",
-    "manager": "Heather Darnell",
-    "email": "dmariani@nsls.org",
-    "slack": "UHXFN781L",
-    "department": "Human Resources",
-    "manages": []
-  },
-  {
-    "name": "Heather Darnell",
-    "title": "Senior Director, Human Resources",
-    "manager": "Cory David Capoccia",
-    "email": "hdarnell@nsls.org",
-    "slack": "U03D1HK963E",
-    "department": "Human Resources",
-    "manages": [
-      "Danielle Mariani",
-      "Jenna Fontanez",
-      "Lillian Crystal Collazo"
-    ]
-  },
-  {
-    "name": "Karla Michelle Fernandez Mena",
-    "title": "Member Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "kfernandez@nsls.org",
-    "slack": "U0A77JRUDS7",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Jorge Alberto",
-    "title": "Trainer",
-    "manager": "Edgar Segura",
-    "email": "jalberto@nsls.org",
-    "slack": "U0A7AHB67UM",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Franklin Kenel Ortega",
-    "title": "Member Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "fortega@nsls.org",
-    "slack": "U0A7BUY5EG6",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Kara Klimuszko",
-    "title": "Member Experience Team Lead",
-    "manager": "Kimberly Campbell",
-    "email": "kklimuszko@nsls.org",
-    "slack": "U01B6B0T831",
-    "department": "Member Experience",
-    "manages": [
-      "Atrayu Polhemus",
-      "Charlotte Anne Donnelly",
-      "Melissa Baggett",
-      "Monica Cerrato",
-      "Nancy Crystal Castillo"
-    ]
-  },
-  {
-    "name": "Naomi Ariza",
-    "title": "Membership Experience Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "nariza@nsls.org",
-    "slack": "U0B24LCLQMP",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Charlotte Anne Donnelly",
-    "title": "Member Experience Specialist",
-    "manager": "Kara Klimuszko",
-    "email": "cdonnelly@nsls.org",
-    "slack": "U05DKQE1J3H",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Alejandro Gabriel",
-    "title": "QA Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "agabriel@nsls.org",
-    "slack": "U0A7E0JCNBU",
-    "department": "Member Experience",
-    "manages": [
-      "Arianna Michell Fermin",
-      "Daniela Leonardo",
-      "Eva Sheik",
-      "Franklin Kenel Ortega",
-      "Ismel Chalas",
-      "Jennifer Alex. Peguero",
-      "Karla Michelle Fernandez Mena",
-      "Maria Ferrand"
-    ]
-  },
-  {
-    "name": "Jennifer Alex. Peguero",
-    "title": "Member Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "apegueronsls@nsls.org",
-    "slack": "",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Maikel Emeterio Berbi",
-    "title": "Membership Experience Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "mberbi@nsls.org",
-    "slack": "U0B1A9YPKHV",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Sofia Laura Margareta Kurtenbach Fader",
-    "title": "Membership Experience Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "skurtenbach@nsls.org",
-    "slack": "U0B1NBN7UN9",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Elian Y Castro",
-    "title": "Membership Experience Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "ecastro@nsls.org",
-    "slack": "U0B1NBFJACD",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Atrayu Polhemus",
-    "title": "Membership Experience Specialist",
-    "manager": "Kara Klimuszko",
-    "email": "apolhemus@nsls.org",
-    "slack": "U08E6QG6KUM",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Emilia Jasset Santana",
-    "title": "Membership Experience Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "esantana@nsls.org",
-    "slack": "U0B1PMSKT0E",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Nancy Crystal Castillo",
-    "title": "Member Experience Specialist",
-    "manager": "Kara Klimuszko",
-    "email": "ncastillo@nsls.org",
-    "slack": "U05516H7B8A",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Eva Sheik",
-    "title": "Member Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "esheik@nsls.org",
-    "slack": "U0ASCHYJ2UT",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Alaynie Smith",
-    "title": "Workforce Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "alsmith@nsls.org",
-    "slack": "U03EDCNTW5B",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Monica Cerrato",
-    "title": "Member Experience Specialist",
-    "manager": "Kara Klimuszko",
-    "email": "mcerrato@nsls.org",
-    "slack": "U02EG4YQ2UF",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Angel Daniel Guzman",
-    "title": "Membership Experience Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "aguzman@nsls.org",
-    "slack": "U0B1VBGR6DS",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Dania Chireno",
-    "title": "Membership Experience Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "dchireno@nsls.org",
-    "slack": "U0B2L28CDGQ",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Kimberly Campbell",
-    "title": "Director of Member Experience",
-    "manager": "Ashleigh Smith",
-    "email": "kcampbell@nsls.org",
-    "slack": "U021ZK0NW07",
-    "department": "Member Experience",
-    "manages": [
-      "Alaynie Smith",
-      "Alejandro Gabriel",
-      "Angel Daniel Guzman",
-      "Dania Chireno",
-      "Edgar Segura",
-      "Elian Y Castro",
-      "Emilia Jasset Santana",
-      "Kara Klimuszko",
-      "Maikel Emeterio Berbi",
-      "Naomi Ariza",
-      "Rauly Villar",
-      "Reiny Arturo Garcia",
-      "Saray Leonor Rosado",
-      "Sofia Laura Margareta Kurtenbach Fader"
-    ]
-  },
-  {
-    "name": "Reiny Arturo Garcia",
-    "title": "Membership Experience Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "rcalderon@nsls.org",
-    "slack": "U0B1KCAN9SP",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Melissa Baggett",
-    "title": "Membership Experience Specialist",
-    "manager": "Kara Klimuszko",
-    "email": "mbaggett@nsls.org",
-    "slack": "U081X01AQA2",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Edgar Segura",
-    "title": "Client Services Manager",
-    "manager": "Kimberly Campbell",
-    "email": "esegura@nsls.org",
-    "slack": "U0A3PH5EA3G",
-    "department": "Member Experience",
-    "manages": [
-      "Jorge Alberto"
-    ]
-  },
-  {
-    "name": "Rauly Villar",
-    "title": "Membership Experience Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "rvillar@nsls.org",
-    "slack": "U0B24L8CQD7",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Arianna Michell Fermin",
-    "title": "Member Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "afermin@nsls.org",
-    "slack": "U0A7E0J7UAE",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Saray Leonor Rosado",
-    "title": "Membership Experience Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "srosado@nsls.org",
-    "slack": "U0B1NBK7C21",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Maria Ferrand",
-    "title": "Member Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "mferrand@nsls.org",
-    "slack": "U0A6YH24JVD",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Ismel Chalas",
-    "title": "Member Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "ichalas@nsls.org",
-    "slack": "U0A7BUYLFUN",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Daniela Leonardo",
-    "title": "Member Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "dleonardo@nsls.org",
-    "slack": "",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Kevin Prentiss",
-    "title": "Ignite",
-    "manager": "Gary Tuerack",
-    "email": "kprentiss@nsls.org",
-    "slack": "U07TS8X7T7X",
-    "department": "Engineering",
-    "manages": [
-      "Brandon Evans",
-      "Chelsea Byers",
-      "Chris Higbee",
-      "David Adams",
-      "Jana Amsellem",
-      "Juan Carlos Maggi",
-      "Lauren Prentiss",
-      "Trina Limpert",
-      "Tyler Lagaly"
-    ]
-  },
-  {
-    "name": "Evgeny Pokrovskiy",
-    "title": "Software QA Automation Eng",
-    "manager": "Juan Carlos Maggi",
-    "email": "epokrovskiy@nsls.org",
-    "slack": "U01AEB1JQ8Y",
-    "department": "Engineering",
-    "manages": []
-  },
-  {
-    "name": "Brandon Evans",
-    "title": "AWS Engineer",
+    "name": "Davo Wood",
+    "title": "AI Support",
     "manager": "Kevin Prentiss",
-    "email": "bevans@nsls.org",
-    "slack": "U08CSE1A9CK",
-    "department": "Engineering",
-    "manages": []
-  },
-  {
-    "name": "David Adams",
-    "title": "Vice President of Technology",
-    "manager": "Kevin Prentiss",
-    "email": "dadams@nsls.org",
-    "slack": "U0A9KTSG4J2",
-    "department": "Engineering",
-    "manages": []
-  },
-  {
-    "name": "Juan Carlos Maggi",
-    "title": "Lead AI/ML Developer & Architect",
-    "manager": "Kevin Prentiss",
-    "email": "jmaggi@nsls.org",
-    "slack": "U02G96B39GQ",
-    "department": "Engineering",
-    "manages": [
-      "Evgeny Pokrovskiy",
-      "Kibaek Kim",
-      "Vadim Geroim"
-    ]
-  },
-  {
-    "name": "Angelica Evans",
-    "title": "Business Intelligence and Automation Lead",
-    "manager": "Jordyn Michelle Tannenbaum",
-    "email": "avillalobos@nsls.org",
-    "slack": "U02EQ4E2WDC",
-    "department": "Engineering",
-    "manages": []
-  },
-  {
-    "name": "Kibaek Kim",
-    "title": "Software Developer",
-    "manager": "Juan Carlos Maggi",
-    "email": "kkim@nsls.org",
-    "slack": "UJAC5NDKK",
-    "department": "Engineering",
-    "manages": []
-  },
-  {
-    "name": "Vadim Geroim",
-    "title": "PHP Developer",
-    "manager": "Juan Carlos Maggi",
-    "email": "vgeroim@nsls.org",
-    "slack": "U0895SB7DGF",
-    "department": "Engineering",
-    "manages": []
-  },
-  {
-    "name": "Rumzy Khalil",
-    "title": "Data Engineer",
-    "manager": "Jordyn Michelle Tannenbaum",
-    "email": "rkhalil@nsls.org",
-    "slack": "U0B1ZU3CC2C",
-    "department": "Business Intelligence",
-    "manages": []
-  },
-  {
-    "name": "Jordyn Michelle Tannenbaum",
-    "title": "Head of Data",
-    "manager": "Adam Lee Stone",
-    "email": "jtannenbaum@nsls.org",
-    "slack": "U0A5FNH2A01",
-    "department": "Business Intelligence",
-    "manages": [
-      "Angelica Evans",
-      "Rumzy Khalil"
-    ]
-  },
-  {
-    "name": "Freda Hobbs",
-    "title": "Chapter Events Manager",
-    "manager": "Jordan Perry",
-    "email": "fhobbs@nsls.org",
-    "slack": "U06QJ0XDH0E",
-    "department": "Operations",
-    "manages": []
-  },
-  {
-    "name": "Joseph Cupka",
-    "title": "National Organizing Director",
-    "manager": "Adam Lee Stone",
-    "email": "jcupka@nsls.org",
-    "slack": "U08U4FS008H",
-    "department": "Operations",
-    "manages": [
-      "Derald Dryman",
-      "Jordan Perry",
-      "LaShaundra Randolph",
-      "Whitney Ann Jett"
-    ]
-  },
-  {
-    "name": "Dasha Cherkasov",
-    "title": "Chapter Event Manager",
-    "manager": "Jordan Perry",
-    "email": "dcherkasov@nsls.org",
-    "slack": "U02A8NJN1QF",
-    "department": "Operations",
-    "manages": []
-  },
-  {
-    "name": "Judy Nguyen Mai-Vargas",
-    "title": "Operations Enablement Coordinator",
-    "manager": "Jordan Perry",
-    "email": "jvargas@nsls.org",
-    "slack": "U090NHBA79A",
-    "department": "Operations",
-    "manages": []
-  },
-  {
-    "name": "Derald Dryman",
-    "title": "Senior Manager of Brand and Community Engagement",
-    "manager": "Joseph Cupka",
-    "email": "ddryman@nsls.org",
-    "slack": "UCG6HQQ05",
-    "department": "Operations",
-    "manages": []
-  },
-  {
-    "name": "Jordan Perry",
-    "title": "Director, Programming",
-    "manager": "Joseph Cupka",
-    "email": "jperry@nsls.org",
-    "slack": "UCG43J6JW",
-    "department": "Operations",
-    "manages": [
-      "Dasha Cherkasov",
-      "Freda Hobbs",
-      "Judy Nguyen Mai-Vargas"
-    ]
-  },
-  {
-    "name": "Chelsea Byers",
-    "title": "Head of Operations (Fractional)",
-    "manager": "Kevin Prentiss",
-    "email": "cbyers@nsls.org",
-    "slack": "U0AT9R3DAT1",
-    "department": "Operations",
-    "manages": []
-  },
-  {
-    "name": "Whitney Ann Jett",
-    "title": "Compliance and Accreditation Manager",
-    "manager": "Joseph Cupka",
-    "email": "wjett@nsls.org",
-    "slack": "U05RKE7AAM7",
-    "department": "Operations",
+    "email": "davowood@nsls.org",
+    "slack": "U0B2B0L7858",
+    "department": "Product",
     "manages": []
   },
   {
@@ -938,7 +270,655 @@
     "manages": []
   },
   {
-    "name": "Cory David Capoccia",
+    "name": "Dylan Blaty",
+    "title": "Design Lead, Product & Growth",
+    "manager": "Adam Stone",
+    "email": "dblaty@nsls.org",
+    "slack": "U0ANJR7P66S",
+    "department": "Marketing",
+    "manages": []
+  },
+  {
+    "name": "Olivia Rigor",
+    "title": "Sr Logistics Coordinator",
+    "manager": "Rachel Porter",
+    "email": "origor@nsls.org",
+    "slack": "U02CDQD2FK8",
+    "department": "Marketing",
+    "manages": []
+  },
+  {
+    "name": "Joshua Hrala",
+    "title": "Senior Demand Generation Manager",
+    "manager": "Michael O'Brien",
+    "email": "jhrala@nsls.org",
+    "slack": "U02EG6LTV4P",
+    "department": "Marketing",
+    "manages": []
+  },
+  {
+    "name": "Tatiana McGrath",
+    "title": "Art Director ",
+    "manager": "Michael O'Brien",
+    "email": "tmcgrath@nsls.org",
+    "slack": "U02FSV479GC",
+    "department": "Marketing",
+    "manages": [
+      "Noah Camenker"
+    ]
+  },
+  {
+    "name": "Andrew Hesse",
+    "title": "Email Marketing Manager",
+    "manager": "Michael O'Brien",
+    "email": "ahesse@nsls.org",
+    "slack": "U04LPUT7WT1",
+    "department": "Marketing",
+    "manages": []
+  },
+  {
+    "name": "Michael Adamian",
+    "title": "Marketing Operations Coordinator",
+    "manager": "Michael O'Brien",
+    "email": "madamian@nsls.org",
+    "slack": "U05PM53KJ3T",
+    "department": "Marketing",
+    "manages": []
+  },
+  {
+    "name": "Adam Stone",
+    "title": "Digital Marketing",
+    "manager": "Gary Tuerack",
+    "email": "astone@nsls.org",
+    "slack": "U08EVP8CF8A",
+    "department": "Marketing",
+    "manages": [
+      "Boris Savoie Doyer",
+      "Devin Lasker",
+      "Dylan Blaty",
+      "Jordyn Tannenbaum",
+      "Joseph Cupka",
+      "Julia Botz",
+      "Michael O'Brien"
+    ]
+  },
+  {
+    "name": "Michael O'Brien",
+    "title": "Senior Director, Marketing",
+    "manager": "Adam Stone",
+    "email": "mobrien@nsls.org",
+    "slack": "U015FETV4KW",
+    "department": "Marketing",
+    "manages": [
+      "Andrew Hesse",
+      "Joshua Hrala",
+      "Michael Adamian",
+      "Rachel Porter",
+      "Tatiana McGrath"
+    ]
+  },
+  {
+    "name": "Boris Savoie Doyer",
+    "title": "",
+    "manager": "Adam Stone",
+    "email": "bsavoiedoyer@nsls.org",
+    "slack": "U096X7F82MP",
+    "department": "Marketing",
+    "manages": []
+  },
+  {
+    "name": "Rachel Porter",
+    "title": "Senior Logistics Manager",
+    "manager": "Michael O'Brien",
+    "email": "rporter@nsls.org",
+    "slack": "UBT60G04C",
+    "department": "Marketing",
+    "manages": [
+      "Eric Gerbehy",
+      "Olivia Rigor"
+    ]
+  },
+  {
+    "name": "Julia Botz",
+    "title": "Junior UX Designer",
+    "manager": "Adam Stone",
+    "email": "jbotz@nsls.org",
+    "slack": "U094PH0JU03",
+    "department": "Marketing",
+    "manages": []
+  },
+  {
+    "name": "Eric Gerbehy",
+    "title": "Sr Logistics Coordinator",
+    "manager": "Rachel Porter",
+    "email": "egerbehy@nsls.org",
+    "slack": "U02CHG5GJCV",
+    "department": "Marketing",
+    "manages": []
+  },
+  {
+    "name": "Noah Camenker",
+    "title": "Video and Media Producer",
+    "manager": "Tatiana McGrath",
+    "email": "ncamenker@nsls.org",
+    "slack": "U03ATLQ2BL1",
+    "department": "Marketing",
+    "manages": []
+  },
+  {
+    "name": "Timothy Duffy",
+    "title": "Director, Student Program Development",
+    "manager": "Ashleigh Smith",
+    "email": "tduffy@nsls.org",
+    "slack": "U04M4JFNRU7",
+    "department": "Student Program Development",
+    "manages": []
+  },
+  {
+    "name": "Lillian Collazo",
+    "title": "HR Generalist",
+    "manager": "Heather Darnell",
+    "email": "lcollazo@nsls.org",
+    "slack": "U023CU7BTSM",
+    "department": "Human Resources",
+    "manages": []
+  },
+  {
+    "name": "Joanne Sandoval",
+    "title": "Early Talent Acquisition Specialist",
+    "manager": "Jenna Fontanez",
+    "email": "jsandoval@nsls.org",
+    "slack": "U04UQR9SBFH",
+    "department": "Human Resources",
+    "manages": []
+  },
+  {
+    "name": "Jenna Fontanez",
+    "title": "Director, Talent Management",
+    "manager": "Heather Darnell",
+    "email": "jfontanez@nsls.org",
+    "slack": "U03RR8TKEDA",
+    "department": "Human Resources",
+    "manages": [
+      "Joanne Sandoval"
+    ]
+  },
+  {
+    "name": "Danielle Mariani",
+    "title": "Senior Culture and Organizational Strategist",
+    "manager": "Heather Darnell",
+    "email": "dmariani@nsls.org",
+    "slack": "UHXFN781L",
+    "department": "Human Resources",
+    "manages": []
+  },
+  {
+    "name": "Heather Darnell",
+    "title": "Senior Director, Human Resources",
+    "manager": "Cory Capoccia",
+    "email": "hdarnell@nsls.org",
+    "slack": "U03D1HK963E",
+    "department": "Human Resources",
+    "manages": [
+      "Danielle Mariani",
+      "Jenna Fontanez",
+      "Lillian Collazo"
+    ]
+  },
+  {
+    "name": "Dania Chireno",
+    "title": "Membership Experience Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "dchireno@nsls.org",
+    "slack": "",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Karla Mena",
+    "title": "Member Experience Specialist",
+    "manager": "Alejandro Gabriel",
+    "email": "kfernandez@nsls.org",
+    "slack": "U0A77JRUDS7",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Franklin Ortega",
+    "title": "Member Experience Specialist",
+    "manager": "Alejandro Gabriel",
+    "email": "fortega@nsls.org",
+    "slack": "U0A7BUY5EG6",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Kara Klimuszko",
+    "title": "Member Experience Team Lead",
+    "manager": "Kimberly Campbell",
+    "email": "kklimuszko@nsls.org",
+    "slack": "U01B6B0T831",
+    "department": "Member Experience",
+    "manages": [
+      "Atrayu Polhemus",
+      "Charlotte Donnelly",
+      "Melissa Baggett",
+      "Monica Cerrato",
+      "Nancy Castillo"
+    ]
+  },
+  {
+    "name": "Naomi Ariza",
+    "title": "Membership Experience Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "nariza@nsls.org",
+    "slack": "U0B24LCLQMP",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Charlotte Donnelly",
+    "title": "Member Experience Specialist",
+    "manager": "Kara Klimuszko",
+    "email": "cdonnelly@nsls.org",
+    "slack": "U05DKQE1J3H",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Jorge Alberto",
+    "title": "Trainer",
+    "manager": "Edgar Segura",
+    "email": "jalberto@nsls.org",
+    "slack": "U0A7AHB67UM",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Alejandro Gabriel",
+    "title": "QA Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "agabriel@nsls.org",
+    "slack": "U0A7E0JCNBU",
+    "department": "Member Experience",
+    "manages": [
+      "Daniela Leonardo",
+      "Eva Sheik",
+      "Franklin Ortega",
+      "Jennifer Peguero",
+      "Karla Mena"
+    ]
+  },
+  {
+    "name": "Jennifer Peguero",
+    "title": "Member Experience Specialist",
+    "manager": "Alejandro Gabriel",
+    "email": "apeguero@nsls.org",
+    "slack": "U0AS9A3RLJY",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Maikel Berbi",
+    "title": "Membership Experience Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "mberbi@nsls.org",
+    "slack": "U0B1A9YPKHV",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Sofia Fader",
+    "title": "Membership Experience Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "skurtenbach@nsls.org",
+    "slack": "U0B1NBN7UN9",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Elian Castro",
+    "title": "Membership Experience Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "ecastro@nsls.org",
+    "slack": "U0B1NBFJACD",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Atrayu Polhemus",
+    "title": "Membership Experience Specialist",
+    "manager": "Kara Klimuszko",
+    "email": "apolhemus@nsls.org",
+    "slack": "U08E6QG6KUM",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Emilia Santana",
+    "title": "Membership Experience Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "esantana@nsls.org",
+    "slack": "U0B1PMSKT0E",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Nancy Castillo",
+    "title": "Member Experience Specialist",
+    "manager": "Kara Klimuszko",
+    "email": "ncastillo@nsls.org",
+    "slack": "U05516H7B8A",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Eva Sheik",
+    "title": "Member Experience Specialist",
+    "manager": "Alejandro Gabriel",
+    "email": "esheik@nsls.org",
+    "slack": "U0ASCHYJ2UT",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Alaynie Smith",
+    "title": "Workforce Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "alsmith@nsls.org",
+    "slack": "U03EDCNTW5B",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Monica Cerrato",
+    "title": "Member Experience Specialist",
+    "manager": "Kara Klimuszko",
+    "email": "mcerrato@nsls.org",
+    "slack": "U02EG4YQ2UF",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Angel Guzman",
+    "title": "Membership Experience Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "aguzman@nsls.org",
+    "slack": "U0B1VBGR6DS",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Kimberly Campbell",
+    "title": "Director of Member Experience",
+    "manager": "Ashleigh Smith",
+    "email": "kcampbell@nsls.org",
+    "slack": "U021ZK0NW07",
+    "department": "Member Experience",
+    "manages": [
+      "Alaynie Smith",
+      "Alejandro Gabriel",
+      "Angel Guzman",
+      "Dania Chireno",
+      "Edgar Segura",
+      "Elian Castro",
+      "Emilia Santana",
+      "Kara Klimuszko",
+      "Maikel Berbi",
+      "Naomi Ariza",
+      "Rauly Villar",
+      "Reiny Garcia",
+      "Saray Rosado",
+      "Sofia Fader"
+    ]
+  },
+  {
+    "name": "Reiny Garcia",
+    "title": "Membership Experience Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "rcalderon@nsls.org",
+    "slack": "U0B1KCAN9SP",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Melissa Baggett",
+    "title": "Membership Experience Specialist",
+    "manager": "Kara Klimuszko",
+    "email": "mbaggett@nsls.org",
+    "slack": "U081X01AQA2",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Edgar Segura",
+    "title": "Client Services Manager",
+    "manager": "Kimberly Campbell",
+    "email": "esegura@nsls.org",
+    "slack": "U0A3PH5EA3G",
+    "department": "Member Experience",
+    "manages": [
+      "Jorge Alberto"
+    ]
+  },
+  {
+    "name": "Daniela Leonardo",
+    "title": "Member Experience Specialist",
+    "manager": "Alejandro Gabriel",
+    "email": "dleonardo@nsls.org",
+    "slack": "",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Rauly Villar",
+    "title": "Membership Experience Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "rvillar@nsls.org",
+    "slack": "U0B24L8CQD7",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Saray Rosado",
+    "title": "Membership Experience Specialist",
+    "manager": "Kimberly Campbell",
+    "email": "srosado@nsls.org",
+    "slack": "U0B1NBK7C21",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "Kevin Prentiss",
+    "title": "Ignite",
+    "manager": "Gary Tuerack",
+    "email": "kprentiss@nsls.org",
+    "slack": "U07TS8X7T7X",
+    "department": "Engineering",
+    "manages": [
+      "Brandon Evans",
+      "Chelsea Byers",
+      "Chris Higbee",
+      "David Adams",
+      "Davo Wood",
+      "Jana Amsellem",
+      "Juan Maggi",
+      "Lauren Prentiss",
+      "Trina Limpert",
+      "Tyler Lagaly"
+    ]
+  },
+  {
+    "name": "Evgeny Pokrovskiy",
+    "title": "Software QA Automation Eng",
+    "manager": "Juan Maggi",
+    "email": "epokrovskiy@nsls.org",
+    "slack": "U01AEB1JQ8Y",
+    "department": "Engineering",
+    "manages": []
+  },
+  {
+    "name": "Brandon Evans",
+    "title": "AWS Engineer",
+    "manager": "Kevin Prentiss",
+    "email": "bevans@nsls.org",
+    "slack": "U08CSE1A9CK",
+    "department": "Engineering",
+    "manages": []
+  },
+  {
+    "name": "David Adams",
+    "title": "Vice President of Technology",
+    "manager": "Kevin Prentiss",
+    "email": "dadams@nsls.org",
+    "slack": "U0A9KTSG4J2",
+    "department": "Engineering",
+    "manages": []
+  },
+  {
+    "name": "Juan Maggi",
+    "title": "Lead AI/ML Developer & Architect",
+    "manager": "Kevin Prentiss",
+    "email": "jmaggi@nsls.org",
+    "slack": "U02G96B39GQ",
+    "department": "Engineering",
+    "manages": [
+      "Evgeny Pokrovskiy",
+      "Kibaek Kim",
+      "Vadim Geroim"
+    ]
+  },
+  {
+    "name": "Angelica Evans",
+    "title": "Business Intelligence and Automation Lead",
+    "manager": "Jordyn Tannenbaum",
+    "email": "avillalobos@nsls.org",
+    "slack": "U02EQ4E2WDC",
+    "department": "Engineering",
+    "manages": []
+  },
+  {
+    "name": "Kibaek Kim",
+    "title": "Software Developer",
+    "manager": "Juan Maggi",
+    "email": "kkim@nsls.org",
+    "slack": "UJAC5NDKK",
+    "department": "Engineering",
+    "manages": []
+  },
+  {
+    "name": "Vadim Geroim",
+    "title": "PHP Developer",
+    "manager": "Juan Maggi",
+    "email": "vgeroim@nsls.org",
+    "slack": "U0895SB7DGF",
+    "department": "Engineering",
+    "manages": []
+  },
+  {
+    "name": "Rumzy Khalil",
+    "title": "Data Engineer",
+    "manager": "Jordyn Tannenbaum",
+    "email": "rkhalil@nsls.org",
+    "slack": "U0B1ZU3CC2C",
+    "department": "Business Intelligence",
+    "manages": []
+  },
+  {
+    "name": "Jordyn Tannenbaum",
+    "title": "Head of Data",
+    "manager": "Adam Stone",
+    "email": "jtannenbaum@nsls.org",
+    "slack": "U0A5FNH2A01",
+    "department": "Business Intelligence",
+    "manages": [
+      "Angelica Evans",
+      "Rumzy Khalil"
+    ]
+  },
+  {
+    "name": "Freda Hobbs",
+    "title": "Chapter Events Manager",
+    "manager": "Jordan Perry",
+    "email": "fhobbs@nsls.org",
+    "slack": "U06QJ0XDH0E",
+    "department": "Operations",
+    "manages": []
+  },
+  {
+    "name": "Joseph Cupka",
+    "title": "National Organizing Director",
+    "manager": "Adam Stone",
+    "email": "jcupka@nsls.org",
+    "slack": "U08U4FS008H",
+    "department": "Operations",
+    "manages": [
+      "Derald Dryman",
+      "Jordan Perry",
+      "LaShaundra Randolph",
+      "Whitney Jett"
+    ]
+  },
+  {
+    "name": "Dasha Cherkasov",
+    "title": "Chapter Event Manager",
+    "manager": "Jordan Perry",
+    "email": "dcherkasov@nsls.org",
+    "slack": "U02A8NJN1QF",
+    "department": "Operations",
+    "manages": []
+  },
+  {
+    "name": "Judy Mai-Vargas",
+    "title": "Operations Enablement Coordinator",
+    "manager": "Jordan Perry",
+    "email": "jvargas@nsls.org",
+    "slack": "U090NHBA79A",
+    "department": "Operations",
+    "manages": []
+  },
+  {
+    "name": "Derald Dryman",
+    "title": "Senior Manager of Brand and Community Engagement",
+    "manager": "Joseph Cupka",
+    "email": "ddryman@nsls.org",
+    "slack": "UCG6HQQ05",
+    "department": "Operations",
+    "manages": []
+  },
+  {
+    "name": "Jordan Perry",
+    "title": "Director, Programming",
+    "manager": "Joseph Cupka",
+    "email": "jperry@nsls.org",
+    "slack": "UCG43J6JW",
+    "department": "Operations",
+    "manages": [
+      "Dasha Cherkasov",
+      "Freda Hobbs",
+      "Judy Mai-Vargas"
+    ]
+  },
+  {
+    "name": "Chelsea Byers",
+    "title": "Head of Operations (Fractional)",
+    "manager": "Kevin Prentiss",
+    "email": "cbyers@nsls.org",
+    "slack": "U0AT9R3DAT1",
+    "department": "Operations",
+    "manages": []
+  },
+  {
+    "name": "Whitney Jett",
+    "title": "Compliance and Accreditation Manager",
+    "manager": "Joseph Cupka",
+    "email": "wjett@nsls.org",
+    "slack": "U05RKE7AAM7",
+    "department": "Operations",
+    "manages": []
+  },
+  {
+    "name": "Cory Capoccia",
     "title": "Board Member",
     "manager": "",
     "email": "ccapoccia@nsls.org",
@@ -956,48 +936,48 @@
     "slack": "U040YTX56DP",
     "department": "Executive",
     "manages": [
-      "Adam Lee Stone",
-      "Anish N Patel",
+      "Adam Stone",
+      "Anish Patel",
       "Ashleigh Smith",
       "Kevin Prentiss"
     ]
   },
   {
-    "name": "Juan Jose Cardenas",
+    "name": "Juan Cardenas",
     "title": "Jr. Staff Accountant",
-    "manager": "Sandra Cecilia Suarez",
+    "manager": "Sandra Suarez",
     "email": "jcardenas@nsls.org",
     "slack": "U05BAL618QY",
     "department": "Finance",
     "manages": []
   },
   {
-    "name": "Sandra Cecilia Suarez",
+    "name": "Sandra Suarez",
     "title": "Supervisor, Accounts Payable",
     "manager": "Valerie English",
     "email": "ssuarez@nsls.org",
     "slack": "U09DZ8YQRUZ",
     "department": "Finance",
     "manages": [
-      "Juan Jose Cardenas"
+      "Juan Cardenas"
     ]
   },
   {
-    "name": "Anish N Patel",
+    "name": "Anish Patel",
     "title": "Chief Financial Officer",
     "manager": "Gary Tuerack",
     "email": "apatel@nsls.org",
     "slack": "U04MU8SUEVA",
     "department": "Finance",
     "manages": [
-      "Erin Jana Muskat",
+      "Erin Muskat",
       "Valerie English"
     ]
   },
   {
-    "name": "Erin Jana Muskat",
+    "name": "Erin Muskat",
     "title": "Senior Director, Financial Planning & Analysis",
-    "manager": "Anish N Patel",
+    "manager": "Anish Patel",
     "email": "emuskat@nsls.org",
     "slack": "U08VCAK3L0Z",
     "department": "Finance",
@@ -1015,13 +995,13 @@
   {
     "name": "Valerie English",
     "title": "Manager, Accounting",
-    "manager": "Anish N Patel",
+    "manager": "Anish Patel",
     "email": "venglish@nsls.org",
     "slack": "U03JPRXN2BV",
     "department": "Finance",
     "manages": [
       "Irina Haikin",
-      "Sandra Cecilia Suarez"
+      "Sandra Suarez"
     ]
   },
   {
@@ -1066,9 +1046,9 @@
     ]
   },
   {
-    "name": "Devin J. Lasker",
+    "name": "Devin Lasker",
     "title": "Vice President of Strategic Partnerships",
-    "manager": "Adam Lee Stone",
+    "manager": "Adam Stone",
     "email": "dlasker@nsls.org",
     "slack": "UA1JFKPUP",
     "department": "Sales",
@@ -1084,7 +1064,7 @@
     "manages": []
   },
   {
-    "name": "Karina Solis Gonzalez",
+    "name": "Karina Gonzalez",
     "title": "Senior Regional Director of Program Development",
     "manager": "Hannah Stoneburner",
     "email": "ksolis@nsls.org",
@@ -1110,7 +1090,7 @@
     "department": "Program Development",
     "manages": [
       "Daniel Harris",
-      "Karina Solis Gonzalez",
+      "Karina Gonzalez",
       "Stephanie Repaci"
     ]
   }
