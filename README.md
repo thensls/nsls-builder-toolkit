@@ -33,6 +33,7 @@ Then open Claude Code and say `/setup` to connect your tools and optionally inst
 | **/pydoc-pipeline** | Generate documentation from Python code |
 | **/web-research** | Structured web research |
 | **/interrogate** | Deep-dive investigation skill |
+| **/signal-setup** | Wire Claude Code into Signal — query Quick Notes, wins, friction, team summaries. Managers + execs only. |
 
 ## Strategy & Knowledge Work
 
