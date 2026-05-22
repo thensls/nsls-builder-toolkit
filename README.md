@@ -34,6 +34,7 @@ Then open Claude Code and say `/setup` to connect your tools and optionally inst
 | **/web-research** | Structured web research |
 | **/interrogate** | Deep-dive investigation skill |
 | **/signal-setup** | Wire Claude Code into Signal — query Quick Notes, wins, friction, team summaries. Managers + execs only. |
+| **/feature-branch-protocol-template** | Template for building your own work-discipline skill — setup, checkpoints, irreversible-step rules, final handoff. Copy to `~/.claude/skills/` and fill in your own preferences. Red's developer version included as a seed. |
 
 ## Strategy & Knowledge Work
 
