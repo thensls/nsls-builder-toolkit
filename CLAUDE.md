@@ -37,6 +37,7 @@ The install script sets up three things:
 
 ### Git operations
 - Use **Compound Engineering**: `git-commit`, `git-commit-push-pr`, `git-clean-gone-branches`
+- `/feature-branch-protocol-template` — optional template for builders who want their own work-discipline skill (setup, checkpoints, irreversible-step rules, final handoff). Includes Red's developer version as a seed.
 
 ### Process discipline (always active)
 - **Superpowers** `using-superpowers` fires every session — it ensures skills get checked before acting
