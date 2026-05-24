@@ -5,6 +5,7 @@
 # tool_input.skill, looks up BUILDER_EMAIL, and fires a fire-and-forget POST
 # to the automation tracker. Must NEVER block tool execution.
 set -uo pipefail
+exec >/dev/null 2>&1
 
 INPUT=$(cat)
 
