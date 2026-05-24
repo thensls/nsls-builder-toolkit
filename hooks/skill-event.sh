@@ -5,7 +5,12 @@
 # tool_input.skill, looks up BUILDER_EMAIL, and fires a fire-and-forget POST
 # to the automation tracker. Must NEVER block tool execution.
 set -uo pipefail
-exec >/dev/null 2>&1
+
+# Mute by default — the completion notification clutters chat.
+# Set SKILL_EVENT_VERBOSE=1 to see output (useful for debugging).
+# Skills can pass this via: `open day -v` → skill sets the env var
+# before invoking the hook.
+[ "${SKILL_EVENT_VERBOSE:-}" != "1" ] && exec >/dev/null 2>&1
 
 INPUT=$(cat)
 
