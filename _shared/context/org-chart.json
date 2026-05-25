@@ -466,15 +466,6 @@
     ]
   },
   {
-    "name": "Dania Chireno",
-    "title": "Membership Experience Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "dchireno@nsls.org",
-    "slack": "",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
     "name": "Karla Mena",
     "title": "Member Experience Specialist",
     "manager": "Alejandro Gabriel",
@@ -542,8 +533,6 @@
     "slack": "U0A7E0JCNBU",
     "department": "Member Experience",
     "manages": [
-      "Daniela Leonardo",
-      "Eva Sheik",
       "Franklin Ortega",
       "Jennifer Peguero",
       "Karla Mena"
@@ -613,15 +602,6 @@
     "manages": []
   },
   {
-    "name": "Eva Sheik",
-    "title": "Member Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "esheik@nsls.org",
-    "slack": "U0ASCHYJ2UT",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
     "name": "Alaynie Smith",
     "title": "Workforce Specialist",
     "manager": "Kimberly Campbell",
@@ -659,7 +639,6 @@
       "Alaynie Smith",
       "Alejandro Gabriel",
       "Angel Guzman",
-      "Dania Chireno",
       "Edgar Segura",
       "Elian Castro",
       "Emilia Santana",
@@ -700,15 +679,6 @@
     "manages": [
       "Jorge Alberto"
     ]
-  },
-  {
-    "name": "Daniela Leonardo",
-    "title": "Member Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "dleonardo@nsls.org",
-    "slack": "",
-    "department": "Member Experience",
-    "manages": []
   },
   {
     "name": "Rauly Villar",

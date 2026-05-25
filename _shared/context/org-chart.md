@@ -1,5 +1,5 @@
 # NSLS Org Chart
-_Last synced: 2026-05-18_
+_Last synced: 2026-05-25_
 
 ## Business Intelligence
 
@@ -110,12 +110,9 @@ _Last synced: 2026-05-18_
 | Angel Guzman | Membership Experience Specialist | Kimberly Campbell | aguzman@nsls.org | U0B1VBGR6DS |
 | Atrayu Polhemus | Membership Experience Specialist | Kara Klimuszko | apolhemus@nsls.org | U08E6QG6KUM |
 | Charlotte Donnelly | Member Experience Specialist | Kara Klimuszko | cdonnelly@nsls.org | U05DKQE1J3H |
-| Dania Chireno | Membership Experience Specialist | Kimberly Campbell | dchireno@nsls.org |  |
-| Daniela Leonardo | Member Experience Specialist | Alejandro Gabriel | dleonardo@nsls.org |  |
 | Edgar Segura | Client Services Manager | Kimberly Campbell | esegura@nsls.org | U0A3PH5EA3G |
 | Elian Castro | Membership Experience Specialist | Kimberly Campbell | ecastro@nsls.org | U0B1NBFJACD |
 | Emilia Santana | Membership Experience Specialist | Kimberly Campbell | esantana@nsls.org | U0B1PMSKT0E |
-| Eva Sheik | Member Experience Specialist | Alejandro Gabriel | esheik@nsls.org | U0ASCHYJ2UT |
 | Franklin Ortega | Member Experience Specialist | Alejandro Gabriel | fortega@nsls.org | U0A7BUY5EG6 |
 | Jennifer Peguero | Member Experience Specialist | Alejandro Gabriel | apeguero@nsls.org | U0AS9A3RLJY |
 | Jorge Alberto | Trainer | Edgar Segura | jalberto@nsls.org | U0A7AHB67UM |
