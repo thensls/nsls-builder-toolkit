@@ -1,0 +1,8 @@
+# Normalize line endings so scripts checked out on Windows don't get CRLF,
+# which breaks shebang scripts and confuses Node when comparing token files.
+* text=auto eol=lf
+
+# Binaries and lockfiles: leave untouched.
+*.png binary
+*.jpg binary
+*.pdf binary

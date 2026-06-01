@@ -1,0 +1,35 @@
+name: MCP smoke test
+
+# Boots the bundled MCP server(s) on both macOS and Windows to catch
+# platform-specific launch regressions (POSIX-only paths, shell wrappers,
+# CRLF shebangs) BEFORE they ship to a builder. The Signal MCP broke on
+# Windows because it was launched via a .sh wrapper Windows can't exec —
+# this matrix would have caught it on the PR.
+
+on:
+  pull_request:
+    paths:
+      - 'mcp-servers/**'
+      - '.mcp.json'
+      - '.github/workflows/mcp-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'mcp-servers/**'
+      - '.mcp.json'
+      - '.github/workflows/mcp-smoke.yml'
+
+jobs:
+  selftest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Signal MCP boots on ${{ matrix.os }}
+        run: node mcp-servers/signal/signal-mcp.js --selftest
