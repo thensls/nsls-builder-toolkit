@@ -533,13 +533,13 @@
     "slack": "U0A7E0JCNBU",
     "department": "Member Experience",
     "manages": [
+      "Alex Peguero",
       "Franklin Ortega",
-      "Jennifer Peguero",
       "Karla Mena"
     ]
   },
   {
-    "name": "Jennifer Peguero",
+    "name": "Alex Peguero",
     "title": "Member Experience Specialist",
     "manager": "Alejandro Gabriel",
     "email": "apeguero@nsls.org",
