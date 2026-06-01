@@ -107,11 +107,15 @@ curl -s -o /dev/null -w "%{http_code}\n" \
   https://employee-profiles-production.up.railway.app/api/mcp/wins?weeks=1
 ```
 
-Windows (PowerShell):
+Windows (PowerShell — works on the default 5.1; `-SkipHttpErrorCheck` is 7+ only, so catch the 401/403 instead):
 ```powershell
 $tok = (Get-Content "$HOME\.config\nsls\signal-token" -Raw).Trim()
-(Invoke-WebRequest -Uri "https://employee-profiles-production.up.railway.app/api/mcp/wins?weeks=1" `
-  -Headers @{ Authorization = "Bearer $tok" } -SkipHttpErrorCheck).StatusCode
+$uri = "https://employee-profiles-production.up.railway.app/api/mcp/wins?weeks=1"
+try {
+  (Invoke-WebRequest -Uri $uri -Headers @{ Authorization = "Bearer $tok" }).StatusCode
+} catch {
+  $_.Exception.Response.StatusCode.value__   # prints 401 / 403 on a rejected token
+}
 ```
 
 - `200` — working. They'll see results once they restart.

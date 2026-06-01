@@ -17,6 +17,7 @@ on:
     paths:
       - 'mcp-servers/**'
       - '.mcp.json'
+      - '.github/workflows/mcp-smoke.yml'
 
 jobs:
   selftest:
