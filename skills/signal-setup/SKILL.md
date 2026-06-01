@@ -112,7 +112,7 @@ Windows (PowerShell — works on the default 5.1; `-SkipHttpErrorCheck` is 7+ on
 $tok = (Get-Content "$HOME\.config\nsls\signal-token" -Raw).Trim()
 $uri = "https://employee-profiles-production.up.railway.app/api/mcp/wins?weeks=1"
 try {
-  (Invoke-WebRequest -Uri $uri -Headers @{ Authorization = "Bearer $tok" }).StatusCode
+  (Invoke-WebRequest -UseBasicParsing -Uri $uri -Headers @{ Authorization = "Bearer $tok" }).StatusCode
 } catch {
   $_.Exception.Response.StatusCode.value__   # prints 401 / 403 on a rejected token
 }
