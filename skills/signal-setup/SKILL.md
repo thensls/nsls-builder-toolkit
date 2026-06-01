@@ -93,8 +93,15 @@ Never echo the token back in chat output. Don't include it in commit messages, s
 
 The most reliable cross-platform check is the server's own self-test — it confirms Node can launch the bundled server on this machine (no token needed):
 
+macOS/Linux:
 ```sh
 node "$CLAUDE_PLUGIN_ROOT/mcp-servers/signal/signal-mcp.js" --selftest
+# expect: signal-mcp: selftest OK — 6 tools registered, <platform>, node <version>
+```
+
+Windows (PowerShell — note `$env:` prefix and backslashes):
+```powershell
+node "$env:CLAUDE_PLUGIN_ROOT\mcp-servers\signal\signal-mcp.js" --selftest
 # expect: signal-mcp: selftest OK — 6 tools registered, <platform>, node <version>
 ```
 
