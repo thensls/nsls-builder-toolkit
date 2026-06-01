@@ -17,7 +17,7 @@ Signal (the people-ops bot powering Quick Notes, wins, and friction signals) exp
 
 After setup you'll have six new tools in Claude Code: `signal_team_summary`, `signal_wins`, `signal_friction`, `signal_person`, `signal_person_history`, `signal_person_goals`.
 
-**Works on macOS, Linux, and Windows.** The MCP server is launched directly as `node signal-mcp.js` (no shell wrapper), so it runs identically on every OS. The only host requirement is **Node.js 18+ on the PATH** — the server is a Node program. Each step below gives a macOS/Linux (`sh`) form and a Windows (PowerShell) form; use whichever matches the builder's machine.
+**Works on macOS, Linux, and Windows.** The MCP server is launched directly as `node signal-mcp.js` (no shell wrapper), so it runs identically on every OS. The only host requirement is **Node.js 20+ on the PATH** — the bundle is built for Node 20 (and CI tests on it), so older majors may hit unsupported syntax. Each step below gives a macOS/Linux (`sh`) form and a Windows (PowerShell) form; use whichever matches the builder's machine.
 
 ## Who can use this
 
@@ -39,7 +39,7 @@ The MCP server runs as `node signal-mcp.js`, so Node must be on the PATH. Check 
 node --version   # works on macOS, Linux, and Windows (PowerShell or cmd)
 ```
 
-If this prints a version ≥ v18, continue. If it errors (`command not found` / `not recognized`), the builder must install Node first:
+If this prints a version ≥ v20, continue. If it errors (`command not found` / `not recognized`), the builder must install Node first:
 - **macOS**: `brew install node` (or download from nodejs.org)
 - **Windows**: download the LTS installer from https://nodejs.org and re-open Claude Code afterward so the new PATH is picked up.
 
@@ -105,13 +105,15 @@ node "$env:CLAUDE_PLUGIN_ROOT\mcp-servers\signal\signal-mcp.js" --selftest
 # expect: signal-mcp: selftest OK — 6 tools registered, <platform>, node <version>
 ```
 
+`CLAUDE_PLUGIN_ROOT` is set inside the plugin's `.mcp.json`/hook context but is not guaranteed to be exported into a plain terminal. When running this by hand, substitute the real path — the `mcp-servers/signal/signal-mcp.js` inside the installed `nsls-builder-toolkit` plugin directory (the same folder this skill loaded from).
+
 Then confirm the token is accepted by the API.
 
 macOS/Linux:
 ```sh
 curl -s -o /dev/null -w "%{http_code}\n" \
   -H "Authorization: Bearer $(cat ~/.config/nsls/signal-token)" \
-  https://employee-profiles-production.up.railway.app/api/mcp/wins?weeks=1
+  "https://employee-profiles-production.up.railway.app/api/mcp/wins?weeks=1"
 ```
 
 Windows (PowerShell — works on the default 5.1; `-SkipHttpErrorCheck` is 7+ only, so catch the 401/403 instead):
