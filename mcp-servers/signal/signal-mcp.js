@@ -6872,18 +6872,23 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs, exportName) {
+    function addFormats(ajv, list, fs2, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs[f]);
+        ajv.addFormat(f, fs2[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.default = formatsPlugin;
   }
 });
+
+// src/index.ts
+import os from "node:os";
+import nodePath from "node:path";
+import fs from "node:fs";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -15446,12 +15451,30 @@ var StdioServerTransport = class {
 };
 
 // src/index.ts
+var SELFTEST = process.argv.includes("--selftest");
 var BASE_URL = (process.env.SIGNAL_API_URL ?? "https://employee-profiles-production.up.railway.app").replace(/\/$/, "");
-var TOKEN = process.env.SIGNAL_API_TOKEN;
-if (!TOKEN) {
-  console.error("signal-mcp: SIGNAL_API_TOKEN env var required");
-  process.exit(1);
+function loadToken() {
+  const envToken = process.env.SIGNAL_API_TOKEN?.trim();
+  if (envToken) return envToken;
+  const configDir = process.env.XDG_CONFIG_HOME ? nodePath.join(process.env.XDG_CONFIG_HOME, "nsls") : nodePath.join(os.homedir(), ".config", "nsls");
+  const tokenFile = nodePath.join(configDir, "signal-token");
+  let raw;
+  try {
+    raw = fs.readFileSync(tokenFile, "utf8");
+  } catch {
+    console.error(
+      `signal-mcp: no token found. Set SIGNAL_API_TOKEN or create ${tokenFile} (run /signal-setup in Claude Code).`
+    );
+    process.exit(1);
+  }
+  const token = raw.trim();
+  if (!token) {
+    console.error(`signal-mcp: token file at ${tokenFile} is empty (run /signal-setup in Claude Code).`);
+    process.exit(1);
+  }
+  return token;
 }
+var TOKEN = SELFTEST ? "selftest-no-token" : loadToken();
 async function call(path, params = {}) {
   const url = new URL(BASE_URL + path);
   for (const [k, v] of Object.entries(params)) {
@@ -15586,4 +15609,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 });
+if (SELFTEST) {
+  console.log(`signal-mcp: selftest OK \u2014 ${tools.length} tools registered, ${process.platform}/${process.arch}, node ${process.version}`);
+  process.exit(0);
+}
 await server.connect(new StdioServerTransport());

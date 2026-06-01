@@ -2,8 +2,8 @@
   "mcpServers": {
     "signal": {
       "type": "stdio",
-      "command": "${CLAUDE_PLUGIN_ROOT}/mcp-servers/signal/signal-mcp.sh",
-      "args": []
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp-servers/signal/signal-mcp.js"]
     }
   }
 }

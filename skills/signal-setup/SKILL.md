@@ -17,6 +17,8 @@ Signal (the people-ops bot powering Quick Notes, wins, and friction signals) exp
 
 After setup you'll have six new tools in Claude Code: `signal_team_summary`, `signal_wins`, `signal_friction`, `signal_person`, `signal_person_history`, `signal_person_goals`.
 
+**Works on macOS, Linux, and Windows.** The MCP server is launched directly as `node signal-mcp.js` (no shell wrapper), so it runs identically on every OS. The only host requirement is **Node.js 18+ on the PATH** — the server is a Node program. Each step below gives a macOS/Linux (`sh`) form and a Windows (PowerShell) form; use whichever matches the builder's machine.
+
 ## Who can use this
 
 - **Executives** (people.app_role = 'executive'): org-wide on `wins`, `friction`, `person/*`. `team_summary` returns your own direct reports unless you pass `manager_slug`.
@@ -29,10 +31,28 @@ If you're not sure, run setup anyway — the first tool call will tell you.
 
 When the user invokes /signal-setup:
 
-### Step 1 — Check existing state
+### Step 0 — Confirm Node.js is installed
+
+The MCP server runs as `node signal-mcp.js`, so Node must be on the PATH. Check first — a missing Node is the most common Windows failure, and it shows up as "tools never appear" with no error.
 
 ```sh
+node --version   # works on macOS, Linux, and Windows (PowerShell or cmd)
+```
+
+If this prints a version ≥ v18, continue. If it errors (`command not found` / `not recognized`), the builder must install Node first:
+- **macOS**: `brew install node` (or download from nodejs.org)
+- **Windows**: download the LTS installer from https://nodejs.org and re-open Claude Code afterward so the new PATH is picked up.
+
+### Step 1 — Check existing state
+
+macOS/Linux:
+```sh
 test -f ~/.config/nsls/signal-token && echo "token exists" || echo "no token"
+```
+
+Windows (PowerShell):
+```powershell
+if (Test-Path "$HOME\.config\nsls\signal-token") { "token exists" } else { "no token" }
 ```
 
 If a token exists, ask whether to rotate or just verify the existing one.
@@ -49,8 +69,9 @@ Then prompt them to paste it into Claude Code.
 
 ### Step 3 — Write the token file
 
-Use Bash to write the token with strict permissions. The token file lives at `~/.config/nsls/signal-token`:
+Write the token to `~/.config/nsls/signal-token` (the server reads this exact path on every OS via `os.homedir()`).
 
+macOS/Linux — strict permissions via umask:
 ```sh
 mkdir -p ~/.config/nsls
 umask 077  # so the file is created mode 600
@@ -58,14 +79,39 @@ printf '%s' '<TOKEN>' > ~/.config/nsls/signal-token
 chmod 600 ~/.config/nsls/signal-token
 ```
 
+Windows (PowerShell) — `chmod`/`umask` don't exist; create the dir and write the file without a trailing newline:
+```powershell
+$dir = "$HOME\.config\nsls"
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+[IO.File]::WriteAllText("$dir\signal-token", '<TOKEN>')
+```
+(NTFS file permissions already restrict the file to the user profile; no explicit chmod needed.)
+
 Never echo the token back in chat output. Don't include it in commit messages, summaries, or anywhere else it could be persisted.
 
 ### Step 4 — Verify
 
+The most reliable cross-platform check is the server's own self-test — it confirms Node can launch the bundled server on this machine (no token needed):
+
+```sh
+node "$CLAUDE_PLUGIN_ROOT/mcp-servers/signal/signal-mcp.js" --selftest
+# expect: signal-mcp: selftest OK — 6 tools registered, <platform>, node <version>
+```
+
+Then confirm the token is accepted by the API.
+
+macOS/Linux:
 ```sh
 curl -s -o /dev/null -w "%{http_code}\n" \
   -H "Authorization: Bearer $(cat ~/.config/nsls/signal-token)" \
   https://employee-profiles-production.up.railway.app/api/mcp/wins?weeks=1
+```
+
+Windows (PowerShell):
+```powershell
+$tok = (Get-Content "$HOME\.config\nsls\signal-token" -Raw).Trim()
+(Invoke-WebRequest -Uri "https://employee-profiles-production.up.railway.app/api/mcp/wins?weeks=1" `
+  -Headers @{ Authorization = "Bearer $tok" } -SkipHttpErrorCheck).StatusCode
 ```
 
 - `200` — working. They'll see results once they restart.
@@ -87,14 +133,18 @@ If a token is compromised or the user just wants a fresh one:
 
 ## Common failures
 
-**`signal-mcp: token not found at ...`** in MCP server logs → the wrapper script can't find the token file. Confirm it exists at `~/.config/nsls/signal-token` and is readable.
+**`signal-mcp: no token found ...`** in MCP server logs → the server couldn't find a token. Confirm the file exists at `~/.config/nsls/signal-token` and is readable. (The server resolves this path with `os.homedir()`, so it's the same location on every OS.)
+
+**`node: command not found` / `'node' is not recognized`, or the `signal` server silently never appears** → Node isn't installed or isn't on the PATH. This is the #1 Windows failure. Re-run Step 0; on Windows, install Node from nodejs.org and fully restart Claude Code so the PATH refreshes.
 
 **`401 unknown token`** → the token was rotated somewhere else (e.g. the user clicked the button again from a different browser). Re-mint and re-run setup.
 
 **`403 token owner has no team access`** → the user's `app_role` is `standard` and they have no direct reports. Either Airtable isn't reflecting their team, or they genuinely don't manage anyone yet.
 
-**Tools still missing after restart** → run `/mcp` in Claude Code to see if the `signal` server is listed. If it's not, the `nsls-builder-toolkit` plugin might not be enabled. Run `/setup` to check plugin state.
+**Tools still missing after restart** → run `/mcp` in Claude Code to see if the `signal` server is listed. If it's listed but errored, run the `--selftest` from Step 4 to see the failure. If it's not listed at all, the `nsls-builder-toolkit` plugin might not be enabled — run `/setup` to check plugin state.
 
-## Why not just an env var
+## Why a token file (not an env var, not a shell wrapper)
 
-The MCP server runs whenever Claude Code spawns it — it doesn't inherit the user's interactive shell env. Putting `SIGNAL_API_TOKEN=...` in `~/.zshrc` works only if Claude Code is launched from a shell that has sourced it. The file-based approach avoids that footgun: the wrapper reads the token at every spawn, regardless of how Claude Code was launched.
+The MCP server runs whenever Claude Code spawns it — it doesn't inherit the user's interactive shell env. Putting `SIGNAL_API_TOKEN=...` in `~/.zshrc` works only if Claude Code is launched from a shell that has sourced it. The file-based approach avoids that footgun: the server reads the token at every spawn, regardless of how Claude Code was launched.
+
+Earlier versions used a POSIX shell wrapper (`signal-mcp.sh`) to read the token and `exec node`. That broke on Windows, which can't launch a `.sh` as a command — the server failed to start with no visible error. The token-reading now lives inside the Node server (`loadToken()`), and `.mcp.json` invokes `node` directly, so there's no OS-specific glue left.
