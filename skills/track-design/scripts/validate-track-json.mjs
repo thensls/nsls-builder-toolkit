@@ -128,22 +128,32 @@ export function validateTracks(tracks, opts = {}) {
   return { errors, warnings };
 }
 
+// ---- CLI arg parsing (exported for testing) ----
+export function parseArgs(args) {
+  const assumeClarity = args.includes("--assume-clarity");
+  const eqArg = args.find((a) => a.startsWith("--assume="));
+  const spaceIdx = args.indexOf("--assume");
+  const assume = eqArg
+    ? eqArg.split("=")[1].split(",").map((s) => s.trim()).filter(Boolean)
+    : (spaceIdx !== -1 && args[spaceIdx + 1] && !args[spaceIdx + 1].startsWith("--")
+        ? args[spaceIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+        : []);
+  // file = last positional that isn't a flag and isn't the value consumed by `--assume <value>`
+  const consumed = new Set();
+  if (!eqArg && spaceIdx !== -1 && args[spaceIdx + 1] && !args[spaceIdx + 1].startsWith("--")) consumed.add(spaceIdx + 1);
+  const file = args.findLast((a, i) => !a.startsWith("--") && !consumed.has(i));
+  return { file, assume, assumeClarity };
+}
+
 // ---- CLI ----
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const args = process.argv.slice(2);
-  const file = args.find((a) => !a.startsWith("--"));
-  const assumeArg = args.find((a) => a.startsWith("--assume="))?.split("=")[1]
-    || (args.includes("--assume") ? args[args.indexOf("--assume") + 1] : undefined);
-  const assumeClarity = args.includes("--assume-clarity");
+  const { file, assume, assumeClarity } = parseArgs(process.argv.slice(2));
   if (!file) { console.error("Usage: node validate-track-json.mjs <tracks.json> [--assume a,b] [--assume-clarity]"); process.exit(2); }
   const { readFileSync } = await import("node:fs");
   let data;
   try { data = JSON.parse(readFileSync(file, "utf8")); }
   catch (e) { console.error(`Could not read/parse ${file}: ${e.message}`); process.exit(2); }
-  const { errors, warnings } = validateTracks(data, {
-    assume: assumeArg ? assumeArg.split(",").map((s) => s.trim()).filter(Boolean) : [],
-    assumeClarity
-  });
+  const { errors, warnings } = validateTracks(data, { assume, assumeClarity });
   for (const w of warnings) console.warn(`WARN  ${w}`);
   for (const e of errors) console.error(`ERROR ${e}`);
   if (errors.length) { console.error(`\n${errors.length} error(s), ${warnings.length} warning(s).`); process.exit(1); }

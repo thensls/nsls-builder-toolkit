@@ -97,7 +97,9 @@ These are set by the seed or are DB-managed and will be ignored or overwritten:
 
 ### Optional fields with seed defaults
 
-Every field below is read by `buildSubstepData` in `seed.ts`. Absence is detected via `"fieldName" in sub`, so `null` and omission are treated identically.
+Every field below is read by `buildSubstepData` in `seed.ts`. Absence is detected via `"fieldName" in sub`.
+
+> **To get a field's default, OMIT the key entirely. Do NOT emit an explicit `null`.** The seed uses `"field" in sub ? sub.field : default`, and `in` is true for an explicit `null` — so `null` overrides the default and is written to the DB. This matters for fields with non-null defaults (`showTitle`, `celebrationShowConfetti`, `celebrationConfettiCount`, `celebrationShowPath`, `freeResponseEnabled`, `autoProgressOnSelect`, `isAssessmentQuestion`, and the array fields `suggestions`, `dropdownOptions`, `checkboxOptions`, `bannerTexts`, `celebrationTasks`). The JSON generator must only include keys it intends to set.
 
 | Field | Type | Seed default |
 |-------|------|--------------|

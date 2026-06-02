@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateTracks } from "./validate-track-json.mjs";
+import { validateTracks, parseArgs } from "./validate-track-json.mjs";
 
 const goodTracks = [
   {
@@ -84,4 +84,26 @@ test("unknown fieldType is a warning, not an error", () => {
 test("top level must be an array", () => {
   const { errors } = validateTracks({ id: "x" });
   assert.ok(errors.some((e) => /array/i.test(e)));
+});
+
+// ---- parseArgs tests ----
+
+test("parseArgs: space-form --assume picks correct file", () => {
+  const result = parseArgs(["--assume", "a,b", "tracks.json"]);
+  assert.deepEqual(result, { file: "tracks.json", assume: ["a", "b"], assumeClarity: false });
+});
+
+test("parseArgs: equals-form --assume=a,b picks correct file", () => {
+  const result = parseArgs(["--assume=a,b", "tracks.json"]);
+  assert.deepEqual(result, { file: "tracks.json", assume: ["a", "b"], assumeClarity: false });
+});
+
+test("parseArgs: --assume-clarity flag with file", () => {
+  const result = parseArgs(["tracks.json", "--assume-clarity"]);
+  assert.deepEqual(result, { file: "tracks.json", assume: [], assumeClarity: true });
+});
+
+test("parseArgs: file only", () => {
+  const result = parseArgs(["tracks.json"]);
+  assert.deepEqual(result, { file: "tracks.json", assume: [], assumeClarity: false });
 });

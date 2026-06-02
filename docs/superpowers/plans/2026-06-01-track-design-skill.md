@@ -470,19 +470,14 @@ export function validateTracks(tracks, opts = {}) {
 // ---- CLI ----
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
-  const file = args.find((a) => !a.startsWith("--"));
-  const assumeArg = args.find((a) => a.startsWith("--assume="))?.split("=")[1]
-    || (args.includes("--assume") ? args[args.indexOf("--assume") + 1] : undefined);
-  const assumeClarity = args.includes("--assume-clarity");
+  // CLI arg parsing later refactored to an exported parseArgs() — see the shipped file.
+  const { file, assume, assumeClarity } = parseArgs(process.argv.slice(2));
   if (!file) { console.error("Usage: node validate-track-json.mjs <tracks.json> [--assume a,b] [--assume-clarity]"); process.exit(2); }
   const { readFileSync } = await import("node:fs");
   let data;
   try { data = JSON.parse(readFileSync(file, "utf8")); }
   catch (e) { console.error(`Could not read/parse ${file}: ${e.message}`); process.exit(2); }
-  const { errors, warnings } = validateTracks(data, {
-    assume: assumeArg ? assumeArg.split(",").map((s) => s.trim()).filter(Boolean) : [],
-    assumeClarity
-  });
+  const { errors, warnings } = validateTracks(data, { assume, assumeClarity });
   for (const w of warnings) console.warn(`WARN  ${w}`);
   for (const e of errors) console.error(`ERROR ${e}`);
   if (errors.length) { console.error(`\n${errors.length} error(s), ${warnings.length} warning(s).`); process.exit(1); }
