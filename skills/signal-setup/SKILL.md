@@ -43,7 +43,37 @@ If this prints a version ≥ v20, continue. If it errors (`command not found` / 
 - **macOS**: `brew install node` (or download from nodejs.org)
 - **Windows**: download the LTS installer from https://nodejs.org and re-open Claude Code afterward so the new PATH is picked up.
 
-### Step 1 — Check existing state
+### Step 1 — Register the MCP server (the part that's silently missing)
+
+This is the #1 reason `signal_*` tools never appear even when Node and the token are perfect. The toolkit is *locally enabled* (an `enabledPlugins` entry), not marketplace-installed. Local enable loads skills/commands/hooks but does **not** register a plugin's bundled `.mcp.json` MCP server — so `signal` is absent from `/mcp` and `claude mcp list`, not failed, just never loaded.
+
+Fix it by registering the server explicitly at user scope, pointing at the absolute path of this plugin (the directory this skill loaded from — `$CLAUDE_PLUGIN_ROOT`, e.g. `~/.claude/local-plugins/nsls-builder-toolkit`). Substitute the real path; don't rely on `$CLAUDE_PLUGIN_ROOT` being exported into a plain terminal (it usually isn't). `claude mcp add` is idempotent — if it's already registered it prints "already exists" and changes nothing, so it's always safe to run.
+
+First check whether it's already there:
+
+```sh
+claude mcp get signal     # "No MCP server found" → register it below; otherwise skip to Step 2
+```
+
+macOS/Linux — register (replace `<PLUGIN_ROOT>` with the real absolute path):
+```sh
+claude mcp add signal --scope user \
+  --env CLAUDE_PLUGIN_ROOT="<PLUGIN_ROOT>" \
+  -- node "<PLUGIN_ROOT>/mcp-servers/signal/signal-mcp.js"
+```
+
+Windows (PowerShell) — same command, backslashes, real path substituted:
+```powershell
+claude mcp add signal --scope user `
+  --env CLAUDE_PLUGIN_ROOT="<PLUGIN_ROOT>" `
+  -- node "<PLUGIN_ROOT>\mcp-servers\signal\signal-mcp.js"
+```
+
+This writes to `~/.claude.json`. Verify with `claude mcp get signal` (expect `Scope: User config`). Reversible with `claude mcp remove signal -s user`. The server points at the same local-plugins path the auto-update hook git-pulls, so future updates to `signal-mcp.js` flow through on the next session. Tools bind at session start, so they appear after the restart in the final step — not immediately.
+
+> New installs already do this automatically (`install.sh` registers every server in `.mcp.json`). This step is the self-heal for anyone who installed before that landed, or whose registration got removed.
+
+### Step 2 — Check existing state
 
 macOS/Linux:
 ```sh
@@ -57,7 +87,7 @@ if (Test-Path "$HOME\.config\nsls\signal-token") { "token exists" } else { "no t
 
 If a token exists, ask whether to rotate or just verify the existing one.
 
-### Step 2 — Mint the token
+### Step 3 — Mint the token
 
 Tell the user to:
 
@@ -67,7 +97,7 @@ Tell the user to:
 
 Then prompt them to paste it into Claude Code.
 
-### Step 3 — Write the token file
+### Step 4 — Write the token file
 
 Write the token to `~/.config/nsls/signal-token` (the server reads this exact path on every OS via `os.homedir()`).
 
@@ -89,7 +119,7 @@ New-Item -ItemType Directory -Force -Path $dir | Out-Null
 
 Never echo the token back in chat output. Don't include it in commit messages, summaries, or anywhere else it could be persisted.
 
-### Step 4 — Verify
+### Step 5 — Verify
 
 The most reliable cross-platform check is the server's own self-test — it confirms Node can launch the bundled server on this machine (no token needed):
 
@@ -131,7 +161,7 @@ try {
 - `401` — token rejected. Likely typo or trailing whitespace; have them re-paste.
 - `403` — token works but they're a `standard` role. Tell them this skill isn't for them.
 
-### Step 5 — Tell them to restart
+### Step 6 — Tell them to restart
 
 Claude Code only registers MCP servers at session start. Tell the user:
 
@@ -154,7 +184,7 @@ If a token is compromised or the user just wants a fresh one:
 
 **`403 token owner has no team access`** → the user's `app_role` is `standard` and they have no direct reports. Either Airtable isn't reflecting their team, or they genuinely don't manage anyone yet.
 
-**Tools still missing after restart** → run `/mcp` in Claude Code to see if the `signal` server is listed. If it's listed but errored, run the `--selftest` from Step 4 to see the failure. If it's not listed at all, the `nsls-builder-toolkit` plugin might not be enabled — run `/setup` to check plugin state.
+**Tools still missing after restart** → run `/mcp` (or `claude mcp list`) to see if the `signal` server is listed. If it's listed but errored, run the `--selftest` from Step 5 to see the failure. If it's **not listed at all**, the server was never registered — this is the local-enable gap from Step 1, *not* a disabled plugin. Don't re-run `/setup` or re-enable the plugin; that won't register the MCP server. Run the `claude mcp add` from Step 1 (`claude mcp get signal` first to confirm it's absent), then restart.
 
 ## Why a token file (not an env var, not a shell wrapper)
 
