@@ -6,6 +6,12 @@
 # to the automation tracker. Must NEVER block tool execution.
 set -uo pipefail
 
+# Mute by default — the completion notification clutters chat.
+# Set SKILL_EVENT_VERBOSE=1 to see output (useful for debugging).
+# Skills can pass this via: `open day -v` → skill sets the env var
+# before invoking the hook.
+[ "${SKILL_EVENT_VERBOSE:-}" != "1" ] && exec >/dev/null 2>&1
+
 INPUT=$(cat)
 
 SKILL_NAME=$(printf '%s' "$INPUT" | python3 -c "
