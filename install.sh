@@ -166,10 +166,78 @@ else
   echo "    claude plugin install compound-engineering@compound-engineering-plugin"
 fi
 
+# --- Step 3.5: Register bundled MCP servers (signal, etc.) ---
+#
+# This plugin is *locally enabled* (enabledPlugins in settings.json), not
+# marketplace-installed. Local enable loads skills/commands/hooks, but it does
+# NOT register a plugin's bundled .mcp.json MCP servers — only marketplace
+# installs do. So the signal_* tools silently never appear.
+#
+# Fix: register each server from .mcp.json explicitly at user scope, pointing at
+# the absolute install path. That path is the same local-plugins dir the
+# auto-update hook git-pulls, so server updates still flow through on the next
+# session. `claude mcp add` is idempotent — it no-ops if the server already
+# exists, so re-running the installer is safe.
+
+echo ""
+echo "Step 3: Registering bundled MCP servers..."
+
+if [ -n "$CLAUDE_BIN" ] && [ -f "$PLUGIN_DIR/.mcp.json" ]; then
+  # Guard against set -e: a Python exception here (bad CLAUDE_BIN, malformed
+  # .mcp.json) must not abort the installer and skip Steps 4-5, which don't
+  # depend on MCP registration. Matches the || pattern used in Step 2.
+  CLAUDE_BIN="$CLAUDE_BIN" PLUGIN_DIR="$PLUGIN_DIR" python3 - << 'PYEOF' || echo "  Note: MCP registration step failed — run /signal-setup later to register the server"
+import json, os, subprocess, sys
+
+claude = os.environ["CLAUDE_BIN"]
+root = os.environ["PLUGIN_DIR"]
+
+try:
+    with open(os.path.join(root, ".mcp.json"), encoding="utf-8") as f:
+        servers = json.load(f).get("mcpServers", {})
+except Exception as e:
+    print(f"  Could not read .mcp.json ({e}) — skipping MCP registration")
+    sys.exit(0)
+
+def sub(v):
+    # The bundled config uses ${CLAUDE_PLUGIN_ROOT}; user-scope config doesn't
+    # expand it, so substitute the real absolute path here.
+    return v.replace("${CLAUDE_PLUGIN_ROOT}", root) if isinstance(v, str) else v
+
+new = 0
+for name, cfg in servers.items():
+    command = sub(cfg.get("command", ""))
+    args = [sub(a) for a in cfg.get("args", [])]
+    cmd = [claude, "mcp", "add", name, "--scope", "user",
+           "--env", f"CLAUDE_PLUGIN_ROOT={root}"]
+    for k, val in cfg.get("env", {}).items():
+        cmd += ["--env", f"{k}={sub(val)}"]
+    cmd += ["--", command] + args
+
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    out = (res.stdout + res.stderr).strip()
+    if "already exists" in out:
+        print(f"  {name}: already registered")
+    elif res.returncode == 0 and "Added" in out:
+        print(f"  {name}: registered (user scope)")
+        new += 1
+    else:
+        print(f"  {name}: registration failed — {out or 'unknown error'}")
+
+print(f"  {new} MCP server(s) newly registered (restart Claude Code to load)")
+PYEOF
+else
+  if [ -z "$CLAUDE_BIN" ]; then
+    echo "  Skipped — 'claude' CLI not found in PATH. Run /signal-setup later to register."
+  else
+    echo "  No .mcp.json found — nothing to register"
+  fi
+fi
+
 # --- Step 4: Create slash-command pointer skills ---
 
 echo ""
-echo "Step 3: Creating slash-command pointers..."
+echo "Step 4: Creating slash-command pointers..."
 SKILLS_DIR="$HOME/.claude/skills"
 mkdir -p "$SKILLS_DIR"
 
@@ -221,7 +289,7 @@ echo "  $count skill pointers synced"
 # --- Step 5: Add 'cc' shortcut ---
 
 echo ""
-echo "Step 4: Adding 'cc' shortcut..."
+echo "Step 5: Adding 'cc' shortcut..."
 
 # Detect shell config file
 SHELL_RC=""
