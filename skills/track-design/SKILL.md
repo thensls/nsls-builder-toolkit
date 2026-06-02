@@ -1,15 +1,12 @@
 ---
 name: track-design
 description: >-
-  Take a raw idea for a Society app learning experience and design a complete,
-  importable track — end to end. Walks a builder through framing the value
-  promise, researching, brainstorming the step structure, getting member
-  focus-group feedback, validating UX, then emits both a Student Experience
-  Documentation Google Doc and a directly-importable ignite-next track JSON.
-  Use when someone says: design a track, build a track, new Society track,
-  track design, "I want users to learn X" on the Society app, turn this idea
-  into a track, author a track, track JSON, ignite-next track. For the Society
-  (ignite-next) app only — not for NSLS marketing pages or automations.
+  Use when a builder wants to turn a raw idea into a complete, importable
+  Society app (ignite-next) learning track. Triggers: "design a track",
+  "build a track", "new Society track", "author a track", "turn this idea
+  into a track", "I want users to learn X on the Society app", "track JSON",
+  "ignite-next track". For the Society (ignite-next) app ONLY — not for NSLS
+  marketing pages, slides, Slack bots, or automations.
 ---
 
 # Track Design
@@ -23,11 +20,31 @@ Design a complete, production-ready Society (ignite-next) app track — from a r
 
 ---
 
+## Quick Start
+
+A track goes idea → 2 shippable artifacts through these phases:
+
+**0 Frame** (lock value promise) → **1 Research** → **2 Brainstorm shape** → **3 Member focus group** → **4 UX validation** → **5 Author + emit** (Google Doc + importable JSON) → **6 Validate + handoff**
+
+Each phase names the reference to open and the skill to invoke (see the Reference Index). Phases run in order; the running scratchpad is your resume point if a builder stops mid-pipeline.
+
+---
+
 ## Operating Rules
 
 - **Run phases in order.** A builder may skip a phase only on explicit request. When a phase is skipped, record it by name in the Phase 6 handoff note — never skip silently. (Heartbeat rule: "Skipped Phase 3 — builder confirmed existing research is sufficient.")
 - **Read the reference before designing.** Each phase cites which `references/` file to open. Do it at that phase, not before. Never design from memory.
 - **Keep a running scratchpad.** Maintain an evolving frame → outline → authored content block in the conversation. The builder may stop mid-pipeline; the scratchpad is the resume point.
+
+---
+
+## Red Flags — STOP
+
+- "The value promise is close enough, I'll refine it while designing." → No. The Phase 0 gate is not met. Stay in Phase 0.
+- "The builder is in a hurry, I'll skip the focus group / UX audit silently." → No. Skipping is allowed only on explicit request, and MUST be recorded by name in the Phase 6 handoff note.
+- "I remember the schema / ontology, I don't need to open the reference." → No. Never design from memory. Open the cited reference at its phase.
+
+Violating the letter of these rules violates their spirit.
 
 ---
 
@@ -53,7 +70,7 @@ Design a complete, production-ready Society (ignite-next) app track — from a r
 
 **Purpose:** Ground the content design in domain best practices and borrow proven patterns from existing tracks.
 
-**Invoke:** Run the `web-research` skill for domain best-practices on the track's subject matter. Ask it to surface the top 5–8 concepts a practitioner would expect to encounter, and any known traps or misconceptions beginners face.
+**REQUIRED:** **Invoke:** Run the `web-research` skill for domain best-practices on the track's subject matter. Ask it to surface the top 5–8 concepts a practitioner would expect to encounter, and any known traps or misconceptions beginners face.
 
 **Study:** Re-read `references/examples/clarity-track.md` and `references/examples/self-leadership-track.md`. Note which patterns are borrowable:
 - Generation-then-select (surface options; member picks)
@@ -101,7 +118,7 @@ Design a complete, production-ready Society (ignite-next) app track — from a r
 
 **Purpose:** Catch cognitive load, brand, and experience problems before authoring full content.
 
-**Invoke:** Run the `ux-audit` skill's Design Validation Layer on the current outline. Pass the full step/substep sequence and the target registers.
+**REQUIRED:** **Invoke:** Run the `ux-audit` skill's Design Validation Layer on the current outline. Pass the full step/substep sequence and the target registers.
 
 **The validation covers:**
 - Predicted SUS score — flag if steps feel like tasks rather than conversations
@@ -132,7 +149,7 @@ Design a complete, production-ready Society (ignite-next) app track — from a r
 
 **(a) Student Experience Documentation Google Doc**
 
-Use the `gdoc-build` skill. Format it like the examples in `references/examples/`:
+**REQUIRED:** Use the `gdoc-build` skill. Format it like the examples in `references/examples/`:
 - **Track-at-a-Glance table** — name, type (artifact/practice), registers, prerequisites, step count, estimated time
 - **Per-step walkthrough** — step name, purpose sentence, substep breakdown with full content
 - **"Why this matters" callouts** — one per step, written for a skeptical member
@@ -188,7 +205,7 @@ node scripts/validate-track-json.mjs my-track.json --assume goal,strengths --ass
 
 ## Definition of Done
 
-All five conditions must be true before calling this skill complete:
+All five Definition-of-Done conditions below must be true before calling this skill complete:
 
 1. **Both artifacts exist:** Student Experience Documentation Google Doc (link in handoff note) and importable ignite-next track JSON file.
 2. **Validator exits 0:** `node scripts/validate-track-json.mjs` with correct `--assume` flags returns no errors.
