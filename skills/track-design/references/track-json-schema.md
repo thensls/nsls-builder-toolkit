@@ -136,7 +136,7 @@ Every field below is read by `buildSubstepData` in `seed.ts`. Absence is detecte
 | `celebrationNextStepsDescription` | `string \| null` | `null` |
 | `celebrationButtonText` | `string \| null` | `null` |
 | `celebrationShowConfetti` | `boolean` | `true` |
-| `celebrationConfettiCount` | `number` | `30` |
+| `celebrationConfettiCount` | `number \| null` | `30` |
 | `celebrationShowPath` | `boolean` | `false` |
 | `celebrationCompletedSection` | `string \| null` | `null` |
 | `celebrationNextSection` | `string \| null` | `null` |
@@ -202,26 +202,27 @@ These fields exist in the Prisma `SubStep` model but are **never exported** by `
 
 ### Common `fieldType` values
 
-These are the values observed in `tracks-export.json`. The field is a plain string — not a DB enum.
+These are the values observed in `tracks-export.json`. The field is a plain string — not a DB enum. **This table is a descriptive guide only** — `type` and `fieldType` are plain strings, and the pairings listed here are conventions observed in the live data, not validation rules. Do not build a strict per-type `fieldType` validator from this table.
 
-| Value | Used with `type` |
-|-------|-----------------|
-| `"text"` | `collect`, `chat` |
-| `"textarea"` | `collect` |
-| `"select"` | `collect` |
-| `"multi-select"` | `collect` |
-| `"image-multiselect"` | `collect` |
-| `"dropdown-with-checkboxes"` | `collect` |
-| `"currency"` | `collect` |
-| `"education"` | `collect` |
-| `"work"` | `collect` |
-| `"banner"` | `say` |
-| `"banner-multiple"` | `say` |
-| `"celebration"` | `say` |
-| `"assessment-results"` | `say` |
-| `"dream-job-select"` | `collect` |
-| `"dream-job-requirements"` | `collect` |
-| `""` (empty string) | `generate` — `fieldType` is present but empty |
+| Value | Used with `type` | Notes |
+|-------|-----------------|-------|
+| `"text"` | `say`, `collect`, `chat`, `generate` | Most common value; all `generate` substeps use it; `say` uses it for text-display variants |
+| `"select"` | `collect` | |
+| `"multi-select"` | `collect` | |
+| `"image-multiselect"` | `collect` | |
+| `"dropdown-with-checkboxes"` | `collect` | |
+| `"currency"` | `collect` | |
+| `"education"` | `collect` | |
+| `"work"` | `collect` | |
+| `"banner"` | `say` | |
+| `"banner-multiple"` | `say` | |
+| `"celebration"` | `say` | |
+| `"assessment-results"` | `say` | |
+| `"dream-job-select"` | `collect` | |
+| `"dream-job-requirements"` | `collect` | |
+| `""` (empty string) | `chat` | Present but empty; observed on `chat` substeps |
+
+**Not observed in current export (valid per CLAUDE.md, zero instances in `tracks-export.json`):** `"textarea"` — accepted by the app as a `collect` field type but not present in any exported track as of this writing.
 
 ---
 
