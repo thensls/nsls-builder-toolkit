@@ -7,6 +7,41 @@
 
 ---
 
+## 0. Enhancement Summary — Deepened 2026-06-03
+
+Deepened with 10 parallel research/review agents: 2 repo explorers (app AI runtime, PostHog instrumentation), 4 best-practices researchers (secure LLM proxy, design-kit/vanilla-player, LLM-as-judge scoring, Netlify/CORS/Playwright), 3 spec reviewers (security, architecture, simplicity), 1 institutional-learnings search. Original spec (§1–§13) is preserved below; this section records what changed and what now needs a decision.
+
+### Findings that change the design
+
+1. **The app's AI is Braintrust, not a raw OpenAI call — the "mirrors production" claim is false.** ignite-next runs `generate`/`chat` through **Braintrust-managed prompts invoked by `substepId`**, multi-model (gpt-4o / gpt-4o-mini / gpt-4-turbo / claude-3-opus selected *per prompt in Braintrust*), with the system prompt assembled server-side by `buildUserContext` — **not** from the `track.json` template. A generic `gpt-4o` relay fed the authored template produces different output via a different path. **Revision:** drop "matches production"; frame prototype AI as **illustrative**, and scope the AI-dependent rubric dimensions (D5 personalization, D6 copy, D7 peak-end) as illustrative-only for calibration. (Mirroring Braintrust-by-`substepId` only works for already-seeded substeps and re-introduces the live-app coupling the baked kit avoids — rejected for v1.) Refs: `src/app/api/chat/stream/route.ts`, `src/services/braintrustStreamingInvoke.ts`, `src/utils/aiContextBuilder.ts`.
+
+2. **`gpt-4o` is being retired (Feb 2026).** Pin the **GPT-5.1 family — `gpt-5.1-mini` as the cost default** — to a dated snapshot verified against the models endpoint at build time. Do not hardcode `gpt-4o`.
+
+3. **OpenAI budget limits are now soft/alert-only — NOT a hard cap.** This makes the proxy's own controls the *only* real ceiling. **Pre-ship requirement (security C1+H1):** a **dedicated OpenAI project + key** with a low cap, **plus a server-enforced daily request/token budget + kill switch** (Redis counter; env-var threshold) in the proxy. Origin allowlist + embedded token + per-IP rate limit are *friction*, not the boundary — the spend cap + kill switch is. Also: scope the origin allowlist tighter than all of `*.netlify.app` (that's every Netlify site on earth); render streamed AI output as **text, not HTML** (XSS); seed prototypes from **synthetic personas only, never real member data** (egresses to OpenAI).
+
+4. **PostHog is sparsely instrumented — the calibration loop has a prerequisite.** Only ~6 events, **step-level not substep-level**, with **no** `track_started`/`track_completed`/chat/generate/celebration events. Of the 8 rubric metrics, only ~2–3 (step-1 drop-off, step-to-step continuation, partial completion) are measurable today; the rest need **new instrumentation in ignite-next first.** **Revision:** the calibration job is gated on instrumenting the app. Add a **Phase A** that's available *now*: validate the judge against 5–10 **human-scored** tracks (target Spearman ρ ≥ ~0.7 vs humans) to prove the rubric measures the right thing before any PostHog data exists.
+
+5. **Scoring methodology upgrades (adopted into Phase 8 — see revised §8):** LLM-as-judge is self-inconsistent and synthetic personas **systematically overstate adoption**. Bake in: **independent scoring before any discussion** (kill sequential cross-referencing — it manufactures groupthink); **median of 3 samples per dimension**; **temperature split** (personas warm ~0.7–1.0 for reaction diversity, expert scorers cool ~0.1 for stability); an explicit **adversarial/skeptic agent** arguing the failure case; **evidence-citation + justification-before-number**; treat scores as **relative ranking + ship-bar gate, not calibrated prediction**; **ship-bar fires on median < 7 OR high dispersion** (high dispersion → route to human). Calibration metrics: Spearman/Kendall (rank is what matters), Gwet's AC2 if outcomes skew; need **15–30+ tracks** before a coefficient means anything.
+
+### Implementation depth captured (folded into the build plan)
+- **Netlify:** `netlify deploy --dir=<abs> --no-build --json`; parse `deploy_url` (draft) vs `url` (prod); CLI sets font/`.mjs` MIME correctly (the zip-API path is what corrupts them). Streaming needs `X-Accel-Buffering: no` + `Cache-Control: no-transform` or Railway buffers the whole stream. `file://` breaks `fetch`/modules → serve locally with `npx serve`. Answer `OPTIONS` preflight 2xx **above** any auth middleware.
+- **Design kit:** keep `oklch`/`color-mix(in oklab, …)` math (Tailwind v4 opacity modifiers compile to `color-mix`, not `opacity`); variable fonts need `font-weight: <range>` in `@font-face`; convert the *variable* ttf, woff2 is enough. **Mechanically extract the token layer** from `globals.css` (94 custom properties, 5 `@font-face`) between marker comments so drift is a re-run, not a hand-diff; hand-author component HTML/CSS only; **pin SYNC to the ignite-next commit SHA** (local clone is 3+ mo stale — `git fetch` first). `SubStepRenderer.tsx` is ~1,600 lines / ~15 fieldType branches — the real mirroring surface.
+- **Player:** framework-free state machine (`{index, answers}` + `render()`), single-pass `{slug}` interpolation with HTML-escaping + leave-unknown-tokens-literal, build-time ordering lint, `localStorage` versioned key + clamp, streamed render via `getReader()` + `TextDecoder({stream:true})`, SSE frame buffering on `\n\n`.
+- **Playwright:** role/text selectors over a generated DOM, generic input fill, end-detection via content-hash stability + iteration cap, per-step assertions (blank screen, unresolved `{token}`, no advance button, console errors), screenshot gallery; use `domcontentloaded` not `networkidle` for streaming pages.
+- **Airtable (MEMORY gotchas):** primary field `singleLineText`; `filterByFormula` uses field **names** (or Python-filter); select values as plain strings when keyed by field ID; base needs `workspaceId`; create fields via API but **formula fields must be UI**; use a **base-scoped token**.
+- **gdoc-build:** `python-docx` (never pandoc); **new draft doc, never overwrite shared**; org-restricted sharing.
+- **Doppler** is source of truth for the Railway secret (attach to an existing project); reuse the deploy-notify pattern for a **spend alert** to Kevin.
+
+### Open decisions surfaced by research (need Kevin — see §14)
+- **A. Separate `track-prototype` skill vs. extend `track-design`** (architecture reviewer's top rec).
+- **B. v1 scope: live proxy now, or baked-fallback-only first** (simplicity reviewer + the gpt-4o/soft-cap/Braintrust findings weaken the proxy's v1 value).
+- **C. Rubric for v1: keep 8 weighted dimensions, or simplify** (methodology upgrades adopted regardless).
+
+### References (selected)
+LLM-as-judge: RULERS (arXiv 2601.08654), Rating Roulette (EMNLP 2025), Self-Preference Bias (arXiv 2410.21819), eugeneyan.com/writing/llm-evaluators. Proxy: OpenAI deprecations & "budgets are soft" (developers.openai.com/api/docs/deprecations, grafient.ai), AI SDK 5 streamText, Cloudflare Turnstile, express-rate-limit trust-proxy. Repo ground truth: ignite-next `braintrust*`, `instrumentation-client.ts`, `posthog-events.ts`.
+
+---
+
 ## 1. Purpose
 
 `track-design` today ends at two artifacts: a Student Experience Doc (Google Doc) and an importable `track.json`. Neither lets a builder *feel* the track they authored. You can't tell whether pacing drags, whether a celebration lands, or whether the copy reads right on screen by reading JSON.
@@ -274,6 +309,18 @@ Per "after we get the build right":
 - **Design drift** — hand-mirrored kit will lag the app; mitigated by `SYNC.md` + visible "approximate preview" watermark.
 - **Rubric validity unproven** — the 8 dimensions are a hypothesis until PostHog calibration; that's the explicit point of storing predictions.
 - **Cost** — live AI per run-through costs tokens; rate limiting + small `max_tokens` + baked fallback bound it.
+
+---
+
+## 14. Open decisions surfaced by the deepen-plan research
+
+These three forks came out of the research and need a call before the spec is final. The methodology upgrades in §0.5 are adopted regardless of how these land.
+
+**A. Separate skill vs. extend track-design.** The architecture review's top recommendation: extract Phases 7–8 into a sibling `track-prototype` skill rather than bolting them onto `track-design`. Rationale: `track-design` is pure text + one pure-function validator — safe to auto-ship org-wide via PR; Phases 7–8 are live infra (Railway, Airtable, a drift-prone design kit, 3 dependent skills) that can break independently and shouldn't widen the authoring skill's blast radius. The Phase-6-validator-exit gate is already a clean skill boundary. *Counter:* one skill keeps the builder's journey seamless and discoverable.
+
+**B. v1 proxy scope.** Three research threads converge against shipping the live proxy in v1: (1) it doesn't mirror production anyway (Braintrust), so "live" buys little over a baked sample for a feel-of-it preview; (2) gpt-4o retiring + soft budget caps mean real hardening work (dedicated key, Redis budget, kill switch) before it's safe to expose; (3) the baked Claude-written fallback is already in scope and shows pacing/copy/flow fine. The simplicity review estimates cutting the proxy removes a whole repo + the riskiest third of the player. *Counter (your earlier call):* you explicitly wanted it genuinely live. Option: **baked-only v1, proxy as a fast-follow Phase 7.5** once a builder says the canned answer blocks judgment.
+
+**C. Rubric for v1.** Keep the 8 weighted dimensions (your call), or simplify to ~4 unweighted for v1 since the weights are admittedly unprovable until calibration data exists. Either way we adopt: independent-scoring, median-of-3, adversarial agent, evidence-citation, ranking-not-prediction framing, ship-bar on median<7 OR high dispersion, and the Phase-A human-validation step.
 
 ---
 
