@@ -33,6 +33,13 @@ must exit 0. If it does not, stop and send the builder back to track-design Phas
 4. **Run locally:** `npx serve prototype-build -p 3000` then open `http://localhost:3000`.
    (Opening `index.html` via `file://` breaks ES modules and fetch — always serve over HTTP.)
 5. **Deploy:** invoke the `netlify-deploy` skill on `prototype-build/`. Record the URL.
+
+   The `netlify-deploy` skill handles auth and the CLI. For a prebuilt folder use:
+   `netlify deploy --dir=<abs>/prototype-build --no-build --json`
+   Parse `url` (prod) from the JSON. (CLI deploy sets font/.mjs MIME correctly — never
+   use the zip-API path, which serves everything as text/plain.) Default to a DRAFT
+   deploy (omit --prod) for review links; only --prod when the builder approves. Tear
+   down old draft deploys when a review round closes.
 6. **Handoff note:** persona used, local command, live URL, and the
    "approximate preview" caveat (this mirrors the app's design, it is not the live app).
 
