@@ -385,7 +385,7 @@ To use: `npm install braintrust` in your project, set `BRAINTRUST_API_KEY` as an
 ```
 
 - `NSLS_DNS_PROXY_URL` — public, fixed: `https://nsls-dns-proxy-production.up.railway.app`. (The bare `nsls-dns-proxy.up.railway.app` 404s — it must include `-production`.)
-- `NSLS_DNS_PROXY_TOKEN` — a shared secret. It is NOT in any repo or `.env.example`. Get it from Kevin / the proxy owner; it's `PROXY_AUTH_TOKEN` in the Doppler project `nsls-dns-proxy`.
+- `NSLS_DNS_PROXY_TOKEN` — a shared secret, so it's NOT in any repo. Self-serve it from the nsls.org-gated credentials doc (sign in with your NSLS Google account): https://docs.google.com/document/d/19hXZEgdgacnvzDIza6t5o26Zm7UpcFiYMPOknynukR8/edit — copy the token from there. (Source of truth for rotation is the Doppler project `nsls-dns-proxy` → `PROXY_AUTH_TOKEN`; if it's rotated, that doc is updated to match.)
 
 After adding them, restart Claude Code so the `env` block reloads.
 

@@ -26,8 +26,9 @@ Claude Code environment (the `env` block in `~/.claude/settings.json`):
   `https://nsls-dns-proxy-production.up.railway.app`
   (note the `-production` — the bare `nsls-dns-proxy.up.railway.app` host 404s)
 - `NSLS_DNS_PROXY_TOKEN` — the shared bearer token. It's a secret, so it lives
-  in no repo. Get it from Kevin / the proxy owner — it's `PROXY_AUTH_TOKEN` in
-  the Doppler project `nsls-dns-proxy`.
+  in no repo. Self-serve it from the nsls.org-gated doc (sign in with your NSLS
+  Google account): https://docs.google.com/document/d/19hXZEgdgacnvzDIza6t5o26Zm7UpcFiYMPOknynukR8/edit
+  (Source of truth is the Doppler project `nsls-dns-proxy` → `PROXY_AUTH_TOKEN`.)
 
 Confirm both are set and the service is up before doing anything else:
 
