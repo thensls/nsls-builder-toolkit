@@ -1,0 +1,61 @@
+/* >>> GENERATED FROM ignite-next globals.css — DO NOT EDIT BY HAND <<< */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --primary: #f16b68;
+  --primary-foreground: #ffffff;
+  --myers-briggs: #df1983;
+  --enneagram: #ffb949;
+  --holland-code: #b1c47d;
+  --disc: #32b38e;
+  --big-five: #407faf;
+  --myers-briggs-contrast: #fff7f1;
+  --enneagram-contrast: #fff7f1;
+  --holland-code-contrast: #fff7f1;
+  --disc-contrast: #fff7f1;
+  --big-five-contrast: #fff7f1;
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.21 0 0);
+  --destructive: oklch(0.63 0.26 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.55 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.21 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0 0);
+  --border: oklch(0.93 0 0);
+  --input: oklch(0.93 0 0);
+  --ring: oklch(0.71 0 0);
+  --radius: 0.5rem;
+  --color-light: #fff7f1;
+  --color-dark: #003250;
+  --color-dark-10: #e5e1de;
+  --color-medium: #f2e8e0;
+  --color-mediumPlus: #e9ddd3;
+  --color-mocha: #c1b7af;
+  --color-success: #8eaf86;
+  --color-success-foreground: #171717;
+}
+/* <<< END GENERATED <<< */
+
+/* Fonts (mirrored from ignite-next/public/fonts) */
+@font-face {
+  font-family: "Hanken Grotesk";
+  src: url("./fonts/HankenGrotesk-Variable.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "HermeneusOne";
+  src: url("./fonts/HermeneusOne-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Rand";
+  src: url("./fonts/Rand-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-display: swap;
+}
+:root { --tp-font-sans: "Hanken Grotesk", system-ui, -apple-system, sans-serif; }

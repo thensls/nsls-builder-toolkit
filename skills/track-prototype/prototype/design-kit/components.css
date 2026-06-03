@@ -1,0 +1,63 @@
+/* Buttons — mirrors src/components/ui/button.tsx cva variants */
+.tp-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  white-space: nowrap; border-radius: var(--radius, .5rem);
+  font: 600 1rem/1.25 var(--tp-font-sans); cursor: pointer; border: 2px solid transparent;
+  transition: background-color .3s ease, color .3s ease, box-shadow .3s ease;
+}
+.tp-btn:disabled { pointer-events: none; opacity: .5; }
+.tp-btn-default { background: var(--primary, #f16b68); color: #fff; }
+.tp-btn-default:hover { background: color-mix(in oklab, var(--primary, #f16b68) 90%, transparent); }
+.tp-btn-lg { padding: 1rem 1.5rem; width: 100%; }
+
+/* Text + currency inputs — mirrors .step-input */
+.tp-input {
+  width: 100%; box-sizing: border-box;
+  border: 2px solid var(--color-mediumPlus, #e9ddd3); background: var(--color-light, #fff7f1);
+  border-radius: .75rem; padding: 1rem; font: 1rem var(--tp-font-sans); color: var(--color-dark, #003250);
+  transition: border-color .3s, background .3s;
+}
+.tp-input::placeholder { color: var(--color-mocha, #c1b7af); }
+.tp-input:focus { outline: none; border-color: var(--color-mocha, #c1b7af); background: #fefaf7; }
+.tp-input-wrap { position: relative; }
+.tp-currency { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--color-mocha, #c1b7af); }
+.tp-input-currency { padding-left: 2rem; }
+
+/* Option grids — mirrors MultiSelectInput / image-multiselect */
+.tp-options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; }
+.tp-option {
+  display: flex; flex-direction: column; gap: .25rem; text-align: left;
+  padding: .75rem; border-radius: .75rem; cursor: pointer;
+  border: 2px solid var(--color-mediumPlus, #e9ddd3); background: var(--color-light, #fff7f1);
+  color: var(--color-dark, #003250); transition: all .3s;
+}
+.tp-option:hover { border-color: var(--color-mocha, #c1b7af); background: var(--color-mediumPlus, #e9ddd3); }
+.tp-option[aria-selected="true"] { background: var(--color-mediumPlus, #e9ddd3); box-shadow: 0 0 0 2px var(--color-mocha, #c1b7af); }
+.tp-opt-desc { font-size: .75rem; color: var(--color-mocha, #c1b7af); }
+.tp-opt-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: .5rem; }
+
+/* Banner / prose */
+.tp-prose { font: 500 1rem/1.5 var(--tp-font-sans); color: var(--color-dark, #003250); margin-bottom: 1.5rem; }
+.tp-banner-line { margin-top: 1rem; }
+
+/* Celebration — mirrors CelebrationContent */
+.tp-celebration { text-align: center; }
+.tp-tasks { list-style: none; padding: .75rem 1rem; margin: 1rem 0; border-radius: .5rem;
+  background: color-mix(in oklab, var(--color-success, #8eaf86) 10%, transparent); text-align: left; }
+.tp-task::before { content: "✓ "; color: var(--color-success, #8eaf86); font-weight: 700; }
+.tp-next { margin: 1.5rem 0; text-align: left; }
+
+/* Chat bubbles — mirrors ChatInterface */
+.tp-chat { display: flex; flex-direction: column; gap: .75rem; margin-bottom: 1.5rem; }
+.tp-bubble { padding: .75rem 1rem; border-radius: 1rem; max-width: 85%; }
+.tp-bubble-ai { background: var(--color-medium, #f2e8e0); color: var(--color-dark, #003250); align-self: flex-start; }
+
+/* Generated AI output */
+.tp-ai-output { padding: 1rem; border-radius: .75rem; background: var(--color-medium, #f2e8e0);
+  color: var(--color-dark, #003250); margin-bottom: 1.5rem; white-space: pre-wrap; }
+.tp-ai-placeholder { padding: 1rem; border: 2px dashed var(--color-mediumPlus, #e9ddd3);
+  border-radius: .75rem; color: var(--color-mocha, #c1b7af); margin-bottom: 1.5rem; }
+
+/* Streaming caret (used in Plan 2) */
+.tp-ai-output.is-writing::after { content: "▋"; animation: tp-blink 1s steps(2) infinite; }
+@keyframes tp-blink { 50% { opacity: 0; } }
