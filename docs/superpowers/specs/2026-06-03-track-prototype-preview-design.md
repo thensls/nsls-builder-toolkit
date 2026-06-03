@@ -32,10 +32,10 @@ Deepened with 10 parallel research/review agents: 2 repo explorers (app AI runti
 - **gdoc-build:** `python-docx` (never pandoc); **new draft doc, never overwrite shared**; org-restricted sharing.
 - **Doppler** is source of truth for the Railway secret (attach to an existing project); reuse the deploy-notify pattern for a **spend alert** to Kevin.
 
-### Open decisions surfaced by research (need Kevin — see §14)
-- **A. Separate `track-prototype` skill vs. extend `track-design`** (architecture reviewer's top rec).
-- **B. v1 scope: live proxy now, or baked-fallback-only first** (simplicity reviewer + the gpt-4o/soft-cap/Braintrust findings weaken the proxy's v1 value).
-- **C. Rubric for v1: keep 8 weighted dimensions, or simplify** (methodology upgrades adopted regardless).
+### Decisions resolved 2026-06-03 (see §14 for detail)
+- **A. RESOLVED → separate `track-prototype` skill.** `track-design` stays pure; Phases 7–8 become a sibling skill gated on the Phase-6 validator exit.
+- **B. RESOLVED → live proxy in v1**, built with the full hardening the research requires (dedicated OpenAI project + key, server-side daily budget + kill switch, tightened origin allowlist, GPT-5.1-mini pinned). AI is framed as **illustrative**, not production-matching.
+- **C. RESOLVED → most-rigorous rubric:** 4 dimensions, no weights, binary anchored sub-checks (§8.4). Plus the methodology upgrades (independent scoring, median-of-3, adversarial agent, evidence-citation). Calibration seeds against the **2 live tracks** now (§9).
 
 ### References (selected)
 LLM-as-judge: RULERS (arXiv 2601.08654), Rating Roulette (EMNLP 2025), Self-Preference Bias (arXiv 2410.21819), eugeneyan.com/writing/llm-evaluators. Proxy: OpenAI deprecations & "budgets are soft" (developers.openai.com/api/docs/deprecations, grafient.ai), AI SDK 5 streamText, Cloudflare Turnstile, express-rate-limit trust-proxy. Repo ground truth: ignite-next `braintrust*`, `instrumentation-client.ts`, `posthog-events.ts`.
@@ -212,49 +212,56 @@ Four experts read the conversation + screenshots, debate, and converge on **rank
 - **Copywriter** — voice, tone, Society brand fit, resonance
 - **Product/Engagement Strategist** — adoption/retention mechanics, value-promise strength, predicted drop-off (most tied to the rubric metrics)
 
-### 8.4 Scoring (rubric)
-The panel scores the track on **8 dimensions, 1–10 each**, judged **from the run-through** (screenshots + click-through), not from the JSON. **7 is the ship bar** per dimension. Full anchors live in `references/focus-group-rubric.md`; summarized here:
+### 8.4 Scoring (rubric) — 4 dimensions, binary anchored sub-checks, no weights
 
-| # | Dimension | Predicts (PostHog, once live) | Weight |
-|---|-----------|-------------------------------|--------|
-| 1 | Value clarity at entry | Track start rate | ×1.5 |
-| 2 | First-step ease | Step-1 drop-off | ×1.25 |
-| 3 | Cognitive load & pacing | Mid-track drop-off, time-per-substep | ×1.0 |
-| 4 | Motivation & momentum (celebrations) | Step-to-step continuation rate | ×1.25 |
-| 5 | Personalization payoff | Engagement depth (chat turns, generate accepts) | ×1.0 |
-| 6 | Copy resonance & tone | Completion + sentiment | ×1.0 |
-| 7 | Perceived value at completion (peak-end) | Completion rate + next-track uptake | ×1.5 |
-| 8 | Trust & fit (first-gen / skeptical) | Drop-off in at-risk segments | ×1.0 |
+**Decided 2026-06-03 (most-rigorous form).** The panel judges the track **from the run-through** (screenshots + click-through), not from the JSON. There are **4 dimensions**; each is scored as a set of **binary MET/UNMET sub-checks** with explicit anchors. No weighted composite — the "score" is **checks met / total** (e.g., 11/16), and iteration progress is checks turning green (v1: 9/16 → v2: 14/16). Binary sub-checks are used over a 1–10 scale because the judge research shows wide scales suffer central-tendency bias; crisp MET/UNMET anchors are more repeatable across re-runs and across tracks. Full anchors live in `references/focus-group-rubric.md`.
 
-**Anchors (1–2 / 5–6 / 9–10):**
-1. **Value clarity** — no/vague promise · promise present but generic or buried · concrete deliverable + compelling reason on screen 1, repeatable in one sentence.
-2. **First-step ease** — cold-opens heavy free-text/long form · moderate first ask, mild hesitation · near-frictionless first win, instant momentum.
-3. **Load & pacing** — 10+ collects no break, walls of text · mostly fine, 1–2 heavy spots · every step single-themed (4–8 collects) with synthesis breaks, effortless rhythm.
-4. **Momentum** — no/generic celebration · present but bland, win not named · each milestone named specifically + previews next, pulls you forward.
-5. **Personalization payoff** — none or tokens empty/awkward · surface only ("Hi {name}") · later screens build on earlier answers, AI output feels specifically theirs.
-6. **Copy resonance** — off-brand/corporate/condescending · serviceable but flat · warm, specific, peer-level, sounds like Society; a skeptic softens.
-7. **Peak-end value** — ends abruptly, no takeaway · takeaway underwhelms vs effort · ends on a high with a real artifact they'll reference, wants the next track.
-8. **Trust & fit** — assumes privilege, invasive early · neutral, neither alienates nor reassures · actively meets at-risk members where they are, safe/optional, edge personas stay in.
+Each sub-check is scored by the median of 3 independent samples; a sub-check where the samples disagree (no clear majority) is marked **CONTESTED** and routed to human review rather than auto-scored.
 
-**Composite** = weighted average using the weights above (sum of weights = 9.5), normalized to a 1–10 **adoption/engagement index**. Weights are tunable once PostHog calibration data lands.
+**Dimension 1 — Value / payoff** (entry promise + completion payoff)
+- [ ] Within the first 1–2 screens the deliverable is named concretely (not "explore yourself").
+- [ ] The "why this matters to me" is stated, not merely implied.
+- [ ] At completion a tangible artifact/clarity exists the student could point to.
+- [ ] The ending previews/motivates the next step (next track or real-world application).
 
-**Ship-bar rule:** any dimension scoring **< 7 automatically generates a ranked recommendation**, even when the composite is high — so a single weak spot (e.g., a flat ending) can't hide behind a good average.
+**Dimension 2 — Pacing & momentum** (load + celebrations)
+- [ ] No single step exceeds ~8 collects without a synthesis/break.
+- [ ] No wall-of-text screen; orientation copy stays scannable.
+- [ ] Each step ends by naming the specific accomplishment (not a generic "Done!").
+- [ ] The sequence creates forward pull — each step sets up the next.
+
+**Dimension 3 — Copy & tone**
+- [ ] Voice is peer/coach-level and warm — not corporate or condescending.
+- [ ] No unexplained jargon.
+- [ ] Personalization tokens read naturally (no awkward "Hi {name}," or empty token).
+- [ ] On-brand for Society (matches the voice of the reference examples).
+
+**Dimension 4 — Friction & fit** (first-step ease + personalization payoff + trust)
+- [ ] First interaction is a low-friction win (not a cold heavy free-text / long form).
+- [ ] Later screens visibly build on earlier answers (personalization is real, not surface).
+- [ ] Nothing invasive or privilege-assuming asked early; safe for a first-gen / skeptical member.
+- [ ] An anxious or skeptical edge persona would stay in, not bail.
+
+**Ship-bar rule:** **any UNMET sub-check automatically generates a ranked recommendation** (`{id, dimension, sub_check, severity, substep, change}`). CONTESTED sub-checks generate a human-review flag, not a recommendation. There is no average to hide a weak spot behind — every red check is surfaced.
+
+**Dimension labels carry the critique even where not separately scored:** the 8 original concepts (value clarity, first-step ease, load, momentum, personalization, copy, peak-end, trust) are folded into these 4 dimensions' sub-checks, so nothing we workshopped is lost — it's just scored as crisp checks rather than fuzzy 1–10s.
 
 ### 8.5 Outputs
 - **Google Doc** (`gdoc-build`): full conversation + expert synthesis + ranked recommendations + scorecard. The read-first artifact for the designer.
 - **Markdown twin** in `track-dir/focus-group/v{N}/`:
   - `conversation.md` — the member + expert dialogue
-  - `recommendations.md` — **structured, machine-actionable**: each rec = `{id, dimension, severity, substep, change}`. This is what a builder points at: *"implement the focus-group changes."*
-  - `scorecard.md` — the 8 scores + composite + rationale
+  - `recommendations.md` — **structured, machine-actionable**: each rec = `{id, dimension, sub_check, severity, substep, change}`. This is what a builder points at: *"implement the focus-group changes."*
+  - `scorecard.md` — the 4 dimensions with each sub-check MET/UNMET/CONTESTED + rationale + the checks-met total
 - **Score ledger row** (see §9).
 
 ### 8.6 The loop
 ```
-build v1 → focus group → scores{v1} + recommendations.md
+build v1 → focus group → checks-met{v1} + recommendations.md (one per UNMET check)
    ↓  builder: "implement the focus-group changes"  (Claude edits track.json from recommendations.md)
-build v2 → focus group → scores{v2}   ← compared to v1 in scores.md
+build v2 → focus group → checks-met{v2}   ← compared to v1 in scores.md (more green checks)
    ↓  ...
-[later, track live] → PostHog actuals → predicted vs real (calibration job, future)
+calibration: score the live tracks (Clarity, Personal Insights) → compare to real PostHog
+             completion/drop-off → does the rubric rank the better-performing track higher?
 ```
 
 ---
@@ -262,19 +269,26 @@ build v2 → focus group → scores{v2}   ← compared to v1 in scores.md
 ## 9. Score ledger & data model
 
 ### Local mirror — `track-dir/focus-group/scores.md`
-A running table for at-a-glance iteration progress:
+A running table for at-a-glance iteration progress (checks met per dimension + total):
 
-| Version | Date | Composite | D1 | D2 | … | D8 | Doc |
-|---------|------|-----------|----|----|----|----|-----|
-| v1 | 2026-06-03 | 6.2 | 7 | 5 | … | 6 | [link] |
-| v2 | 2026-06-04 | 7.8 | 8 | 7 | … | 8 | [link] |
+| Version | Date | Total | D1 Value | D2 Pacing | D3 Copy | D4 Fit | Doc |
+|---------|------|-------|----------|-----------|---------|--------|-----|
+| v1 | 2026-06-03 | 9/16 | 2/4 | 2/4 | 3/4 | 2/4 | [link] |
+| v2 | 2026-06-04 | 14/16 | 4/4 | 3/4 | 4/4 | 3/4 | [link] |
 
 ### Canonical — Airtable base "Track Previews"
-- **Tracks**: `slug` (PK), `title`, `type`, `current_version`
-- **ScoreRuns**: `track` (link), `version`, `date`, `composite`, `dim_1`…`dim_8`, `gdoc_url`, `recommendations_count`, `persona_used`, `build_url`
-- **PostHogActuals** *(populated later by the calibration job)*: `track` (link), `period`, `start_rate`, `completion_rate`, `dropoff_by_step` (json), `engagement_metrics` (json)
+- **Tracks**: `slug` (PK, `singleLineText`), `title`, `type`, `current_version`, `is_live` (bool), `posthog_track_key`
+- **ScoreRuns**: `track` (link), `version`, `content_hash`, `date`, `checks_met`, `checks_total`, `d1_value`, `d2_pacing`, `d3_copy`, `d4_fit` (each "n/4"), `contested_count`, `gdoc_url`, `persona_used`, `build_url`
+- **PostHogActuals**: `track` (link), `period`, `live_track_version`, `completion_rate`, `step1_dropoff`, `step_to_step_continuation`, `dropoff_by_step` (json), `n_users`, `notes`
 
-The ScoreRuns ↔ PostHogActuals join (by track + time window) is what the future calibration job consumes. Storing per-dimension predicted scores now makes that join possible without a later migration.
+**Join key is version-aware (research fix):** ScoreRuns carry a `content_hash` of the scored `track.json`, and PostHogActuals carry the `live_track_version` they reflect — so calibration compares a score to *the version it actually scored*, not whatever was live later. Storing per-dimension sub-check results now avoids a later migration. Airtable is canonical; `scores.md` is a render of it (not a second hand-maintained copy). Use a **base-scoped token**; primary field is `singleLineText`; do field-name filtering (or Python-side), never field-ID `filterByFormula` (MEMORY gotchas).
+
+### Calibration is no longer purely future — 2 live anchors exist now
+Clarity and Personal Insights are **live with ~1,000 users each**. Even with PostHog's sparse step-level instrumentation, completion rate + step drop-off + step-to-step continuation are computable for these two from existing events + the `completedTrack`/`UserSession` tables. So the calibration set seeds with **2 real rows today**:
+- **Score both live tracks** with the 4-dimension binary rubric and record ScoreRuns.
+- **Pull their real outcomes** into PostHogActuals.
+- **Check directional agreement:** does the rubric rate the higher-completing track higher? Use disagreements to tune the sub-check anchors against reality.
+- **Caveat (research):** n=2 is a **directional sanity check, not a coefficient** — a meaningful Spearman/Kendall needs ~15–30+ tracks (use Gwet's AC2 if outcomes skew). These two are the first rows; the set accumulates as tracks ship. This also gives us a cheap "is the rubric even measuring the right thing?" read before trusting it on brand-new tracks (the research's Phase-A human-validation goal, met with real behavioral data instead of human raters).
 
 ---
 
@@ -312,15 +326,15 @@ Per "after we get the build right":
 
 ---
 
-## 14. Open decisions surfaced by the deepen-plan research
+## 14. Decisions (resolved 2026-06-03)
 
-These three forks came out of the research and need a call before the spec is final. The methodology upgrades in §0.5 are adopted regardless of how these land.
+All three forks the deepen-plan research surfaced are now decided.
 
-**A. Separate skill vs. extend track-design.** The architecture review's top recommendation: extract Phases 7–8 into a sibling `track-prototype` skill rather than bolting them onto `track-design`. Rationale: `track-design` is pure text + one pure-function validator — safe to auto-ship org-wide via PR; Phases 7–8 are live infra (Railway, Airtable, a drift-prone design kit, 3 dependent skills) that can break independently and shouldn't widen the authoring skill's blast radius. The Phase-6-validator-exit gate is already a clean skill boundary. *Counter:* one skill keeps the builder's journey seamless and discoverable.
+**A. Separate `track-prototype` skill** *(was: extend track-design)*. `track-design` (Phases 0–6) stays pure text + the pure-function validator — safe to auto-ship org-wide via PR. The new `track-prototype` skill owns all live infra (Railway proxy, Airtable, the drift-prone design kit, and the `netlify-deploy`/`playwright`/`gdoc-build` dependencies) and takes a validated `track.json` as its input contract. The Phase-6-validator-exit is the skill boundary; `track-design`'s handoff note points to `track-prototype`. (Phases 7–8 below become Phases 1–2 of the new skill at planning time.)
 
-**B. v1 proxy scope.** Three research threads converge against shipping the live proxy in v1: (1) it doesn't mirror production anyway (Braintrust), so "live" buys little over a baked sample for a feel-of-it preview; (2) gpt-4o retiring + soft budget caps mean real hardening work (dedicated key, Redis budget, kill switch) before it's safe to expose; (3) the baked Claude-written fallback is already in scope and shows pacing/copy/flow fine. The simplicity review estimates cutting the proxy removes a whole repo + the riskiest third of the player. *Counter (your earlier call):* you explicitly wanted it genuinely live. Option: **baked-only v1, proxy as a fast-follow Phase 7.5** once a builder says the canned answer blocks judgment.
+**B. Live proxy in v1**, hardened per the security/proxy research: a **dedicated OpenAI project + key**, **server-side daily request/token budget + kill switch** (the real ceiling, since OpenAI budgets are now soft), **tightened origin allowlist** (not all of `*.netlify.app`), build-embedded rotatable token, per-IP/per-token rate limit, **GPT-5.1-mini pinned** to a dated snapshot. Streamed output rendered as **text, not HTML**. Prototype AI is **illustrative** (the app's real runtime is Braintrust-by-`substepId`), not production-matching — the AI-dependent sub-checks are scoped accordingly. Baked Claude-written fallback still covers proxy-down/offline.
 
-**C. Rubric for v1.** Keep the 8 weighted dimensions (your call), or simplify to ~4 unweighted for v1 since the weights are admittedly unprovable until calibration data exists. Either way we adopt: independent-scoring, median-of-3, adversarial agent, evidence-citation, ranking-not-prediction framing, ship-bar on median<7 OR high dispersion, and the Phase-A human-validation step.
+**C. Most-rigorous rubric:** 4 dimensions (Value/payoff, Pacing & momentum, Copy & tone, Friction & fit), **no weights**, each scored as **binary MET/UNMET anchored sub-checks** rolling up to checks-met/total (§8.4). Methodology: independent scoring before discussion, **median-of-3 samples** per sub-check, **temperature split** (personas ~0.7–1.0, expert scorers ~0.1), an explicit **adversarial/skeptic agent** to counter synthetic personas' upward adoption bias, evidence-citation before verdict, **ranking-not-prediction** framing. Ship-bar fires a recommendation on **any UNMET** check; CONTESTED checks route to human review. **Calibration seeds now against the 2 live tracks** (Clarity, Personal Insights; ~1,000 users each) as a directional sanity check (§9).
 
 ---
 
