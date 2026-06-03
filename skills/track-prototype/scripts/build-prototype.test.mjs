@@ -28,6 +28,15 @@ test("escapes < in injected JSON so track copy containing </script> can't break 
   assert.match(indexHtml, /\\u003c/);              // < was escaped in the injected JSON
 });
 
+test("buildSite unwraps a 1-element array (canonical track.json shape)", () => {
+  const { screens } = buildSite([track], { samples: { cs: "x" } });
+  assert.equal(screens.length, 3);
+});
+
+test("buildSite throws on a multi-track array rather than silently previewing one", () => {
+  assert.throws(() => buildSite([track, track], {}), /array of 2/);
+});
+
 test("buildSite throws on a token used before it is produced", () => {
   const bad = { id: "t", title: "D", steps: [{ id: "s", title: "S", substeps: [
     { id: "a", title: "A", prompt: "Hi {name}", type: "say", fieldType: "banner" },

@@ -15,7 +15,15 @@ function jsonForScript(value) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
-export function buildSite(track, opts = {}) {
+export function buildSite(input, opts = {}) {
+  // A canonical track.json (what validate-track-json accepts) is a top-level ARRAY of
+  // tracks. Preview targets one track — unwrap a single-element array. Throw clearly on
+  // an ambiguous multi-track array rather than silently previewing only the first.
+  let track = input;
+  if (Array.isArray(input)) {
+    if (input.length !== 1) throw new Error(`Expected one track, got an array of ${input.length}. Pass a single track or a 1-element array.`);
+    track = input[0];
+  }
   const errs = findOrderingErrors([track], { assume: opts.assume || [] });
   if (errs.length) throw new Error("Token ordering errors:\n" + errs.join("\n"));
   const ctx = { samples: opts.samples || {} };
