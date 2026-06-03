@@ -1,6 +1,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderSubstep } from "./render-substep.mjs";
+import { renderSubstep, safeUrl } from "./render-substep.mjs";
+
+test("safeUrl drops javascript: and other unsafe schemes, keeps safe ones", () => {
+  assert.equal(safeUrl("javascript:alert(1)"), "");
+  assert.equal(safeUrl("data:text/html,<x>"), "");
+  assert.equal(safeUrl("/img/a.png"), "/img/a.png");
+  assert.equal(safeUrl("https://x/y.png"), "https://x/y.png");
+  assert.equal(safeUrl("intro.png"), "intro.png");
+  assert.equal(safeUrl("data:image/png;base64,AAAA"), "data:image/png;base64,AAAA");
+});
+
+test("option with a javascript: imageUrl emits no img tag", () => {
+  const html = renderSubstep({ id: "x", slug: "v", title: "V", prompt: "Pick", type: "collect", fieldType: "image-multiselect",
+    options: [{ text: "A", imageUrl: "javascript:alert(1)" }] }, {});
+  assert.doesNotMatch(html, /javascript:/);
+  assert.doesNotMatch(html, /<img/);
+});
 
 test("say/banner renders prompt + a Continue button", () => {
   const html = renderSubstep({ id: "x", title: "T", prompt: "Welcome", type: "say", fieldType: "banner" }, {});

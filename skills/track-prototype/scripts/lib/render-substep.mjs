@@ -5,6 +5,18 @@
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+// Prototypes deploy to public URLs, so drop any imageUrl whose scheme isn't safe
+// (blocks javascript:/vbscript:/data:text). Allows http(s), protocol-relative,
+// root/relative paths, and data:image/. Returns "" for anything else.
+export function safeUrl(u) {
+  const s = String(u ?? "").trim();
+  if (s === "") return "";
+  if (/^(https?:\/\/|\/\/|\/|\.\/|\.\.\/)/i.test(s)) return s;
+  if (/^data:image\//i.test(s)) return s;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return ""; // any other explicit scheme -> drop
+  return s; // bare relative filename (e.g. "intro.png")
+}
+
 const continueBtn = (label = "Continue") =>
   `<button class="tp-btn tp-btn-default tp-btn-lg" data-next>${esc(label)}</button>`;
 
@@ -34,7 +46,8 @@ function optionList(sub) {
   return opts.map((o, i) => {
     const text = typeof o === "string" ? o : (o.text ?? "");
     const desc = typeof o === "object" && o.description ? `<span class="tp-opt-desc">${esc(o.description)}</span>` : "";
-    const img = typeof o === "object" && o.imageUrl ? `<img class="tp-opt-img" src="${esc(o.imageUrl)}" alt="">` : "";
+    const safeImg = typeof o === "object" ? safeUrl(o.imageUrl) : "";
+    const img = safeImg ? `<img class="tp-opt-img" src="${esc(safeImg)}" alt="">` : "";
     return `<button class="tp-option" data-option data-value="${esc(text)}" data-index="${i}">${img}<span>${esc(text)}</span>${desc}</button>`;
   }).join("");
 }
