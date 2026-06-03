@@ -38,7 +38,8 @@ function parseArgs(argv) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { file, samplesPath, out, assume } = parseArgs(process.argv.slice(2));
   if (!file) { console.error("Usage: build-prototype.mjs <track.json> [--persona name] [--samples samples.json] [--out dir] [--assume a,b]"); process.exit(2); }
-  const track = JSON.parse(readFileSync(file, "utf8"));
+  const raw = JSON.parse(readFileSync(file, "utf8"));
+  const track = Array.isArray(raw) ? raw[0] : raw; // track files may be wrapped in a top-level array
   const samples = samplesPath ? JSON.parse(readFileSync(samplesPath, "utf8")) : {};
   const date = new Date().toISOString().slice(0, 10);
   const { indexHtml } = buildSite(track, { samples, assume, date });
