@@ -19,14 +19,26 @@ for.
 
 ## Before you start
 
-This skill calls the `nsls-dns-proxy` service. It needs two values, available
-in the builder-toolkit env:
+This skill calls the `nsls-dns-proxy` service. It reads two values from your
+Claude Code environment (the `env` block in `~/.claude/settings.json`):
 
-- `NSLS_DNS_PROXY_URL` — the deployed proxy (e.g. `https://nsls-dns-proxy.up.railway.app`)
-- `NSLS_DNS_PROXY_TOKEN` — the shared bearer token
+- `NSLS_DNS_PROXY_URL` — the deployed proxy:
+  `https://nsls-dns-proxy-production.up.railway.app`
+  (note the `-production` — the bare `nsls-dns-proxy.up.railway.app` host 404s)
+- `NSLS_DNS_PROXY_TOKEN` — the shared bearer token. It's a secret, so it lives
+  in no repo. Self-serve it from the nsls.org-gated doc (sign in with your NSLS
+  Google account): https://docs.google.com/document/d/19hXZEgdgacnvzDIza6t5o26Zm7UpcFiYMPOknynukR8/edit
+  (Source of truth is the Doppler project `nsls-dns-proxy` → `PROXY_AUTH_TOKEN`.)
 
-If either is missing, tell the user to run `/connect` or add them to
-`~/.claude/local-plugins/nsls-builder-toolkit/.env`, then stop.
+Confirm both are set and the service is up before doing anything else:
+
+```bash
+echo "URL=$NSLS_DNS_PROXY_URL"            # should print the -production host
+curl -s "$NSLS_DNS_PROXY_URL/health"      # expect {"ok":true,"service":"nsls-dns-proxy",...}
+```
+
+If either var is missing, run `/connect` and pick **NSLS DNS Proxy** — it writes
+both into your `settings.json` `env` block. Then stop until they're set.
 
 ## Why this is safe (say this if asked)
 

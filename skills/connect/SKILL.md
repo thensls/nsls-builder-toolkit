@@ -368,6 +368,40 @@ To use: `npm install braintrust` in your project, set `BRAINTRUST_API_KEY` as an
 
 ---
 
+### NSLS DNS Proxy
+
+**What:** The scoped service that puts apps on branded `nsls.org` subdomains (e.g. `signal.nsls.org`). It can ONLY create/update/delete subdomain CNAME/A/AAAA records — it physically cannot touch email, the apex, `www`, or `auth`.
+**Skills that use it:** `/add-domain`
+
+**Not an MCP integration.** The `/add-domain` skill calls the proxy over plain HTTP with `curl`. It reads two values straight from your environment — no MCP server, no `mcpServers` block.
+
+**Two env vars** (add to the top-level `env` block in `~/.claude/settings.json`):
+
+```json
+"env": {
+  "NSLS_DNS_PROXY_URL": "https://nsls-dns-proxy-production.up.railway.app",
+  "NSLS_DNS_PROXY_TOKEN": "<shared bearer token>"
+}
+```
+
+- `NSLS_DNS_PROXY_URL` — public, fixed: `https://nsls-dns-proxy-production.up.railway.app`. (The bare `nsls-dns-proxy.up.railway.app` 404s — it must include `-production`.)
+- `NSLS_DNS_PROXY_TOKEN` — a shared secret, so it's NOT in any repo. Self-serve it from the nsls.org-gated credentials doc (sign in with your NSLS Google account): https://docs.google.com/document/d/19hXZEgdgacnvzDIza6t5o26Zm7UpcFiYMPOknynukR8/edit — copy the token from there. (Source of truth for rotation is the Doppler project `nsls-dns-proxy` → `PROXY_AUTH_TOKEN`; if it's rotated, that doc is updated to match.)
+
+After adding them, restart Claude Code so the `env` block reloads.
+
+**Verify:**
+```bash
+curl -s "$NSLS_DNS_PROXY_URL/health"   # expect {"ok":true,"service":"nsls-dns-proxy","railwayVerify":true}
+```
+A `200` with `"ok":true` means you're connected. A `404` ("Application not found") means the URL is wrong — check for the `-production` suffix.
+
+**Known issues from setup:**
+- The most common mistake is the URL: `nsls-dns-proxy.up.railway.app` (no `-production`) returns Railway's "Application not found." Use the `-production` host.
+- A `401`/`403` from `/domains` means the token is missing or wrong — re-check `NSLS_DNS_PROXY_TOKEN`.
+- These are plain env vars, not an MCP server, so nothing appears under `/mcp`. The only "connection" is the two vars being present in your shell — confirm with `echo "$NSLS_DNS_PROXY_URL"`.
+
+---
+
 ### Snowflake
 
 **What:** Data warehouse.
