@@ -17,6 +17,7 @@ visual language changes.
    `git -C <ignite-next> diff <pinned-sha>..HEAD -- src/components/SubStepRenderer.tsx src/components/fields src/components/ui/button.tsx src/app/globals.css`
    Hand-update `components.css` / `render-substep.mjs` for any changed classNames.
 4. Re-run the gallery through a browser (serve `prototype/design-kit/` and screenshot `gallery.html`) and eyeball.
+   For a fuller check, build a real track and drive it with `scripts/walk.mjs` (requires Playwright — see its header).
 5. Update the pinned SHA above and the watermark date.
 
 ## What is mechanical vs hand-authored

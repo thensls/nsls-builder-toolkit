@@ -1,3 +1,8 @@
+// QA harness: drives a served prototype through every screen, screenshotting each and
+// flagging blank screens, unresolved {tokens}, and stuck/no-advance steps.
+// Requires Playwright installed (`npm i -D playwright && npx playwright install chromium`).
+// Usage: node scripts/walk.mjs http://localhost:3000
+// (Used manually for QA now; the Plan-3 focus-group phase builds on this harness.)
 import { chromium } from "playwright";
 const URL = process.argv[2];
 const browser = await chromium.launch();

@@ -11,6 +11,11 @@ test("safeUrl drops javascript: and other unsafe schemes, keeps safe ones", () =
   assert.equal(safeUrl("data:image/png;base64,AAAA"), "data:image/png;base64,AAAA");
 });
 
+test("safeUrl strips control chars so a tab can't smuggle a javascript: scheme", () => {
+  assert.equal(safeUrl("java\tscript:alert(1)"), "");
+  assert.equal(safeUrl("java\nscript:alert(1)"), "");
+});
+
 test("option with a javascript: imageUrl emits no img tag", () => {
   const html = renderSubstep({ id: "x", slug: "v", title: "V", prompt: "Pick", type: "collect", fieldType: "image-multiselect",
     options: [{ text: "A", imageUrl: "javascript:alert(1)" }] }, {});

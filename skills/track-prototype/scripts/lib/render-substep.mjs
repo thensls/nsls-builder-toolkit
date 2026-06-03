@@ -9,7 +9,9 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
 // (blocks javascript:/vbscript:/data:text). Allows http(s), protocol-relative,
 // root/relative paths, and data:image/. Returns "" for anything else.
 export function safeUrl(u) {
-  const s = String(u ?? "").trim();
+  // Strip control chars/whitespace first — browsers do this before resolving a URL, so
+  // "java\tscript:" would otherwise sneak past the scheme check.
+  const s = String(u ?? "").replace(/[\u0000-\u001f]/g, "").trim();
   if (s === "") return "";
   if (/^(https?:\/\/|\/\/|\/|\.\/|\.\.\/)/i.test(s)) return s;
   if (/^data:image\//i.test(s)) return s;
