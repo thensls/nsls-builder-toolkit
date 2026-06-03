@@ -156,7 +156,7 @@ The design kit is hand-mirrored, so it drifts when the app's design changes. `SY
   - **Hard caps:** model pinned to `gpt-4o`, small `max_tokens`, system-prompt shape constrained to track-preview use.
 - Deploy notifications follow the existing workflow→bot pattern if wired; not required for v1.
 
-**Branding:** optionally `track-preview.nsls.org` via `/add-domain` (safe-by-construction subdomain). *(Pending Kevin's yes/skip.)*
+**Branding:** none — prototypes call the raw Railway URL (`https://track-preview-proxy.up.railway.app`). Decided 2026-06-03: not worth a branded subdomain for an internal proxy endpoint.
 
 ---
 
@@ -178,18 +178,32 @@ Four experts read the conversation + screenshots, debate, and converge on **rank
 - **Product/Engagement Strategist** — adoption/retention mechanics, value-promise strength, predicted drop-off (most tied to the rubric metrics)
 
 ### 8.4 Scoring (rubric)
-The panel scores the track on **8 dimensions, 1–10 each, plus a composite adoption/engagement index.** Each dimension is anchored (what a 3 vs 7 vs 10 looks like — defined in `focus-group-rubric.md`) and mapped to the PostHog metric it predicts:
+The panel scores the track on **8 dimensions, 1–10 each**, judged **from the run-through** (screenshots + click-through), not from the JSON. **7 is the ship bar** per dimension. Full anchors live in `references/focus-group-rubric.md`; summarized here:
 
-| # | Dimension | Predicts (PostHog, once live) |
-|---|-----------|-------------------------------|
-| 1 | Value clarity at entry | Track start rate |
-| 2 | First-step ease | Step-1 drop-off |
-| 3 | Cognitive load & pacing | Mid-track drop-off, time-per-substep |
-| 4 | Motivation & momentum (celebrations) | Step-to-step continuation rate |
-| 5 | Personalization payoff | Engagement depth (chat turns, generate accepts) |
-| 6 | Copy resonance & tone | Completion + sentiment |
-| 7 | Perceived value at completion (peak-end) | Completion rate + next-track uptake |
-| 8 | Trust & fit (first-gen / skeptical) | Drop-off in at-risk segments |
+| # | Dimension | Predicts (PostHog, once live) | Weight |
+|---|-----------|-------------------------------|--------|
+| 1 | Value clarity at entry | Track start rate | ×1.5 |
+| 2 | First-step ease | Step-1 drop-off | ×1.25 |
+| 3 | Cognitive load & pacing | Mid-track drop-off, time-per-substep | ×1.0 |
+| 4 | Motivation & momentum (celebrations) | Step-to-step continuation rate | ×1.25 |
+| 5 | Personalization payoff | Engagement depth (chat turns, generate accepts) | ×1.0 |
+| 6 | Copy resonance & tone | Completion + sentiment | ×1.0 |
+| 7 | Perceived value at completion (peak-end) | Completion rate + next-track uptake | ×1.5 |
+| 8 | Trust & fit (first-gen / skeptical) | Drop-off in at-risk segments | ×1.0 |
+
+**Anchors (1–2 / 5–6 / 9–10):**
+1. **Value clarity** — no/vague promise · promise present but generic or buried · concrete deliverable + compelling reason on screen 1, repeatable in one sentence.
+2. **First-step ease** — cold-opens heavy free-text/long form · moderate first ask, mild hesitation · near-frictionless first win, instant momentum.
+3. **Load & pacing** — 10+ collects no break, walls of text · mostly fine, 1–2 heavy spots · every step single-themed (4–8 collects) with synthesis breaks, effortless rhythm.
+4. **Momentum** — no/generic celebration · present but bland, win not named · each milestone named specifically + previews next, pulls you forward.
+5. **Personalization payoff** — none or tokens empty/awkward · surface only ("Hi {name}") · later screens build on earlier answers, AI output feels specifically theirs.
+6. **Copy resonance** — off-brand/corporate/condescending · serviceable but flat · warm, specific, peer-level, sounds like Society; a skeptic softens.
+7. **Peak-end value** — ends abruptly, no takeaway · takeaway underwhelms vs effort · ends on a high with a real artifact they'll reference, wants the next track.
+8. **Trust & fit** — assumes privilege, invasive early · neutral, neither alienates nor reassures · actively meets at-risk members where they are, safe/optional, edge personas stay in.
+
+**Composite** = weighted average using the weights above (sum of weights = 9.5), normalized to a 1–10 **adoption/engagement index**. Weights are tunable once PostHog calibration data lands.
+
+**Ship-bar rule:** any dimension scoring **< 7 automatically generates a ranked recommendation**, even when the composite is high — so a single weak spot (e.g., a flat ending) can't hide behind a good average.
 
 ### 8.5 Outputs
 - **Google Doc** (`gdoc-build`): full conversation + expert synthesis + ranked recommendations + scorecard. The read-first artifact for the designer.
@@ -260,7 +274,6 @@ Per "after we get the build right":
 - **Design drift** — hand-mirrored kit will lag the app; mitigated by `SYNC.md` + visible "approximate preview" watermark.
 - **Rubric validity unproven** — the 8 dimensions are a hypothesis until PostHog calibration; that's the explicit point of storing predictions.
 - **Cost** — live AI per run-through costs tokens; rate limiting + small `max_tokens` + baked fallback bound it.
-- **Open question:** brand the proxy `track-preview.nsls.org`? (yes/skip)
 
 ---
 
