@@ -8,6 +8,13 @@ import { flattenSubsteps } from "../prototype/player-core.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROTO = join(HERE, "..", "prototype");
 
+// Stringify for embedding inside a <script> tag: escape "<" so a value containing
+// "</script>" can't close the tag early (the raw track object is injected unescaped
+// into window.__TRACK__). Standard hardening for JSON-in-HTML.
+function jsonForScript(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
 export function buildSite(track, opts = {}) {
   const errs = findOrderingErrors([track], { assume: opts.assume || [] });
   if (errs.length) throw new Error("Token ordering errors:\n" + errs.join("\n"));
@@ -15,8 +22,8 @@ export function buildSite(track, opts = {}) {
   const screens = flattenSubsteps(track).map((sub) => renderSubstep(sub, ctx));
   const template = readFileSync(join(PROTO, "template.html"), "utf8");
   const indexHtml = template
-    .replace("%%TRACK%%", JSON.stringify(track))
-    .replace("%%SCREENS%%", JSON.stringify(screens))
+    .replace("%%TRACK%%", jsonForScript(track))
+    .replace("%%SCREENS%%", jsonForScript(screens))
     .replace("__DATE__", opts.date || "");
   return { indexHtml, screens };
 }
