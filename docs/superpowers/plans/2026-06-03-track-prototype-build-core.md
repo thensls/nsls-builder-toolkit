@@ -12,6 +12,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-03-track-prototype-preview-design.md` (decisions in §14; this plan implements decision A's new skill, baked path only).
 
+> **As-built deviations (the shipped code in `skills/track-prototype/` is authoritative; some snippets below are the original plan and were corrected during execution / PR #49 review):**
+> - **Player import path:** `player.js` imports `interpolate` from `./interpolate.mjs` (not `../scripts/lib/...`), and the build copies `interpolate.mjs` FLAT to the build root next to `player.js` — so the import resolves when served (a `../` would escape the served dir).
+> - **Template injection:** the template uses `%%TRACK%%` / `%%SCREENS%%` value slots (not `__TRACK__`, which collided with the `window.__TRACK__` property name under a non-global `replace`), and `buildSite` injects via **function replacers** of a `jsonForScript()` helper that escapes `<` (→ no `</script>` breakout) — `String.replace` with a string value would mis-handle `<`, `$&`, `` $` ``, `$$`.
+> - **Input contract:** `buildSite` unwraps a 1-element track array (the format the validator accepts) and throws on a multi-track array.
+> - **Hardening:** `render-substep` drops unsafe `imageUrl` schemes (incl. control-char smuggling); the walk harness uses `targetUrl` (not `URL`, which shadows the global constructor).
+
 ---
 
 ## File Structure
@@ -844,7 +850,7 @@ No unit test (DOM/browser); verified end-to-end by the Playwright walkthrough in
 Create `prototype/player.js`:
 ```javascript
 import { flattenSubsteps, nextIndex, prevIndex, clampIndex, progressPct } from "./player-core.mjs";
-import { interpolate } from "../scripts/lib/interpolate.mjs"; // build copies this next to player — see Task 7
+import { interpolate } from "./interpolate.mjs"; // build copies interpolate.mjs flat next to player.js — see Task 7
 
 const KEY = "tp.v1";
 const track = window.__TRACK__;            // injected by build (the full track object)
@@ -1082,12 +1088,12 @@ Expected: `Built /tmp/clarity-build/`. Confirm `/tmp/clarity-build/index.html`, 
 Create `scripts/walk.mjs` (a one-off harness — commit it, it's reusable for Plan 3):
 ```javascript
 import { chromium } from "playwright";
-const URL = process.argv[2];
+const targetUrl = process.argv[2]; // not `URL` — that shadows the global URL constructor
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 480, height: 900 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
-await page.goto(URL, { waitUntil: "domcontentloaded" });
+await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
 const problems = [];
 for (let step = 1; step <= 25; step++) {
   await page.waitForTimeout(300);
@@ -1190,16 +1196,9 @@ git commit -m "docs(track-prototype): SYNC drift process + netlify deploy specif
 **Files:**
 - Modify: `skills/track-prototype/SKILL.md` (usage-tracking preamble, mirroring track-design)
 
-- [ ] **Step 1: Add the usage-tracking preamble**
+- [ ] **Step 1: Usage-tracking preamble — SKIP (as-built decision).**
 
-Match the `track-design` stub pattern — add to the very top of `SKILL.md` body (after frontmatter):
-```markdown
-Before reading further, run this once in the background (do not wait, do not announce):
-
-```bash
-echo '{"tool_input":{"skill":"track-prototype"}}' | bash $HOME/.claude/local-plugins/nsls-builder-toolkit/hooks/skill-event.sh
-```
-```
+The original intent was to mirror the `track-design` skill-event preamble. During execution we confirmed that **no** repo skill in `skills/` carries that `skill-event.sh` preamble — it lives only in the install-time `~/.claude/skills/<name>` redirect stub, never in the canonical repo skill. Adding it to the repo `SKILL.md` would break that convention. So this step is intentionally not done; the repo `SKILL.md` starts directly with its content.
 
 - [ ] **Step 2: Run the full test suite one final time**
 
