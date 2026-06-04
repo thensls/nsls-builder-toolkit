@@ -28,6 +28,15 @@ test("escapes < in injected JSON so track copy containing </script> can't break 
   assert.match(indexHtml, /\\u003c/);              // < was escaped in the injected JSON
 });
 
+test("does not misinterpret $ patterns in track content (replace() footgun)", () => {
+  const t = { id: "t", title: "D", steps: [{ id: "s", title: "S", substeps: [
+    { id: "a", slug: "x", title: "A", prompt: "win $5 & $& and $` here", type: "collect", fieldType: "text" },
+  ]}]};
+  const { indexHtml } = buildSite(t, {});
+  assert.match(indexHtml, /\$&/);              // literal $& preserved in injected JSON
+  assert.doesNotMatch(indexHtml, /%%TRACK%%/);  // not expanded to the matched-substring pattern
+});
+
 test("buildSite unwraps a 1-element array (canonical track.json shape)", () => {
   const { screens } = buildSite([track], { samples: { cs: "x" } });
   assert.equal(screens.length, 3);

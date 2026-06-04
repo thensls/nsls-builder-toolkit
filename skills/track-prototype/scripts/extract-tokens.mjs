@@ -43,7 +43,7 @@ export function extractTokensCss(globalsSrc) {
   for (const body of themeMatches) {
     body.split("\n")
       .map((l) => l.trim())
-      .filter((l) => /^--[a-z0-9-]+\s*:\s*#/i.test(l)) // only direct hex values
+      .filter((l) => /^--[a-z0-9-]+\s*:\s*#[^;]+;/i.test(l)) // only complete single-line hex values
       .forEach((p) => themeProps.push(p));
   }
 

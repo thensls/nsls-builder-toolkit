@@ -29,10 +29,12 @@ export function buildSite(input, opts = {}) {
   const ctx = { samples: opts.samples || {} };
   const screens = flattenSubsteps(track).map((sub) => renderSubstep(sub, ctx));
   const template = readFileSync(join(PROTO, "template.html"), "utf8");
+  // Use FUNCTION replacers: a string replacement would interpret $&, $`, $$, $n in the
+  // value as special patterns, corrupting JSON whose content contains a literal "$&" etc.
   const indexHtml = template
-    .replace("%%TRACK%%", jsonForScript(track))
-    .replace("%%SCREENS%%", jsonForScript(screens))
-    .replace("__DATE__", opts.date || "");
+    .replace("%%TRACK%%", () => jsonForScript(track))
+    .replace("%%SCREENS%%", () => jsonForScript(screens))
+    .replace("__DATE__", () => opts.date || "");
   return { indexHtml, screens };
 }
 

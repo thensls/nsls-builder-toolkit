@@ -29,19 +29,20 @@ function captureCurrent() {
   const grid = root.querySelector("[data-slug][data-multi]");
   if (grid) {
     const chosen = [...grid.querySelectorAll('[data-option][aria-selected="true"]')].map((b) => b.dataset.value);
-    if (chosen.length) state.answers[grid.dataset.slug] = chosen.join(", ");
+    state.answers[grid.dataset.slug] = chosen.join(", "); // always write — empty when deselected, so stale data clears
   }
 }
 
 function advance() { captureCurrent(); state.i = nextIndex(state.i, subs.length); persist(); render(); }
-function back() { state.i = prevIndex(state.i, subs.length); persist(); render(); }
+function back() { captureCurrent(); state.i = prevIndex(state.i, subs.length); persist(); render(); }
 
 function wire() {
   root.querySelector("[data-next]")?.addEventListener("click", advance);
   document.getElementById("tp-back")?.toggleAttribute("disabled", state.i === 0);
   root.querySelectorAll("[data-option]").forEach((opt) => opt.addEventListener("click", () => {
     const grid = opt.closest("[data-slug]");
-    const multi = grid?.dataset.multi === "true";
+    if (!grid) return;
+    const multi = grid.dataset.multi === "true";
     if (!multi) grid.querySelectorAll("[data-option]").forEach((o) => o.setAttribute("aria-selected", "false"));
     opt.setAttribute("aria-selected", opt.getAttribute("aria-selected") === "true" ? "false" : "true");
   }));

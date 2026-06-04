@@ -4,12 +4,12 @@
 // Usage: node scripts/walk.mjs http://localhost:3000
 // (Used manually for QA now; the Plan-3 focus-group phase builds on this harness.)
 import { chromium } from "playwright";
-const URL = process.argv[2];
+const targetUrl = process.argv[2];
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 480, height: 900 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
-await page.goto(URL, { waitUntil: "domcontentloaded" });
+await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
 const problems = [];
 for (let step = 1; step <= 25; step++) {
   await page.waitForTimeout(300);
