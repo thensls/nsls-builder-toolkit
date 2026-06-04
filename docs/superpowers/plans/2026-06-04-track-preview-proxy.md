@@ -664,6 +664,7 @@ async function streamFromProxy(body, onDelta) {
     if (!res.ok || !res.body) return false;
     const reader = res.body.getReader(); const dec = new TextDecoder();
     for (;;) { const { value, done } = await reader.read(); if (done) break; onDelta(dec.decode(value, { stream: true })); }
+    const tail = dec.decode(); if (tail) onDelta(tail);   // flush any trailing multi-byte char
     return true;
   } catch { return false; }   // any failure → caller keeps the baked sample
 }
