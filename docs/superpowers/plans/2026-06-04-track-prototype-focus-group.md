@@ -443,7 +443,11 @@ export function buildScoreRunFields({ trackSlug, version, contentHash, date, sco
 ---
 
 ## Sequencing
-Pure libs first (Tasks 3–7) — they're the deterministic core and unblock everything. Then the gallery harness (8) and the Airtable base (9). Then wire the orchestrated Phase-2 procedure (10) on top of working libs. Then the calibration seed (11) once Phase 2 runs end-to-end. The panel/orchestration (10) is the least testable and most prompt-sensitive — build it last, on a proven scoring/ledger foundation. Plan 3 can start once Plan 1 merges; it does not require Plan 2 (works on a baked build, just with baked AI screens).
+Pure libs first (Tasks 3–7) — they're the deterministic core and unblock everything. Then the gallery harness (8) and the Airtable base (9). Then wire the orchestrated Phase-2 procedure (10) on top of working libs. Then the calibration seed (11) once Phase 2 runs end-to-end. The panel/orchestration (10) is the least testable and most prompt-sensitive — build it last, on a proven scoring/ledger foundation.
+
+**Plan 3 depends on Plan 2 — live AI is part of the focus-group feedback loop (decided 2026-06-04).** The panel evaluates the **live** `generate`/`chat` output, not the baked fallback, and every iterate-pass regenerates it. So the deterministic libs (Tasks 3–7) can be built right after Plan 1, but the *end-to-end Phase-2 run* (Task 10) requires Plan 2's proxy live. Two consequences for the harness/protocol:
+- **Capture, don't re-generate.** The Task-8 walkthrough must record each live AI generation into `report.json` so the panel scores a *fixed* artifact per run (re-querying the model mid-scoring would judge different text than the screenshots show).
+- **Evaluation mode.** Run the proxy in a low-temperature mode during focus-group runs (Plan 2 should expose this) so a re-run's score delta reflects track changes, not AI randomness. Even so, treat AI-dependent sub-checks' deltas as noisier than structural ones.
 
 ## Risks
 - **Synthetic-persona adoption bias** — mitigated by the adversarial skeptic (Stage 4) and the explicit ranking-not-prediction framing; do not present scores as predictions.

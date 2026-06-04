@@ -363,7 +363,12 @@ All three forks the deepen-plan research surfaced are now decided.
 - **`society-authoring/scripts/export-tracks.ts`** — the Track→Step→SubStep traversal; **reference for the inverse (the Plan 4 importer)**.
 - **Not extracted:** the simulator/DeviceEmulator and admin editor — welded to tRPC/Prisma/session/auth; lifting costs more than our clean static build.
 
-**Open strategic note (not decided):** if the long-term author is *non-technical* (a GUI editor) rather than a Claude-Code/conversational builder, society-authoring's editor is the only existing head start on that — a reason not to delete it even though we won't fix it now.
+**Resolved 2026-06-04 — no GUI in the short/medium term.** The author does not need a GUI to build: they author **conversationally** (via the `track-design` skill), and the product is the **preview + focus-group iteration loop** to iterate against. society-authoring's visual editor is therefore parked (long-term-only, if ever) — kept as a parts donor, not on the roadmap. This makes the iterate-against loop the core deliverable.
+
+**Roadmap horizons (order unchanged 1→2→3→4; confirmed 2026-06-04):**
+- **Short term** — the iterate-against loop: **Plan 1 (preview, shipped)** → **Plan 2 (live-AI proxy)** → **Plan 3 (focus group + rubric + "implement the focus-group changes")**. **Live AI is part of the focus-group feedback loop (confirmed 2026-06-04):** the focus group evaluates the *live* `generate`/`chat` output (not the baked fallback), and every iterate-pass regenerates it — so Plan 3 **depends on** Plan 2, which is why Plan 2 precedes it. Authoring stays conversational (`track-design`). **Methodology wrinkle:** live AI is non-deterministic, so a re-run's score delta could reflect AI variance, not just track changes. Mitigate by having the Phase-2 walkthrough **capture** each live generation into `report.json` so the panel scores a *fixed* artifact per run, and run the proxy in a **low-temperature evaluation mode** during focus-group runs to reduce the confound. The baked fallback remains only for proxy-down resilience, not as the thing being scored.
+- **Medium term** — **Plan 4 (JSON→DB importer → publish into ignite-next)**: the production on-ramp once tracks are iterated and ready to ship.
+- **Long term / parked** — a visual GUI editor (the society-authoring paradigm). Not planned; revisit only if non-technical authoring becomes a goal.
 
 ---
 

@@ -479,6 +479,8 @@ export function makeGenerateHandler({ model, maxOutputTokens, maxInputChars }) {
 }
 ```
 > `model` is injected (pinned `gpt-5.1-mini` in prod via `app.mjs`), never client-chosen. `maxOutputTokens` clamps cost; the input cap bounds prompt cost; chat history arrives in `messages`.
+>
+> **Evaluation mode (for Plan 3's focus-group loop).** Live AI is part of the focus-group feedback loop, and the panel must score a stable artifact across iterations. Accept an optional `eval: true` in the body (or an `X-Eval-Mode` header) that sets a low **`temperature` (~0.1)** for the `streamText` call, so a re-run's output — and therefore the focus group's score delta — reflects track changes rather than sampling noise. Temperature stays server-controlled (clamped); the client only toggles the mode. Add a test asserting `temperature` is passed through when `eval` is set.
 
 - [ ] **Step 4: Run → PASS. Commit** `feat: /api/generate streaming handler with caps + abort`.
 
