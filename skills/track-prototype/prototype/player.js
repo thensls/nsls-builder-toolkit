@@ -10,6 +10,7 @@ const bar = document.getElementById("tp-progress-bar");
 
 let state = load();
 let chatInFlight = false;  // true while a chat stream is running — prevents double-sends
+let aiController = null;   // AbortController for the current in-flight AI stream (generate or chat)
 
 function load() {
   try {
@@ -24,17 +25,17 @@ function persist() { localStorage.setItem(KEY, JSON.stringify(state)); }
 // Streaming helper
 // ANY failure returns false so the caller can keep/restore the baked sample.
 // ---------------------------------------------------------------------------
-async function streamFromProxy(body, onDelta) {
+async function streamFromProxy(body, onDelta, signal) {
   const p = window.__PROXY__; if (!p) return false;
   try {
     const res = await fetch(p.url + "/api/generate", { method: "POST",
-      headers: { "Content-Type": "application/json", "X-Proxy-Token": p.token || "" }, body: JSON.stringify(body) });
+      headers: { "Content-Type": "application/json", "X-Proxy-Token": p.token || "" }, body: JSON.stringify(body), signal });
     if (!res.ok || !res.body) return false;
     const reader = res.body.getReader(); const dec = new TextDecoder();
     for (;;) { const { value, done } = await reader.read(); if (done) break; onDelta(dec.decode(value, { stream: true })); }
     const tail = dec.decode(); if (tail) onDelta(tail);   // flush any trailing multi-byte char
     return true;
-  } catch { return false; }   // ANY failure → caller keeps the baked sample (critical)
+  } catch { return false; }   // ANY failure (incl. AbortError) → caller keeps the baked sample (critical)
 }
 
 // ---------------------------------------------------------------------------
@@ -59,8 +60,8 @@ function captureCurrent() {
   }
 }
 
-function advance() { captureCurrent(); state.i = nextIndex(state.i, subs.length); persist(); render(); }
-function back() { captureCurrent(); state.i = prevIndex(state.i, subs.length); persist(); render(); }
+function advance() { captureCurrent(); state.i = nextIndex(state.i, subs.length); persist(); aiController?.abort(); chatInFlight = false; render(); }
+function back() { captureCurrent(); state.i = prevIndex(state.i, subs.length); persist(); aiController?.abort(); chatInFlight = false; render(); }
 
 function wire() {
   root.querySelector("[data-next]")?.addEventListener("click", advance);
@@ -92,9 +93,13 @@ async function maybeRunGenerateAI() {
   out.textContent = "";
   out.classList.add("is-writing");
 
+  aiController?.abort();
+  aiController = new AbortController();
+
   const ok = await streamFromProxy(
     { type: "generate", template: sub.aiPromptConfig?.template || sub.prompt, profile: state.answers },
-    (d) => { out.textContent += d; }
+    (d) => { out.textContent += d; },
+    aiController.signal
   );
 
   out.classList.remove("is-writing");
@@ -164,9 +169,13 @@ function wireChatAI() {
     // Build messages array including the user turn we just pushed
     const messages = [...state.chat[slug]]; // already has the user turn
 
+    aiController?.abort();
+    aiController = new AbortController();
+
     const ok = await streamFromProxy(
       { type: "chat", system: sub.chatSystemPrompt, profile: state.answers, messages },
-      (d) => { aiBubble.textContent += d; }
+      (d) => { aiBubble.textContent += d; },
+      aiController.signal
     );
 
     aiBubble.classList.remove("is-writing");
@@ -211,6 +220,7 @@ document.getElementById("tp-back").addEventListener("click", back);
 document.getElementById("tp-reset")?.addEventListener("click", () => {
   localStorage.removeItem(KEY);
   state = { i: 0, answers: {}, chat: {} };
+  aiController?.abort(); chatInFlight = false;
   render();
 });
 render();
