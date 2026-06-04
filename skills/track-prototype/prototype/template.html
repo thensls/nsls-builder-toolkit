@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Track Preview</title>
+<link rel="stylesheet" href="design-kit/tokens.css">
+<link rel="stylesheet" href="design-kit/components.css">
+<link rel="stylesheet" href="design-kit/wizard.css">
+</head><body>
+<div class="tp-frame">
+  <div class="tp-header"><div class="tp-progress"><div class="tp-progress-bar" id="tp-progress-bar"></div></div></div>
+  <div class="tp-body" id="tp-body"></div>
+  <div class="tp-footer"><button class="tp-back" id="tp-back">← Back</button><button class="tp-back" id="tp-reset">↻ Restart</button></div>
+</div>
+<div class="tp-watermark">approximate preview — mirrors app design, built __DATE__</div>
+<script>window.__TRACK__ = %%TRACK%%; window.__SCREENS__ = %%SCREENS%%;</script>
+<script type="module" src="player.js"></script>
+</body></html>
