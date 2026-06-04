@@ -162,6 +162,13 @@ test("throws when OPENAI_API_KEY is missing", () => {
 test("killSwitch true when env is '1'", () => {
   assert.equal(loadConfig({ OPENAI_API_KEY: "k", REDIS_URL: "r", KILL_SWITCH: "1" }).killSwitch, true);
 });
+
+test("blank numeric env vars fall through to defaults (not 0)", () => {
+  const c = loadConfig({ OPENAI_API_KEY: "k", REDIS_URL: "r", DAILY_REQUEST_CAP: "", MAX_OUTPUT_TOKENS: "", PORT: "" });
+  assert.equal(c.dailyRequestCap, 2000);   // not 0
+  assert.equal(c.maxOutputTokens, 768);    // not 0
+  assert.equal(c.port, 8080);              // not 0
+});
 ```
 
 - [ ] **Step 2: Run → FAIL** (`node --test test/config.test.mjs`).
@@ -177,11 +184,13 @@ export function loadConfig(env = process.env) {
     proxyToken: env.PROXY_TOKEN || "",
     allowedOrigins: (env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean),
     redisUrl: env.REDIS_URL,
-    dailyRequestCap: Number(env.DAILY_REQUEST_CAP ?? 2000),
-    maxOutputTokens: Number(env.MAX_OUTPUT_TOKENS ?? 768),
-    maxInputChars: Number(env.MAX_INPUT_CHARS ?? 6000),
+    // Use `||` not `??`: a blank env var ("") is non-null, and Number("") === 0 —
+    // which would zero the cap (everything 503s), maxOutputTokens, and port.
+    dailyRequestCap: Number(env.DAILY_REQUEST_CAP || 2000),
+    maxOutputTokens: Number(env.MAX_OUTPUT_TOKENS || 768),
+    maxInputChars: Number(env.MAX_INPUT_CHARS || 6000),
     killSwitch: env.KILL_SWITCH === "1",
-    port: Number(env.PORT ?? 8080),
+    port: Number(env.PORT || 8080),
   };
 }
 ```
@@ -362,6 +371,14 @@ test("503 immediately when kill switch is on", async () => {
   app.get("/x", (_q, r) => r.send("ok"));
   await request(app).get("/x").expect(503);
 });
+
+test("FAILS CLOSED (503) when Redis errors — a cost ceiling must not fail open", async () => {
+  const brokenRedis = { incr: async () => { throw new Error("redis down"); }, expire: async () => {} };
+  const app = express();
+  app.use(makeBudget({ redis: brokenRedis, cap: 100, killSwitch: false, today: () => "2026-06-04" }));
+  app.get("/x", (_q, r) => r.send("ok"));
+  await request(app).get("/x").expect(503);
+});
 ```
 `test/rate-limit.test.mjs`:
 ```javascript
@@ -390,7 +407,15 @@ export function makeBudget({ redis, cap, killSwitch, today = () => new Date().to
       if (n === 1) await redis.expire(key, 172800);
       if (n > cap) return res.status(503).json({ error: "daily limit reached" });
       next();
-    } catch { next(); }   // never let a redis blip take the service down; rate-limit still applies
+    } catch {
+      // FAIL CLOSED. This is a cost ceiling — if Redis is down we cannot enforce the
+      // budget, so refuse rather than become an unbounded relay. (The player falls back
+      // to baked AI on a 503, so the user impact is degraded-not-broken.) NOTE: the
+      // rate limiter also uses RedisStore, so Redis availability is itself part of the
+      // security posture — when Redis is down, both ceilings are unavailable, which is
+      // exactly why we 503 here instead of waving requests through.
+      return res.status(503).json({ error: "budget unavailable" });
+    }
   };
 }
 ```
@@ -406,6 +431,7 @@ export const makeRateLimit = (redisClient) =>
     keyGenerator: keyFor,
     store: new RedisStore({ sendCommand: (...args) => redisClient.sendCommand(args) }) });
 ```
+> **Fail closed on store errors (consistent with the budget).** Both cost ceilings depend on Redis, so if the store is unavailable the limiter must NOT wave requests through. Verify the configured store-error behavior blocks (errors → 5xx) rather than silently passing; do not enable any "pass on store error" option. Redis availability is part of the security posture — a Redis health check at boot + alerting is worthwhile.
 
 - [ ] **Step 4: Run → PASS. Commit** `feat: per-(token,ip) rate limit + redis daily budget + kill switch`.
 
