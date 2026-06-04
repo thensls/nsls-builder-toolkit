@@ -491,12 +491,16 @@ export function makeGenerateHandler({ model, maxOutputTokens, maxInputChars }) {
     const { type = "generate", template, system, profile, messages } = req.body ?? {};
     const p = buildPrompt({ type, template, system, profile, messages });
     if (p.size > maxInputChars) return res.status(413).json({ error: "input too large" });
+    // Express `req` has no `.signal` — wire an AbortController to the connection close
+    // so a client disconnect aborts the upstream OpenAI call (stops billing).
+    const controller = new AbortController();
+    req.on("close", () => controller.abort());
     const result = streamText({
       model,
       system: p.system || SYSTEM_GUARD,
       ...(p.messages ? { messages: p.messages } : { prompt: p.prompt }),
       maxOutputTokens,
-      abortSignal: req.signal,           // client disconnect stops the upstream call (stops billing)
+      abortSignal: controller.signal,
     });
     result.pipeTextStreamToResponse(res, {
       headers: { "Cache-Control": "no-transform", "X-Accel-Buffering": "no" },  // else Railway buffers the stream
@@ -685,7 +689,7 @@ Proxy must be provably safe before any public deploy: **Tasks 1–7 (build + tes
 ## Risks
 - **Open-relay abuse** — bounded by daily cap + dedicated key; spend alert is the detection. Accept residual.
 - **`trust proxy` misconfig** silently disables per-IP limiting → `/debug-ip` verification is mandatory in Task 8.
-- **Stream-abort billing** — `abortSignal: req.signal` must be wired (Task 6) or disconnects keep billing.
+- **Stream-abort billing** — an `AbortController` wired to `req.on("close")` must feed `streamText`'s `abortSignal` (Task 6); Express `req` has no `.signal`, so disconnects otherwise keep billing.
 - **Multi-turn chat state** — keep history in `state.chat[slug]`, cap its length before sending (reuse `MAX_INPUT_CHARS` server-side as the backstop).
 - **Model snapshot drift** — pin a dated `gpt-5.1-mini` snapshot; re-verify against the models endpoint when it's deprecated.
 
