@@ -1,10 +1,18 @@
 // Rank correlation for predicted-score vs actual-outcome calibration.
-// NOTE: rank() assigns sequential ranks and does NOT average ties — fine for the small,
-// largely-distinct score sets here. If tie-heavy data appears, switch to average-rank.
+// Uses AVERAGE ranks for ties (standard Spearman) — important here because checks-met
+// totals are integers 0..16 and tie often; sequential ranks would manufacture spurious
+// correlation (a constant series would rank 1,2,3 and look perfectly correlated).
 function rank(xs) {
-  const sorted = [...xs].map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]);
+  const idx = xs.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]);
   const r = Array(xs.length);
-  for (let i = 0; i < sorted.length; i++) r[sorted[i][1]] = i + 1;
+  let i = 0;
+  while (i < idx.length) {
+    let j = i;
+    while (j + 1 < idx.length && idx[j + 1][0] === idx[i][0]) j++;   // span of equal values
+    const avg = (i + j) / 2 + 1;                                      // mean of ranks (i+1..j+1)
+    for (let k = i; k <= j; k++) r[idx[k][1]] = avg;
+    i = j + 1;
+  }
   return r;
 }
 function pearson(a, b) {
