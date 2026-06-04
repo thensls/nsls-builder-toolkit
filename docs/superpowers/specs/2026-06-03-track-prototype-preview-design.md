@@ -346,3 +346,32 @@ All three forks the deepen-plan research surfaced are now decided.
 4. Phase 8 produces, for a build: a focus-group Google Doc, a markdown twin (`conversation.md` + structured `recommendations.md` + `scorecard.md`), and a new row in both `scores.md` and the Airtable ScoreRuns table.
 5. `"implement the focus-group changes"` is actionable from `recommendations.md`, and a re-run produces a v2 row showing score deltas.
 6. `SKILL.md` reflects Phases 7–8, the Reference Index, and the updated DoD; `SYNC.md` documents the re-mirror process.
+
+---
+
+## 15. Prior art & reuse — `society-authoring` (assessed 2026-06-04)
+
+`thensls/society-authoring` is an earlier, never-production-ready attempt at a Society track **authoring** tool: a fork of the member app (same Next.js/tRPC/Prisma stack) with a full visual admin editor, a live **simulator**, AI-generation modals, and draft/publish + versioning. Its own `PLANS/` docs diagnose why it stalled — a **field-explosion** architecture: 40+ type-specific Prisma columns instead of config-as-data, no field registry (one new field type touches 7–9 files), a 1,509-line renderer + a 1,199-line editor, `@ts-nocheck`/`@ts-ignore` through the seams. The member-facing half works; the authoring half isn't clean enough to extend, and the planned refactors were never built.
+
+**Decision: do NOT revive/fix it; continue the lightweight skill pipeline and harvest selectively.** Reviving it means inheriting the exact debt that stalled it (plus DB/auth/versioning we don't need to *preview*). Plan 1 already shipped a working clickable preview in ~30 small tested files — a 120-line `render-substep.mjs` vs their 1,509-line renderer — which validates the lighter paradigm. The repo's refactor docs are kept as a **guardrail**: keep substep config as data; keep the renderer a thin router.
+
+**Canonical app: `ignite-next`** (society-authoring = parts donor). Design kit and any future importer target ignite-next.
+
+**Harvest (reuse decisions):**
+- **Schema contract — reconciled 2026-06-04.** ignite-next's `tracks-export.json` has **58 substep keys, all already covered** by `references/track-json-schema.md` (derived from it). The only divergence: society-authoring adds one field, `includeInContext` (controls whether a substep response feeds AI context) — not needed since ignite-next is canonical; noted in case the apps re-converge. **No schema change required; our `track.json` is import-ready against the canonical app.**
+- **`society-authoring/src/lib/ai/prompt-builder.ts`** — clean, dependency-free prompt assembler (template-var substitution, message arrays). **Port/adapt into Plan 2** so the proxy's prompt assembly mirrors authoring-time prompts.
+- **`society-authoring/scripts/export-tracks.ts`** — the Track→Step→SubStep traversal; **reference for the inverse (the Plan 4 importer)**.
+- **Not extracted:** the simulator/DeviceEmulator and admin editor — welded to tRPC/Prisma/session/auth; lifting costs more than our clean static build.
+
+**Open strategic note (not decided):** if the long-term author is *non-technical* (a GUI editor) rather than a Claude-Code/conversational builder, society-authoring's editor is the only existing head start on that — a reason not to delete it even though we won't fix it now.
+
+---
+
+## 16. Plan 4 (stub) — JSON → DB importer → publish (production on-ramp)
+
+Our pipeline authors a `track.json` and previews/focus-groups it, but getting a track **live** still needs an import into the app — and ignite-next only has *export*, never *import*. Plan 4 closes that gap.
+
+- **Goal:** take a skill-authored, preview-validated, focus-grouped `track.json` and land it in **ignite-next** as a draft, then ride the app's existing draft/publish + versioning to production.
+- **Approach:** a JSON→DB importer (the inverse of `export-tracks.ts`): map `track.json` → Track/Step/SubStep upserts by stable id, set `isDraft=true`, leave admin-only fields untouched (per the schema doc's never-emit list). Reuse the app's own publish flow rather than rebuilding it.
+- **Gate:** runs only on a validator-passing, ideally focus-group-cleared track.
+- **Status:** stub — detail after Plans 1–3 land and the canonical-app importer surface is confirmed. Lowest priority of the four; it's the production on-ramp, not part of the preview/feedback loop.
