@@ -34,6 +34,16 @@ must exit 0. If it does not, stop and send the builder back to track-design Phas
    (Opening `index.html` via `file://` breaks ES modules and fetch — always serve over HTTP.)
 5. **Deploy:** invoke the `netlify-deploy` skill on `prototype-build/`. Record the URL.
 
+   **Live AI (optional):** pass `--proxy-url <url> --proxy-token <token>` to the build command
+   to enable real streaming responses. Set these once, org-wide, and share the same build flags.
+   Without them the prototype is baked-only (AI samples are pre-written). With them:
+   - `generate` substeps auto-stream a fresh draft when the screen loads.
+   - `chat` substeps are an interactive multi-turn exchange.
+   - Any proxy failure (network, auth, timeout) automatically falls back to the baked sample —
+     reviewers always see something, never a blank screen.
+   AI output is illustrative: the real app runs on Braintrust with different prompts and
+   guardrails. Do not present prototype AI output as production fidelity.
+
    The `netlify-deploy` skill handles auth and the CLI. For a prebuilt folder use:
    `netlify deploy --dir=<abs>/prototype-build --no-build --json`
    Default to a DRAFT deploy (omit --prod) for review links — and for a draft, the
