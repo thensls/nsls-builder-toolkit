@@ -937,7 +937,7 @@ Create `prototype/template.html` (`__HEAD__`/`__DATA__` are replaced by the buil
   <div class="tp-footer"><button class="tp-back" id="tp-back">← Back</button></div>
 </div>
 <div class="tp-watermark">approximate preview — mirrors app design, built __DATE__</div>
-<script>window.__TRACK__ = __TRACK__; window.__SCREENS__ = __SCREENS__;</script>
+<script>window.__TRACK__ = %%TRACK%%; window.__SCREENS__ = %%SCREENS%%;</script>
 <script type="module" src="player.js"></script>
 </body></html>
 ```
@@ -994,16 +994,30 @@ import { flattenSubsteps } from "../prototype/player-core.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROTO = join(HERE, "..", "prototype");
 
-export function buildSite(track, opts = {}) {
+// Embed JSON inside a <script> tag SAFELY: escape "<" so a value containing
+// "</script>" can't close the tag early, and use FUNCTION replacers so $&/$`/$$/$n
+// in the value are not interpreted as special String.replace patterns.
+function jsonForScript(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
+export function buildSite(input, opts = {}) {
+  // A canonical track.json is a top-level ARRAY of tracks (what validate-track-json
+  // accepts). Preview targets one track — unwrap a 1-element array; throw on multi-track.
+  let track = input;
+  if (Array.isArray(input)) {
+    if (input.length !== 1) throw new Error(`Expected one track, got an array of ${input.length}. Pass a single track or a 1-element array.`);
+    track = input[0];
+  }
   const errs = findOrderingErrors([track], { assume: opts.assume || [] });
   if (errs.length) throw new Error("Token ordering errors:\n" + errs.join("\n"));
   const ctx = { samples: opts.samples || {} };
   const screens = flattenSubsteps(track).map((sub) => renderSubstep(sub, ctx));
   const template = readFileSync(join(PROTO, "template.html"), "utf8");
   const indexHtml = template
-    .replace("__TRACK__", JSON.stringify(track))
-    .replace("__SCREENS__", JSON.stringify(screens))
-    .replace("__DATE__", opts.date || "");
+    .replace("%%TRACK%%", () => jsonForScript(track))
+    .replace("%%SCREENS%%", () => jsonForScript(screens))
+    .replace("__DATE__", () => opts.date || "");
   return { indexHtml, screens };
 }
 
@@ -1017,22 +1031,21 @@ function parseArgs(argv) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { file, samplesPath, out, assume } = parseArgs(process.argv.slice(2));
   if (!file) { console.error("Usage: build-prototype.mjs <track.json> [--persona name] [--samples samples.json] [--out dir] [--assume a,b]"); process.exit(2); }
-  const track = JSON.parse(readFileSync(file, "utf8"));
+  const raw = JSON.parse(readFileSync(file, "utf8"));
   const samples = samplesPath ? JSON.parse(readFileSync(samplesPath, "utf8")) : {};
   const date = new Date().toISOString().slice(0, 10);
-  const { indexHtml } = buildSite(track, { samples, assume, date });
+  const { indexHtml } = buildSite(raw, { samples, assume, date }); // buildSite unwraps a 1-element array
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, "index.html"), indexHtml);
   cpSync(join(PROTO, "design-kit"), join(out, "design-kit"), { recursive: true });
   cpSync(join(PROTO, "player.js"), join(out, "player.js"));
   cpSync(join(PROTO, "player-core.mjs"), join(out, "player-core.mjs"));
-  mkdirSync(join(out, "scripts", "lib"), { recursive: true });
-  cpSync(join(HERE, "lib", "interpolate.mjs"), join(out, "scripts", "lib", "interpolate.mjs"));
+  cpSync(join(HERE, "lib", "interpolate.mjs"), join(out, "interpolate.mjs")); // FLAT — next to player.js
   console.log(`Built ${out}/`);
 }
 ```
 
-> Note: the CLI copies `interpolate.mjs` into the build at `scripts/lib/` so `player.js`'s `import "../scripts/lib/interpolate.mjs"` resolves from `prototype-build/`. The `gallery.html` is part of `design-kit/` and ships harmlessly.
+> Note: `player.js`, `player-core.mjs`, and `interpolate.mjs` are all copied FLAT to the build root so `player.js`'s `./player-core.mjs` and `./interpolate.mjs` imports resolve when served. The template uses `%%TRACK%%` / `%%SCREENS%%` value slots (not `__TRACK__`, which would collide with the `window.__TRACK__` property name under a non-global `replace`). The `gallery.html` ships in `design-kit/` harmlessly.
 
 - [ ] **Step 5: Run test to verify it passes**
 
