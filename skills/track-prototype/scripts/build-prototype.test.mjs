@@ -52,3 +52,10 @@ test("buildSite throws on a token used before it is produced", () => {
   ]}]};
   assert.throws(() => buildSite(bad, {}), /\{name\}/);
 });
+
+test("bakes proxy config when provided; null when absent", () => {
+  const withProxy = buildSite(track, { proxy: { url: "https://p", token: "t" } });
+  assert.match(withProxy.indexHtml, /window\.__PROXY__ = \{"url":"https:\/\/p","token":"t"\}/);
+  const without = buildSite(track, {});
+  assert.match(without.indexHtml, /window\.__PROXY__ = null/);
+});
