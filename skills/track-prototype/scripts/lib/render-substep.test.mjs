@@ -58,3 +58,19 @@ test("unknown fieldType falls back to a generic text screen (no throw)", () => {
   const html = renderSubstep({ id: "x", title: "T", prompt: "P", type: "collect", fieldType: "totally-new" }, {});
   assert.match(html, /P/);
 });
+
+test("chat renders data-chat-log, data-chat-input, data-chat-send and a seed bubble", () => {
+  const html = renderSubstep({ id: "x", slug: "coach", title: "Coach", prompt: "Hello!", type: "chat", fieldType: "text" },
+    { samples: { coach: "I am your coach." } });
+  assert.match(html, /data-chat-log/);
+  assert.match(html, /data-chat-input/);
+  assert.match(html, /data-chat-send/);
+  assert.match(html, /I am your coach\./);   // seed bubble present
+});
+
+test("chat without a sample still renders the interactive hooks with a fallback seed", () => {
+  const html = renderSubstep({ id: "x", slug: "coach", title: "Coach", prompt: "Hello!", type: "chat", fieldType: "text" }, {});
+  assert.match(html, /data-chat-log/);
+  assert.match(html, /data-chat-input/);
+  assert.match(html, /data-chat-send/);
+});

@@ -79,11 +79,19 @@ function renderGenerate(sub, ctx) {
 }
 
 function renderChat(sub, ctx) {
+  const slug = esc(sub.slug || "");
   const sample = (ctx.samples && ctx.samples[sub.slug]) || "Tell me what's on your mind.";
-  return `<div class="tp-chat">
-    <div class="tp-bubble tp-bubble-ai" data-tpl>${esc(sub.prompt)}</div>
-    <div class="tp-bubble tp-bubble-ai">${esc(sample)}</div>
-  </div>${continueBtn("Continue")}`;
+  return `<div class="tp-chat" data-chat data-slug="${slug}">
+    <div class="tp-chat-log" data-chat-log>
+      <div class="tp-bubble tp-bubble-ai" data-tpl>${esc(sub.prompt)}</div>
+      <div class="tp-bubble tp-bubble-ai">${esc(sample)}</div>
+    </div>
+  </div>
+  <div class="tp-chat-input-row">
+    <input class="tp-input" data-chat-input placeholder="Reply…">
+    <button class="tp-btn tp-btn-default" data-chat-send>Send</button>
+  </div>
+  ${continueBtn("Continue")}`;
 }
 
 function renderAssessmentResults(sub) {

@@ -34,6 +34,7 @@ export function buildSite(input, opts = {}) {
   const indexHtml = template
     .replace("%%TRACK%%", () => jsonForScript(track))
     .replace("%%SCREENS%%", () => jsonForScript(screens))
+    .replace("%%PROXY%%", () => jsonForScript(opts.proxy || null))
     .replace("__DATE__", () => opts.date || "");
   return { indexHtml, screens };
 }
@@ -42,17 +43,19 @@ function parseArgs(argv) {
   const get = (flag) => { const i = argv.indexOf(flag); return i !== -1 ? argv[i + 1] : undefined; };
   return { file: argv.find((a) => !a.startsWith("--") && a.endsWith(".json")),
     persona: get("--persona"), samplesPath: get("--samples"),
-    out: get("--out") || "prototype-build", assume: (get("--assume") || "").split(",").filter(Boolean) };
+    out: get("--out") || "prototype-build", assume: (get("--assume") || "").split(",").filter(Boolean),
+    proxyUrl: get("--proxy-url"), proxyToken: get("--proxy-token") };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const { file, samplesPath, out, assume } = parseArgs(process.argv.slice(2));
-  if (!file) { console.error("Usage: build-prototype.mjs <track.json> [--persona name] [--samples samples.json] [--out dir] [--assume a,b]"); process.exit(2); }
+  const { file, samplesPath, out, assume, proxyUrl, proxyToken } = parseArgs(process.argv.slice(2));
+  if (!file) { console.error("Usage: build-prototype.mjs <track.json> [--persona name] [--samples samples.json] [--out dir] [--assume a,b] [--proxy-url url] [--proxy-token token]"); process.exit(2); }
   const raw = JSON.parse(readFileSync(file, "utf8"));
   const track = Array.isArray(raw) ? raw[0] : raw; // track files may be wrapped in a top-level array
   const samples = samplesPath ? JSON.parse(readFileSync(samplesPath, "utf8")) : {};
   const date = new Date().toISOString().slice(0, 10);
-  const { indexHtml } = buildSite(track, { samples, assume, date });
+  const proxy = proxyUrl ? { url: proxyUrl, token: proxyToken || "" } : undefined;
+  const { indexHtml } = buildSite(track, { samples, assume, date, proxy });
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, "index.html"), indexHtml);
   cpSync(join(PROTO, "design-kit"), join(out, "design-kit"), { recursive: true });
