@@ -78,7 +78,7 @@ Per-run output (in the builder's track dir): `focus-group/v{N}/{conversation.md,
 
 - [ ] **Step 3: Write the structured-output schemas.**
   `persona-reaction.json`: `{ persona, perScreen: [{ screen, reaction, wouldContinue: bool, friction?: string }], wouldDrop: bool, dropScreen?: number }`.
-  `expert-verdict.json`: `{ expert, sample, dimensions: [{ dim, subChecks: [{ key, verdict: "MET"|"UNMET", evidenceScreen, rationale }] }] }`.
+  `expert-verdict.json`: keyed objects (so each dim + sub-check appears exactly once, structurally): `{ expert, sample, dimensions: { value|pacing|copy|fit: { a|b|c|d: { verdict: "MET"|"UNMET", evidenceScreen, rationale } } } }`.
 
 - [ ] **Step 4: Commit** `docs(track-prototype): focus-group panel + anti-groupthink protocol + output schemas`.
 

@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ExpertVerdict",
+  "description": "One expert's single-sample verdict over all 16 rubric sub-checks (Stage 2 blind, repeated 3x; Stage 3 revised). Feeds scorecard.mjs. dimensions/sub-checks are KEYED OBJECTS (not arrays) so the 4 dimensions and 4 sub-checks are each present exactly once — structurally, no dupes or omissions.",
+  "type": "object",
+  "required": ["expert", "sample", "dimensions"],
+  "additionalProperties": false,
+  "properties": {
+    "expert": { "type": "string", "enum": ["UX Designer", "Educational Designer", "Copywriter", "Product/Engagement Strategist"] },
+    "sample": { "type": "integer", "minimum": 1, "maximum": 3, "description": "which of the 3 independent samples" },
+    "dimensions": {
+      "type": "object",
+      "required": ["value", "pacing", "copy", "fit"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "$ref": "#/definitions/dimension" },
+        "pacing": { "$ref": "#/definitions/dimension" },
+        "copy": { "$ref": "#/definitions/dimension" },
+        "fit": { "$ref": "#/definitions/dimension" }
+      }
+    }
+  },
+  "definitions": {
+    "dimension": {
+      "type": "object",
+      "required": ["a", "b", "c", "d"],
+      "additionalProperties": false,
+      "properties": {
+        "a": { "$ref": "#/definitions/subcheck" },
+        "b": { "$ref": "#/definitions/subcheck" },
+        "c": { "$ref": "#/definitions/subcheck" },
+        "d": { "$ref": "#/definitions/subcheck" }
+      }
+    },
+    "subcheck": {
+      "type": "object",
+      "required": ["verdict", "evidenceScreen", "rationale"],
+      "additionalProperties": false,
+      "properties": {
+        "verdict": { "type": "string", "enum": ["MET", "UNMET"] },
+        "evidenceScreen": { "type": "integer", "description": "screen index cited as evidence" },
+        "rationale": { "type": "string", "description": "justification written BEFORE the verdict; ignore copy length" }
+      }
+    }
+  }
+}

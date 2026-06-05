@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PersonaReaction",
+  "description": "One member persona's independent screen-by-screen reaction to a rendered track run-through (Stage 1).",
+  "type": "object",
+  "required": ["persona", "perScreen", "wouldDrop"],
+  "additionalProperties": false,
+  "properties": {
+    "persona": { "type": "string", "description": "Persona name/register from member-personas.md" },
+    "perScreen": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["screen", "reaction", "wouldContinue"],
+        "additionalProperties": false,
+        "properties": {
+          "screen": { "type": "integer", "description": "1-based screen index from report.json" },
+          "reaction": { "type": "string", "description": "Authentic in-voice reaction; do not sanitize friction" },
+          "wouldContinue": { "type": "boolean" },
+          "friction": { "type": "string", "description": "Optional: what felt confusing/insulting/skippable" }
+        }
+      }
+    },
+    "wouldDrop": { "type": "boolean", "description": "Would this persona abandon the track?" },
+    "dropScreen": { "type": "integer", "description": "If wouldDrop, the screen they'd leave on" }
+  }
+}
