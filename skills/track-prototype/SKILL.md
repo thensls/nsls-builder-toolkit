@@ -54,9 +54,45 @@ must exit 0. If it does not, stop and send the builder back to track-design Phas
 6. **Handoff note:** persona used, local command, live URL, and the
    "approximate preview" caveat (this mirrors the app's design, it is not the live app).
 
-> Phase 2 (Walkthrough & Focus Group) is added by a later plan.
+## Phase 2 — Walkthrough & Focus Group (opt-in)
+
+Gate: a working Phase-1 build (local or deployed). **Turn live AI ON** (build with `--proxy-url`/`--proxy-token`) — the panel scores the *live* `generate`/`chat` output, not the baked fallback. The deployed proxy is `https://track-preview-proxy-production.up.railway.app` (token in Doppler `track-preview-proxy/prd` → `PROXY_TOKEN`).
+
+1. **Walkthrough:** `node scripts/walk-gallery.mjs <served-url> focus-group/v{N}` → a screenshot per screen + `report.json`. (Requires Playwright installed.) If `report.json.problems` is non-empty (blank screen, unresolved `{token}`, stuck/no-advance, console error), **STOP and fix the build before the panel runs** — don't score a broken prototype.
+
+2. **Panel** (full protocol in `references/focus-group-panel.md`) — run as parallel sub-agents in isolated contexts, staged to fight groupthink:
+   - **Stage 1** — member personas (`../track-design/references/member-personas.md`) react INDEPENDENTLY from the screenshots, **warm temp**, structured to `references/schemas/persona-reaction.json`.
+   - **Stage 2** — the 4 experts score all 16 sub-checks BLIND, **3 samples each at low temp**, evidence-cited, structured to `references/schemas/expert-verdict.json`.
+   - **Stage 3** — experts revise INFORMED by the *aggregated, anonymized* persona reactions.
+   - **Stage 4** — the adversarial skeptic argues over-scoring / the abandonment case; experts respond.
+   - Use a different model family for the judges than for any generated track copy.
+
+3. **Aggregate + emit:**
+   - Feed the expert verdict samples to `scorecard.mjs` → MET/UNMET/**CONTESTED** per sub-check → dimension rollup → checks-met total → ship-bar.
+   - `recommendations.mjs` → write `focus-group/v{N}/recommendations.md` (one rec per UNMET; CONTESTED = human-review flag).
+   - Write `focus-group/v{N}/conversation.md` (the dialogue) and `scorecard.md` (sub-checks + total).
+   - Google Doc via **`gdoc-build`** (python-docx; **new draft, org-restricted, never overwrite a shared doc**): conversation + expert synthesis + ranked recs + scorecard.
+   - **Ledger:** `AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv node scripts/ledger-write.mjs <run.json>` — POSTs the ScoreRun to the "Track Previews" base and appends the local `scores.md`. `run.json` = `{ trackSlug, version, contentHash, date, scorecard, gdocUrl, persona, buildUrl, scoresMdPath }`.
+
+4. **Handoff:** the Google Doc link + the scorecard + the checks-met total.
+
+### The iteration loop
+Builder says **"implement the focus-group changes"** → read `recommendations.md`, edit `track.json` per each `fix` rec's `change` (CONTESTED `review` recs go to a human, not auto-applied), re-run Phase 1 → Phase 2 → a v{N+1} ScoreRun showing the delta. **Scores are a ranking + ship-bar gate, NOT a calibrated prediction** — celebrate green checks; don't over-read the number (synthetic personas overstate adoption).
+
+### Calibration (accruing; needs PostHog)
+Every Phase-2 run adds a ScoreRun. Once a track is live in PostHog, add its actuals to the `PostHogActuals` table, then run the calibration (Spearman/Kendall via `scripts/lib/calibration.mjs`, joining by slug + `content_hash`). Seed against the two live tracks (Clarity, Personal Insights) as a **directional sanity check only** — n is tiny; ~15–30+ tracks before a coefficient means anything. (The `calibrate.mjs` CLI is the remaining piece.)
+
+## Reference Index
+| Phase | Reads | Invokes / scripts |
+|-------|-------|-------------------|
+| 1 | `../track-design/references/member-personas.md` | `build-prototype.mjs`, `netlify-deploy` |
+| 2 | `focus-group-rubric.md`, `focus-group-panel.md`, `schemas/`, `member-personas.md` | `walk-gallery.mjs`, `lib/{scorecard,recommendations,scores-ledger,airtable-record,calibration}.mjs`, `ledger-write.mjs`, `gdoc-build`, `playwright` |
+
+## Definition of Done
+- **Phase 1:** a `prototype-build/` that renders with Ignite Next styling and runs through end-to-end (locally and on Netlify); live AI streams when built with the proxy flags, baked fallback otherwise.
+- **Phase 2:** a focus-group Google Doc (draft, org-restricted) + `recommendations.md` + `scorecard.md` under `focus-group/v{N}/`, a new ScoreRun in the Airtable base + a row in local `scores.md`, and `"implement the focus-group changes"` actionable from `recommendations.md`.
 
 ## Operating Rules
-- Never seed the prototype with real member data — prototype input is illustrative and,
-  once Plan 2 lands, egresses to an LLM. Use only synthetic personas.
+- Never seed the prototype with real member data — prototype input is illustrative and **egresses to OpenAI via the proxy** when live AI is on. Use only synthetic personas.
 - The design kit is hand-mirrored from ignite-next and drifts. See `prototype/SYNC.md`.
+- AI output is illustrative (the app runs Braintrust), and focus-group scores are a relative ranking + gate, not a prediction.
