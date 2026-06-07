@@ -10,6 +10,13 @@ test("renderRow emits a markdown table row with dims + total + doc link", () => 
   assert.match(row, /https:\/\/doc/);
 });
 
+test("renderRow falls back to total/16 when composite is missing (never 'undefined')", () => {
+  const noComposite = { total: 9, dimensions: sc.dimensions };
+  const row = renderRow({ version: "v1", date: "d", scorecard: noComposite, docUrl: "" });
+  assert.match(row, /\| 9\/16 \|/);
+  assert.doesNotMatch(row, /undefined/);
+});
+
 test("appendRow seeds the header once, then appends", () => {
   const first = appendRow("", renderRow({ version: "v1", date: "d", scorecard: sc, docUrl: "" }));
   assert.ok(first.includes(HEADER));
