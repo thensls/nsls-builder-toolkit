@@ -123,6 +123,34 @@ test("select given an array is flagged", () => {
   assert.ok(p.some((x) => x.startsWith("SHAPE") && x.includes("mood")));
 });
 
+// --- effective-min default rules (Macroscope #4) ---
+function multiTrack(sub) {
+  return { steps: [{ slug: "s", substeps: [
+    { slug: "m", type: "collect", fieldType: "multi-select",
+      options: [{ text: "A" }, { text: "B" }, { text: "C" }], ...sub },
+  ] }] };
+}
+
+test("multi-select with a max but no explicit min defaults min to 2", () => {
+  const t = multiTrack({ multiselectMaxSelections: 3 });
+  // 1 selection violates the default min of 2
+  assert.ok(validateAnswers(t, { m: ["A"] }).some((x) => x.startsWith("MINSEL")));
+  // 2 selections satisfy it
+  assert.deepEqual(validateAnswers(t, { m: ["A", "B"] }), []);
+});
+
+test("multi-select with neither min nor max requires at least 1", () => {
+  const t = multiTrack({});
+  assert.ok(validateAnswers(t, { m: [] }).some((x) => x.startsWith("MINSEL")));
+  assert.deepEqual(validateAnswers(t, { m: ["A"] }), []);
+});
+
+test("explicit multiselectMinSelections overrides the max-implied default", () => {
+  const t = multiTrack({ multiselectMinSelections: 1, multiselectMaxSelections: 3 });
+  // explicit min of 1 wins over the default-2 rule
+  assert.deepEqual(validateAnswers(t, { m: ["A"] }), []);
+});
+
 test("unwrapTrack handles array wrapper and bare object", () => {
   const obj = { steps: [] };
   assert.equal(unwrapTrack([obj]), obj);

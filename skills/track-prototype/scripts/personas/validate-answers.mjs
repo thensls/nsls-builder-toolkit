@@ -17,8 +17,10 @@
 //      a dropdownOptions / checkboxOptions value)
 //   3. no answer key references a slug that doesn't exist as a collect substep
 //   4. every currency answer parses to a non-zero number
-//   5. multi-select arrays respect multiselectMinSelections (default 2 when unset
-//      but min/max present) / multiselectMaxSelections when declared
+//   5. multi-select arrays respect the effective min / multiselectMaxSelections.
+//      Effective min: multiselectMinSelections if set; else 2 when a
+//      multiselectMaxSelections is declared (a bounded multi-select implies
+//      "pick several"); else 1.
 //
 // optionsSourceSlug: a substep with no inline options inherits its option set from
 // the answer chosen for optionsSourceSlug (the narrowing pattern — pick 12, then a
@@ -26,6 +28,7 @@
 // narrowing stays internally consistent.
 
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 export function unwrapTrack(raw) {
   const t = Array.isArray(raw) ? raw[0] : raw;
@@ -132,11 +135,17 @@ export function validateAnswers(track, answers) {
           if (value.length !== 1) problems.push(`SINGLEPICK: "${slug}" (autoProgress) needs exactly 1, got ${value.length}`);
           continue;
         }
-        const min = sub.multiselectMinSelections;
         const max = sub.multiselectMaxSelections;
-        if (min != null && value.length < min) problems.push(`MINSEL: "${slug}" needs >= ${min}, got ${value.length}`);
+        // Effective min: explicit value wins; else default 2 when a max is
+        // declared (a bounded multi-select implies "pick several"); else 1.
+        const min =
+          sub.multiselectMinSelections != null
+            ? sub.multiselectMinSelections
+            : max != null
+              ? 2
+              : 1;
+        if (value.length < min) problems.push(`MINSEL: "${slug}" needs >= ${min}, got ${value.length}`);
         if (max != null && value.length > max) problems.push(`MAXSEL: "${slug}" needs <= ${max}, got ${value.length}`);
-        if (min == null && value.length < 1) problems.push(`MINSEL: "${slug}" needs at least 1 selection`);
       } else {
         // single select
         if (Array.isArray(value)) { problems.push(`SHAPE: "${slug}" (select) must be a single string, got an array`); continue; }
@@ -155,7 +164,8 @@ export async function loadAndValidate(trackPath, answersPath) {
 }
 
 // CLI: node validate-answers.mjs <track.json> <answers.json>
-const isMain = import.meta.url === `file://${process.argv[1]}`;
+// fileURLToPath decodes percent-encoding so the check survives paths with spaces.
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
   const [, , trackPath, answersPath] = process.argv;
   if (!trackPath || !answersPath) {

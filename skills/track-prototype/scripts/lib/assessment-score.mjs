@@ -68,6 +68,12 @@ function emptyScores() {
     enneagram: { type1: 0, type2: 0, type3: 0, type4: 0, type5: 0, type6: 0, type7: 0, type8: 0, type9: 0 },
     holland: { R: 0, I: 0, A: 0, S: 0, E: 0, C: 0 },
     disc: { D: 0, I: 0, S: 0, C: 0 },
+    // NOTE: big5 has NO `introversion` key — and that is FAITHFUL to production.
+    // The vendored scoring weights carry 4 `"introversion": 0.9` entries, but
+    // production (assessmentComputation.ts) inits big5 with exactly these five
+    // keys and tallies via `if (key in scores.big5)`, so `introversion` is a
+    // dead key dropped in prod too. Don't add it here — that would make the
+    // preview diverge from the app. See prototype/SYNC.md.
     big5: { openness: 0, conscientiousness: 0, extraversion: 0, agreeableness: 0, neuroticism: 0 },
   };
 }
@@ -115,7 +121,17 @@ function addInto(target, weightObj) {
 /**
  * Map the player's stored answers (text, keyed by substep slug) to answerIds,
  * using the assessment step's option list (each option has {text, answerId}).
- * Handles multi-select values that the player joins with ", ".
+ *
+ * Matching is against the KNOWN option texts, never a blind delimiter split.
+ * The personality substeps are SINGLE-pick (the whole stored string is one
+ * option text), but the player joins true multi-selects with ", " — and option
+ * texts can themselves contain ", " (e.g. "Aim for more abstract, exciting
+ * possibilities"), so NO split is safe. We instead:
+ *   (a) try the WHOLE stored string as one option text (fixes every single-pick
+ *       comma case — the dominant case); then
+ *   (b) only if that misses, recover multiple selections by greedily consuming
+ *       known option texts from the string, longest-match first, tolerating the
+ *       ", " join between them.
  */
 export function resolveAnswerIds(track, answers = {}) {
   const step = (track?.steps || []).find((s) => s.slug === ASSESSMENT_STEP_SLUG);
@@ -131,16 +147,44 @@ export function resolveAnswerIds(track, answers = {}) {
       }
     }
   }
+  // Known option texts, longest first, so greedy matching prefers the most
+  // specific text (avoids a shorter text shadowing a longer one it prefixes).
+  const knownTexts = [...textToId.keys()].sort((a, b) => b.length - a.length);
 
   const ids = [];
   for (const sub of subs) {
     const raw = answers[sub.slug];
     if (raw == null || raw === "") continue;
-    // player joins multi-select with ", " — split and trim
-    for (const t of String(raw).split(",").map((x) => x.trim())) {
-      const id = textToId.get(t);
-      if (id != null) ids.push(id);
+    for (const id of matchOptionTexts(String(raw), textToId, knownTexts)) {
+      ids.push(id);
     }
+  }
+  return ids;
+}
+
+/**
+ * Resolve a stored answer string to one or more answerIds using only the known
+ * option texts. (a) whole-string single-pick first; (b) greedy longest-match
+ * recovery of a ", "-joined multi-select otherwise.
+ */
+function matchOptionTexts(raw, textToId, knownTexts) {
+  const whole = raw.trim();
+  // (a) Whole string is one known option — the single-pick case (comma-safe).
+  if (textToId.has(whole)) return [textToId.get(whole)];
+
+  // (b) Recover a multi-select: greedily consume known texts from the front,
+  //     longest-match first, skipping any ", " join (and stray whitespace).
+  const ids = [];
+  let rest = whole;
+  while (rest.length > 0) {
+    const match = knownTexts.find(
+      (t) => t.length > 0 && rest.slice(0, t.length) === t
+    );
+    if (!match) break; // unrecognized leading text — give up (graceful)
+    ids.push(textToId.get(match));
+    rest = rest.slice(match.length);
+    // consume the join: a comma optionally followed by whitespace, or bare ws.
+    rest = rest.replace(/^\s*,?\s*/, "");
   }
   return ids;
 }

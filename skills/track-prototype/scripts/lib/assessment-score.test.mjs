@@ -118,6 +118,60 @@ test("resolveAnswerIds handles multi-select (comma-joined) values", () => {
   assert.deepEqual(ids.sort(), ["a1", "a2"]);
 });
 
+test("resolveAnswerIds resolves a comma-bearing single-pick option (no shredding)", () => {
+  // The dominant real case: a SINGLE-pick option whose text contains a comma.
+  // A naive split(",") would shred it into pieces that match nothing.
+  const track = {
+    steps: [
+      { slug: "discover-your-personality", substeps: [
+        { slug: "q1", type: "collect", fieldType: "image-multiselect",
+          options: [
+            { text: "Aim for more abstract, exciting possibilities", answerId: "a1" },
+            { text: "Stick to concrete, proven plans", answerId: "a3" },
+          ] },
+      ] },
+    ],
+  };
+  // Player stored the whole single option text verbatim (with its comma).
+  const ids = resolveAnswerIds(track, { q1: "Aim for more abstract, exciting possibilities" });
+  assert.deepEqual(ids, ["a1"]);
+});
+
+test("resolveAnswerIds recovers a genuine multi-select of comma-free options", () => {
+  const track = {
+    steps: [
+      { slug: "discover-your-personality", substeps: [
+        { slug: "q1", type: "collect", fieldType: "image-multiselect",
+          options: [
+            { text: "Go with the flow", answerId: "a1" },
+            { text: "Rally the team", answerId: "a2" },
+            { text: "Plan it all out", answerId: "a3" },
+          ] },
+      ] },
+    ],
+  };
+  const ids = resolveAnswerIds(track, { q1: "Go with the flow, Rally the team" });
+  assert.deepEqual(ids.sort(), ["a1", "a2"]);
+});
+
+test("resolveAnswerIds recovers a multi-select whose members themselves contain commas", () => {
+  // Greedy longest-match: both selected options carry their own ", ".
+  const track = {
+    steps: [
+      { slug: "discover-your-personality", substeps: [
+        { slug: "q1", type: "collect", fieldType: "image-multiselect",
+          options: [
+            { text: "Aim for more abstract, exciting possibilities", answerId: "a1" },
+            { text: "Stick to concrete, proven plans", answerId: "a2" },
+          ] },
+      ] },
+    ],
+  };
+  const joined = "Aim for more abstract, exciting possibilities, Stick to concrete, proven plans";
+  const ids = resolveAnswerIds(track, { q1: joined });
+  assert.deepEqual(ids.sort(), ["a1", "a2"]);
+});
+
 test("buildCards mirrors AssessmentResults content (title/result/description per framework)", () => {
   const r = scoreAssessment({ answerIds: ["a1", "a2"], weights: WEIGHTS, types: TYPES });
   const cards = buildCards(r, TYPES);

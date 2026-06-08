@@ -33,3 +33,13 @@ are COPIED VERBATIM from ignite-next `src/data/`. The build bakes them into
 or framework descriptions. The join is by `answerId` (matches production) — never by option
 text: in the Clarity track only ~50/84 option texts match a weights `optionText`, but ~81/84
 answerIds match.
+
+### `big5.introversion` is intentionally dropped (faithful to prod)
+The vendored weights carry 4 `"introversion": 0.9` big5 entries. The scorer does
+NOT count them — and neither does production. `assessmentComputation.ts`
+initializes big5 with exactly `{openness, conscientiousness, extraversion,
+agreeableness, neuroticism}` and tallies with `if (key in scores.big5)`, so
+`introversion` is a dead key in the app too (its only use is these data rows;
+there is no introversion→negative-extraversion mapping). We mirror that exactly:
+the preview must reflect production, not "fix" it. Do not add an `introversion`
+key to `emptyScores()` and do not edit the vendored JSON.

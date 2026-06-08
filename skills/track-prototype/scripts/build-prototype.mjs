@@ -65,7 +65,9 @@ function parseArgs(argv) {
     proxyUrl: get("--proxy-url"), proxyToken: get("--proxy-token") };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// fileURLToPath decodes percent-encoding so the check survives paths with spaces.
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isMain) {
   const { file, samplesPath, out, assume, proxyUrl, proxyToken } = parseArgs(process.argv.slice(2));
   if (!file) { console.error("Usage: build-prototype.mjs <track.json> [--persona name] [--samples samples.json] [--out dir] [--assume a,b] [--proxy-url url] [--proxy-token token]"); process.exit(2); }
   const raw = JSON.parse(readFileSync(file, "utf8"));

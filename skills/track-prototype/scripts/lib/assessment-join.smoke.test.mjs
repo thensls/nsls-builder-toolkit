@@ -84,19 +84,25 @@ test(
     );
 
     // Simulate a real single-select player walk: one chosen option per substep,
-    // keyed by substep slug as player.js captureCurrent() stores it. Prefer a
-    // comma-free text so the resolver's own ", " split (multi-select handling)
-    // doesn't shred a single answer — that single-select path is what we score.
+    // keyed by substep slug as player.js captureCurrent() stores it. PREFER a
+    // comma-bearing option when one exists — the resolver must whole-match it
+    // (not shred it on ","). This exercises the Macroscope #1 fix on real data.
     const answers = {};
     let chosenWithId = 0;
+    let chosenWithComma = 0;
     for (const sub of subs) {
       const opts = (sub.options || []).filter((o) => o && o.text != null);
       if (!opts.length) continue;
-      const pick = opts.find((o) => !o.text.includes(",")) || opts[0];
+      const pick = opts.find((o) => o.text.includes(",")) || opts[0];
       answers[sub.slug] = pick.text;
       if (pick.answerId != null) chosenWithId++;
+      if (pick.text.includes(",")) chosenWithComma++;
     }
     assert.ok(chosenWithId > 0, "expected chosen answers carrying an answerId");
+    assert.ok(
+      chosenWithComma > 0,
+      "expected at least one comma-bearing option in the real track (the case #1 fixes)"
+    );
 
     const ids = resolveAnswerIds(track, answers);
     const resolveRate = ids.length / chosenWithId;
