@@ -415,6 +415,168 @@
     "manages": []
   },
   {
+    "name": "Leila McAvoy",
+    "title": "",
+    "manager": "",
+    "email": "",
+    "slack": "",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Gabriela R Cordeiro",
+    "title": "",
+    "manager": "",
+    "email": "gcordeiro@nsls.org",
+    "slack": "U0AF9KUEVAM",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Luis Fernando Yupanqui Taco",
+    "title": "",
+    "manager": "",
+    "email": "",
+    "slack": "",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Bruno Drouin",
+    "title": "",
+    "manager": "",
+    "email": "bdrouin@nsls.org",
+    "slack": "U097SSUQB6J",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Elizabeth Garretson",
+    "title": "",
+    "manager": "",
+    "email": "egarretson@nsls.org",
+    "slack": "U07SRF50VGD",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Janine Walsh",
+    "title": "",
+    "manager": "",
+    "email": "jwalsh@nsls.org",
+    "slack": "U0ADTNZUB8D",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Jasmine Artis",
+    "title": "",
+    "manager": "",
+    "email": "jartis@nsls.org",
+    "slack": "U0ABXMAAVEU",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Tattiana Alfaro",
+    "title": "",
+    "manager": "",
+    "email": "talfaro@nsls.org",
+    "slack": "U0B0244Q9AS",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Adam Munns",
+    "title": "",
+    "manager": "",
+    "email": "hello@munnsmedia.com",
+    "slack": "U0AM0JG42F6",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Adam Carpenter",
+    "title": "",
+    "manager": "",
+    "email": "",
+    "slack": "",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Matthew Schuman",
+    "title": "",
+    "manager": "",
+    "email": "mschuman@nsls.org",
+    "slack": "U0AAX0KFAR1",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Stefani Stout",
+    "title": "",
+    "manager": "",
+    "email": "sstout@nsls.org",
+    "slack": "U098K2VA01E",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Pascal Zamprelli",
+    "title": "",
+    "manager": "",
+    "email": "pzamprelli@nsls.org",
+    "slack": "U08T2KEUB0Q",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Jake Arcangeli",
+    "title": "",
+    "manager": "",
+    "email": "jarcangeli@nsls.org",
+    "slack": "U0ACL36HJ2F",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "David Weber ",
+    "title": "",
+    "manager": "",
+    "email": "dweber@nsls.org",
+    "slack": "U086Y4L1ZED",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Robert Stoica",
+    "title": "",
+    "manager": "",
+    "email": "rstoica@nsls.org",
+    "slack": "U0515D8001W",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Collin Wood",
+    "title": "",
+    "manager": "",
+    "email": "cwood@nsls.org",
+    "slack": "U08RLLMFJTU",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Kyle Coberly",
+    "title": "",
+    "manager": "",
+    "email": "kcoberly@nsls.org",
+    "slack": "U0B286J7NUE",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
     "name": "Lillian Collazo",
     "title": "HR Generalist",
     "manager": "Heather Darnell",

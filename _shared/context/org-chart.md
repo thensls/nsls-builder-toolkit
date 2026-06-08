@@ -1,5 +1,5 @@
 # NSLS Org Chart
-_Last synced: 2026-06-01_
+_Last synced: 2026-06-08_
 
 ## Business Intelligence
 
@@ -174,3 +174,26 @@ _Last synced: 2026-06-01_
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
 | Timothy Duffy | Director, Student Program Development | Ashleigh Smith | tduffy@nsls.org | U04M4JFNRU7 |
+
+## Unknown
+
+| Name | Title | Manager | Email | Slack |
+|------|-------|---------|-------|-------|
+| Adam Carpenter |  |  |  |  |
+| Adam Munns |  |  | hello@munnsmedia.com | U0AM0JG42F6 |
+| Bruno Drouin |  |  | bdrouin@nsls.org | U097SSUQB6J |
+| Collin Wood |  |  | cwood@nsls.org | U08RLLMFJTU |
+| David Weber  |  |  | dweber@nsls.org | U086Y4L1ZED |
+| Elizabeth Garretson |  |  | egarretson@nsls.org | U07SRF50VGD |
+| Gabriela R Cordeiro |  |  | gcordeiro@nsls.org | U0AF9KUEVAM |
+| Jake Arcangeli |  |  | jarcangeli@nsls.org | U0ACL36HJ2F |
+| Janine Walsh |  |  | jwalsh@nsls.org | U0ADTNZUB8D |
+| Jasmine Artis |  |  | jartis@nsls.org | U0ABXMAAVEU |
+| Kyle Coberly |  |  | kcoberly@nsls.org | U0B286J7NUE |
+| Leila McAvoy |  |  |  |  |
+| Luis Fernando Yupanqui Taco |  |  |  |  |
+| Matthew Schuman |  |  | mschuman@nsls.org | U0AAX0KFAR1 |
+| Pascal Zamprelli |  |  | pzamprelli@nsls.org | U08T2KEUB0Q |
+| Robert Stoica |  |  | rstoica@nsls.org | U0515D8001W |
+| Stefani Stout |  |  | sstout@nsls.org | U098K2VA01E |
+| Tattiana Alfaro |  |  | talfaro@nsls.org | U0B0244Q9AS |

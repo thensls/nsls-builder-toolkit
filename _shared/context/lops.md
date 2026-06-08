@@ -1,5 +1,5 @@
 # Lines of Priority (LOPs)
-_Last synced: 2026-05-25_
+_Last synced: 2026-06-08_
 
 ## L1: Simplification/Efficiency
 **Owner**: Anish Patel | **Health**: On Track
@@ -12,15 +12,15 @@ _Last synced: 2026-05-25_
 
 ### L2: Contract simplification (employees + contractors)
 **Owner**: Anish Patel | **Health**: On Track
-> DRI is asking for a status update rather than providing one. No explicit progress, blockers, or completion signals mentioned.
+> Contract simplification L2 progressing well: legal review responsibility codified with CFO (5/19), A. Kempe legal redline cycle completed cleanly (5/19–22), goal marked On Track in Signal (5/21). SARs seminar held (5/19) with ~35 employees driven to sign up; board meeting delivered (5/20) with Kevin's decision inputs and forward calendar locked through 2027. Re-forecasted budgets ready for SLT distribution; minor note on Airtable task sync status needing verification.
 
 ### L2: Move all Society and FOL lifecycle marketing emails to Customer.io by end of 2026
 **Owner**: Adam Stone | **Health**: On Track | **Deadline**: 2026-12-31
 > Team is actively working through migration requirements for both lifecycle and email-only invites. Currently building tracking plans to ensure existing HubSpot functionality transfers and to align tracking across NSLs and Society.
 
 ### L2: Dashboards for SLT and Core Revenue: 2026 data by the end of Q2 and 2025 data by Q4
-**Owner**: Anish Patel | **Health**: Off Track | **Deadline**: 2026-06-30
-> DRI did not provide an update on their own goal progress. Instead, they asked about their team members' status, which suggests they may not have clear visibility into their own milestone delivery.
+**Owner**: Anish Patel | **Health**: At Risk | **Deadline**: 2026-06-30
+> Progress accelerated last week with Jordan shipping updated Chapter & Revenue Dashboard and initial NSLS SLT Dashboard, both requiring QA and refinement. Two blockers cleared: legacy Enrollments dashboard deprecation and Chapter Health Dashboard ownership clarified. New scope added for Hex app embedding into app.nsls.org with architecture review in progress (feedback due 5/29). SLT dashboard QA, budget/forecast refinement, and SLT direction incorporation remain before 6/30 deadline; 2025 backfill on track for Q4.
 
 ### L2: Build a repeatable system to track and engage 100% of advisors and E-board members each season.
 **Owner**: Adam Stone | **Health**: On Track | **Deadline**: 2026-06-30
@@ -49,7 +49,7 @@ _Last synced: 2026-05-25_
 
 ### L2: Complete job framework and compensation leveling project by the end of Q2
 **Owner**: Heather Darnell | **Health**: On Track | **Deadline**: 2026-06-30
-> Job framework and compensation leveling project is in progress. No additional details provided by DRI.
+> Job framework and compensation leveling project is in progress. No additional details provided on timeline or blockers.
 
 ### L2: Host Meaningful 25th Anniversary Event
 **Owner**: Chelsea Byers | **Health**: No update | **Deadline**: 2026-10-27
@@ -57,7 +57,7 @@ _Last synced: 2026-05-25_
 
 ### L2: Review and improve talent acquisition process by Q2
 **Owner**: Jenna Fontanez | **Health**: On Track | **Deadline**: 2026-06-30
-> DRI received board input on talent acquisition improvements and has clarified direction: increase investment in outbound sourcing and specialized search partners, build targeted pipelines for hard-to-fill roles, and strengthen screening with better knockout questions and intentional filtering steps.
+> DRI is implementing a multi-pronged talent acquisition strategy combining fractional/external hiring firms, inbound recruitment, Ben.AI outbound platform, and other outreach methods. Framework emphasizes manager accountability while maintaining consistent intake process oversight.
 
 ## L1: Core Revenue
 **Owner**: Ashleigh Smith | **Health**: At Risk
@@ -70,11 +70,11 @@ _Last synced: 2026-05-25_
 
 ### L2: Achieve RR 5.0% + AOVe $130 → $30.7M core revenue
 **Owner**: Michael O'Brien | **Health**: On Track | **Deadline**: 2026-12-31
-> Spring enrollment revenue goal was achieved. Strong signals indicate similar performance expected in fall, supporting the $30.7M core revenue target.
+> Response rate is lower than target, but average order value is exceeding expectations, resulting in revenue being on target for the $30.7M core revenue goal.
 
 ### L2: Increase ARPM1 to $140
 **Owner**: Michael O'Brien | **Health**: At Risk
-> DRI has completed improvements to post-join, post-orientation, and post-LTD communications. Currently focused on post-speaker broadcast, post-SNTs, and post-induction CTA prioritization to drive ARPM1 toward $140 target.
+> Multiple dependencies blocking progress: need to track A&E purchases for existing members, update lifecycle communications post speaker broadcast and SNTs, and migrate post-induction emails to Customer.io (delayed until July). These blockers may impact timeline for reaching $140 ARPM target.
 
 ### L2: Enrollment Funnel Completion Rate (MOFU)
 **Owner**: Adam Stone | **Health**: No update | **Deadline**: 2026-12-31
