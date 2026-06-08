@@ -45,6 +45,7 @@ async function streamFromProxy(body, onDelta, signal) {
 function render() {
   root.innerHTML = interpolate(screens[state.i], state.answers); // fill {slug} live
   bar.style.width = progressPct(state.i, subs.length) + "%";
+  populateInheritedOptions(); // narrowing pattern: build options from a prior answer
   wire();
   // Kick off AI after the screen is visible (non-blocking)
   maybeRunGenerateAI();
@@ -99,6 +100,27 @@ function renderAssessmentCards(out, cards) {
     card.append(title, result, desc);
     out.appendChild(card);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Narrowing pattern (optionsSourceSlug): a substep with no inline options
+// inherits its choices from the answer the user picked for an upstream slug
+// (e.g. pick 12 values, then narrow to 8, then 6). Those options can't be baked
+// at build time — populate the empty grid here from state.answers.
+// ---------------------------------------------------------------------------
+function populateInheritedOptions() {
+  const grid = root.querySelector("[data-options-source]");
+  if (!grid || grid.querySelector("[data-option]")) return; // already has options
+  const sourceSlug = grid.dataset.optionsSource;
+  const upstream = state.answers[sourceSlug];
+  const values = Array.isArray(upstream)
+    ? upstream
+    : (typeof upstream === "string" && upstream ? upstream.split(", ") : []);
+  grid.innerHTML = values.map((text, i) =>
+    `<button class="tp-option" data-option data-value="${String(text).replace(/"/g, "&quot;")}" data-index="${i}"><span>${
+      String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))
+    }</span></button>`
+  ).join("");
 }
 
 function captureCurrent() {

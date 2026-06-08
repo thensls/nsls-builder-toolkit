@@ -44,7 +44,13 @@ function renderCelebration(sub) {
 }
 
 function optionList(sub) {
-  const opts = Array.isArray(sub.options) ? sub.options : [];
+  let opts = Array.isArray(sub.options) ? sub.options : [];
+  // dropdown-with-checkboxes carries its choices on dropdownOptions/checkboxOptions
+  // (a 1-10 scale, etc.) rather than `options`. Surface them as clickable options so
+  // the grid isn't empty and the answer is actually selectable.
+  if (opts.length === 0 && (sub.dropdownOptions || sub.checkboxOptions)) {
+    opts = [...(sub.dropdownOptions || []), ...(sub.checkboxOptions || [])];
+  }
   return opts.map((o, i) => {
     const text = typeof o === "string" ? o : (o.text ?? "");
     const desc = typeof o === "object" && o.description ? `<span class="tp-opt-desc">${esc(o.description)}</span>` : "";
@@ -61,8 +67,13 @@ function renderCollect(sub) {
     case "select":
     case "multi-select":
     case "image-multiselect":
-    case "dropdown-with-checkboxes":
-      return `${prompt}<div class="tp-options tp-options-grid" data-slug="${slug}" data-multi="${sub.fieldType !== "select"}">${optionList(sub)}</div>${continueBtn()}`;
+    case "dropdown-with-checkboxes": {
+      // The narrowing pattern: a substep with no inline options inherits its choices
+      // from the answer chosen for optionsSourceSlug. Mark the grid so the player can
+      // populate it at runtime from state.answers (those options aren't known at build).
+      const source = sub.optionsSourceSlug ? ` data-options-source="${esc(sub.optionsSourceSlug)}"` : "";
+      return `${prompt}<div class="tp-options tp-options-grid" data-slug="${slug}" data-multi="${sub.fieldType !== "select"}"${source}>${optionList(sub)}</div>${continueBtn()}`;
+    }
     case "currency":
       return `${prompt}<div class="tp-input-wrap"><span class="tp-currency">$</span><input class="tp-input tp-input-currency" type="number" data-input data-slug="${slug}" placeholder="0"></div>${continueBtn()}`;
     default: // text, textarea, work, education, dream-job-*, unknown -> generic text capture
