@@ -95,7 +95,10 @@ function renderChat(sub, ctx) {
 }
 
 function renderAssessmentResults(sub) {
-  return `<div class="tp-prose"><p data-tpl>${esc(sub.prompt)}</p></div><div class="tp-results">Assessment results display</div>${continueBtn()}`;
+  // The player computes the real personality scores on render (compute-on-render,
+  // same pattern as generate) from window.__ASSESSMENT__ + the user's answers, then
+  // fills [data-assessment-results]. The inner text is a graceful fallback only.
+  return `<div class="tp-prose"><p data-tpl>${esc(sub.prompt)}</p></div><div class="tp-results" data-assessment-results>Computing your results…</div>${continueBtn()}`;
 }
 
 export function renderSubstep(sub, ctx = {}) {

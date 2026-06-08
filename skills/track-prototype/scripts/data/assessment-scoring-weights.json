@@ -1,0 +1,2066 @@
+[
+  {
+    "answerId": "1737073276576x970070120695070700",
+    "optionText": "Establish clear structures and deadlines up front",
+    "myersBriggs": {
+      "J": 0.8,
+      "S": 0.6
+    },
+    "disc": {
+      "D": 0.7,
+      "C": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.7
+    },
+    "hollandCode": {
+      "C": 0.5,
+      "E": 0.4
+    },
+    "enneagram": {
+      "type1": 0.8,
+      "type3": 0.6
+    }
+  },
+  {
+    "answerId": "1737073286644x155782848464289800",
+    "optionText": "Allow the process to evolve organically based on team input",
+    "myersBriggs": {
+      "P": 0.8,
+      "N": 0.6
+    },
+    "disc": {
+      "I": 0.6,
+      "S": 0.4
+    },
+    "big5": {
+      "openness": 0.6
+    },
+    "hollandCode": {
+      "A": 0.5,
+      "S": 0.4
+    },
+    "enneagram": {
+      "type7": 0.7,
+      "type9": 0.5
+    }
+  },
+  {
+    "answerId": "1737073455002x254970852455481340",
+    "optionText": "Analyze the problem thoroughly before acting",
+    "myersBriggs": {
+      "T": 0.9,
+      "S": 0.7
+    },
+    "disc": {
+      "C": 0.8
+    },
+    "big5": {
+      "conscientiousness": 0.7,
+      "openness": -0.3
+    },
+    "hollandCode": {
+      "I": 0.8,
+      "C": 0.6
+    },
+    "enneagram": {
+      "type5": 0.9,
+      "type1": 0.6
+    }
+  },
+  {
+    "answerId": "1737073463656x485530083098361860",
+    "optionText": "Take quick action based on instinct",
+    "myersBriggs": {
+      "F": 0.7,
+      "N": 0.6
+    },
+    "disc": {
+      "D": 0.8,
+      "I": 0.5
+    },
+    "big5": {
+      "openness": 0.6
+    },
+    "hollandCode": {
+      "E": 0.7,
+      "R": 0.5
+    },
+    "enneagram": {
+      "type7": 0.8,
+      "type8": 0.7
+    }
+  },
+  {
+    "answerId": "1737073637833x259216453040078850",
+    "optionText": "Keep discussions focused on practical outcomes",
+    "myersBriggs": {
+      "S": 0.8,
+      "J": 0.7
+    },
+    "disc": {
+      "D": 0.7,
+      "C": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.7
+    },
+    "hollandCode": {
+      "C": 0.7,
+      "R": 0.5
+    },
+    "enneagram": {
+      "type3": 0.7,
+      "type1": 0.6,
+      "type8": 0.5
+    }
+  },
+  {
+    "answerId": "1737073648204x549712032707903500",
+    "optionText": "Explore various perspectives and possibilities",
+    "myersBriggs": {
+      "N": 0.8,
+      "P": 0.6
+    },
+    "disc": {
+      "I": 0.7,
+      "S": 0.5
+    },
+    "big5": {
+      "openness": 0.8
+    },
+    "hollandCode": {
+      "A": 0.6,
+      "S": 0.5
+    },
+    "enneagram": {
+      "type7": 0.7,
+      "type9": 0.6,
+      "type4": 0.5
+    }
+  },
+  {
+    "answerId": "1737073808463x538973694971084800",
+    "optionText": "Take charge and provide direction",
+    "myersBriggs": {
+      "E": 0.7,
+      "T": 0.6
+    },
+    "disc": {
+      "D": 0.9,
+      "C": 0.5
+    },
+    "big5": {
+      "extraversion": 0.7,
+      "agreeableness": -0.4
+    },
+    "hollandCode": {
+      "E": 0.8,
+      "R": 0.5
+    },
+    "enneagram": {
+      "type8": 0.8,
+      "type3": 0.7,
+      "type1": 0.5
+    }
+  },
+  {
+    "answerId": "1737073820127x661266696548909000",
+    "optionText": "Support and facilitate group harmony",
+    "myersBriggs": {
+      "I": 0.6,
+      "F": 0.7
+    },
+    "disc": {
+      "S": 0.8,
+      "I": 0.6
+    },
+    "big5": {
+      "agreeableness": 0.8
+    },
+    "hollandCode": {
+      "S": 0.7,
+      "A": 0.5
+    },
+    "enneagram": {
+      "type2": 0.8,
+      "type9": 0.7,
+      "type6": 0.5
+    }
+  },
+  {
+    "answerId": "1737073971935x380292910184923140",
+    "optionText": "Direct, specific critiques",
+    "myersBriggs": {
+      "T": 0.8,
+      "J": 0.5
+    },
+    "disc": {
+      "D": 0.8,
+      "C": 0.7
+    },
+    "big5": {
+      "neuroticism": -0.5
+    },
+    "hollandCode": {
+      "R": 0.6,
+      "C": 0.5
+    },
+    "enneagram": {
+      "type8": 0.7,
+      "type1": 0.6,
+      "type3": 0.5
+    }
+  },
+  {
+    "answerId": "1737073980945x516493849019547650",
+    "optionText": "Supportive, encouraging guidance",
+    "myersBriggs": {
+      "F": 0.8,
+      "P": 0.4
+    },
+    "disc": {
+      "S": 0.7,
+      "I": 0.6
+    },
+    "big5": {
+      "agreeableness": 0.7
+    },
+    "hollandCode": {
+      "S": 0.7,
+      "A": 0.5
+    },
+    "enneagram": {
+      "type2": 0.7,
+      "type9": 0.6,
+      "type4": 0.5
+    }
+  },
+  {
+    "answerId": "1737074109653x636555905770192900",
+    "optionText": "Prioritize efficiency and results",
+    "myersBriggs": {
+      "T": 0.8,
+      "J": 0.6
+    },
+    "disc": {
+      "D": 0.8,
+      "C": 0.7
+    },
+    "big5": {
+      "conscientiousness": 0.7,
+      "agreeableness": -0.4
+    },
+    "hollandCode": {
+      "E": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type3": 0.8,
+      "type8": 0.7,
+      "type1": 0.6
+    }
+  },
+  {
+    "answerId": "1737074118759x900708562306859000",
+    "optionText": "Prioritize team morale and well-being",
+    "myersBriggs": {
+      "F": 0.8,
+      "P": 0.5
+    },
+    "disc": {
+      "S": 0.8,
+      "I": 0.6
+    },
+    "big5": {
+      "agreeableness": 0.8
+    },
+    "hollandCode": {
+      "S": 0.8,
+      "A": 0.5
+    },
+    "enneagram": {
+      "type2": 0.9,
+      "type9": 0.7,
+      "type6": 0.5
+    }
+  },
+  {
+    "answerId": "1737074253189x424121296352706560",
+    "optionText": "Create detailed plans and schedules",
+    "myersBriggs": {
+      "J": 0.9,
+      "S": 0.7
+    },
+    "disc": {
+      "C": 0.9,
+      "D": 0.5
+    },
+    "big5": {
+      "conscientiousness": 0.9
+    },
+    "hollandCode": {
+      "C": 0.8,
+      "R": 0.5
+    },
+    "enneagram": {
+      "type1": 0.8,
+      "type6": 0.6,
+      "type3": 0.5
+    }
+  },
+  {
+    "answerId": "1737074260706x877394102258761700",
+    "optionText": "Stay flexible and adapt as needed",
+    "myersBriggs": {
+      "P": 0.9,
+      "N": 0.6
+    },
+    "disc": {
+      "I": 0.7,
+      "S": 0.5
+    },
+    "big5": {
+      "openness": 0.7
+    },
+    "hollandCode": {
+      "A": 0.6,
+      "E": 0.5
+    },
+    "enneagram": {
+      "type7": 0.8,
+      "type9": 0.6,
+      "type4": 0.4
+    }
+  },
+  {
+    "answerId": "1737074297424x770277121707475000",
+    "optionText": "Focus on planning and organization",
+    "myersBriggs": {
+      "J": 0.8,
+      "S": 0.7
+    },
+    "disc": {
+      "C": 0.8,
+      "S": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.8
+    },
+    "hollandCode": {
+      "C": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type1": 0.8,
+      "type6": 0.7,
+      "type3": 0.5
+    }
+  },
+  {
+    "answerId": "1737074305727x493057622765731800",
+    "optionText": "Focus on innovation and possibilities",
+    "myersBriggs": {
+      "P": 0.8,
+      "N": 0.7
+    },
+    "disc": {
+      "I": 0.7,
+      "D": 0.5
+    },
+    "big5": {
+      "openness": 0.8
+    },
+    "hollandCode": {
+      "A": 0.8,
+      "I": 0.6
+    },
+    "enneagram": {
+      "type7": 0.9,
+      "type4": 0.6,
+      "type5": 0.5
+    }
+  },
+  {
+    "answerId": "1737074338099x332376476383707140",
+    "optionText": "Focus on facts and concrete details",
+    "myersBriggs": {
+      "S": 0.9,
+      "T": 0.7
+    },
+    "disc": {
+      "C": 0.8,
+      "D": 0.5
+    },
+    "big5": {
+      "conscientiousness": 0.7
+    },
+    "hollandCode": {
+      "R": 0.7,
+      "C": 0.6
+    },
+    "enneagram": {
+      "type1": 0.7,
+      "type6": 0.6,
+      "type5": 0.5
+    }
+  },
+  {
+    "answerId": "1737074357335x629258047334907900",
+    "optionText": "Focused on concepts and possibilities",
+    "myersBriggs": {
+      "N": 0.9,
+      "F": 0.6
+    },
+    "disc": {
+      "I": 0.7
+    },
+    "big5": {
+      "openness": 0.8
+    },
+    "hollandCode": {
+      "A": 0.7,
+      "I": 0.6
+    },
+    "enneagram": {
+      "type7": 0.8,
+      "type4": 0.7,
+      "type9": 0.5
+    }
+  },
+  {
+    "answerId": "1737074379012x670608686568702000",
+    "optionText": "Complete work well ahead of time",
+    "myersBriggs": {
+      "J": 0.9
+    },
+    "disc": {
+      "C": 0.8,
+      "S": 0.5
+    },
+    "big5": {
+      "conscientiousness": 0.9
+    },
+    "hollandCode": {
+      "C": 0.7,
+      "R": 0.5
+    },
+    "enneagram": {
+      "type1": 0.8,
+      "type6": 0.7,
+      "type3": 0.6
+    }
+  },
+  {
+    "answerId": "1737074385496x275713184879345660",
+    "optionText": "Work until the last minute",
+    "myersBriggs": {
+      "P": 0.9
+    },
+    "disc": {
+      "I": 0.6,
+      "D": 0.5
+    },
+    "big5": {
+      "openness": 0.6
+    },
+    "hollandCode": {
+      "A": 0.6,
+      "E": 0.5
+    },
+    "enneagram": {
+      "type7": 0.8,
+      "type9": 0.6,
+      "type4": 0.5
+    }
+  },
+  {
+    "answerId": "1737073244848x337970816021430300",
+    "optionText": "Drive the conversation towards conclusions",
+    "myersBriggs": {
+      "J": 0.8,
+      "T": 0.6
+    },
+    "disc": {
+      "D": 0.9,
+      "C": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.7,
+      "extraversion": 0.5
+    },
+    "hollandCode": {
+      "E": 0.8,
+      "C": 0.5
+    },
+    "enneagram": {
+      "type8": 0.8,
+      "type3": 0.7,
+      "type1": 0.6
+    }
+  },
+  {
+    "answerId": "1737073257738x951553735686881300",
+    "optionText": "Facilitate open-ended exploration",
+    "myersBriggs": {
+      "P": 0.8,
+      "N": 0.7
+    },
+    "disc": {
+      "I": 0.7,
+      "S": 0.5
+    },
+    "big5": {
+      "openness": 0.8
+    },
+    "hollandCode": {
+      "A": 0.7,
+      "S": 0.6
+    },
+    "enneagram": {
+      "type7": 0.7,
+      "type9": 0.6,
+      "type4": 0.5
+    }
+  },
+  {
+    "answerId": "1737073430470x143620217451577340",
+    "optionText": "Move between different groups of people",
+    "myersBriggs": {
+      "E": 0.9,
+      "N": 0.5
+    },
+    "disc": {
+      "I": 0.9,
+      "D": 0.6
+    },
+    "big5": {
+      "extraversion": 0.9
+    },
+    "hollandCode": {
+      "E": 0.7,
+      "S": 0.6
+    },
+    "enneagram": {
+      "type7": 0.8,
+      "type2": 0.7,
+      "type3": 0.6
+    }
+  },
+  {
+    "answerId": "1737073438002x357933086537154560",
+    "optionText": "Find one person for a deep conversation",
+    "myersBriggs": {
+      "I": 0.9,
+      "S": 0.4
+    },
+    "disc": {
+      "S": 0.7,
+      "C": 0.5
+    },
+    "big5": {
+      "introversion": 0.9
+    },
+    "hollandCode": {
+      "I": 0.7,
+      "A": 0.5
+    },
+    "enneagram": {
+      "type4": 0.7,
+      "type5": 0.7,
+      "type9": 0.5
+    }
+  },
+  {
+    "answerId": "1737073620244x761600220017459200",
+    "optionText": "Offer practical solutions",
+    "myersBriggs": {
+      "T": 0.9,
+      "J": 0.6
+    },
+    "disc": {
+      "D": 0.7,
+      "C": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.7,
+      "agreeableness": -0.3
+    },
+    "hollandCode": {
+      "R": 0.7,
+      "C": 0.6
+    },
+    "enneagram": {
+      "type1": 0.7,
+      "type5": 0.6,
+      "type3": 0.5
+    }
+  },
+  {
+    "answerId": "1737073625869x662131296860373000",
+    "optionText": "Provide emotional support",
+    "myersBriggs": {
+      "F": 0.9,
+      "P": 0.5
+    },
+    "disc": {
+      "S": 0.8,
+      "I": 0.7
+    },
+    "big5": {
+      "agreeableness": 0.8
+    },
+    "hollandCode": {
+      "S": 0.8,
+      "A": 0.5
+    },
+    "enneagram": {
+      "type2": 0.9,
+      "type4": 0.7,
+      "type9": 0.6
+    }
+  },
+  {
+    "answerId": "1737073785879x916255055020032000",
+    "optionText": "Address issues directly and logically",
+    "myersBriggs": {
+      "T": 0.8,
+      "J": 0.6
+    },
+    "disc": {
+      "D": 0.9,
+      "C": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.6,
+      "agreeableness": -0.4
+    },
+    "hollandCode": {
+      "E": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type8": 0.9,
+      "type1": 0.7,
+      "type3": 0.5
+    }
+  },
+  {
+    "answerId": "1737073792368x288248526004551700",
+    "optionText": "Focus on maintaining harmony",
+    "myersBriggs": {
+      "F": 0.8,
+      "P": 0.5
+    },
+    "disc": {
+      "S": 0.8,
+      "I": 0.7
+    },
+    "big5": {
+      "agreeableness": 0.8
+    },
+    "hollandCode": {
+      "S": 0.8,
+      "A": 0.5
+    },
+    "enneagram": {
+      "type9": 0.9,
+      "type2": 0.8,
+      "type6": 0.5
+    }
+  },
+  {
+    "answerId": "1737073946296x221336882923438100",
+    "optionText": "Share my thoughts and experiences readily",
+    "myersBriggs": {
+      "E": 0.9,
+      "F": 0.5
+    },
+    "disc": {
+      "I": 0.9,
+      "D": 0.6
+    },
+    "big5": {
+      "extraversion": 0.9
+    },
+    "hollandCode": {
+      "E": 0.7,
+      "S": 0.6
+    },
+    "enneagram": {
+      "type7": 0.8,
+      "type2": 0.7,
+      "type3": 0.6
+    }
+  },
+  {
+    "answerId": "1737073954368x904092157911236600",
+    "optionText": "Listen and observe before sharing",
+    "myersBriggs": {
+      "I": 0.9,
+      "T": 0.4
+    },
+    "disc": {
+      "S": 0.7,
+      "C": 0.6
+    },
+    "big5": {
+      "introversion": 0.9
+    },
+    "hollandCode": {
+      "I": 0.7,
+      "A": 0.5
+    },
+    "enneagram": {
+      "type5": 0.8,
+      "type4": 0.6,
+      "type9": 0.5
+    }
+  },
+  {
+    "answerId": "1737074079285x528874552774623200",
+    "optionText": "Lead and organize",
+    "myersBriggs": {
+      "E": 0.8,
+      "J": 0.7
+    },
+    "disc": {
+      "D": 0.9,
+      "C": 0.6
+    },
+    "big5": {
+      "extraversion": 0.8
+    },
+    "hollandCode": {
+      "E": 0.9,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type8": 0.8,
+      "type3": 0.7,
+      "type1": 0.5
+    }
+  },
+  {
+    "answerId": "1737074090092x546430270947459100",
+    "optionText": "Support and contribute",
+    "myersBriggs": {
+      "I": 0.7,
+      "P": 0.6
+    },
+    "disc": {
+      "S": 0.8,
+      "I": 0.6
+    },
+    "big5": {
+      "agreeableness": 0.7
+    },
+    "hollandCode": {
+      "S": 0.8,
+      "A": 0.5
+    },
+    "enneagram": {
+      "type9": 0.8,
+      "type2": 0.7,
+      "type6": 0.5
+    }
+  },
+  {
+    "answerId": "1737074231535x718316187461615600",
+    "optionText": "Organize events and invite others ",
+    "myersBriggs": {
+      "E": 0.9,
+      "J": 0.6
+    },
+    "disc": {
+      "I": 0.8,
+      "D": 0.7
+    },
+    "big5": {
+      "extraversion": 0.9
+    },
+    "hollandCode": {
+      "E": 0.8,
+      "S": 0.6
+    },
+    "enneagram": {
+      "type7": 0.8,
+      "type2": 0.7,
+      "type3": 0.6
+    }
+  },
+  {
+    "answerId": "1737074238447x394520976237264900",
+    "optionText": "Wait for and respond to invitations",
+    "myersBriggs": {
+      "I": 0.9,
+      "P": 0.5
+    },
+    "disc": {
+      "S": 0.7,
+      "C": 0.5
+    },
+    "big5": {
+      "introversion": 0.9
+    },
+    "hollandCode": {
+      "A": 0.6,
+      "I": 0.5
+    },
+    "enneagram": {
+      "type5": 0.7,
+      "type9": 0.7,
+      "type4": 0.6
+    }
+  },
+  {
+    "answerId": "1737074278638x135093427621855230",
+    "optionText": "Speak more than listen",
+    "myersBriggs": {
+      "E": 0.9,
+      "T": 0.4
+    },
+    "disc": {
+      "D": 0.8,
+      "I": 0.7
+    },
+    "big5": {
+      "extraversion": 0.9
+    },
+    "hollandCode": {
+      "E": 0.7,
+      "S": 0.5
+    },
+    "enneagram": {
+      "type3": 0.7,
+      "type7": 0.7,
+      "type8": 0.6
+    }
+  },
+  {
+    "answerId": "1737074285226x528853024232177660",
+    "optionText": "Listen more than speak",
+    "myersBriggs": {
+      "I": 0.9,
+      "F": 0.4
+    },
+    "disc": {
+      "S": 0.8,
+      "C": 0.6
+    },
+    "big5": {
+      "introversion": 0.9
+    },
+    "hollandCode": {
+      "I": 0.7,
+      "A": 0.5
+    },
+    "enneagram": {
+      "type4": 0.7,
+      "type5": 0.7,
+      "type9": 0.6
+    }
+  },
+  {
+    "answerId": "1737074318110x628240280708448300",
+    "optionText": "Remain objective and analytical",
+    "myersBriggs": {
+      "T": 0.9,
+      "S": 0.5
+    },
+    "disc": {
+      "C": 0.8,
+      "D": 0.6
+    },
+    "big5": {
+      "neuroticism": -0.6
+    },
+    "hollandCode": {
+      "I": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type5": 0.8,
+      "type1": 0.7,
+      "type3": 0.5
+    }
+  },
+  {
+    "answerId": "1737074324797x155628070924451840",
+    "optionText": "Empathize and connect emotionally",
+    "myersBriggs": {
+      "F": 0.9,
+      "N": 0.5
+    },
+    "disc": {
+      "S": 0.8,
+      "I": 0.7
+    },
+    "big5": {
+      "agreeableness": 0.8
+    },
+    "hollandCode": {
+      "S": 0.8,
+      "A": 0.6
+    },
+    "enneagram": {
+      "type2": 0.9,
+      "type4": 0.8,
+      "type9": 0.6
+    }
+  },
+  {
+    "answerId": "1737073219127x274753412849467400",
+    "optionText": "Follow a structured, systematic approach",
+    "myersBriggs": {
+      "J": 0.8,
+      "S": 0.7
+    },
+    "disc": {
+      "C": 0.8,
+      "S": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.9
+    },
+    "hollandCode": {
+      "C": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type1": 0.8,
+      "type5": 0.7,
+      "type6": 0.5
+    }
+  },
+  {
+    "answerId": "1737073228950x776109012957265900",
+    "optionText": "Explore freely and learn through experience",
+    "myersBriggs": {
+      "P": 0.8,
+      "N": 0.7
+    },
+    "disc": {
+      "I": 0.7,
+      "D": 0.5
+    },
+    "big5": {
+      "openness": 0.8
+    },
+    "hollandCode": {
+      "A": 0.8,
+      "E": 0.6
+    },
+    "enneagram": {
+      "type7": 0.9,
+      "type4": 0.6,
+      "type9": 0.5
+    }
+  },
+  {
+    "answerId": "1737073403200x790903030341173200",
+    "optionText": "Create a detailed plan of action",
+    "myersBriggs": {
+      "J": 0.9,
+      "S": 0.7
+    },
+    "disc": {
+      "C": 0.8,
+      "D": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.9
+    },
+    "hollandCode": {
+      "C": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type1": 0.8,
+      "type3": 0.7,
+      "type6": 0.6
+    }
+  },
+  {
+    "answerId": "1737073413172x136524186378567680",
+    "optionText": "Trust my instincts and adapt as I go",
+    "myersBriggs": {
+      "P": 0.9,
+      "N": 0.7
+    },
+    "disc": {
+      "I": 0.7,
+      "S": 0.5
+    },
+    "big5": {
+      "openness": 0.8
+    },
+    "hollandCode": {
+      "A": 0.7,
+      "E": 0.6
+    },
+    "enneagram": {
+      "type7": 0.8,
+      "type9": 0.6,
+      "type4": 0.5
+    }
+  },
+  {
+    "answerId": "1737073593669x506636291092774900",
+    "optionText": "Structured with clear objectives",
+    "myersBriggs": {
+      "J": 0.8,
+      "S": 0.7
+    },
+    "disc": {
+      "C": 0.9,
+      "S": 0.5
+    },
+    "big5": {
+      "conscientiousness": 0.8
+    },
+    "hollandCode": {
+      "C": 0.8,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type1": 0.7,
+      "type3": 0.6,
+      "type6": 0.5
+    }
+  },
+  {
+    "answerId": "1737073606326x138136713487712260",
+    "optionText": "Open-ended with room for exploration",
+    "myersBriggs": {
+      "P": 0.8,
+      "N": 0.7
+    },
+    "disc": {
+      "I": 0.7,
+      "D": 0.5
+    },
+    "big5": {
+      "openness": 0.9
+    },
+    "hollandCode": {
+      "A": 0.7,
+      "I": 0.6
+    },
+    "enneagram": {
+      "type7": 0.8,
+      "type4": 0.7,
+      "type5": 0.6
+    }
+  },
+  {
+    "answerId": "1737073763985x184446150030393340",
+    "optionText": "Focus on achievable, measurable targets",
+    "myersBriggs": {
+      "S": 0.8,
+      "J": 0.7
+    },
+    "disc": {
+      "C": 0.8,
+      "D": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.8
+    },
+    "hollandCode": {
+      "C": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type1": 0.8,
+      "type3": 0.7,
+      "type6": 0.5
+    }
+  },
+  {
+    "answerId": "1737073773430x544484296143142900",
+    "optionText": "Aim for ambitious, transformative changes",
+    "myersBriggs": {
+      "N": 0.8,
+      "P": 0.6
+    },
+    "disc": {
+      "I": 0.7,
+      "D": 0.6
+    },
+    "big5": {
+      "openness": 0.8
+    },
+    "hollandCode": {
+      "A": 0.7,
+      "E": 0.6
+    },
+    "enneagram": {
+      "type7": 0.8,
+      "type4": 0.7,
+      "type8": 0.6
+    }
+  },
+  {
+    "answerId": "1737073920325x506301852938666000",
+    "optionText": "Concrete skills and practical knowledge",
+    "myersBriggs": {
+      "S": 0.9,
+      "T": 0.6
+    },
+    "disc": {
+      "C": 0.7,
+      "D": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.7
+    },
+    "hollandCode": {
+      "R": 0.8,
+      "C": 0.7
+    },
+    "enneagram": {
+      "type3": 0.7,
+      "type1": 0.6,
+      "type6": 0.5
+    }
+  },
+  {
+    "answerId": "1737073928761x487901223840383000",
+    "optionText": "Abstract concepts and theoretical understanding",
+    "myersBriggs": {
+      "N": 0.9,
+      "F": 0.5
+    },
+    "disc": {
+      "I": 0.6
+    },
+    "big5": {
+      "openness": 0.9
+    },
+    "hollandCode": {
+      "I": 0.8,
+      "A": 0.6
+    },
+    "enneagram": {
+      "type5": 0.8,
+      "type4": 0.7,
+      "type7": 0.6
+    }
+  },
+  {
+    "answerId": "1737074053332x631017088713752600",
+    "optionText": "Analyze what went wrong systematically",
+    "myersBriggs": {
+      "T": 0.8,
+      "J": 0.7
+    },
+    "disc": {
+      "C": 0.9,
+      "D": 0.5
+    },
+    "big5": {
+      "conscientiousness": 0.8
+    },
+    "hollandCode": {
+      "I": 0.7,
+      "C": 0.6
+    },
+    "enneagram": {
+      "type1": 0.8,
+      "type5": 0.7,
+      "type3": 0.6
+    }
+  },
+  {
+    "answerId": "1737074061509x372696027024326660",
+    "optionText": "Reflect on the emotional impact and lessons",
+    "myersBriggs": {
+      "F": 0.8,
+      "P": 0.6
+    },
+    "disc": {
+      "S": 0.7,
+      "I": 0.6
+    },
+    "big5": {
+      "agreeableness": 0.7
+    },
+    "hollandCode": {
+      "S": 0.7,
+      "A": 0.6
+    },
+    "enneagram": {
+      "type4": 0.9,
+      "type2": 0.7,
+      "type9": 0.6
+    }
+  },
+  {
+    "answerId": "1737074193926x470423531755143200",
+    "optionText": "Make practical, realistic plans",
+    "myersBriggs": {
+      "S": 0.9,
+      "J": 0.7
+    },
+    "disc": {
+      "C": 0.8,
+      "S": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.8
+    },
+    "hollandCode": {
+      "C": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type6": 0.8,
+      "type1": 0.7,
+      "type3": 0.6
+    }
+  },
+  {
+    "answerId": "1737074202060x730003261199482900",
+    "optionText": "Dream big and imagine ideal scenarios",
+    "myersBriggs": {
+      "N": 0.9,
+      "P": 0.7
+    },
+    "disc": {
+      "I": 0.7,
+      "D": 0.5
+    },
+    "big5": {
+      "openness": 0.9
+    },
+    "hollandCode": {
+      "A": 0.8,
+      "E": 0.6
+    },
+    "enneagram": {
+      "type7": 0.9,
+      "type4": 0.8,
+      "type5": 0.6
+    }
+  },
+  {
+    "answerId": "1737073185345x482787881745121300",
+    "optionText": "Break them down into logical steps",
+    "myersBriggs": {
+      "T": 0.9,
+      "S": 0.8
+    },
+    "disc": {
+      "C": 0.9,
+      "D": 0.5
+    },
+    "big5": {
+      "conscientiousness": 0.8
+    },
+    "hollandCode": {
+      "I": 0.8,
+      "C": 0.7
+    },
+    "enneagram": {
+      "type5": 0.8,
+      "type1": 0.7
+    }
+  },
+  {
+    "answerId": "1737073199960x562508693030043650",
+    "optionText": "Look for creative, unconventional solutions",
+    "myersBriggs": {
+      "N": 0.9,
+      "P": 0.7
+    },
+    "disc": {
+      "I": 0.7,
+      "D": 0.6
+    },
+    "big5": {
+      "openness": 0.9
+    },
+    "hollandCode": {
+      "A": 0.8,
+      "E": 0.6
+    },
+    "enneagram": {
+      "type7": 0.8,
+      "type4": 0.7
+    }
+  },
+  {
+    "answerId": "1737073380037x460219962055720960",
+    "optionText": "Facts and data",
+    "myersBriggs": {
+      "T": 1.0,
+      "S": 0.8
+    },
+    "disc": {
+      "C": 0.9,
+      "D": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.8
+    },
+    "hollandCode": {
+      "I": 0.8,
+      "R": 0.7
+    },
+    "enneagram": {
+      "type5": 0.8,
+      "type1": 0.7,
+      "type3": 0.6
+    }
+  },
+  {
+    "answerId": "1737073388324x137990978149285890",
+    "optionText": "Intuition and personal values",
+    "myersBriggs": {
+      "F": 1.0,
+      "N": 0.7
+    },
+    "disc": {
+      "I": 0.7,
+      "S": 0.6
+    },
+    "big5": {
+      "openness": 0.7
+    },
+    "hollandCode": {
+      "A": 0.8,
+      "S": 0.7
+    },
+    "enneagram": {
+      "type4": 0.9,
+      "type2": 0.8,
+      "type9": 0.6
+    }
+  },
+  {
+    "answerId": "1737073572017x977006328469258200",
+    "optionText": "Focus on finding the most efficient solution",
+    "myersBriggs": {
+      "T": 0.8,
+      "J": 0.7
+    },
+    "disc": {
+      "D": 0.8,
+      "C": 0.7
+    },
+    "big5": {
+      "conscientiousness": 0.8
+    },
+    "hollandCode": {
+      "R": 0.7,
+      "E": 0.6
+    },
+    "enneagram": {
+      "type3": 0.8,
+      "type1": 0.7,
+      "type5": 0.6
+    }
+  },
+  {
+    "answerId": "1737073580424x164060162485911550",
+    "optionText": "Consider everyone's perspectives and feelings",
+    "myersBriggs": {
+      "F": 0.8,
+      "P": 0.6
+    },
+    "disc": {
+      "S": 0.8,
+      "I": 0.7
+    },
+    "big5": {
+      "agreeableness": 0.9
+    },
+    "hollandCode": {
+      "S": 0.8,
+      "A": 0.6
+    },
+    "enneagram": {
+      "type2": 0.9,
+      "type9": 0.8,
+      "type4": 0.6
+    }
+  },
+  {
+    "answerId": "1737073743110x381465187950526460",
+    "optionText": "Use proven methods and approaches",
+    "myersBriggs": {
+      "S": 0.9,
+      "J": 0.7
+    },
+    "disc": {
+      "C": 0.8,
+      "S": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.8
+    },
+    "hollandCode": {
+      "C": 0.8,
+      "R": 0.7
+    },
+    "enneagram": {
+      "type6": 0.8,
+      "type1": 0.7,
+      "type3": 0.5
+    }
+  },
+  {
+    "answerId": "1737073750092x553261188064477200",
+    "optionText": "Experiment with new solutions",
+    "myersBriggs": {
+      "N": 0.9,
+      "P": 0.7
+    },
+    "disc": {
+      "I": 0.7,
+      "D": 0.6
+    },
+    "big5": {
+      "openness": 0.9
+    },
+    "hollandCode": {
+      "A": 0.8,
+      "I": 0.7
+    },
+    "enneagram": {
+      "type7": 0.9,
+      "type4": 0.7,
+      "type5": 0.6
+    }
+  },
+  {
+    "answerId": "1737073897887x568048395451367400",
+    "optionText": "Focus on practical, achievable ideas",
+    "myersBriggs": {
+      "S": 0.8,
+      "J": 0.7
+    },
+    "disc": {
+      "C": 0.8,
+      "D": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.7
+    },
+    "hollandCode": {
+      "R": 0.7,
+      "C": 0.6
+    },
+    "enneagram": {
+      "type1": 0.7,
+      "type6": 0.6,
+      "type3": 0.5
+    }
+  },
+  {
+    "answerId": "1737073907411x982383147230691300",
+    "optionText": "Generate wild, imaginative possibilities",
+    "myersBriggs": {
+      "N": 0.8,
+      "P": 0.7
+    },
+    "disc": {
+      "I": 0.8,
+      "D": 0.5
+    },
+    "big5": {
+      "openness": 0.9
+    },
+    "hollandCode": {
+      "A": 0.8,
+      "I": 0.7
+    },
+    "enneagram": {
+      "type7": 0.9,
+      "type4": 0.8,
+      "type5": 0.6
+    }
+  },
+  {
+    "answerId": "1737074025047x171361812832059400",
+    "optionText": "Analyze pros and cons systematically",
+    "myersBriggs": {
+      "T": 0.9,
+      "J": 0.8
+    },
+    "disc": {
+      "C": 0.9,
+      "D": 0.5
+    },
+    "big5": {
+      "conscientiousness": 0.9
+    },
+    "hollandCode": {
+      "I": 0.8,
+      "C": 0.7
+    },
+    "enneagram": {
+      "type5": 0.8,
+      "type1": 0.7,
+      "type6": 0.6
+    }
+  },
+  {
+    "answerId": "1737074033328x573167398071828500",
+    "optionText": "Trust my gut feeling about what's right",
+    "myersBriggs": {
+      "F": 0.9,
+      "P": 0.7
+    },
+    "disc": {
+      "I": 0.7,
+      "S": 0.6
+    },
+    "big5": {
+      "openness": 0.7
+    },
+    "hollandCode": {
+      "A": 0.7,
+      "S": 0.6
+    },
+    "enneagram": {
+      "type4": 0.8,
+      "type9": 0.7,
+      "type2": 0.6
+    }
+  },
+  {
+    "answerId": "1737074172700x928738393004703700",
+    "optionText": "Focus on one thing until completion",
+    "myersBriggs": {
+      "J": 0.9,
+      "S": 0.6
+    },
+    "disc": {
+      "C": 0.8,
+      "S": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.9
+    },
+    "hollandCode": {
+      "C": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type1": 0.8,
+      "type5": 0.7,
+      "type6": 0.5
+    }
+  },
+  {
+    "answerId": "1737074180699x711794184609333200",
+    "optionText": "Switch between multiple activities",
+    "myersBriggs": {
+      "P": 0.9,
+      "N": 0.6
+    },
+    "disc": {
+      "I": 0.7,
+      "D": 0.5
+    },
+    "big5": {
+      "openness": 0.7
+    },
+    "hollandCode": {
+      "A": 0.7,
+      "E": 0.6
+    },
+    "enneagram": {
+      "type7": 0.9,
+      "type3": 0.6,
+      "type4": 0.5
+    }
+  },
+  {
+    "answerId": "1737073145427x700685284803346400",
+    "optionText": "Create action plans to address the source",
+    "myersBriggs": {
+      "T": 0.8,
+      "J": 0.7
+    },
+    "disc": {
+      "D": 0.8,
+      "C": 0.7
+    },
+    "big5": {
+      "conscientiousness": 0.8,
+      "neuroticism": -0.6
+    },
+    "hollandCode": {
+      "R": 0.7,
+      "E": 0.6
+    },
+    "enneagram": {
+      "type3": 0.8,
+      "type1": 0.7,
+      "type8": 0.6
+    }
+  },
+  {
+    "answerId": "1737073157096x776507020994412500",
+    "optionText": "Process my feelings and seek support",
+    "myersBriggs": {
+      "F": 0.8,
+      "P": 0.6
+    },
+    "disc": {
+      "S": 0.8,
+      "I": 0.7
+    },
+    "big5": {
+      "neuroticism": 0.7,
+      "agreeableness": 0.6
+    },
+    "hollandCode": {
+      "S": 0.8,
+      "A": 0.6
+    },
+    "enneagram": {
+      "type4": 0.9,
+      "type2": 0.8,
+      "type9": 0.6
+    }
+  },
+  {
+    "answerId": "1737073352706x332837390304935940",
+    "optionText": "Maintain objectivity and logical thinking ",
+    "myersBriggs": {
+      "T": 0.9,
+      "S": 0.6
+    },
+    "disc": {
+      "C": 0.9,
+      "D": 0.6
+    },
+    "big5": {
+      "neuroticism": -0.7
+    },
+    "hollandCode": {
+      "I": 0.8,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type5": 0.9,
+      "type1": 0.7,
+      "type3": 0.5
+    }
+  },
+  {
+    "answerId": "1737073360818x559104714837852200",
+    "optionText": "Engage fully with the emotional experience",
+    "myersBriggs": {
+      "F": 0.9,
+      "N": 0.6
+    },
+    "disc": {
+      "S": 0.8,
+      "I": 0.7
+    },
+    "big5": {
+      "neuroticism": 0.7,
+      "agreeableness": 0.7
+    },
+    "hollandCode": {
+      "A": 0.8,
+      "S": 0.7
+    },
+    "enneagram": {
+      "type4": 0.9,
+      "type2": 0.8,
+      "type7": 0.6
+    }
+  },
+  {
+    "answerId": "1737073534602x932118834809143300",
+    "optionText": "Focus on practical improvements",
+    "myersBriggs": {
+      "T": 0.8,
+      "J": 0.7
+    },
+    "disc": {
+      "D": 0.7,
+      "C": 0.7
+    },
+    "big5": {
+      "conscientiousness": 0.8,
+      "neuroticism": -0.5
+    },
+    "hollandCode": {
+      "R": 0.7,
+      "C": 0.6
+    },
+    "enneagram": {
+      "type3": 0.8,
+      "type1": 0.7,
+      "type8": 0.6
+    }
+  },
+  {
+    "answerId": "1737073553458x532046035564101600",
+    "optionText": "Process the emotional impact first",
+    "myersBriggs": {
+      "F": 0.8,
+      "P": 0.6
+    },
+    "disc": {
+      "S": 0.8,
+      "I": 0.6
+    },
+    "big5": {
+      "neuroticism": 0.7,
+      "agreeableness": 0.6
+    },
+    "hollandCode": {
+      "S": 0.7,
+      "A": 0.6
+    },
+    "enneagram": {
+      "type4": 0.9,
+      "type2": 0.7,
+      "type9": 0.6
+    }
+  },
+  {
+    "answerId": "1737073723111x275346479634186240",
+    "optionText": "Focus on finding solutions quickly",
+    "myersBriggs": {
+      "T": 0.8,
+      "J": 0.7
+    },
+    "disc": {
+      "D": 0.9,
+      "C": 0.7
+    },
+    "big5": {
+      "conscientiousness": 0.7,
+      "agreeableness": -0.5
+    },
+    "hollandCode": {
+      "E": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type8": 0.8,
+      "type3": 0.7,
+      "type1": 0.6
+    }
+  },
+  {
+    "answerId": "1737073729344x580294875353186300",
+    "optionText": "Address underlying emotions first",
+    "myersBriggs": {
+      "F": 0.8,
+      "P": 0.6
+    },
+    "disc": {
+      "S": 0.8,
+      "I": 0.7
+    },
+    "big5": {
+      "agreeableness": 0.8
+    },
+    "hollandCode": {
+      "S": 0.8,
+      "A": 0.6
+    },
+    "enneagram": {
+      "type9": 0.8,
+      "type2": 0.8,
+      "type4": 0.7
+    }
+  },
+  {
+    "answerId": "1737073872180x832122080371671000",
+    "optionText": "Analyze what went wrong objectively",
+    "myersBriggs": {
+      "T": 0.9,
+      "J": 0.7
+    },
+    "disc": {
+      "C": 0.8,
+      "D": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.8
+    },
+    "hollandCode": {
+      "I": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type5": 0.8,
+      "type1": 0.7,
+      "type3": 0.6
+    }
+  },
+  {
+    "answerId": "1737073880162x831294481101750300",
+    "optionText": "Focus on emotional resilience",
+    "myersBriggs": {
+      "F": 0.9,
+      "P": 0.6
+    },
+    "disc": {
+      "S": 0.7,
+      "I": 0.7
+    },
+    "big5": {
+      "agreeableness": 0.7
+    },
+    "hollandCode": {
+      "S": 0.7,
+      "A": 0.6
+    },
+    "enneagram": {
+      "type4": 0.8,
+      "type2": 0.7,
+      "type9": 0.6
+    }
+  },
+  {
+    "answerId": "1737073103251x172902281481551870",
+    "optionText": "Concrete benefits and practical outcomes",
+    "myersBriggs": {
+      "S": 0.9,
+      "T": 0.6
+    },
+    "disc": {
+      "C": 0.7,
+      "D": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.7
+    },
+    "hollandCode": {
+      "R": 0.8,
+      "C": 0.7
+    },
+    "enneagram": {
+      "type3": 0.7,
+      "type1": 0.6,
+      "type6": 0.5
+    }
+  },
+  {
+    "answerId": "1737073115774x613797929973448700",
+    "optionText": "Abstract benefits and personal meaning",
+    "myersBriggs": {
+      "N": 0.9,
+      "F": 0.6
+    },
+    "disc": {
+      "I": 0.6
+    },
+    "big5": {
+      "openness": 0.9
+    },
+    "hollandCode": {
+      "A": 0.8,
+      "I": 0.6
+    },
+    "enneagram": {
+      "type4": 0.9,
+      "type7": 0.7,
+      "type5": 0.6
+    }
+  },
+  {
+    "answerId": "1737073325420x395772772218568700",
+    "optionText": "Plan and track progress",
+    "myersBriggs": {
+      "J": 0.9,
+      "S": 0.7
+    },
+    "disc": {
+      "C": 0.8,
+      "D": 0.6
+    },
+    "big5": {
+      "conscientiousness": 0.9
+    },
+    "hollandCode": {
+      "C": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type1": 0.8,
+      "type3": 0.7,
+      "type6": 0.6
+    }
+  },
+  {
+    "answerId": "1737073334734x364099672101355500",
+    "optionText": "Keep options open and adjust as needed",
+    "myersBriggs": {
+      "P": 0.9,
+      "N": 0.7
+    },
+    "disc": {
+      "I": 0.7,
+      "S": 0.5
+    },
+    "big5": {
+      "openness": 0.8
+    },
+    "hollandCode": {
+      "A": 0.7,
+      "E": 0.6
+    },
+    "enneagram": {
+      "type7": 0.9,
+      "type9": 0.7,
+      "type4": 0.5
+    }
+  },
+  {
+    "answerId": "1737073694877x710244893043982300",
+    "optionText": "Detailed, step-by-step explanations",
+    "myersBriggs": {
+      "S": 0.9,
+      "J": 0.6
+    },
+    "disc": {
+      "C": 0.8,
+      "S": 0.5
+    },
+    "big5": {
+      "conscientiousness": 0.8
+    },
+    "hollandCode": {
+      "C": 0.7,
+      "R": 0.6
+    },
+    "enneagram": {
+      "type1": 0.7,
+      "type5": 0.6,
+      "type6": 0.6
+    }
+  },
+  {
+    "answerId": "1737073705653x896656014945075200",
+    "optionText": "Overall concepts and themes",
+    "myersBriggs": {
+      "N": 0.9,
+      "P": 0.6
+    },
+    "disc": {
+      "I": 0.7
+    },
+    "big5": {
+      "openness": 0.8
+    },
+    "hollandCode": {
+      "A": 0.7,
+      "I": 0.6
+    },
+    "enneagram": {
+      "type7": 0.8,
+      "type4": 0.7,
+      "type5": 0.6
+    }
+  },
+  {
+    "answerId": "1737073997241x447049289283928060",
+    "optionText": "Keep emotions in check to stay objective",
+    "myersBriggs": {
+      "T": 0.8,
+      "J": 0.6
+    },
+    "disc": {
+      "C": 0.8,
+      "D": 0.6
+    },
+    "big5": {
+      "neuroticism": -0.7
+    },
+    "hollandCode": {
+      "R": 0.7,
+      "I": 0.6
+    },
+    "enneagram": {
+      "type5": 0.8,
+      "type1": 0.7,
+      "type3": 0.5
+    }
+  },
+  {
+    "answerId": "1737074004882x698828942365425700",
+    "optionText": "Express feelings to process and cope",
+    "myersBriggs": {
+      "F": 0.8,
+      "P": 0.5
+    },
+    "disc": {
+      "I": 0.7,
+      "S": 0.7
+    },
+    "big5": {
+      "neuroticism": 0.6,
+      "agreeableness": 0.6
+    },
+    "hollandCode": {
+      "A": 0.7,
+      "S": 0.7
+    },
+    "enneagram": {
+      "type4": 0.9,
+      "type2": 0.8,
+      "type7": 0.6
+    }
+  },
+  {
+    "answerId": "1737074148429x319939190386589700",
+    "optionText": "Logical consequences and practical outcomes",
+    "myersBriggs": {
+      "T": 1.0,
+      "J": 0.7
+    },
+    "disc": {
+      "C": 0.9,
+      "D": 0.7
+    },
+    "big5": {
+      "conscientiousness": 0.8
+    },
+    "hollandCode": {
+      "I": 0.8,
+      "R": 0.7
+    },
+    "enneagram": {
+      "type1": 0.8,
+      "type5": 0.7,
+      "type3": 0.6
+    }
+  },
+  {
+    "answerId": "1737074159047x227024125788864500",
+    "optionText": "Impact on people and relationships",
+    "myersBriggs": {
+      "F": 1.0,
+      "P": 0.6
+    },
+    "disc": {
+      "S": 0.8,
+      "I": 0.7
+    },
+    "big5": {
+      "agreeableness": 0.9
+    },
+    "hollandCode": {
+      "S": 0.9,
+      "A": 0.7
+    },
+    "enneagram": {
+      "type2": 0.9,
+      "type9": 0.8,
+      "type4": 0.7
+    }
+  }
+]

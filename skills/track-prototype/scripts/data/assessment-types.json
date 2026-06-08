@@ -1,0 +1,341 @@
+{
+  "myersBriggs": [
+    {
+      "id": "INTJ",
+      "name": "INTJ\n(Introversion, Intuition, Thinking, Judging)",
+      "description": "Strategic, independent, and determined. Excels in long-term planning and innovation but can be private and perfectionistic."
+    },
+    {
+      "id": "INTP",
+      "name": "INTP\n(Introversion, Intuition, Thinking, Perceiving)",
+      "description": "Intellectual, curious, and analytical. Loves exploring abstract concepts and theories but can struggle with follow-through."
+    },
+    {
+      "id": "ENTJ",
+      "name": "ENTJ\n(Extroversion, Intuition, Thinking, Judging)",
+      "description": "Bold, decisive, and efficient leader. Thrives in structured environments and is driven to achieve big goals but may be seen as intimidating."
+    },
+    {
+      "id": "ENTP",
+      "name": "ENTP\n(Extroversion, Intuition, Thinking, Perceiving)",
+      "description": "Witty, energetic, and argumentative. Enjoys mental sparring and pushing boundaries but can struggle with routine and follow-through."
+    },
+    {
+      "id": "INFJ",
+      "name": "INFJ\n(Introversion, Intuition, Feeling, Judging)",
+      "description": "Deep, introspective, and highly empathetic. Has a strong sense of purpose and often works toward helping others but may be prone to burnout."
+    },
+    {
+      "id": "INFP",
+      "name": "INFP\n(Introversion, Intuition, Feeling, Perceiving)",
+      "description": "Idealistic, creative, and deeply emotional. Seeks meaning in everything but can be overly sensitive and struggle with practical matters."
+    },
+    {
+      "id": "ENFJ",
+      "name": "ENFJ\n(Extroversion, Intuition, Feeling, Judging)",
+      "description": "Charismatic, inspiring, and driven by the desire to help others. A natural leader but may take on too much responsibility."
+    },
+    {
+      "id": "ENFP",
+      "name": "ENFP\n(Extroversion, Intuition, Feeling, Perceiving)",
+      "description": "Enthusiastic, spontaneous, and highly creative. Loves exploring possibilities but may struggle with structure and follow-through."
+    },
+    {
+      "id": "ISTJ",
+      "name": "ISTJ\n(Introversion, Sensing, Thinking, Judging)",
+      "description": "Responsible, disciplined, and detail-oriented. Values tradition and reliability but can be rigid and resistant to change."
+    },
+    {
+      "id": "ISFJ",
+      "name": "ISFJ\n(Introversion, Sensing, Feeling, Judging)",
+      "description": "Warm, nurturing, and dependable. Loyal and hard-working but may struggle with self-advocacy."
+    },
+    {
+      "id": "ESTJ",
+      "name": "ESTJ\n(Extroversion, Sensing, Thinking, Judging)",
+      "description": "Organized, practical, and strong-willed. Thrives in leadership roles but may come across as too controlling or blunt."
+    },
+    {
+      "id": "ESFJ",
+      "name": "ESFJ\n(Extroversion, Sensing, Feeling, Judging)",
+      "description": "Social, caring, and community-focused. Excels in fostering harmony but may struggle with criticism or change."
+    },
+    {
+      "id": "ISTP",
+      "name": "ISTP\n(Introversion, Sensing, Thinking, Perceiving)",
+      "description": "Independent, hands-on, and resourceful. Loves working with tools and solving practical problems but can be impulsive or distant."
+    },
+    {
+      "id": "ISFP",
+      "name": "ISFP\n(Introversion, Sensing, Feeling, Perceiving)",
+      "description": "Artistic, free-spirited, and highly in tune with emotions. Craves new experiences but may struggle with long-term commitments."
+    },
+    {
+      "id": "ESTP",
+      "name": "ESTP\n(Extroversion, Sensing, Thinking, Perceiving)",
+      "description": "Energetic, action-oriented, and charming. Loves excitement and risk-taking but may struggle with long-term planning."
+    },
+    {
+      "id": "ESFP",
+      "name": "ESFP\n(Extroversion, Sensing, Feeling, Perceiving)",
+      "description": "Fun-loving, social, and spontaneous. Thrives in the moment but may avoid deeper or serious issues."
+    }
+  ],
+
+  "DISC": [
+    {
+      "id": "D",
+      "name": "Dominance (D)",
+      "title": "The Leader",
+      "description": "Bold, assertive, and results-driven. Thrives in leadership roles and embraces challenges but can be impatient or overly aggressive."
+    },
+    {
+      "id": "I",
+      "name": "Influence (I)",
+      "title": "The Persuader",
+      "description": "Charismatic, social, and enthusiastic. Great at communication and building relationships but can be disorganized or easily distracted."
+    },
+    {
+      "id": "S",
+      "name": "Steadiness (S)",
+      "title": "The Supporter",
+      "description": "Loyal, patient, and dependable. A great team player who values harmony but may struggle with change or setting boundaries."
+    },
+    {
+      "id": "C",
+      "name": "Conscientiousness (C)",
+      "title": "The Analyst",
+      "description": "Detail-oriented, analytical, and precise. Values accuracy and structure but may be overly critical or struggle with spontaneity."
+    }
+  ],
+
+  "enneagram": [
+    {
+      "id": "type1",
+      "name": "Type 1: The Reformer",
+      "description": "Principled, disciplined, and perfectionistic. Strives for integrity and high standards but can be overly critical and rigid."
+    },
+    {
+      "id": "type2",
+      "name": "Type 2: The Helper",
+      "description": "Warm, caring, and generous. Seeks to support others but may struggle with setting boundaries and seeking validation."
+    },
+    {
+      "id": "type3",
+      "name": "Type 3: The Achiever",
+      "description": "Ambitious, adaptable, and success-driven. Excels at goal-setting but may be overly focused on image and external validation."
+    },
+    {
+      "id": "type4",
+      "name": "Type 4: The Individualist",
+      "description": "Creative, introspective, and deeply emotional. Values authenticity but may struggle with mood swings and feeling misunderstood."
+    },
+    {
+      "id": "type5",
+      "name": "Type 5: The Investigator",
+      "description": "Analytical, curious, and independent. Loves knowledge and deep thinking but may be emotionally detached or withdrawn."
+    },
+    {
+      "id": "type6",
+      "name": "Type 6: The Loyalist",
+      "description": "Responsible, trustworthy, and security-oriented. Values stability and preparedness but can be anxious or skeptical."
+    },
+    {
+      "id": "type7",
+      "name": "Type 7: The Enthusiast",
+      "description": "Fun-loving, spontaneous, and adventurous. Seeks excitement and new experiences but may struggle with commitment and focus."
+    },
+    {
+      "id": "type8",
+      "name": "Type 8: The Challenger",
+      "description": "Confident, assertive, and protective. A strong leader who values control but can be confrontational or overly domineering."
+    },
+    {
+      "id": "type9",
+      "name": "Type 9: The Peacemaker",
+      "description": "Easygoing, empathetic, and harmonious. Avoids conflict and seeks peace but may struggle with indecisiveness and passivity."
+    }
+  ],
+
+  "big5": [
+    {
+      "name": "Openness",
+      "description": "Characterized by imagination, curiosity, and a preference for novelty and variety. People high in openness are creative and open to new experiences, while those low in openness prefer routine and tradition."
+    },
+    {
+      "name": "Conscientiousness",
+      "description": "Reflects a person's level of organization, dependability, and self-discipline. Highly conscientious individuals are responsible and goal-oriented, while lower conscientiousness may indicate spontaneity or a lack of structure."
+    },
+    {
+      "name": "Extraversion",
+      "description": "Associated with sociability, assertiveness, and enthusiasm. Extroverts enjoy social interactions and stimulation, while introverts prefer solitude and quieter environments."
+    },
+    {
+      "name": "Agreeableness",
+      "description": "Relates to compassion, cooperation, and social harmony. Highly agreeable people are empathetic and kind, while those lower in agreeableness may be more competitive or skeptical."
+    },
+    {
+      "name": "Neuroticism",
+      "description": "Indicates emotional stability and resilience. High neuroticism is linked to anxiety, mood swings, and stress sensitivity, while low neuroticism is associated with calmness and emotional stability."
+    }
+  ],
+
+  "hollandCode": [
+    {
+      "name": "Realistic",
+      "description": "Hands-on, practical, and mechanically inclined. Prefers working with tools, machines, and the outdoors. Enjoys physical tasks and problem-solving through direct action.",
+      "combinations": {
+        "RIA": "Hands-on Analytical Creator",
+        "RIS": "Hands-on Analytical Helper",
+        "RIE": "Hands-on Analytical Leader",
+        "RIC": "Hands-on Analytical Organizer",
+        "RAI": "Hands-on Imaginative Thinker",
+        "RAS": "Hands-on Imaginative Helper",
+        "RAE": "Hands-on Imaginative Leader",
+        "RAC": "Hands-on Imaginative Organizer",
+        "RSI": "Hands-on Empathic Thinker",
+        "RSA": "Hands-on Empathic Creator",
+        "RSE": "Hands-on Empathic Leader",
+        "RSC": "Hands-on Empathic Organizer",
+        "REI": "Hands-on Driven Thinker",
+        "REA": "Hands-on Driven Creator",
+        "RES": "Hands-on Driven Helper",
+        "REC": "Hands-on Driven Organizer",
+        "RCI": "Hands-on Precise Thinker",
+        "RCA": "Hands-on Precise Creator",
+        "RCS": "Hands-on Precise Helper",
+        "RCE": "Hands-on Precise Leader"
+      }
+    },
+    {
+      "name": "Investigative",
+      "description": "Curious, analytical, and intellectual. Enjoys research, problem-solving, and exploring abstract concepts. Prefers working with ideas rather than people or things.",
+      "combinations": {
+        "IRA": "Analytical Hands-on Creator",
+        "IRS": "Analytical Hands-on Helper",
+        "IRE": "Analytical Hands-on Leader",
+        "IRC": "Analytical Hands-on Organizer",
+        "IAE": "Analytical Imaginative Leader",
+        "IAS": "Analytical Imaginative Helper",
+        "IAR": "Analytical Imaginative Builder",
+        "IAC": "Analytical Imaginative Organizer",
+        "ISR": "Analytical Empathic Builder",
+        "ISA": "Analytical Empathic Creator",
+        "ISE": "Analytical Empathic Leader",
+        "ISC": "Analytical Empathic Organizer",
+        "IER": "Analytical Driven Builder",
+        "IEA": "Analytical Driven Creator",
+        "IES": "Analytical Driven Helper",
+        "IEC": "Analytical Driven Organizer",
+        "ICR": "Analytical Precise Builder",
+        "ICA": "Analytical Precise Creator",
+        "ICS": "Analytical Precise Helper",
+        "ICE": "Analytical Precise Leader"
+      }
+    },
+    {
+      "name": "Artistic",
+      "description": "Creative, expressive, and imaginative. Prefers unstructured environments that allow for self-expression through art, music, writing, or design.",
+      "combinations": {
+        "ARI": "Imaginative Hands-on Thinker",
+        "ARS": "Imaginative Hands-on Helper",
+        "ARE": "Imaginative Hands-on Leader",
+        "ARC": "Imaginative Hands-on Organizer",
+        "ASI": "Imaginative Empathic Thinker",
+        "ASR": "Imaginative Empathic Builder",
+        "ASE": "Imaginative Empathic Leader",
+        "ASC": "Imaginative Empathic Organizer",
+        "AEI": "Imaginative Driven Thinker",
+        "AER": "Imaginative Driven Builder",
+        "AES": "Imaginative Driven Helper",
+        "AEC": "Imaginative Driven Organizer",
+        "ACI": "Imaginative Precise Thinker",
+        "ACR": "Imaginative Precise Builder",
+        "ACS": "Imaginative Precise Helper",
+        "ACE": "Imaginative Precise Leader",
+        "AIE": "Imaginative Analytical Leader",
+        "AIS": "Imaginative Analytical Helper",
+        "AIR": "Imaginative Analytical Builder",
+        "AIC": "Imaginative Analytical Organizer"
+      }
+    },
+    {
+      "name": "Social",
+      "description": "Empathetic, cooperative, and people-oriented. Enjoys helping, teaching, and supporting others. Prefers roles that involve direct interaction and teamwork.",
+      "combinations": {
+        "SRI": "Empathic Hands-on Thinker",
+        "SRA": "Empathic Hands-on Creator",
+        "SRE": "Empathic Hands-on Leader",
+        "SRC": "Empathic Hands-on Organizer",
+        "SIA": "Empathic Analytical Creator",
+        "SIR": "Empathic Analytical Builder",
+        "SIE": "Empathic Analytical Leader",
+        "SIC": "Empathic Analytical Organizer",
+        "SEA": "Empathic Driven Creator",
+        "SER": "Empathic Driven Builder",
+        "SEI": "Empathic Driven Thinker",
+        "SEC": "Empathic Driven Organizer",
+        "SCA": "Empathic Precise Creator",
+        "SCR": "Empathic Precise Builder",
+        "SCI": "Empathic Precise Thinker",
+        "SCE": "Empathic Precise Leader",
+        "SAI": "Empathic Imaginative Thinker",
+        "SAR": "Empathic Imaginative Builder",
+        "SAE": "Empathic Imaginative Leader",
+        "SAC": "Empathic Imaginative Organizer"
+      }
+    },
+    {
+      "name": "Enterprising",
+      "description": "Persuasive, ambitious, and energetic. Enjoys leadership, business, and taking risks. Prefers roles involving sales, management, or entrepreneurship.",
+      "combinations": {
+        "ERI": "Driven Hands-on Thinker",
+        "ERA": "Driven Hands-on Creator",
+        "ERS": "Driven Hands-on Helper",
+        "ERC": "Driven Hands-on Organizer",
+        "EIA": "Driven Analytical Creator",
+        "EIR": "Driven Analytical Builder",
+        "EIS": "Driven Analytical Helper",
+        "EIC": "Driven Analytical Organizer",
+        "ESA": "Driven Empathic Creator",
+        "ESR": "Driven Empathic Builder",
+        "ESI": "Driven Empathic Thinker",
+        "ESC": "Driven Empathic Organizer",
+        "ECA": "Driven Precise Creator",
+        "ECR": "Driven Precise Builder",
+        "ECS": "Driven Precise Helper",
+        "ECI": "Driven Precise Thinker",
+        "EAI": "Driven Imaginative Thinker",
+        "EAR": "Driven Imaginative Builder",
+        "EAS": "Driven Imaginative Helper",
+        "EAC": "Driven Imaginative Organizer"
+      }
+    },
+    {
+      "name": "Conventional",
+      "description": "Organized, detail-oriented, and structured. Prefers working with data, numbers, and systematic tasks. Enjoys roles involving administration, finance, or clerical work.",
+      "combinations": {
+        "CRI": "Precise Hands-on Thinker",
+        "CRA": "Precise Hands-on Creator",
+        "CRS": "Precise Hands-on Helper",
+        "CRE": "Precise Hands-on Leader",
+        "CIA": "Precise Analytical Creator",
+        "CIR": "Precise Analytical Builder",
+        "CIS": "Precise Analytical Helper",
+        "CIE": "Precise Analytical Leader",
+        "CSA": "Precise Empathic Creator",
+        "CSR": "Precise Empathic Builder",
+        "CSI": "Precise Empathic Thinker",
+        "CSE": "Precise Empathic Leader",
+        "CEA": "Precise Driven Creator",
+        "CER": "Precise Driven Builder",
+        "CES": "Precise Driven Helper",
+        "CEI": "Precise Driven Thinker",
+        "CAI": "Precise Imaginative Thinker",
+        "CAR": "Precise Imaginative Builder",
+        "CAS": "Precise Imaginative Helper",
+        "CAE": "Precise Imaginative Leader"
+      }
+    }
+  ]
+}

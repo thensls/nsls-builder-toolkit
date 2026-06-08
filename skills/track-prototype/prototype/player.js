@@ -1,5 +1,6 @@
 import { flattenSubsteps, nextIndex, prevIndex, clampIndex, progressPct } from "./player-core.mjs";
 import { interpolate } from "./interpolate.mjs"; // build copies interpolate.mjs alongside player.js (see build-prototype.mjs)
+import { scoreAssessment, resolveAnswerIds, buildCards } from "./assessment-score.mjs"; // build copies it alongside player.js
 
 const KEY = "tp.v1";
 const track = window.__TRACK__;            // injected by build (the full track object)
@@ -48,6 +49,56 @@ function render() {
   // Kick off AI after the screen is visible (non-blocking)
   maybeRunGenerateAI();
   wireChatAI();
+  // Compute + render the real personality scores when an assessment-results screen shows
+  maybeRunAssessmentResults();
+}
+
+// ---------------------------------------------------------------------------
+// Assessment results — compute-on-render (mirrors maybeRunGenerateAI).
+// Scores the user's chosen answers client-side from window.__ASSESSMENT__
+// (weights + types, baked by the build) and renders the real personality cards
+// into [data-assessment-results]. Pure + synchronous — no proxy/network needed.
+// ---------------------------------------------------------------------------
+function maybeRunAssessmentResults() {
+  const sub = subs[state.i];
+  if (!sub || sub.fieldType !== "assessment-results") return;
+  const out = root.querySelector("[data-assessment-results]");
+  if (!out) return;
+
+  const data = window.__ASSESSMENT__;
+  if (!data || !Array.isArray(data.weights)) {
+    out.textContent = "Assessment scoring data not available in this preview.";
+    return;
+  }
+
+  const answerIds = resolveAnswerIds(track, state.answers);
+  if (answerIds.length === 0) {
+    out.textContent = "Complete the personality questions to see your results.";
+    return;
+  }
+
+  const results = scoreAssessment({ answerIds, weights: data.weights, types: data.types });
+  const cards = results.cards || buildCards(results, data.types || {});
+  renderAssessmentCards(out, cards);
+}
+
+function renderAssessmentCards(out, cards) {
+  out.innerHTML = "";
+  for (const c of cards) {
+    const card = document.createElement("div");
+    card.className = "tp-result-card tp-result-" + (c.color || "");
+    const title = document.createElement("div");
+    title.className = "tp-result-framework";
+    title.textContent = c.title;
+    const result = document.createElement("div");
+    result.className = "tp-result-type";
+    result.textContent = c.result;
+    const desc = document.createElement("p");
+    desc.className = "tp-result-desc";
+    desc.textContent = c.description;
+    card.append(title, result, desc);
+    out.appendChild(card);
+  }
 }
 
 function captureCurrent() {

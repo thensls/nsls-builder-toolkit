@@ -23,3 +23,13 @@ visual language changes.
 ## What is mechanical vs hand-authored
 - Mechanical (re-run extract-tokens): colors, radius, font vars.
 - Hand-authored (diff + edit): component CSS, substep routing.
+
+## Vendored assessment scoring data
+`scripts/data/assessment-scoring-weights.json` and `scripts/data/assessment-types.json`
+are COPIED VERBATIM from ignite-next `src/data/`. The build bakes them into
+`window.__ASSESSMENT__` so the player can compute real personality results client-side
+(`scripts/lib/assessment-score.mjs`, a faithful port of `src/services/assessmentComputation.ts`
++ `src/lib/assessmentUtils.ts`). Re-copy both files when the app updates its scoring weights
+or framework descriptions. The join is by `answerId` (matches production) — never by option
+text: in the Clarity track only ~50/84 option texts match a weights `optionText`, but ~81/84
+answerIds match.

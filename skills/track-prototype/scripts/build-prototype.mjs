@@ -7,6 +7,21 @@ import { flattenSubsteps } from "../prototype/player-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROTO = join(HERE, "..", "prototype");
+const DATA = join(HERE, "data");
+
+// Vendored assessment scoring data (copied from ignite-next). Baked into the page so
+// the player can compute personality results client-side. Read lazily so a missing
+// file doesn't break non-assessment builds.
+function loadAssessmentData() {
+  try {
+    return {
+      weights: JSON.parse(readFileSync(join(DATA, "assessment-scoring-weights.json"), "utf8")),
+      types: JSON.parse(readFileSync(join(DATA, "assessment-types.json"), "utf8")),
+    };
+  } catch {
+    return null;
+  }
+}
 
 // Stringify for embedding inside a <script> tag: escape "<" so a value containing
 // "</script>" can't close the tag early (the raw track object is injected unescaped
@@ -29,12 +44,15 @@ export function buildSite(input, opts = {}) {
   const ctx = { samples: opts.samples || {} };
   const screens = flattenSubsteps(track).map((sub) => renderSubstep(sub, ctx));
   const template = readFileSync(join(PROTO, "template.html"), "utf8");
+  // opts.assessment lets tests inject a tiny fixture; default to the vendored data.
+  const assessment = opts.assessment !== undefined ? opts.assessment : loadAssessmentData();
   // Use FUNCTION replacers: a string replacement would interpret $&, $`, $$, $n in the
   // value as special patterns, corrupting JSON whose content contains a literal "$&" etc.
   const indexHtml = template
     .replace("%%TRACK%%", () => jsonForScript(track))
     .replace("%%SCREENS%%", () => jsonForScript(screens))
     .replace("%%PROXY%%", () => jsonForScript(opts.proxy || null))
+    .replace("%%ASSESSMENT%%", () => jsonForScript(assessment || null))
     .replace("__DATE__", () => opts.date || "");
   return { indexHtml, screens };
 }
@@ -62,5 +80,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   cpSync(join(PROTO, "player.js"), join(out, "player.js"));
   cpSync(join(PROTO, "player-core.mjs"), join(out, "player-core.mjs"));
   cpSync(join(HERE, "lib", "interpolate.mjs"), join(out, "interpolate.mjs"));
+  cpSync(join(HERE, "lib", "assessment-score.mjs"), join(out, "assessment-score.mjs"));
   console.log(`Built ${out}/`);
 }
