@@ -86,7 +86,7 @@ function renderAssessmentCards(out, cards) {
   out.innerHTML = "";
   for (const c of cards) {
     const card = document.createElement("div");
-    card.className = "tp-result-card tp-result-" + (c.color || "");
+    card.className = "tp-result-card";
     const title = document.createElement("div");
     title.className = "tp-result-framework";
     title.textContent = c.title;
