@@ -23,3 +23,23 @@ visual language changes.
 ## What is mechanical vs hand-authored
 - Mechanical (re-run extract-tokens): colors, radius, font vars.
 - Hand-authored (diff + edit): component CSS, substep routing.
+
+## Vendored assessment scoring data
+`scripts/data/assessment-scoring-weights.json` and `scripts/data/assessment-types.json`
+are COPIED VERBATIM from ignite-next `src/data/`. The build bakes them into
+`window.__ASSESSMENT__` so the player can compute real personality results client-side
+(`scripts/lib/assessment-score.mjs`, a faithful port of `src/services/assessmentComputation.ts`
++ `src/lib/assessmentUtils.ts`). Re-copy both files when the app updates its scoring weights
+or framework descriptions. The join is by `answerId` (matches production) — never by option
+text: in the Clarity track only ~50/84 option texts match a weights `optionText`, but ~81/84
+answerIds match.
+
+### `big5.introversion` is intentionally dropped (faithful to prod)
+The vendored weights carry 4 `"introversion": 0.9` big5 entries. The scorer does
+NOT count them — and neither does production. `assessmentComputation.ts`
+initializes big5 with exactly `{openness, conscientiousness, extraversion,
+agreeableness, neuroticism}` and tallies with `if (key in scores.big5)`, so
+`introversion` is a dead key in the app too (its only use is these data rows;
+there is no introversion→negative-extraversion mapping). We mirror that exactly:
+the preview must reflect production, not "fix" it. Do not add an `introversion`
+key to `emptyScores()` and do not edit the vendored JSON.

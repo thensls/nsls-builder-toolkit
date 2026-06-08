@@ -1,0 +1,213 @@
+{
+  "name": "Maya",
+  "location": "Fresno, California",
+  "age": "20",
+  "gender": "Female",
+  "education": "Sophomore at Fresno State, majoring in Communications. First in my family to go to a four-year university.",
+  "work-experience": "Part-time barista at a local cafe for two years, and a volunteer peer tutor in the campus writing center.",
+  "direction-clarity": "4",
+  "job-acquisition-confidence": "5",
+  "easy-tasks": "Making nervous people feel comfortable and explaining confusing things in plain language.",
+  "energizing-tasks": "Helping a classmate finally understand something, or organizing a small group around a shared goal.",
+  "complimented-skills": "People always tell me I am a really good listener and that I make them feel heard.",
+  "natural-talents": "They would say I am patient, warm, and good at bringing people together.",
+  "focusing-tasks": "Tutoring writing and editing other people’s essays — I look up and hours have passed.",
+  "fulfilling-work": "Running a study group for first-gen students last semester felt completely natural and fulfilling.",
+  "strengths-selection": [
+    "Reflective Calm",
+    "Quiet Resilience",
+    "Grounded Hope"
+  ],
+  "world-problem": "I would make sure every first-generation student had someone in their corner who believed in them.",
+  "industries": "Education, community nonprofits, and public media inspire me.",
+  "companies": "Mission-driven nonprofits and community organizations that put people before profit.",
+  "people": "My mom, my high school counselor, and Mister Rogers — people who lead with warmth.",
+  "conversation": "Talking about what makes people tick and how to help communities support each other.",
+  "time": "I would mentor students, volunteer at the library, and tell community stories.",
+  "inspirations-selection": [
+    "Quietly Building",
+    "Underdog Empowerment",
+    "Unseen Impact"
+  ],
+  "energizing": "A warm, collaborative setting where I work closely with a small, supportive team.",
+  "flexibility": "I like a good amount of flexibility, but I appreciate having a clear rhythm to my week.",
+  "work-culture": "A culture that is kind, inclusive, and genuinely cares about people over numbers.",
+  "work-setting": "A welcoming community space or a friendly open office, not an isolated cubicle.",
+  "scheduling": "Mostly steady daytime hours with room to adjust when life happens.",
+  "stress": "A gentle, manageable level of pressure — enough to focus me, not so much that I burn out.",
+  "climate": "A mild, sunny climate like California’s Central Valley suits me.",
+  "scene": "A friendly, community-minded town with local cafes and gathering spots.",
+  "proximity": "I’d like to stay fairly close to home and my family.",
+  "transport": "Walking and the occasional bus, with a car for longer trips.",
+  "nature": "Being near parks and a bit of nature matters a lot to my well-being.",
+  "values-selection": [
+    "Compassion – Showing kindness to others",
+    "Community – Building connections with others",
+    "Authenticity – Being true to yourself",
+    "Kindness – Treating others with care",
+    "Growth – Continuously improving",
+    "Learning – Acquiring new skills",
+    "Equality – Advocating for fairness",
+    "Generosity – Giving freely to help others",
+    "Balance – Maintaining stability across life areas",
+    "Gratitude – Appreciating life's good things",
+    "Loyalty – Being faithful in relationships",
+    "Honesty – Being truthful and transparent"
+  ],
+  "values-selection-2": [
+    "Compassion – Showing kindness to others",
+    "Community – Building connections with others",
+    "Authenticity – Being true to yourself",
+    "Kindness – Treating others with care",
+    "Growth – Continuously improving",
+    "Equality – Advocating for fairness",
+    "Generosity – Giving freely to help others",
+    "Loyalty – Being faithful in relationships"
+  ],
+  "value-selection-3": [
+    "Compassion – Showing kindness to others",
+    "Community – Building connections with others",
+    "Authenticity – Being true to yourself",
+    "Kindness – Treating others with care",
+    "Growth – Continuously improving",
+    "Equality – Advocating for fairness"
+  ],
+  "job-sector": "Education or community nonprofit work, ideally student support or outreach.",
+  "anything-else": "I want work that feels meaningful and lets me help people who are often overlooked.",
+  "job-familiarity": "Mix of both",
+  "open-to-education": "Open to further education",
+  "dream-job-selection": "Student Success / Outreach Coordinator",
+  "dream-job-requirements": "Yes, I am ready to see what it takes.",
+  "housing-costs": "850",
+  "food-costs": "350",
+  "transportation-costs": "150",
+  "utilities-costs": "120",
+  "debt-payments": "90",
+  "miscellaneous-costs": "140",
+  "question-1": [
+    "Processing my feelings and/or seeking support"
+  ],
+  "question-2": [
+    "Engage fully with my emotions"
+  ],
+  "question-3": [
+    "Processing any emotional impact"
+  ],
+  "question-4": [
+    "Addressing any emotions"
+  ],
+  "question-5": [
+    "Feeling my emotions"
+  ],
+  "question-6": [
+    "Abstract benefits and personal meaning"
+  ],
+  "question-7": [
+    "Keep options open and adjust as needed"
+  ],
+  "question-8": [
+    "Overall concepts and themes"
+  ],
+  "question-9": [
+    "Gather information before acting"
+  ],
+  "question-10": [
+    "Explore freely and learn through experience"
+  ],
+  "question-11": [
+    "Trust my instincts and adapt as I go"
+  ],
+  "question-12": [
+    "Open-ended exploration"
+  ],
+  "question-13": [
+    "Aim for more abstract, exciting possibilities"
+  ],
+  "question-14": [
+    "Concepts and theories"
+  ],
+  "question-15": [
+    "Reflecting on the emotional impact"
+  ],
+  "question-16": [
+    "Dream big and imagine"
+  ],
+  "question-17": [
+    "Look for creative, unconventional solutions"
+  ],
+  "question-18": [
+    "Intuition and personal values"
+  ],
+  "question-19": [
+    "Considering everyone's perspectives and feelings"
+  ],
+  "question-20": [
+    "Use proven methods and approaches"
+  ],
+  "question-21": [
+    "Generate wild, imaginative possibilities"
+  ],
+  "question-22": [
+    "Trust my gut feeling about what's right"
+  ],
+  "question-23": [
+    "Switch between multiple activities"
+  ],
+  "question-24": [
+    "Allow the process to evolve naturally based on team input"
+  ],
+  "question-25": [
+    "Take quick action based on my instinct/gut feeling"
+  ],
+  "question-26": [
+    "Explore various perspectives and possibilities"
+  ],
+  "question-27": [
+    "Support and facilitate group harmony"
+  ],
+  "question-28": [
+    "Supportive, encouraging guidance"
+  ],
+  "question-29": [
+    "Prioritize team morale and well-being"
+  ],
+  "question-30": [
+    "Stay flexible and adapt as needed"
+  ],
+  "question-31": [
+    "Focus on innovation and possibilities"
+  ],
+  "question-32": [
+    "Focus on big ideas and possibilities"
+  ],
+  "question-33": [
+    "Work until the last minute"
+  ],
+  "question-34": [
+    "Facilitate open-ended exploration"
+  ],
+  "question-35": [
+    "Find one person for a deep conversation"
+  ],
+  "question-36": [
+    "Provide emotional support"
+  ],
+  "question-37": [
+    "Focus on maintaining peace"
+  ],
+  "question-38": [
+    "Listen and observe before sharing"
+  ],
+  "question-39": [
+    "Support and contribute"
+  ],
+  "question-40": [
+    "Wait for invitations"
+  ],
+  "question-41": [
+    "Listen more than speak"
+  ],
+  "question-42": [
+    "Empathizing and connecting emotionally"
+  ]
+}

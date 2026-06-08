@@ -1,5 +1,6 @@
 import { flattenSubsteps, nextIndex, prevIndex, clampIndex, progressPct } from "./player-core.mjs";
 import { interpolate } from "./interpolate.mjs"; // build copies interpolate.mjs alongside player.js (see build-prototype.mjs)
+import { scoreAssessment, resolveAnswerIds, buildCards } from "./assessment-score.mjs"; // build copies it alongside player.js
 
 const KEY = "tp.v1";
 const track = window.__TRACK__;            // injected by build (the full track object)
@@ -44,10 +45,87 @@ async function streamFromProxy(body, onDelta, signal) {
 function render() {
   root.innerHTML = interpolate(screens[state.i], state.answers); // fill {slug} live
   bar.style.width = progressPct(state.i, subs.length) + "%";
+  populateInheritedOptions(); // narrowing pattern: build options from a prior answer
   wire();
   // Kick off AI after the screen is visible (non-blocking)
   maybeRunGenerateAI();
   wireChatAI();
+  // Compute + render the real personality scores when an assessment-results screen shows
+  maybeRunAssessmentResults();
+}
+
+// ---------------------------------------------------------------------------
+// Assessment results — compute-on-render (mirrors maybeRunGenerateAI).
+// Scores the user's chosen answers client-side from window.__ASSESSMENT__
+// (weights + types, baked by the build) and renders the real personality cards
+// into [data-assessment-results]. Pure + synchronous — no proxy/network needed.
+// ---------------------------------------------------------------------------
+function maybeRunAssessmentResults() {
+  const sub = subs[state.i];
+  if (!sub || sub.fieldType !== "assessment-results") return;
+  const out = root.querySelector("[data-assessment-results]");
+  if (!out) return;
+
+  const data = window.__ASSESSMENT__;
+  if (!data || !Array.isArray(data.weights)) {
+    out.textContent = "Assessment scoring data not available in this preview.";
+    return;
+  }
+
+  const answerIds = resolveAnswerIds(track, state.answers);
+  if (answerIds.length === 0) {
+    out.textContent = "Complete the personality questions to see your results.";
+    return;
+  }
+
+  const results = scoreAssessment({ answerIds, weights: data.weights, types: data.types });
+  const cards = results.cards || buildCards(results, data.types || {});
+  renderAssessmentCards(out, cards);
+}
+
+function renderAssessmentCards(out, cards) {
+  out.innerHTML = "";
+  for (const c of cards) {
+    const card = document.createElement("div");
+    card.className = "tp-result-card";
+    const title = document.createElement("div");
+    title.className = "tp-result-framework";
+    title.textContent = c.title;
+    const result = document.createElement("div");
+    result.className = "tp-result-type";
+    result.textContent = c.result;
+    const desc = document.createElement("p");
+    desc.className = "tp-result-desc";
+    desc.textContent = c.description;
+    card.append(title, result, desc);
+    out.appendChild(card);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Narrowing pattern (optionsSourceSlug): a substep with no inline options
+// inherits its choices from the answer the user picked for an upstream slug
+// (e.g. pick 12 values, then narrow to 8, then 6). Those options can't be baked
+// at build time — populate the empty grid here from state.answers.
+// ---------------------------------------------------------------------------
+function populateInheritedOptions() {
+  const grid = root.querySelector("[data-options-source]");
+  if (!grid || grid.querySelector("[data-option]")) return; // already has options
+  const sourceSlug = grid.dataset.optionsSource;
+  const upstream = state.answers[sourceSlug];
+  const values = Array.isArray(upstream)
+    ? upstream
+    : (typeof upstream === "string" && upstream ? upstream.split(", ") : []);
+  // NOTE: this hand-rolled HTML escaper intentionally duplicates `esc` in
+  // render-substep.mjs. player.js runs in the browser as a standalone copied
+  // file (the build copies it next to interpolate.mjs / assessment-score.mjs)
+  // and does not import the render module, so we inline the same escape map here
+  // rather than add a build-time dependency. Keep the two in sync.
+  grid.innerHTML = values.map((text, i) =>
+    `<button class="tp-option" data-option data-value="${String(text).replace(/"/g, "&quot;")}" data-index="${i}"><span>${
+      String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))
+    }</span></button>`
+  ).join("");
 }
 
 function captureCurrent() {

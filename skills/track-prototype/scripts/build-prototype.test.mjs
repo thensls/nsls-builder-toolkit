@@ -59,3 +59,20 @@ test("bakes proxy config when provided; null when absent", () => {
   const without = buildSite(track, {});
   assert.match(without.indexHtml, /window\.__PROXY__ = null/);
 });
+
+test("bakes assessment weights + types into window.__ASSESSMENT__ (vendored data by default)", () => {
+  const { indexHtml } = buildSite(track, {});
+  assert.match(indexHtml, /window\.__ASSESSMENT__ =/);
+  assert.doesNotMatch(indexHtml, /%%ASSESSMENT%%/); // placeholder fully replaced
+  // vendored data is present: an answerId from the real weights file and a framework type
+  assert.match(indexHtml, /"answerId"/);
+  assert.match(indexHtml, /"myersBriggs"/);
+});
+
+test("assessment bake is overridable (test fixture) and < is escaped", () => {
+  const fixture = { weights: [{ answerId: "x", optionText: "</script>" }], types: { myersBriggs: [] } };
+  const { indexHtml } = buildSite(track, { assessment: fixture });
+  assert.match(indexHtml, /window\.__ASSESSMENT__ =/);
+  assert.match(indexHtml, /\\u003c\/script>/);          // < escaped, no real breakout
+  assert.doesNotMatch(indexHtml, /<\/script>"\}\];/);
+});
