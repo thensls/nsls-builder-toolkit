@@ -43,6 +43,36 @@ test("collect/multi-select renders one option button per option", () => {
   assert.equal((html.match(/data-option/g) || []).length, 2);
 });
 
+test("dropdown-with-checkboxes with dropdownOptions and no options renders one button per dropdown option", () => {
+  const sub = { id: "x", slug: "scale", title: "S", prompt: "Rate", type: "collect", fieldType: "dropdown-with-checkboxes",
+    dropdownOptions: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"] };
+  const html = renderSubstep(sub, {});
+  assert.equal((html.match(/data-option/g) || []).length, 10);
+});
+
+test("checkboxOptions are appended after dropdownOptions", () => {
+  const sub = { id: "x", slug: "scale", title: "S", prompt: "Rate", type: "collect", fieldType: "dropdown-with-checkboxes",
+    dropdownOptions: ["1", "2"], checkboxOptions: ["Not sure"] };
+  const html = renderSubstep(sub, {});
+  assert.equal((html.match(/data-option/g) || []).length, 3);
+  // checkbox option renders after the dropdown options
+  assert.ok(html.indexOf('data-value="Not sure"') > html.indexOf('data-value="2"'));
+});
+
+test("optionsSourceSlug renders a data-options-source attribute on the grid", () => {
+  const sub = { id: "x", slug: "narrow", title: "N", prompt: "Narrow down", type: "collect", fieldType: "multi-select",
+    optionsSourceSlug: "strengths-12" };
+  const html = renderSubstep(sub, {});
+  assert.match(html, /data-options-source="strengths-12"/);
+});
+
+test("a substep without optionsSourceSlug renders no data-options-source attribute", () => {
+  const sub = { id: "x", slug: "v", title: "V", prompt: "Pick", type: "collect", fieldType: "multi-select",
+    options: [{ text: "A" }, { text: "B" }] };
+  const html = renderSubstep(sub, {});
+  assert.doesNotMatch(html, /data-options-source/);
+});
+
 test("generate renders the baked sample when provided", () => {
   const html = renderSubstep({ id: "x", slug: "cs", title: "CS", prompt: "Draft:", type: "generate", fieldType: "text" },
     { samples: { cs: "Your career statement draft." } });

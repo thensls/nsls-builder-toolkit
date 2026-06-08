@@ -71,8 +71,8 @@ await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
 // Total screen count + flattened substeps — read from the injected globals.
 // window.__SCREENS__ is the array of pre-rendered HTML; window.__TRACK__ is the
 // full track object. We flatten the track once in the page to get an ordered
-// descriptor list (slug / type / fieldType / autoProgressOnSelect) aligned with
-// the player index, so the walker knows what each screen wants without scraping.
+// descriptor list (slug / type / fieldType) aligned with the player index, so the
+// walker knows what each screen wants without scraping.
 // ---------------------------------------------------------------------------
 const meta = await page.evaluate(() => {
   const track = window.__TRACK__;
@@ -83,7 +83,6 @@ const meta = await page.evaluate(() => {
         slug: sub.slug || null,
         type: sub.type || null,
         fieldType: sub.fieldType || null,
-        autoProgress: !!sub.autoProgressOnSelect,
       });
   return {
     totalScreens: Array.isArray(window.__SCREENS__) ? window.__SCREENS__.length : null,
@@ -138,7 +137,6 @@ async function readScreenDescriptor(fallback) {
   return {
     slug,
     fieldType: fallback.fieldType,
-    autoProgress: fallback.autoProgress,
     hasInput: dom.hasInput,
     optionValues: dom.optionValues,
   };
@@ -146,7 +144,7 @@ async function readScreenDescriptor(fallback) {
 
 // Poll .tp-ai-output until its text length stabilizes (stream complete) or a
 // timeout. Returns when stable/timed-out — never hangs.
-async function waitForStream(selector, { interval = 600, maxMs = 30000, window = 3 } = {}) {
+async function waitForStream(selector, { interval = 600, maxMs = 30000, stableWindow = 3 } = {}) {
   const lengths = [];
   const deadline = Date.now() + maxMs;
   for (;;) {
@@ -155,7 +153,7 @@ async function waitForStream(selector, { interval = 600, maxMs = 30000, window =
       return el ? el.textContent.length : -1;
     }, selector);
     lengths.push(len);
-    if (isStreamStable(lengths, window) && len > 0) return;
+    if (isStreamStable(lengths, stableWindow) && len > 0) return;
     if (Date.now() >= deadline) return;
     await page.waitForTimeout(interval);
   }
@@ -238,25 +236,14 @@ for (let step = 1; step <= MAX_STEPS; step++) {
     if (plan.action === "fill") {
       await page.locator("[data-input]").first().fill(plan.value).catch(() => {});
     } else if (plan.action === "click-options") {
-      let advancedByOption = false;
+      // The player only toggles aria-selected on option click; it never
+      // auto-advances. Click every matched option (single-pick screens get one
+      // value from the planner) and let the Continue click below advance.
       for (const value of plan.values) {
         const opt = page.locator(`[data-option][data-value="${cssEscape(value)}"]`);
         if ((await opt.count()) === 0) continue;
         await opt.first().click().catch(() => {});
         await page.waitForTimeout(120);
-        // autoProgressOnSelect: clicking may advance the player with no Continue.
-        if (plan.autoProgress) {
-          const idxNow = await playerIndex();
-          if (idxNow !== null && idxBefore !== null && idxNow > idxBefore) {
-            advancedByOption = true;
-            break;
-          }
-        }
-      }
-      if (advancedByOption) {
-        // Player already moved on — do NOT click Continue (would double-advance).
-        prevHash = await contentHash();
-        continue;
       }
     }
     // plan.action === "none" → nothing to fill; just advance via Continue.

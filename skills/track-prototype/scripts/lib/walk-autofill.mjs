@@ -39,13 +39,12 @@ function toValues(answer) {
 //   fieldType,           // e.g. "text", "currency", "image-multiselect"
 //   hasInput,            // a [data-input] is present on the screen
 //   optionValues,        // array of data-value strings rendered in the grid
-//   autoProgress,        // substep.autoProgressOnSelect (single-pick, may auto-advance)
 // }
 // answer: the persona answer for this slug (string | string[] | undefined)
 //
 // Returns one of:
 //   { action: "fill",   value }                         // type into [data-input]
-//   { action: "click-options", values: [...], autoProgress }  // click matching [data-option]s
+//   { action: "click-options", values: [...] }          // click matching [data-option]s
 //   { action: "none" }                                  // nothing to fill (banner-like / empty grid)
 // plus { problem } (a non-fatal note string) when the answer can't be satisfied,
 // so the caller can record it and fall back gracefully.
@@ -73,12 +72,11 @@ export function planFill(descriptor, answer) {
 
     if (answer === undefined || answer === null) {
       // No persona answer — fall back to selecting the first option (old behavior)
-      // so the screen can advance, and flag it.
-      const first = isMulti ? [available[0]] : available[0] != null ? [available[0]] : [];
+      // so the screen can advance, and flag it. The early-return above guarantees
+      // available[0] is defined.
       return {
         action: "click-options",
-        values: first,
-        autoProgress: !!d.autoProgress,
+        values: [available[0]],
         problem: `slug "${d.slug}" (${ft}): no persona answer, selected first option as fallback`,
       };
     }
@@ -87,15 +85,14 @@ export function planFill(descriptor, answer) {
       // Answer present but none matched a real option — flag and fall back to first.
       return {
         action: "click-options",
-        values: isMulti ? [available[0]] : [available[0]],
-        autoProgress: !!d.autoProgress,
+        values: [available[0]],
         problem: `slug "${d.slug}" (${ft}): answer ${JSON.stringify(answer)} matched no option, selected first as fallback`,
       };
     }
 
-    // single-select / autoProgress: click exactly one (the first match).
-    const values = isMulti && !d.autoProgress ? matched : [matched[0]];
-    const out = { action: "click-options", values, autoProgress: !!d.autoProgress };
+    // multi-select: click every matched option. single-select: click the first match.
+    const values = isMulti ? matched : [matched[0]];
+    const out = { action: "click-options", values };
     if (matched.length < wanted.length) {
       out.problem = `slug "${d.slug}" (${ft}): ${wanted.length - matched.length} answer value(s) matched no option`;
     }

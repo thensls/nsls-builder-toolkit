@@ -116,6 +116,11 @@ function populateInheritedOptions() {
   const values = Array.isArray(upstream)
     ? upstream
     : (typeof upstream === "string" && upstream ? upstream.split(", ") : []);
+  // NOTE: this hand-rolled HTML escaper intentionally duplicates `esc` in
+  // render-substep.mjs. player.js runs in the browser as a standalone copied
+  // file (the build copies it next to interpolate.mjs / assessment-score.mjs)
+  // and does not import the render module, so we inline the same escape map here
+  // rather than add a build-time dependency. Keep the two in sync.
   grid.innerHTML = values.map((text, i) =>
     `<button class="tp-option" data-option data-value="${String(text).replace(/"/g, "&quot;")}" data-index="${i}"><span>${
       String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))

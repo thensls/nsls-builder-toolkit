@@ -36,7 +36,6 @@ test("select → click exactly the one matching option", () => {
   );
   assert.equal(plan.action, "click-options");
   assert.deepEqual(plan.values, ["Mix of both"]);
-  assert.equal(plan.autoProgress, false);
 });
 
 // --- planFill: multi-select -------------------------------------------------
@@ -61,23 +60,31 @@ test("multi-select reports a problem when some values don't match", () => {
 
 // --- planFill: comma-bearing option text (must NOT split on commas) ---------
 
-test("image-multiselect autoProgress: matches whole comma-bearing data-value", () => {
+test("matches a whole comma-bearing data-value (does not split on commas)", () => {
   const opt = "Aim for more abstract, exciting possibilities";
   const plan = planFill(
-    { slug: "question-13", fieldType: "image-multiselect", autoProgress: true, optionValues: [opt, "Stay concrete"] },
+    { slug: "question-13", fieldType: "image-multiselect", optionValues: [opt, "Stay concrete"] },
     [opt]
   );
   assert.equal(plan.action, "click-options");
   assert.deepEqual(plan.values, [opt]); // single, whole string, not split
-  assert.equal(plan.autoProgress, true);
 });
 
-test("autoProgress single-pick clicks only the first match even if answer is array", () => {
+test("single-pick (select) clicks only the first match even if answer is an array", () => {
   const plan = planFill(
-    { slug: "q", fieldType: "image-multiselect", autoProgress: true, optionValues: ["X", "Y"] },
-    ["X"]
+    { slug: "q", fieldType: "select", optionValues: ["X", "Y"] },
+    ["X", "Y"]
   );
   assert.deepEqual(plan.values, ["X"]);
+});
+
+test("multi-select selects all matched options", () => {
+  const opt = "Aim for more abstract, exciting possibilities";
+  const plan = planFill(
+    { slug: "question-13", fieldType: "image-multiselect", optionValues: [opt, "Stay concrete"] },
+    [opt, "Stay concrete"]
+  );
+  assert.deepEqual(plan.values, [opt, "Stay concrete"]);
 });
 
 // --- planFill: dropdown-with-checkboxes single string -----------------------
