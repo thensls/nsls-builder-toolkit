@@ -138,10 +138,11 @@ admin these exact steps:
 ### 5. Handoff — draft (never send) a Slack message to the builder
 
 Look up the builder (`slack_search_users`), then `slack_send_message_draft` to their
-user id. The draft tells them what's done and their three remaining steps:
-1. Accept the Doppler invite.
-2. Put env vars in the **`prd`** config of each Doppler project.
-3. Wire **Doppler → Railway** themselves (Doppler project → **Integrations → Railway** →
+user id. The draft tells them what's done and their remaining steps:
+1. Accept the **Railway team invite** (else they can't see their Railway projects).
+2. Accept the **Doppler invite**.
+3. Put env vars in the **`prd`** config of each Doppler project.
+4. Wire **Doppler → Railway** themselves (Doppler project → **Integrations → Railway** →
    point `prd` at the Railway service's production env — they have Admin).
 
 Then: push deploys with secrets pulled from Doppler.
