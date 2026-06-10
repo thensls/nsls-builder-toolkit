@@ -7,9 +7,20 @@ The NSLS Builder Toolkit gives every NSLS employee with Claude Code a set of ski
 
 ## Install
 
+**macOS / Linux:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash
 ```
+
+**Windows (PowerShell):** the toolkit's hooks use `python3`/`bash`, which Windows
+lacks, so Windows builders register the PowerShell equivalents. After the plugin
+is cloned to `~/.claude/local-plugins/nsls-builder-toolkit`:
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\.claude\local-plugins\nsls-builder-toolkit\install.ps1"
+```
+This registers the Windows SessionStart hook (`hooks/session-start.ps1` — pull +
+sync + tracker ping) and the PreToolUse skill hook (`hooks/skill-event.ps1`) in
+`settings.json`. Idempotent; re-run anytime. Restart Claude Code afterward.
 
 Then open Claude Code and say `/setup` to connect your tools and optionally install personal productivity skills.
 
@@ -207,6 +218,10 @@ The ping fires from two places — the `PreToolUse` hook (CLI + desktop) and a
 one-line `Bash` call embedded in each skill's pointer (works wherever skills
 run). The server dedupes per builder/skill/day, so both producers can fire
 without inflating counts.
+
+On **Windows**, those producers (`python3`/`bash`) don't run; `install.ps1`
+registers a PowerShell `PreToolUse` hook (`hooks/skill-event.ps1`) plus the
+session ping (`hooks/session-start.ps1`) so Windows builders are covered too.
 
 ### Opt out
 
