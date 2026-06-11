@@ -1,8 +1,15 @@
 # /provision-builder — design
 
 **Date:** 2026-06-10
-**Status:** Approved, pre-implementation
+**Status:** Implemented (shipped PR #55)
 **Author:** Kevin (with Claude)
+
+> **Correction (2026-06-10):** The original design said the *builder* wires the
+> Doppler→Railway sync themselves (since they get Doppler project-Admin). That's wrong —
+> creating a Doppler *connection*/sync is a **workplace-admin** action; project-Admin can
+> edit secrets but cannot add connections. The sync setup moved to the **admin**
+> dashboard checklist (step 4). Surfaced when Josh hit "no permission to add a new
+> connection." Fixed in a follow-up PR.
 
 ## Problem
 
