@@ -5,8 +5,9 @@ description: >-
   wins, friction signals, and team summaries for any team you're allowed
   to see. Use when the user says "set up Signal", "signal mcp", "signal
   setup", "/signal-setup", asks why `signal_*` tools aren't available,
-  or wants to rotate their Signal API token. For managers and execs only —
-  builders without direct reports will hit 403 on every endpoint.
+  or wants to rotate their Signal API token. For everyone: managers and
+  execs get team/org scope; everyone else gets self scope — your own
+  Quick Notes history and goals (powers /role-coach), nobody else's.
 ---
 
 # /signal-setup — Connect Claude Code to Signal
@@ -23,9 +24,9 @@ After setup you'll have six new tools in Claude Code: `signal_team_summary`, `si
 
 - **Executives** (people.app_role = 'executive'): org-wide on `wins`, `friction`, `person/*`. `team_summary` returns your own direct reports unless you pass `manager_slug`.
 - **Managers** (anyone with direct reports): your reporting subtree.
-- **Everyone else**: every endpoint will 403. Don't bother setting this up.
+- **Everyone else (self scope)**: `signal_person`, `signal_person_history`, and `signal_person_goals` work for **your own slug only** — your Quick Notes history and goal updates, with sentiment excluded server-side. Every other slug and every team endpoint returns 403. This is what powers `/role-coach` for individual contributors.
 
-If you're not sure, run setup anyway — the first tool call will tell you.
+If you're not sure, run setup anyway — the first tool call will tell you your scope.
 
 ## Setup flow
 
@@ -91,8 +92,8 @@ If a token exists, ask whether to rotate or just verify the existing one.
 
 Tell the user to:
 
-1. Open `https://employee-profiles-production.up.railway.app/team` in a browser. Sign in with their NSLS Google account.
-2. Click **"Generate MCP token"** at the top of the page.
+1. Open `https://employee-profiles-production.up.railway.app/me/mcp-token` in a browser (works for everyone; managers/execs can also use the button on `/team`). Sign in with their NSLS Google account.
+2. Click **"Generate MCP token"**.
 3. Copy the token (starts with `signal_` followed by 64 hex chars). It's shown once; if they dismiss the popup they need to regenerate.
 
 Then prompt them to paste it into Claude Code.
@@ -157,9 +158,17 @@ try {
 }
 ```
 
-- `200` — working. They'll see results once they restart.
+- `200` — working with team/org scope. They'll see results once they restart.
 - `401` — token rejected. Likely typo or trailing whitespace; have them re-paste.
-- `403` — token works but they're a `standard` role. Tell them this skill isn't for them.
+- `403` — the token is valid but carries **self scope** (`standard` role — no reports, not an exec). That's expected and fine: team endpoints like `wins` 403, but `signal_person`, `signal_person_history`, and `signal_person_goals` work for their own slug. Verify with their own profile slug instead (the lowercased `firstname-lastname` form of their name):
+
+```sh
+curl -s -o /dev/null -w "%{http_code}\n" \
+  -H "Authorization: Bearer $(cat ~/.config/nsls/signal-token)" \
+  "https://employee-profiles-production.up.railway.app/api/mcp/person/<their-slug>"
+```
+
+`200` there = self scope working — exactly what /role-coach T1 needs.
 
 ### Step 6 — Tell them to restart
 
@@ -171,7 +180,7 @@ Claude Code only registers MCP servers at session start. Tell the user:
 
 If a token is compromised or the user just wants a fresh one:
 
-1. Click "Generate MCP token" again on `/team`. The old token stops working the instant the new one is minted (the `app_api_token` column is unique).
+1. Click "Generate MCP token" again on `/me/mcp-token` (or `/team` for managers/execs). The old token stops working the instant the new one is minted (the `app_api_token` column is unique).
 2. Re-run /signal-setup.
 
 ## Common failures
@@ -182,7 +191,9 @@ If a token is compromised or the user just wants a fresh one:
 
 **`401 unknown token`** → the token was rotated somewhere else (e.g. the user clicked the button again from a different browser). Re-mint and re-run setup.
 
-**`403 token owner has no team access`** → the user's `app_role` is `standard` and they have no direct reports. Either Airtable isn't reflecting their team, or they genuinely don't manage anyone yet.
+**`403 token owner has no team access`** on team endpoints → the user's role is `standard` (no direct reports, not an exec). Their token still works in **self scope** on the three `person/*` endpoints for their own slug. If they believe they SHOULD have team scope, Airtable isn't reflecting their reports yet.
+
+**`403 not your profile`** on a `person/<slug>` call → self-scope token reading a slug that isn't theirs (or a typo'd slug — the API deliberately doesn't distinguish). Have them check the slug spelling against their own name.
 
 **Tools still missing after restart** → run `/mcp` (or `claude mcp list`) to see if the `signal` server is listed. If it's listed but errored, run the `--selftest` from Step 5 to see the failure. If it's **not listed at all**, the server was never registered — this is the local-enable gap from Step 1, *not* a disabled plugin. Don't re-run `/setup` or re-enable the plugin; that won't register the MCP server. Run the `claude mcp add` from Step 1 (`claude mcp get signal` first to confirm it's absent), then restart.
 

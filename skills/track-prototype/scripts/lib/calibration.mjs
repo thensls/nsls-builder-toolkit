@@ -36,6 +36,13 @@ export function kendallTau(a, b) {
 export function joinByVersion(runs, actuals) {
   return runs.map((r) => {
     const m = actuals.find((x) => x.slug === r.slug && x.live_track_version === r.content_hash);
-    return m ? { slug: r.slug, version: r.content_hash, predicted: r.total, actual: m.completion_rate } : null;
+    return m ? {
+      slug: r.slug, version: r.content_hash, predicted: r.total,
+      // continuation = length-normalized per-step retention (the rubric's intended target);
+      // completion = raw end-to-end rate (length/position-confounded — kept for contrast).
+      continuation: m.step_to_step_continuation ?? null,
+      completion: m.completion_rate ?? null,
+      actual: m.completion_rate, // back-compat alias
+    } : null;
   }).filter(Boolean);
 }
