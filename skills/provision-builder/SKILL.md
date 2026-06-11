@@ -131,9 +131,20 @@ admin these exact steps:
   ⚠️ **Blast radius:** Railway membership is team-wide, not per-project — the builder will
   see **every** NSLS project, not just their two. State this every run. (A per-builder
   Railway team is the tighter alternative; we deliberately default to the NSLS team.)
-- **Doppler:** dashboard.doppler.com → **Workplace Settings → Team → Invite** →
-  `<builder email>`. Then for **each** new project → **Access** → add the builder as
-  **Admin** (so they manage their own secrets, scoped to just their projects).
+- **Doppler invite + access:** dashboard.doppler.com → **Workplace Settings → Team →
+  Invite** → `<builder email>`. Then for **each** new project → **Access** → add the
+  builder as **Admin** (so they manage their own secrets, scoped to just their projects).
+- **Doppler → Railway sync (admin does this — NOT the builder):** for **each** project,
+  open the **`prd`** config → **Integrations → Add Sync → Railway** → reuse the existing
+  workplace Railway connection (in this workplace it's named **"SLT-Coach Bot"** — it
+  already syncs non-SLT projects, so it's the general NSLS Railway connection) → pick the
+  Railway **project**, **environment** = production, and **service**. **Why the admin:** a
+  Doppler *connection* is a workplace-level resource; creating connections/syncs requires
+  **workplace-admin** permission. A project-scoped **Admin** can edit secrets but cannot
+  add a connection or sync — so the builder literally can't do this step (they'll see
+  "no permission to add a new connection"). The CLI can't do it either; it's dashboard or
+  the `POST /v3/configs/config/syncs` API, and the Railway `data` schema isn't publicly
+  documented — prefer the dashboard.
 
 ### 5. Handoff — draft (never send) a Slack message to the builder
 
@@ -142,8 +153,9 @@ user id. The draft tells them what's done and their remaining steps:
 1. Accept the **Railway team invite** (else they can't see their Railway projects).
 2. Accept the **Doppler invite**.
 3. Put env vars in the **`prd`** config of each Doppler project.
-4. Wire **Doppler → Railway** themselves (Doppler project → **Integrations → Railway** →
-   point `prd` at the Railway service's production env — they have Admin).
+
+The Doppler → Railway sync is set up **for** them by the admin (step 4) — do **not** tell
+the builder to wire it themselves; their project-Admin role can't create the connection.
 
 Then: push deploys with secrets pulled from Doppler.
 
@@ -160,6 +172,7 @@ Each of these is a shortcut that breaks the skill. If you catch yourself doing i
 | "The plan's obvious, I'll skip the confirm." | Confirm the plan before any create. These are real resources. |
 | "The runner isn't an admin, but I'll push the CLI through." | Fall back to request mode and hand off. Don't thrash a permission wall. |
 | "The builder lacks repo write — I'll just add them." | Flag it as a prerequisite gap. Don't silently grant org/repo access. |
+| "The builder has Doppler Admin, so they'll wire the Railway sync." | They can't. Creating a Doppler connection/sync is workplace-admin only; project-Admin edits secrets but can't add connections. The admin sets up the sync. |
 
 ## Diagnostic loop
 
@@ -168,8 +181,13 @@ Each of these is a shortcut that breaks the skill. If you catch yourself doing i
   (they will). The fix is creating the service under the NSLS team + adding them to the
   team — see top of skill.
 - **`railway add` succeeds but nothing deploys:** the service is connected but has no
-  build config / env vars yet. Expected until the builder adds `prd` vars and wires the
-  Doppler→Railway sync. Not a provisioning bug.
+  build config / env vars yet. Expected until the `prd` vars exist and the admin's
+  Doppler→Railway sync (step 4) has run. Not a provisioning bug.
+- **Builder reports "no permission to add a new connection" / "only sees one connection"
+  in Doppler:** working as designed — creating connections/syncs is workplace-admin only.
+  The admin sets up the sync (step 4); the builder only adds `prd` vars. Confirm the
+  builder also actually sees *their* projects in the project list — if not, their
+  project-access grant didn't apply and needs re-granting.
 - **Railway `operation timed out`:** transient backboard error. Re-run `railway list` to
   check whether the resource was created, then retry only the missing step.
 - **Repo not visible to Railway:** verify the builder's org membership, not the GitHub
