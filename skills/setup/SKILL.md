@@ -54,7 +54,7 @@ ENV_FILE="$HOME/.claude/local-plugins/nsls-personal-toolkit/.env"
 mkdir -p "$(dirname "$ENV_FILE")"
 touch "$ENV_FILE"
 # Strip any existing BUILDER_EMAIL line, then append the new one.
-grep -v "^BUILDER_EMAIL=" "$ENV_FILE" > "$ENV_FILE.tmp" && mv "$ENV_FILE.tmp" "$ENV_FILE"
+{ grep -v "^BUILDER_EMAIL=" "$ENV_FILE" || true; } > "$ENV_FILE.tmp" && mv "$ENV_FILE.tmp" "$ENV_FILE"
 echo "BUILDER_EMAIL=<email>" >> "$ENV_FILE"
 ```
 
