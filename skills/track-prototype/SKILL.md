@@ -81,7 +81,9 @@ Gate: a working Phase-1 build (local or deployed). **Turn live AI ON** (build wi
 Builder says **"implement the focus-group changes"** → read `recommendations.md`, edit `track.json` per each `fix` rec's `change` (CONTESTED `review` recs go to a human, not auto-applied), re-run Phase 1 → Phase 2 → a v{N+1} ScoreRun showing the delta. **Scores are a ranking + ship-bar gate, NOT a calibrated prediction** — celebrate green checks; don't over-read the number (synthetic personas overstate adoption).
 
 ### Calibration (accruing; needs PostHog)
-Every Phase-2 run adds a ScoreRun. Once a track is live in PostHog, add its actuals to the `PostHogActuals` table, then run the calibration (Spearman/Kendall via `scripts/lib/calibration.mjs`, joining by slug + `content_hash`). Seed against the two live tracks (Clarity, Personal Insights) as a **directional sanity check only** — n is tiny; ~15–30+ tracks before a coefficient means anything. (The `calibrate.mjs` CLI is the remaining piece.)
+Every Phase-2 run adds a ScoreRun. Once a track is live in PostHog, add its actuals to the `PostHogActuals` table, then run `node scripts/calibrate.mjs` (Spearman/Kendall via `scripts/lib/calibration.mjs`, joining by slug + `content_hash`).
+
+**The calibration target is per-step continuation, NOT raw completion.** The n=3 seed (welcome / personal-insights / career-clarity, 2026-06-11) showed raw completion *anti*-correlates with the rubric (Spearman −0.5) because it's dominated by track length, position, and commitment — a short mandatory intake form tops completion while scoring lowest on experience quality. Against **per-step continuation** (length-normalized retention — the metric the rubric's "predicts" column was designed for), the same n=3 ranks **+1**. So `calibrate.mjs` reports continuation as the primary coefficient and raw completion only under `vsCompletion` as a contrast. Populate `step_to_step_continuation` on each `PostHogActuals` row. Still **directional only** — n is tiny; ~15–30+ paired tracks before a coefficient means anything.
 
 ## Reference Index
 | Phase | Reads | Invokes / scripts |

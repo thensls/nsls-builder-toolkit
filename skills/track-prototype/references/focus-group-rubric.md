@@ -13,6 +13,8 @@ The rubric the Phase-2 panel scores a rendered track against. **Judged from the 
 
 These scores are a **relative ranking and a ship-bar gate, NOT a calibrated prediction** of real adoption. Synthetic personas systematically *overstate* adoption; the rubric's predictive validity is unproven until calibration data accrues (see Plan 3 Task 11). Celebrate green checks and act on recommendations; do not over-read the number.
 
+**Calibrate against per-step continuation, not raw completion.** The n=3 seed found the rubric *anti*-correlates with raw completion (it's dominated by track length/position/commitment — a short mandatory form tops completion while scoring lowest here) but ranks **+1** against length-normalized per-step continuation. That's exactly what the "predicts" column below intends — continuation and next-track uptake, not raw end-to-end completion. `calibrate.mjs` reports continuation as the primary coefficient.
+
 ## The 4 dimensions
 
 Each sub-check lists what **MET** looks like (UNMET = anything short of it). The "predicts" column maps the dimension to the PostHog metric it's *hypothesized* to predict, for future calibration.
