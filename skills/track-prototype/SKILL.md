@@ -12,7 +12,7 @@ description: >-
 # Track Prototype
 
 Turn a validated ignite-next `track.json` into a clickable, deployable prototype that
-mirrors the real Ignite Next design language, so a builder can feel the experience they
+mirrors the real Society (ignite-next) design language, so a builder can feel the experience they
 authored before it ships.
 
 **Input gate:** the track must pass `track-design`'s validator first:
@@ -65,13 +65,14 @@ Gate: a working Phase-1 build (local or deployed). **Turn live AI ON** (build wi
    - **Stage 2** — the 4 experts score all 16 sub-checks BLIND, **3 samples each at low temp**, evidence-cited, structured to `references/schemas/expert-verdict.json`.
    - **Stage 3** — experts revise INFORMED by the *aggregated, anonymized* persona reactions.
    - **Stage 4** — the adversarial skeptic argues over-scoring / the abandonment case; experts respond.
+   - **Stage 5** — **expert roundtable**: the 4 experts discuss the track *together* (one agent), grounded in their Stage-2 verdicts + the anonymized persona distribution + the skeptic case, and converge on the top 3 recommendations. Structured to `references/schemas/expert-roundtable.json`. **Synthesis only — it does NOT feed `scorecard.mjs`** (the score is fixed by Stages 2+4). It produces the readable expert discussion + converged recs for the doc.
    - Use a different model family for the judges than for any generated track copy.
 
 3. **Aggregate + emit:**
-   - Feed the expert verdict samples to `scorecard.mjs` → MET/UNMET/**CONTESTED** per sub-check → dimension rollup → checks-met total → ship-bar.
+   - Feed the **blind + adversarial** expert verdict samples (NOT the roundtable) to `scorecard.mjs` → MET/UNMET/**CONTESTED** per sub-check → dimension rollup → checks-met total → ship-bar.
    - `recommendations.mjs` → write `focus-group/v{N}/recommendations.md` (one rec per UNMET; CONTESTED = human-review flag).
-   - Write `focus-group/v{N}/conversation.md` (the dialogue) and `scorecard.md` (sub-checks + total).
-   - Google Doc via **`gdoc-build`** (python-docx; **new draft, org-restricted, never overwrite a shared doc**): conversation + expert synthesis + ranked recs + scorecard.
+   - Write `focus-group/v{N}/conversation.md` (persona dialogue + the **expert roundtable**) and `scorecard.md` (sub-checks + total).
+   - Google Doc via **`gdoc-build`** (python-docx; **new draft, org-restricted, never overwrite a shared doc**): per-attribute scorecard + per-persona summary + persona conversation + **expert roundtable** (dialogue + converged top-3) + adversarial skeptic + ranked optimization plan.
    - **Ledger:** `AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv node scripts/ledger-write.mjs <run.json>` — POSTs the ScoreRun to the "Track Previews" base and appends the local `scores.md`. `run.json` = `{ trackSlug, version, contentHash, date, scorecard, gdocUrl, persona, buildUrl, scoresMdPath }`.
 
 4. **Handoff:** the Google Doc link + the scorecard + the checks-met total.
@@ -89,7 +90,7 @@ Every Phase-2 run adds a ScoreRun. Once a track is live in PostHog, add its actu
 | 2 | `focus-group-rubric.md`, `focus-group-panel.md`, `schemas/`, `member-personas.md` | `walk-gallery.mjs`, `lib/{scorecard,recommendations,scores-ledger,airtable-record,calibration}.mjs`, `ledger-write.mjs`, `gdoc-build`, `playwright` |
 
 ## Definition of Done
-- **Phase 1:** a `prototype-build/` that renders with Ignite Next styling and runs through end-to-end (locally and on Netlify); live AI streams when built with the proxy flags, baked fallback otherwise.
+- **Phase 1:** a `prototype-build/` that renders with Society (ignite-next) styling and runs through end-to-end (locally and on Netlify); live AI streams when built with the proxy flags, baked fallback otherwise.
 - **Phase 2:** a focus-group Google Doc (draft, org-restricted) + `recommendations.md` + `scorecard.md` under `focus-group/v{N}/`, a new ScoreRun in the Airtable base + a row in local `scores.md`, and `"implement the focus-group changes"` actionable from `recommendations.md`.
 
 ## Operating Rules
