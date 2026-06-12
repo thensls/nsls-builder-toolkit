@@ -120,6 +120,29 @@ test("copyTrackAssets copies only referenced files, reports missing ones gracefu
   rmSync(outDir, { recursive: true, force: true });
 });
 
+test("copyTrackAssets refuses path traversal (no read/write outside the roots)", async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const base = mkdtempSync(join(tmpdir(), "tp-trav-"));
+  const srcRoot = join(base, "app", "assets"); mkdirSync(srcRoot, { recursive: true });
+  const outDir = join(base, "build"); mkdirSync(outDir, { recursive: true });
+  // a sibling secret outside both roots
+  mkdirSync(join(base, "shared"), { recursive: true });
+  writeFileSync(join(base, "shared", "secret.png"), "exfiltrate-me");
+  const t = { id: "t", title: "D", steps: [{ id: "s", title: "S", substeps: [
+    { id: "a", title: "A", prompt: "P", type: "say", fieldType: "banner", imageUrl: "/../../shared/secret.png" },
+  ]}]};
+  // collectAssetPaths drops the traversal path entirely
+  assert.deepEqual(collectAssetPaths(t), []);
+  const { copied, skipped } = copyTrackAssets(t, srcRoot, outDir);
+  assert.deepEqual(copied, []);                                  // nothing copied
+  assert.ok(!existsSync(join(base, "shared", "secret.png.bak"))); // (sanity)
+  // the secret must NOT have been written anywhere under outDir or base via traversal
+  assert.ok(!existsSync(join(base, "secret.png")));
+  rmSync(base, { recursive: true, force: true });
+});
+
 test("buildSite injects the track title into the chrome header", () => {
   const { indexHtml } = buildSite(track, {});
   assert.match(indexHtml, />Demo<\/h1>/);

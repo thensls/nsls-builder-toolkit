@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderSubstep, computeAssessmentProgress, safeUrl } from "./lib/render-substep.mjs";
 import { findOrderingErrors } from "./lib/ordering-lint.mjs";
@@ -42,8 +42,10 @@ export function collectAssetPaths(track) {
   const paths = new Set();
   const consider = (u) => {
     const s = safeUrl(u);
-    // Only root-relative app assets are copyable (http(s)/data: pass through untouched)
-    if (s && s.startsWith("/") && !s.startsWith("//")) paths.add(s);
+    // Only root-relative app assets are copyable (http(s)/data: pass through untouched).
+    // Reject any "../" traversal segment — a crafted imageUrl must not escape the assets
+    // root (read) or the build dir (write). Track JSON can come from shared sources.
+    if (s && s.startsWith("/") && !s.startsWith("//") && !s.split("/").includes("..")) paths.add(s);
   };
   for (const sub of flattenSubsteps(track)) {
     consider(sub.imageUrl);
@@ -58,15 +60,22 @@ export function copyTrackAssets(track, assetsRoot, outDir) {
   const wanted = collectAssetPaths(track);
   const copied = [];
   const missing = [];
+  const skipped = [];
+  const rootR = resolve(assetsRoot) + sep;
+  const outR = resolve(outDir) + sep;
+  const within = (p, base) => { const r = resolve(p); return r === base.slice(0, -1) || r.startsWith(base); };
   for (const rel of wanted) {
     const src = join(assetsRoot, rel); // rel starts with "/" — join normalizes
-    if (!existsSync(src)) { missing.push(rel); continue; }
     const dest = join(outDir, rel);
+    // Defense in depth: even though collectAssetPaths drops ".." segments, confirm the
+    // resolved src/dest stay inside their roots before any fs read/write.
+    if (!within(src, rootR) || !within(dest, outR)) { skipped.push(rel); continue; }
+    if (!existsSync(src)) { missing.push(rel); continue; }
     mkdirSync(dirname(dest), { recursive: true });
     cpSync(src, dest);
     copied.push(rel);
   }
-  return { copied, missing };
+  return { copied, missing, skipped };
 }
 
 export function buildSite(input, opts = {}) {
