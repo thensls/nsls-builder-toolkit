@@ -87,7 +87,9 @@ export const POS_HIDDEN = "tp-pos-hidden";
 export function runtimeClassCorpus() {
   const all = [
     CHAT_ROW_USER, CHAT_ROW_AI, CHAT_BUBBLE_USER, CHAT_BUBBLE_AI,
-    MS_OPTION, MS_TITLE, MS_DESC, MS_CHECK_WRAP, MS_CHECK_BADGE, MS_CHECK_SVG,
+    MS_OPTION, MS_TITLE, MS_DESC, MS_CHECK_WRAP, MS_CHECK_BADGE,
+    // NOTE: MS_CHECK_SVG is an <svg> markup fragment, not a class string — it's
+    // excluded here (its inner classes are scanned via the rendered markup corpus).
     CAROUSEL_WRAP, CAROUSEL_DECK, CAROUSEL_CARD, CAROUSEL_CARD_INNER,
     CAROUSEL_TITLE_BASE, CAROUSEL_BODY, CAROUSEL_RESULT, CAROUSEL_RESULT_SMALL,
     CAROUSEL_DESC, CAROUSEL_ARROW_LEFT, CAROUSEL_ARROW_RIGHT,

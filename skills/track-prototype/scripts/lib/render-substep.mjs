@@ -466,12 +466,14 @@ function renderChat(sub, ctx) {
 
 // --- Assessment results (AssessmentResultsField + AssessmentResults) ----------
 
-function renderAssessmentResults() {
+function renderAssessmentResults(sub) {
   // The player computes the real personality scores on render from
   // window.__ASSESSMENT__ + the user's answers, then builds the stacked
   // carousel inside [data-assessment-results]. Inner text is a fallback only.
+  // Honor an authored prompt on the substep (data-tpl so {tokens} interpolate).
+  const promptHtml = sub && sub.prompt ? `<p class="text-center text-mocha mb-3" data-tpl>${esc(sub.prompt)}</p>` : "";
   return `<div class="tp-results flex flex-col h-full max-w-md lg:max-w-lg mx-auto">` +
-    `<div class="flex-1"><h4 class="text-lg text-center font-bold">Personality Assessment Results</h4>` +
+    `<div class="flex-1"><h4 class="text-lg text-center font-bold">Personality Assessment Results</h4>${promptHtml}` +
     `<div data-assessment-results>Computing your results…</div></div>` +
     `<div class="flex gap-3 px-4 pb-4">${continueBtn("Continue", { extra: "w-full" })}</div></div>`;
 }
@@ -521,7 +523,7 @@ export function renderSubstep(sub, ctx = {}) {
   const close = `</section>`;
 
   // Full-screen substep types (the app early-returns these before page layout)
-  if (sub.fieldType === "assessment-results") return open + renderAssessmentResults() + close;
+  if (sub.fieldType === "assessment-results") return open + renderAssessmentResults(sub) + close;
   if (sub.type === "chat") return open + renderChat(sub, ctx) + close;
   if (sub.type === "generate") return open + renderGenerate(sub, ctx) + close;
   if (sub.fieldType === "celebration") return open + renderCelebration(sub) + close;
