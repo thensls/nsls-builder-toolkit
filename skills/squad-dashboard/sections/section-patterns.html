@@ -1,0 +1,83 @@
+<!-- squad-dashboard — section-pattern library.
+     Copy-and-adapt blocks. Classes are defined in shell/base.css.
+     Claude assembles the squad's chosen sections from these, filling values from content.json.
+     Wrap the body in: <div class="wrap"> ...sections... </div> after the <header class="hero">.
+     Page skeleton:
+       <header class="hero"><div class="wrap"><h1>TITLE</h1><div class="sub">Updated DATE</div>
+         <div class="lop-legend"><span class="lop-chip"><b>L3-1</b> ...</span> ...</div></div></header>
+-->
+
+<!-- ============ metric-card (KPI tiles up top) ============
+     Classification badge optional. For metric-vs-goal it's AUTO-derived (value vs goal); human-overridable.
+     Comparisons (deltas) are whichever the squad declared: vs prior / vs target / YoY. .up=green .down=red -->
+<section class="block">
+  <div class="block-head"><h2>SECTION TITLE</h2><span class="tag">L3-N</span></div>
+  <div class="kpis">
+    <div class="kpi">
+      <div class="toprow"><div class="label">KPI LABEL</div><span class="cls good">Ahead of pace</span></div>
+      <div class="big">$VALUE</div>
+      <div class="period">PCT% of $GOAL goal</div>
+      <div class="progress"><i style="width:PCT%"></i></div>
+      <div class="deltas">
+        <span class="delta"><span class="k">vs 2025</span> <span class="up">+X%</span></span>
+        <span class="delta"><span class="k">vs 2024</span> <span class="up">+Y%</span></span>
+      </div>
+    </div>
+    <!-- repeat .kpi for each KPI -->
+  </div>
+</section>
+
+<!-- ============ metric-group (cluster of related stats) ============ -->
+<section class="block">
+  <div class="block-head"><h2>SECTION TITLE</h2><span class="tag">L3-N</span></div>
+  <div class="mgroup">
+    <div class="stat"><div class="v">VALUE</div><div class="l">LABEL</div></div>
+    <!-- repeat .stat -->
+  </div>
+  <div class="note">Optional note — e.g. "aggregates are sums only; per-item rates below."</div>
+</section>
+
+<!-- ============ item-list (campaigns / releases / initiatives) ============ -->
+<section class="block">
+  <div class="block-head"><h2>SECTION TITLE</h2><span class="tag">L3-N</span></div>
+  <div class="items">
+    <div class="item">
+      <div class="top"><span class="name">ITEM TITLE</span><span class="date">DATE RANGE</span></div>
+      <div class="metrics"><span>Metric</span> <b>VALUE</b> · <span>Metric</span> <b>VALUE</b></div>
+      <div class="desc">Short description, result, or next step.</div>
+    </div>
+    <!-- repeat .item -->
+  </div>
+</section>
+
+<!-- ============ status-board (operational workstreams) ============
+     Classification pill per item. Statuses are HUMAN-set (squad-owned) for judgment work. -->
+<section class="block">
+  <div class="block-head"><h2>SECTION TITLE</h2><span class="tag">L3-N</span></div>
+  <div class="board">
+    <div class="ws"><span class="cls good">On-track</span><div><div class="name">WORKSTREAM</div><div class="n">One-line note.</div></div></div>
+    <div class="ws"><span class="cls warn">At-risk</span><div><div class="name">WORKSTREAM</div><div class="n">One-line note.</div></div></div>
+    <div class="ws"><span class="cls bad">Blocked</span><div><div class="name">WORKSTREAM</div><div class="n">One-line note.</div></div></div>
+    <div class="ws"><span class="cls neutral">In progress</span><div><div class="name">WORKSTREAM</div><div class="n">One-line note.</div></div></div>
+  </div>
+</section>
+
+<!-- ============ narrative (the "read") — ALWAYS human-written ============
+     The badge (if any) on a vs-goal read may be auto-derived; the prose is the squad's words. -->
+<section class="block">
+  <div class="block-head"><h2>The Read</h2><span class="cls bad">Missed monthly budget</span></div>
+  <div class="narr">HUMAN-WRITTEN narrative goes here, verbatim from the squad.</div>
+</section>
+
+<!-- ============ test-outcomes (opt-in rich preset) ============
+     The enrollment experiment card (control/variant, exposures banner, per-arm rows, screenshots)
+     is elaborate (~300 lines of CSS + a card template). Don't duplicate it here — when a squad opts
+     into test-outcomes, lift the card markup + CSS from the enrollment gallery
+     (/Users/nsls/enrollment-test-outcomes/index.html) and the schema from
+     /enrollment-experiment-cleanup Step 9b. -->
+
+<!-- ============ footer (provenance) ============ -->
+<footer>
+  <div>SQUAD · built by the squad-dashboard framework</div>
+  <div class="prov">Source provenance — METRIC: SOURCE (pulled DATE). Narrative + statuses: squad-written.</div>
+</footer>

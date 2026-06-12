@@ -1,0 +1,34 @@
+{
+  "_preset": "Enrollment — A/B test outcomes. The reference design. Uses the opt-in test-outcomes rich card. Maintained in practice by /enrollment-experiment-cleanup; included here as the experiment-shaped example.",
+  "squad": "enrollment",
+  "title": "Enrollment — Test Outcomes",
+  "brand": "nsls",
+  "netlify": { "site_id": "89621266-0994-4f38-ac8d-bbdd7973cf47", "url": "https://enrollment-test-outcomes.netlify.app" },
+  "lops": [
+    { "id": "L3-1", "label": "Lift enrollment funnel conversion" },
+    { "id": "L3-2", "label": "Increase revenue per member (ARPM / attach)" }
+  ],
+  "sources": [
+    {
+      "id": "posthog",
+      "type": "posthog",
+      "note": "Experiment objects: variant screenshots (variant_screenshot_media_ids), per-arm metrics via experiment-results-get. See /enrollment-experiment-cleanup Step 9b.",
+      "pulls": [
+        { "metric": "experiment_card", "query": "experiment-get + experiment-results-get per concluded test" }
+      ]
+    },
+    {
+      "id": "slack",
+      "type": "slack",
+      "note": "The 'EXPERIMENT ENDED:' post carries the verbatim Decision + What we learned + metrics. Human narrative source.",
+      "pulls": []
+    }
+  ],
+  "classification_schemes": {
+    "experiment": { "auto": false, "won": "good", "lost": "bad", "mixed": "warn" }
+  },
+  "sections": [
+    { "type": "test-outcomes", "id": "tests",   "title": "Test Outcomes", "lop": "L3-1", "classification": "experiment" },
+    { "type": "narrative",     "id": "findings","title": "Experiment Findings", "human": true }
+  ]
+}
