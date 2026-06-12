@@ -1,6 +1,14 @@
 import { flattenSubsteps, nextIndex, prevIndex, clampIndex, progressPct } from "./player-core.mjs";
 import { interpolate } from "./interpolate.mjs"; // build copies interpolate.mjs alongside player.js (see build-prototype.mjs)
 import { scoreAssessment, resolveAnswerIds, buildCards } from "./assessment-score.mjs"; // build copies it alongside player.js
+import {
+  CHAT_ROW_USER, CHAT_ROW_AI, CHAT_BUBBLE_USER, CHAT_BUBBLE_AI, msOptionHtml,
+  CAROUSEL_WRAP, CAROUSEL_DECK, CAROUSEL_CARD, CAROUSEL_CARD_INNER,
+  CAROUSEL_TITLE_BASE, CAROUSEL_BODY, CAROUSEL_RESULT, CAROUSEL_RESULT_SMALL, CAROUSEL_DESC,
+  CAROUSEL_ARROW_LEFT, CAROUSEL_ARROW_RIGHT, CAROUSEL_DOTS, CAROUSEL_DOT, CAROUSEL_DOT_ACTIVE,
+  CAROUSEL_COLOR_CLASSES, CAROUSEL_COLOR_FALLBACK,
+  POS_ACTIVE, POS_NEXT, POS_PREV, POS_HIDDEN,
+} from "./runtime-classes.mjs"; // build copies it alongside player.js
 
 const KEY = "tp.v1";
 const track = window.__TRACK__;            // injected by build (the full track object)
@@ -12,6 +20,7 @@ const bar = document.getElementById("tp-progress-bar");
 let state = load();
 let chatInFlight = false;  // true while a chat stream is running — prevents double-sends
 let aiController = null;   // AbortController for the current in-flight AI stream (generate or chat)
+let autoTimer = null;      // pending auto-progress timer (image-multiselect autoProgressOnSelect)
 
 function load() {
   try {
@@ -21,6 +30,24 @@ function load() {
   return { i: 0, answers: {}, chat: {} };
 }
 function persist() { localStorage.setItem(KEY, JSON.stringify(state)); }
+
+// NOTE: this hand-rolled HTML escaper intentionally duplicates `esc` in
+// render-substep.mjs. player.js runs in the browser as a standalone copied
+// file and does not import the render module. Keep the two in sync.
+const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Chat prompts may return JSON like { "feedback": "...", "freeChat": "..." } —
+// the app displays only the freeChat portion (ChatInterface extractDisplayContent).
+function extractDisplayContent(content) {
+  const trimmed = String(content || "").trim();
+  if (!trimmed.startsWith("{")) return content;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed.freeChat === "string") return parsed.freeChat;
+  } catch { /* not valid JSON — show as-is */ }
+  return content;
+}
 
 // ---------------------------------------------------------------------------
 // Streaming helper
@@ -57,8 +84,8 @@ function render() {
 // ---------------------------------------------------------------------------
 // Assessment results — compute-on-render (mirrors maybeRunGenerateAI).
 // Scores the user's chosen answers client-side from window.__ASSESSMENT__
-// (weights + types, baked by the build) and renders the real personality cards
-// into [data-assessment-results]. Pure + synchronous — no proxy/network needed.
+// (weights + types, baked by the build) and renders the REAL stacked-carousel
+// markup (StackedCarousel.tsx) into [data-assessment-results].
 // ---------------------------------------------------------------------------
 function maybeRunAssessmentResults() {
   const sub = subs[state.i];
@@ -80,33 +107,58 @@ function maybeRunAssessmentResults() {
 
   const results = scoreAssessment({ answerIds, weights: data.weights, types: data.types });
   const cards = results.cards || buildCards(results, data.types || {});
-  renderAssessmentCards(out, cards);
+  renderAssessmentCarousel(out, cards);
 }
 
-function renderAssessmentCards(out, cards) {
-  out.innerHTML = "";
-  for (const c of cards) {
-    const card = document.createElement("div");
-    card.className = "tp-result-card";
-    const title = document.createElement("div");
-    title.className = "tp-result-framework";
-    title.textContent = c.title;
-    const result = document.createElement("div");
-    result.className = "tp-result-type";
-    result.textContent = c.result;
-    const desc = document.createElement("p");
-    desc.className = "tp-result-desc";
-    desc.textContent = c.description;
-    card.append(title, result, desc);
-    out.appendChild(card);
-  }
+// Stacked carousel — mirrors StackedCarousel.tsx (active/next/prev card stack,
+// arrows, dots). Position transforms live in design-kit/proto.css.
+function renderAssessmentCarousel(out, cards) {
+  const colorCls = (c) => CAROUSEL_COLOR_CLASSES[c] || CAROUSEL_COLOR_FALLBACK;
+  const cardHtml = (c) =>
+    `<div class="tp-result-card ${CAROUSEL_CARD} ${POS_HIDDEN}">` +
+    `<div class="${CAROUSEL_CARD_INNER}">` +
+    `<h3 class="${CAROUSEL_TITLE_BASE} ${colorCls(c.color)}">${escapeHtml(c.title)}</h3>` +
+    `<div class="${CAROUSEL_BODY}">` +
+    `<div class="${c.title === "Big Five" ? CAROUSEL_RESULT_SMALL : CAROUSEL_RESULT}" style="white-space:pre-line">${escapeHtml(c.result)}</div>` +
+    `<div class="${CAROUSEL_DESC}">${escapeHtml(c.description)}</div>` +
+    `</div></div></div>`;
+
+  const ARROW_L = '<svg class="h-10 w-10 hover:opacity-80" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm32.49,140.49a12,12,0,0,1-17,17l-48-48a12,12,0,0,1,0-17l48-48a12,12,0,0,1,17,17L121,125Z" transform="translate(8 3)"/></svg>';
+  const ARROW_R = '<svg class="h-10 w-10 hover:opacity-80" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM160.49,133.49l-48,48a12,12,0,0,1-17-17L135,124,95.51,85.49a12,12,0,0,1,17-17l48,48A12,12,0,0,1,160.49,133.49Z" transform="translate(-8 3)"/></svg>';
+
+  out.innerHTML =
+    `<div class="${CAROUSEL_WRAP}">` +
+    `<div class="${CAROUSEL_DECK}">${cards.map(cardHtml).join("")}</div>` +
+    `<div class="${CAROUSEL_ARROW_LEFT}" data-carousel-prev>${ARROW_L}</div>` +
+    `<div class="${CAROUSEL_ARROW_RIGHT}" data-carousel-next>${ARROW_R}</div>` +
+    `<div class="${CAROUSEL_DOTS}">${cards.map((_, i) =>
+      `<button class="${CAROUSEL_DOT}" data-carousel-dot="${i}" aria-label="Go to slide ${i + 1}"></button>`).join("")}</div>` +
+    `</div>`;
+
+  const els = [...out.querySelectorAll(".tp-result-card")];
+  const dots = [...out.querySelectorAll("[data-carousel-dot]")];
+  let active = 0;
+  const apply = () => {
+    const n = els.length;
+    els.forEach((el, i) => {
+      const diff = (i - active + n) % n;
+      el.classList.remove(POS_ACTIVE, POS_NEXT, POS_PREV, POS_HIDDEN);
+      el.classList.add(diff === 0 ? POS_ACTIVE : diff === 1 ? POS_NEXT : diff === n - 1 ? POS_PREV : POS_HIDDEN);
+    });
+    dots.forEach((d, i) => { d.className = i === active ? CAROUSEL_DOT_ACTIVE : CAROUSEL_DOT; d.setAttribute("data-carousel-dot", i); });
+  };
+  out.querySelector("[data-carousel-prev]")?.addEventListener("click", () => { active = (active - 1 + els.length) % els.length; apply(); });
+  out.querySelector("[data-carousel-next]")?.addEventListener("click", () => { active = (active + 1) % els.length; apply(); });
+  dots.forEach((d, i) => d.addEventListener("click", () => { active = i; apply(); }));
+  apply();
 }
 
 // ---------------------------------------------------------------------------
 // Narrowing pattern (optionsSourceSlug): a substep with no inline options
 // inherits its choices from the answer the user picked for an upstream slug
 // (e.g. pick 12 values, then narrow to 8, then 6). Those options can't be baked
-// at build time — populate the empty grid here from state.answers.
+// at build time — populate the empty grid here from state.answers, using the
+// REAL MultiSelectInput card markup (shared via runtime-classes.mjs).
 // ---------------------------------------------------------------------------
 function populateInheritedOptions() {
   const grid = root.querySelector("[data-options-source]");
@@ -116,16 +168,7 @@ function populateInheritedOptions() {
   const values = Array.isArray(upstream)
     ? upstream
     : (typeof upstream === "string" && upstream ? upstream.split(", ") : []);
-  // NOTE: this hand-rolled HTML escaper intentionally duplicates `esc` in
-  // render-substep.mjs. player.js runs in the browser as a standalone copied
-  // file (the build copies it next to interpolate.mjs / assessment-score.mjs)
-  // and does not import the render module, so we inline the same escape map here
-  // rather than add a build-time dependency. Keep the two in sync.
-  grid.innerHTML = values.map((text, i) =>
-    `<button class="tp-option" data-option data-value="${String(text).replace(/"/g, "&quot;")}" data-index="${i}"><span>${
-      String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))
-    }</span></button>`
-  ).join("");
+  grid.innerHTML = values.map((text, i) => msOptionHtml(text, i, escapeHtml)).join("");
 }
 
 function captureCurrent() {
@@ -134,22 +177,67 @@ function captureCurrent() {
   const grid = root.querySelector("[data-slug][data-multi]");
   if (grid) {
     const chosen = [...grid.querySelectorAll('[data-option][aria-selected="true"]')].map((b) => b.dataset.value);
-    state.answers[grid.dataset.slug] = chosen.join(", "); // always write — empty when deselected, so stale data clears
+    // De-dupe: dream-job accordions render two data-option elements per value
+    // (summary + Select button); selecting both must not double-count.
+    state.answers[grid.dataset.slug] = [...new Set(chosen)].join(", "); // always write — empty when deselected, so stale data clears
   }
 }
 
-function advance() { captureCurrent(); state.i = nextIndex(state.i, subs.length); persist(); aiController?.abort(); chatInFlight = false; render(); }
-function back() { captureCurrent(); state.i = prevIndex(state.i, subs.length); persist(); aiController?.abort(); chatInFlight = false; render(); }
+function advance() { clearTimeout(autoTimer); captureCurrent(); state.i = nextIndex(state.i, subs.length); persist(); aiController?.abort(); chatInFlight = false; render(); }
+function back() { clearTimeout(autoTimer); captureCurrent(); state.i = prevIndex(state.i, subs.length); persist(); aiController?.abort(); chatInFlight = false; render(); }
+
+// Live "Selected: N / M required" status for multi-select grids (mirrors the
+// validation block in MultiSelectInput.tsx).
+function updateMsStatus() {
+  const status = root.querySelector("[data-ms-status]");
+  const grid = root.querySelector("[data-slug][data-multi]");
+  if (!status || !grid) return;
+  const count = grid.querySelectorAll('[data-option][aria-selected="true"]').length;
+  const countEl = status.querySelector("[data-ms-count]");
+  if (countEl) countEl.textContent = String(count);
+  const min = parseInt(status.dataset.min, 10);
+  const max = parseInt(status.dataset.max, 10);
+  const okMin = Number.isNaN(min) || count >= min;
+  const okMax = Number.isNaN(max) || count <= max;
+  const msgEl = status.querySelector("[data-ms-msg]");
+  if (msgEl) {
+    msgEl.textContent = !okMin ? `Please select at least ${min} option${min !== 1 ? "s" : ""}`
+      : !okMax ? `Please select at most ${max} option${max !== 1 ? "s" : ""}`
+      : "Great — selection complete";
+  }
+  status.classList.toggle("is-valid", okMin && okMax);
+}
 
 function wire() {
-  root.querySelector("[data-next]")?.addEventListener("click", advance);
+  // Wire EVERY [data-next] (collect screens can have Continue + Skip)
+  root.querySelectorAll("[data-next]").forEach((btn) => btn.addEventListener("click", advance));
   document.getElementById("tp-back")?.toggleAttribute("disabled", state.i === 0);
-  root.querySelectorAll("[data-option]").forEach((opt) => opt.addEventListener("click", () => {
+  root.querySelectorAll("[data-option]").forEach((opt) => opt.addEventListener("click", (e) => {
     const grid = opt.closest("[data-slug]");
     if (!grid) return;
     const multi = grid.dataset.multi === "true";
+    const wasSelected = opt.getAttribute("aria-selected") === "true";
     if (!multi) grid.querySelectorAll("[data-option]").forEach((o) => o.setAttribute("aria-selected", "false"));
-    opt.setAttribute("aria-selected", opt.getAttribute("aria-selected") === "true" ? "false" : "true");
+    opt.setAttribute("aria-selected", wasSelected ? "false" : "true");
+    // Mirror the selection onto twin elements with the same value (dream-job
+    // accordions carry data-option on both the header and the Select button).
+    const v = opt.dataset.value;
+    grid.querySelectorAll(`[data-option]`).forEach((o) => {
+      if (o !== opt && o.dataset.value === v) o.setAttribute("aria-selected", opt.getAttribute("aria-selected"));
+    });
+    updateMsStatus();
+    // Auto-progress (image-multiselect autoProgressOnSelect): the app advances
+    // ~300ms after the pick. advance() clears the timer, so a manual Continue
+    // (or the walker) can never double-advance.
+    if (grid.dataset.autoProgress === "true" && opt.getAttribute("aria-selected") === "true") {
+      clearTimeout(autoTimer);
+      autoTimer = setTimeout(advance, 300);
+    }
+  }));
+  // Suggestion chips fill the text input (TextFieldInput suggestions)
+  root.querySelectorAll("[data-suggestion]").forEach((btn) => btn.addEventListener("click", () => {
+    const input = root.querySelector("[data-input]");
+    if (input) { input.value = btn.dataset.suggestion; input.focus(); }
   }));
   root.querySelector("[data-input]")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); advance(); } });
 }
@@ -181,8 +269,11 @@ async function maybeRunGenerateAI() {
   );
 
   out.classList.remove("is-writing");
-  if (!ok) {
+  if (ok) {
+    out.classList.add("is-live"); // streamed content must not keep placeholder styling
+  } else {
     // Fallback: restore the baked sample (critical guarantee)
+    out.classList.remove("is-live");
     out.textContent = bakedText;
   }
 }
@@ -259,7 +350,11 @@ function wireChatAI() {
     aiBubble.classList.remove("is-writing");
 
     if (ok) {
-      state.chat[slug].push({ role: "assistant", content: aiBubble.textContent });
+      // Mirror the app: if the model returned {feedback, freeChat} JSON, show
+      // (and persist) only the freeChat text once the stream is complete.
+      const display = extractDisplayContent(aiBubble.textContent);
+      aiBubble.textContent = display;
+      state.chat[slug].push({ role: "assistant", content: display });
     } else {
       // Fallback: replace empty bubble with something useful
       const fallback = "(preview AI unavailable)";
@@ -281,15 +376,17 @@ function wireChatAI() {
 }
 
 // ---------------------------------------------------------------------------
-// DOM helper — create and append a chat bubble, return the element.
+// DOM helper — append a chat message using the REAL ChatInterface markup
+// (justify row + bubble). Returns the BUBBLE element (streaming writes there).
 // ---------------------------------------------------------------------------
 function appendBubble(log, role, content) {
+  const row = document.createElement("div");
+  row.className = role === "user" ? CHAT_ROW_USER : CHAT_ROW_AI;
   const el = document.createElement("div");
-  el.className = role === "user"
-    ? "tp-bubble tp-bubble-user"
-    : "tp-bubble tp-bubble-ai";
+  el.className = role === "user" ? CHAT_BUBBLE_USER : CHAT_BUBBLE_AI;
   el.textContent = content;
-  log.appendChild(el);
+  row.appendChild(el);
+  log.appendChild(row);
   log.scrollTop = log.scrollHeight;
   return el;
 }

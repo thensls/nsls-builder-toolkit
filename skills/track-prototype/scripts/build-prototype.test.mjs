@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildSite } from "./build-prototype.mjs";
+import { buildSite, collectAssetPaths, copyTrackAssets } from "./build-prototype.mjs";
 
 const track = { id: "t", title: "Demo", steps: [{ id: "s", title: "S", substeps: [
   { id: "ss1", slug: "name", title: "Name", prompt: "Your name?", type: "collect", fieldType: "text" },
@@ -75,4 +75,59 @@ test("assessment bake is overridable (test fixture) and < is escaped", () => {
   assert.match(indexHtml, /window\.__ASSESSMENT__ =/);
   assert.match(indexHtml, /\\u003c\/script>/);          // < escaped, no real breakout
   assert.doesNotMatch(indexHtml, /<\/script>"\}\];/);
+});
+
+// --- Fidelity pass: real app assets in the build -----------------------------
+
+test("collectAssetPaths gathers substep + option image/video URLs, root-relative only", () => {
+  const t = { id: "t", title: "D", steps: [{ id: "s", title: "S", substeps: [
+    { id: "a", title: "A", prompt: "P", type: "say", fieldType: "banner", imageUrl: "/img/intro/intro-1.png" },
+    { id: "b", slug: "q", title: "B", prompt: "P", type: "collect", fieldType: "image-multiselect",
+      options: [{ text: "X", imageUrl: "/img/assessment/x.png" }, { text: "Y", imageUrl: "https://cdn.example.com/y.png" }, "plain"] },
+    { id: "c", title: "C", prompt: "", type: "say", fieldType: "celebration", imageUrl: "/video/done.mp4" },
+    { id: "d", title: "D2", prompt: "P", type: "say", fieldType: "banner", imageUrl: "javascript:alert(1)" },
+  ]}]};
+  assert.deepEqual(collectAssetPaths(t), ["/img/assessment/x.png", "/img/intro/intro-1.png", "/video/done.mp4"]);
+});
+
+test("collectAssetPaths de-dupes repeated references", () => {
+  const t = { id: "t", title: "D", steps: [{ id: "s", title: "S", substeps: [
+    { id: "a", title: "A", prompt: "P", type: "say", fieldType: "banner", imageUrl: "/img/same.png" },
+    { id: "b", title: "B", prompt: "P", type: "say", fieldType: "banner", imageUrl: "/img/same.png" },
+  ]}]};
+  assert.deepEqual(collectAssetPaths(t), ["/img/same.png"]);
+});
+
+test("copyTrackAssets copies only referenced files, reports missing ones gracefully", async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const srcRoot = mkdtempSync(join(tmpdir(), "tp-assets-src-"));
+  const outDir = mkdtempSync(join(tmpdir(), "tp-assets-out-"));
+  mkdirSync(join(srcRoot, "img", "intro"), { recursive: true });
+  writeFileSync(join(srcRoot, "img", "intro", "intro-1.png"), "png-bytes");
+  writeFileSync(join(srcRoot, "img", "unreferenced.png"), "should-not-copy");
+  const t = { id: "t", title: "D", steps: [{ id: "s", title: "S", substeps: [
+    { id: "a", title: "A", prompt: "P", type: "say", fieldType: "banner", imageUrl: "/img/intro/intro-1.png" },
+    { id: "b", title: "B", prompt: "P", type: "say", fieldType: "banner", imageUrl: "/img/intro/missing.png" },
+  ]}]};
+  const { copied, missing } = copyTrackAssets(t, srcRoot, outDir);
+  assert.deepEqual(copied, ["/img/intro/intro-1.png"]);
+  assert.deepEqual(missing, ["/img/intro/missing.png"]);
+  assert.ok(existsSync(join(outDir, "img", "intro", "intro-1.png")));   // path preserved
+  assert.ok(!existsSync(join(outDir, "img", "unreferenced.png")));      // never wholesale
+  rmSync(srcRoot, { recursive: true, force: true });
+  rmSync(outDir, { recursive: true, force: true });
+});
+
+test("buildSite injects the track title into the chrome header", () => {
+  const { indexHtml } = buildSite(track, {});
+  assert.match(indexHtml, />Demo<\/h1>/);
+});
+
+test("buildSite escapes a hostile track title in the chrome header", () => {
+  const t = { ...track, title: '<img src=x onerror=alert(1)>' };
+  const { indexHtml } = buildSite(t, {});
+  assert.doesNotMatch(indexHtml, /<img src=x/);
+  assert.match(indexHtml, /&lt;img src=x/);
 });

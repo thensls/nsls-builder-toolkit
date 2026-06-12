@@ -29,7 +29,10 @@ must exit 0. If it does not, stop and send the builder back to track-design Phas
    a `samples.json` keyed by substep slug: `{ "<slug>": "sample text", ... }`. These are
    illustrative — the real app runs on Braintrust, so do not claim production fidelity.
 3. **Build:**
-   `node scripts/build-prototype.mjs <track.json> --persona "<name>" --samples samples.json --out prototype-build/`
+   `node scripts/build-prototype.mjs <track.json> --persona "<name>" --samples samples.json --out prototype-build/ --assets <ignite-next>/public`
+   (`--assets` copies ONLY the images/videos the track references into the build so
+   `/img/...` and `/video/...` URLs resolve — without it they 404. Never copy the whole
+   public dir by hand; the flag's collector handles referenced-files-only.)
 4. **Run locally:** `npx serve prototype-build -p 3000` then open `http://localhost:3000`.
    (Opening `index.html` via `file://` breaks ES modules and fetch — always serve over HTTP.)
 5. **Deploy:** invoke the `netlify-deploy` skill on `prototype-build/`. Record the URL.
@@ -97,5 +100,5 @@ Every Phase-2 run adds a ScoreRun. Once a track is live in PostHog, add its actu
 
 ## Operating Rules
 - Never seed the prototype with real member data — prototype input is illustrative and **egresses to OpenAI via the proxy** when live AI is on. Use only synthetic personas.
-- The design kit is hand-mirrored from ignite-next and drifts. See `prototype/SYNC.md`.
+- The design kit is the REAL ignite-next theme: `design-kit/app.css` is compiled from the app's Tailwind theme by `scripts/build-design-kit.mjs`, fonts are the app's font files, and `--assets <ignite-next>/public` copies the track's referenced images/videos into the build. Re-sync steps: `prototype/SYNC.md`.
 - AI output is illustrative (the app runs Braintrust), and focus-group scores are a relative ranking + gate, not a prediction.

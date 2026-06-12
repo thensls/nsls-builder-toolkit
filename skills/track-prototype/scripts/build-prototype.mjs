@@ -1,7 +1,7 @@
-import { readFileSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { renderSubstep } from "./lib/render-substep.mjs";
+import { renderSubstep, computeAssessmentProgress, safeUrl } from "./lib/render-substep.mjs";
 import { findOrderingErrors } from "./lib/ordering-lint.mjs";
 import { flattenSubsteps } from "../prototype/player-core.mjs";
 
@@ -30,6 +30,45 @@ function jsonForScript(value) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
+// ---------------------------------------------------------------------------
+// Asset resolution — REAL app images/videos in the build.
+// Tracks reference assets by root-relative URL (e.g. /img/intro/intro-1.png,
+// /video/x.mp4). collectAssetPaths() walks the track for every such reference;
+// copyTrackAssets() copies ONLY those files from an assets root (ignite-next's
+// public/ dir) into the build, preserving paths so the URLs resolve when the
+// build dir is served at root. Missing files are skipped gracefully + reported.
+// ---------------------------------------------------------------------------
+export function collectAssetPaths(track) {
+  const paths = new Set();
+  const consider = (u) => {
+    const s = safeUrl(u);
+    // Only root-relative app assets are copyable (http(s)/data: pass through untouched)
+    if (s && s.startsWith("/") && !s.startsWith("//")) paths.add(s);
+  };
+  for (const sub of flattenSubsteps(track)) {
+    consider(sub.imageUrl);
+    for (const o of sub.options || []) {
+      if (o && typeof o === "object") consider(o.imageUrl);
+    }
+  }
+  return [...paths].sort();
+}
+
+export function copyTrackAssets(track, assetsRoot, outDir) {
+  const wanted = collectAssetPaths(track);
+  const copied = [];
+  const missing = [];
+  for (const rel of wanted) {
+    const src = join(assetsRoot, rel); // rel starts with "/" — join normalizes
+    if (!existsSync(src)) { missing.push(rel); continue; }
+    const dest = join(outDir, rel);
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(src, dest);
+    copied.push(rel);
+  }
+  return { copied, missing };
+}
+
 export function buildSite(input, opts = {}) {
   // A canonical track.json (what validate-track-json accepts) is a top-level ARRAY of
   // tracks. Preview targets one track — unwrap a single-element array. Throw clearly on
@@ -41,7 +80,15 @@ export function buildSite(input, opts = {}) {
   }
   const errs = findOrderingErrors([track], { assume: opts.assume || [] });
   if (errs.length) throw new Error("Token ordering errors:\n" + errs.join("\n"));
-  const ctx = { samples: opts.samples || {} };
+
+  // Personality progress (PersonalityProgressTracker fallback) is computed per
+  // STEP — the app derives it from the current step's substeps.
+  const progress = {};
+  for (const step of track.steps || []) {
+    Object.assign(progress, computeAssessmentProgress(step.substeps || []));
+  }
+
+  const ctx = { samples: opts.samples || {}, progress };
   const screens = flattenSubsteps(track).map((sub) => renderSubstep(sub, ctx));
   const template = readFileSync(join(PROTO, "template.html"), "utf8");
   // opts.assessment lets tests inject a tiny fixture; default to the vendored data.
@@ -53,6 +100,8 @@ export function buildSite(input, opts = {}) {
     .replace("%%SCREENS%%", () => jsonForScript(screens))
     .replace("%%PROXY%%", () => jsonForScript(opts.proxy || null))
     .replace("%%ASSESSMENT%%", () => jsonForScript(assessment || null))
+    .replace("__TRACK_TITLE__", () => String(track.title || "Track Preview").replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])))
     .replace("__DATE__", () => opts.date || "");
   return { indexHtml, screens };
 }
@@ -62,14 +111,15 @@ function parseArgs(argv) {
   return { file: argv.find((a) => !a.startsWith("--") && a.endsWith(".json")),
     persona: get("--persona"), samplesPath: get("--samples"),
     out: get("--out") || "prototype-build", assume: (get("--assume") || "").split(",").filter(Boolean),
-    proxyUrl: get("--proxy-url"), proxyToken: get("--proxy-token") };
+    proxyUrl: get("--proxy-url"), proxyToken: get("--proxy-token"),
+    assets: get("--assets") };
 }
 
 // fileURLToPath decodes percent-encoding so the check survives paths with spaces.
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
-  const { file, samplesPath, out, assume, proxyUrl, proxyToken } = parseArgs(process.argv.slice(2));
-  if (!file) { console.error("Usage: build-prototype.mjs <track.json> [--persona name] [--samples samples.json] [--out dir] [--assume a,b] [--proxy-url url] [--proxy-token token]"); process.exit(2); }
+  const { file, samplesPath, out, assume, proxyUrl, proxyToken, assets } = parseArgs(process.argv.slice(2));
+  if (!file) { console.error("Usage: build-prototype.mjs <track.json> [--persona name] [--samples samples.json] [--out dir] [--assume a,b] [--proxy-url url] [--proxy-token token] [--assets <app-public-dir>]"); process.exit(2); }
   const raw = JSON.parse(readFileSync(file, "utf8"));
   const track = Array.isArray(raw) ? raw[0] : raw; // track files may be wrapped in a top-level array
   const samples = samplesPath ? JSON.parse(readFileSync(samplesPath, "utf8")) : {};
@@ -83,5 +133,17 @@ if (isMain) {
   cpSync(join(PROTO, "player-core.mjs"), join(out, "player-core.mjs"));
   cpSync(join(HERE, "lib", "interpolate.mjs"), join(out, "interpolate.mjs"));
   cpSync(join(HERE, "lib", "assessment-score.mjs"), join(out, "assessment-score.mjs"));
+  cpSync(join(HERE, "lib", "runtime-classes.mjs"), join(out, "runtime-classes.mjs"));
+
+  // Real app assets (images/videos) — copy ONLY what the track references.
+  // Heartbeat: always report what happened so a skipped step is visible.
+  const wanted = collectAssetPaths(track);
+  if (assets) {
+    const { copied, missing } = copyTrackAssets(track, assets, out);
+    console.log(`assets: ${copied.length}/${wanted.length} copied from ${assets}` +
+      (missing.length ? ` — MISSING ${missing.length}: ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ", …" : ""}` : ""));
+  } else {
+    console.log(`assets: scanned ${wanted.length} referenced asset(s); no --assets dir provided, URLs left as-is (will 404 unless served elsewhere)`);
+  }
   console.log(`Built ${out}/`);
 }

@@ -52,7 +52,12 @@ export function planFill(descriptor, answer) {
   const d = descriptor || {};
   const ft = d.fieldType;
 
-  const isOptionGrid = OPTION_FIELD_TYPES.has(ft) || (Array.isArray(d.optionValues) && d.optionValues.length > 0 && !d.hasInput);
+  // A screen is an option grid when it actually renders [data-option] values,
+  // or when its fieldType implies options AND there is no input to fill instead.
+  // (fieldType "select" renders a native <select data-input> in the fidelity
+  // design kit — no [data-option]s — so it must fall through to the fill path.)
+  const hasOptions = Array.isArray(d.optionValues) && d.optionValues.length > 0;
+  const isOptionGrid = hasOptions || (OPTION_FIELD_TYPES.has(ft) && !d.hasInput);
 
   if (isOptionGrid) {
     const available = Array.isArray(d.optionValues) ? d.optionValues : [];
