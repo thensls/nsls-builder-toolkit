@@ -351,6 +351,7 @@
     "department": "Marketing",
     "manages": [
       "Andrew Hesse",
+      "Gabriela R Cordeiro",
       "Joshua Hrala",
       "Michael Adamian",
       "Rachel Porter",
@@ -426,7 +427,7 @@
   {
     "name": "Gabriela R Cordeiro",
     "title": "",
-    "manager": "",
+    "manager": "Michael O'Brien",
     "email": "gcordeiro@nsls.org",
     "slack": "U0AF9KUEVAM",
     "department": "Unknown",
@@ -570,7 +571,7 @@
   {
     "name": "Kyle Coberly",
     "title": "",
-    "manager": "",
+    "manager": "Kevin Prentiss",
     "email": "kcoberly@nsls.org",
     "slack": "U0B286J7NUE",
     "department": "Unknown",
@@ -695,13 +696,13 @@
     "slack": "U0A7E0JCNBU",
     "department": "Member Experience",
     "manages": [
-      "Alex Peguero",
       "Franklin Ortega",
+      "Jennifer Arias",
       "Karla Mena"
     ]
   },
   {
-    "name": "Alex Peguero",
+    "name": "Jennifer Arias",
     "title": "Member Experience Specialist",
     "manager": "Alejandro Gabriel",
     "email": "apeguero@nsls.org",
@@ -875,6 +876,7 @@
       "Davo Wood",
       "Jana Amsellem",
       "Juan Maggi",
+      "Kyle Coberly",
       "Lauren Prentiss",
       "Trina Limpert",
       "Tyler Lagaly"

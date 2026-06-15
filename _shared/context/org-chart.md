@@ -1,5 +1,5 @@
 # NSLS Org Chart
-_Last synced: 2026-06-08_
+_Last synced: 2026-06-15_
 
 ## Business Intelligence
 
@@ -107,7 +107,6 @@ _Last synced: 2026-06-08_
 |------|-------|---------|-------|-------|
 | Alaynie Smith | Workforce Specialist | Kimberly Campbell | alsmith@nsls.org | U03EDCNTW5B |
 | Alejandro Gabriel | QA Specialist | Kimberly Campbell | agabriel@nsls.org | U0A7E0JCNBU |
-| Alex Peguero | Member Experience Specialist | Alejandro Gabriel | apeguero@nsls.org | U0AS9A3RLJY |
 | Angel Guzman | Membership Experience Specialist | Kimberly Campbell | aguzman@nsls.org | U0B1VBGR6DS |
 | Atrayu Polhemus | Membership Experience Specialist | Kara Klimuszko | apolhemus@nsls.org | U08E6QG6KUM |
 | Charlotte Donnelly | Member Experience Specialist | Kara Klimuszko | cdonnelly@nsls.org | U05DKQE1J3H |
@@ -115,6 +114,7 @@ _Last synced: 2026-06-08_
 | Elian Castro | Membership Experience Specialist | Kimberly Campbell | ecastro@nsls.org | U0B1NBFJACD |
 | Emilia Santana | Membership Experience Specialist | Kimberly Campbell | esantana@nsls.org | U0B1PMSKT0E |
 | Franklin Ortega | Member Experience Specialist | Alejandro Gabriel | fortega@nsls.org | U0A7BUY5EG6 |
+| Jennifer Arias | Member Experience Specialist | Alejandro Gabriel | apeguero@nsls.org | U0AS9A3RLJY |
 | Jorge Alberto | Trainer | Edgar Segura | jalberto@nsls.org | U0A7AHB67UM |
 | Kara Klimuszko | Member Experience Team Lead | Kimberly Campbell | kklimuszko@nsls.org | U01B6B0T831 |
 | Karla Mena | Member Experience Specialist | Alejandro Gabriel | kfernandez@nsls.org | U0A77JRUDS7 |
@@ -185,11 +185,11 @@ _Last synced: 2026-06-08_
 | Collin Wood |  |  | cwood@nsls.org | U08RLLMFJTU |
 | David Weber  |  |  | dweber@nsls.org | U086Y4L1ZED |
 | Elizabeth Garretson |  |  | egarretson@nsls.org | U07SRF50VGD |
-| Gabriela R Cordeiro |  |  | gcordeiro@nsls.org | U0AF9KUEVAM |
+| Gabriela R Cordeiro |  | Michael O'Brien | gcordeiro@nsls.org | U0AF9KUEVAM |
 | Jake Arcangeli |  |  | jarcangeli@nsls.org | U0ACL36HJ2F |
 | Janine Walsh |  |  | jwalsh@nsls.org | U0ADTNZUB8D |
 | Jasmine Artis |  |  | jartis@nsls.org | U0ABXMAAVEU |
-| Kyle Coberly |  |  | kcoberly@nsls.org | U0B286J7NUE |
+| Kyle Coberly |  | Kevin Prentiss | kcoberly@nsls.org | U0B286J7NUE |
 | Leila McAvoy |  |  |  |  |
 | Luis Fernando Yupanqui Taco |  |  |  |  |
 | Matthew Schuman |  |  | mschuman@nsls.org | U0AAX0KFAR1 |
