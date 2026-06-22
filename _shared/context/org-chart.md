@@ -1,5 +1,5 @@
 # NSLS Org Chart
-_Last synced: 2026-06-15_
+_Last synced: 2026-06-22_
 
 ## Business Intelligence
 
@@ -46,7 +46,7 @@ _Last synced: 2026-06-15_
 
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
-| Angelica Evans | Business Intelligence and Automation Lead | Jordyn Tannenbaum | avillalobos@nsls.org | U02EQ4E2WDC |
+| Angelica Evans | Technical Product Manager | Kevin Prentiss | avillalobos@nsls.org | U02EQ4E2WDC |
 | Brandon Evans | AWS Engineer | Kevin Prentiss | bevans@nsls.org | U08CSE1A9CK |
 | David Adams | Vice President of Technology | Kevin Prentiss | dadams@nsls.org | U0A9KTSG4J2 |
 | Evgeny Pokrovskiy | Software QA Automation Eng | Juan Maggi | epokrovskiy@nsls.org | U01AEB1JQ8Y |
@@ -105,27 +105,29 @@ _Last synced: 2026-06-15_
 
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
-| Alaynie Smith | Workforce Specialist | Kimberly Campbell | alsmith@nsls.org | U03EDCNTW5B |
 | Alejandro Gabriel | QA Specialist | Kimberly Campbell | agabriel@nsls.org | U0A7E0JCNBU |
+| Alex Arias | Member Experience Specialist | Alejandro Gabriel | apeguero@nsls.org | U0AS9A3RLJY |
 | Angel Guzman | Membership Experience Specialist | Kimberly Campbell | aguzman@nsls.org | U0B1VBGR6DS |
 | Atrayu Polhemus | Membership Experience Specialist | Kara Klimuszko | apolhemus@nsls.org | U08E6QG6KUM |
 | Charlotte Donnelly | Member Experience Specialist | Kara Klimuszko | cdonnelly@nsls.org | U05DKQE1J3H |
+| ELIANA VALLEJO | Membership Experience Specialist | Alejandro Gabriel | esantos@nsls.org | U0BAK4ZT3EF |
 | Edgar Segura | Client Services Manager | Kimberly Campbell | esegura@nsls.org | U0A3PH5EA3G |
 | Elian Castro | Membership Experience Specialist | Kimberly Campbell | ecastro@nsls.org | U0B1NBFJACD |
 | Emilia Santana | Membership Experience Specialist | Kimberly Campbell | esantana@nsls.org | U0B1PMSKT0E |
 | Franklin Ortega | Member Experience Specialist | Alejandro Gabriel | fortega@nsls.org | U0A7BUY5EG6 |
-| Jennifer Arias | Member Experience Specialist | Alejandro Gabriel | apeguero@nsls.org | U0AS9A3RLJY |
 | Jorge Alberto | Trainer | Edgar Segura | jalberto@nsls.org | U0A7AHB67UM |
 | Kara Klimuszko | Member Experience Team Lead | Kimberly Campbell | kklimuszko@nsls.org | U01B6B0T831 |
 | Karla Mena | Member Experience Specialist | Alejandro Gabriel | kfernandez@nsls.org | U0A77JRUDS7 |
 | Kimberly Campbell | Director of Member Experience | Ashleigh Smith | kcampbell@nsls.org | U021ZK0NW07 |
 | Maikel Berbi | Membership Experience Specialist | Kimberly Campbell | mberbi@nsls.org | U0B1A9YPKHV |
 | Melissa Baggett | Membership Experience Specialist | Kara Klimuszko | mbaggett@nsls.org | U081X01AQA2 |
+| Mia Vasquez | Member Experience Specialist | Alejandro Gabriel | mvasquez@nsls.org | U0B720AV5U7 |
 | Monica Cerrato | Member Experience Specialist | Kara Klimuszko | mcerrato@nsls.org | U02EG4YQ2UF |
 | Nancy Castillo | Member Experience Specialist | Kara Klimuszko | ncastillo@nsls.org | U05516H7B8A |
 | Naomi Ariza | Membership Experience Specialist | Kimberly Campbell | nariza@nsls.org | U0B24LCLQMP |
 | Rauly Villar | Membership Experience Specialist | Kimberly Campbell | rvillar@nsls.org | U0B24L8CQD7 |
 | Reiny Garcia | Membership Experience Specialist | Kimberly Campbell | rcalderon@nsls.org | U0B1KCAN9SP |
+| Samantha Montas | Membership Experience Specialist | Alejandro Gabriel | smontas@nsls.org | U0B7FB0EM5L |
 | Saray Rosado | Membership Experience Specialist | Kimberly Campbell | srosado@nsls.org | U0B1NBK7C21 |
 | Sofia Fader | Membership Experience Specialist | Kimberly Campbell | skurtenbach@nsls.org | U0B1NBN7UN9 |
 

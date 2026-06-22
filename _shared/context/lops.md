@@ -1,5 +1,5 @@
 # Lines of Priority (LOPs)
-_Last synced: 2026-06-08_
+_Last synced: 2026-06-22_
 
 ## L1: Simplification/Efficiency
 **Owner**: Anish Patel | **Health**: On Track
@@ -41,15 +41,15 @@ _Last synced: 2026-06-08_
 
 ### L2: Establish baseline and methodology for the strategic alignment score and rubric
 **Owner**: Heather Darnell | **Health**: Hit Goal | **Deadline**: 2026-06-01
-> Goal has been completed. Baseline and methodology for the strategic alignment score and rubric have been established.
+> Goal was completed in April. Baseline and methodology for the strategic alignment score and rubric have been established.
 
 ### L2: Host Successful Impact Days
 **Owner**: Chelsea Byers | **Health**: On Track | **Deadline**: 2026-12-31
 > Joe is planning fall impact day based on the successful spring 2026 event. No blockers mentioned.
 
 ### L2: Complete job framework and compensation leveling project by the end of Q2
-**Owner**: Heather Darnell | **Health**: On Track | **Deadline**: 2026-06-30
-> Job framework and compensation leveling project is in progress. No additional details provided on timeline or blockers.
+**Owner**: Heather Darnell | **Health**: Off Track | **Deadline**: 2026-06-30
+> Goal deadline has been pushed from end of Q2 to Q3 by leadership decision. Project is no longer on track to meet the original Q2 completion target.
 
 ### L2: Host Meaningful 25th Anniversary Event
 **Owner**: Chelsea Byers | **Health**: No update | **Deadline**: 2026-10-27
@@ -57,9 +57,11 @@ _Last synced: 2026-06-08_
 
 ### L2: Review and improve talent acquisition process by Q2
 **Owner**: Jenna Fontanez | **Health**: On Track | **Deadline**: 2026-06-30
-> DRI is implementing a multi-pronged talent acquisition strategy combining fractional/external hiring firms, inbound recruitment, Ben.AI outbound platform, and other outreach methods. Framework emphasizes manager accountability while maintaining consistent intake process oversight.
+> Secured outbound sourcing platform and is now in the learning phase before piloting with the first role. Making significant progress toward process improvement.
 
 ## L1: Core Revenue
+
+'
 **Owner**: Ashleigh Smith | **Health**: At Risk
 **Goal**: Grow core enrollment revenue to $30.7M from $28M 
 > Core Revenue momentum is mixed—while brand initiatives and engagement programs advance on track, we're at risk on enrollment growth and LTV improvement, both critical to hitting our 10.6M market target and revenue expansion. Enrollment remains flat despite being needed for the L1 goal, and the $3 LTV uplift continues to slip. We need to assess whether current enrollment tactics require pivoting or if resource reallocation from on-track initiatives could accelerate these two at-risk areas.
@@ -94,7 +96,7 @@ _Last synced: 2026-06-08_
 
 ## L1: Product Engagement
 **Owner**: Kevin Prentiss | **Health**: On Track
-**Goal**: Establish proof that Society drives superior engagement through baseline establishment and optimization: 50k members on Ignite with Orientation on Society completion >50%, Clarity track completion >25% for members.
+**Goal**: Establish proof that Society drives superior engagement through baseline establishment and optimization: 50k members on Society with Orientation on Society completion >50%, Clarity track completion >25% for members.
 > We're making strong progress on Product Engagement with five of six goals on track or completed, including Personal Insights shipping early. Dashboard and global nav completion for SNT testing are critical path items; we should monitor their sprint delivery closely to keep the May timeline intact.
 
 ### L2: Ability to skip personality test and edit steps in May

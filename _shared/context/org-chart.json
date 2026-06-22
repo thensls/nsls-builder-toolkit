@@ -638,6 +638,15 @@
     "manages": []
   },
   {
+    "name": "Samantha Montas",
+    "title": "Membership Experience Specialist",
+    "manager": "Alejandro Gabriel",
+    "email": "smontas@nsls.org",
+    "slack": "U0B7FB0EM5L",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
     "name": "Franklin Ortega",
     "title": "Member Experience Specialist",
     "manager": "Alejandro Gabriel",
@@ -696,13 +705,16 @@
     "slack": "U0A7E0JCNBU",
     "department": "Member Experience",
     "manages": [
+      "Alex Arias",
+      "ELIANA VALLEJO",
       "Franklin Ortega",
-      "Jennifer Arias",
-      "Karla Mena"
+      "Karla Mena",
+      "Mia Vasquez",
+      "Samantha Montas"
     ]
   },
   {
-    "name": "Jennifer Arias",
+    "name": "Alex Arias",
     "title": "Member Experience Specialist",
     "manager": "Alejandro Gabriel",
     "email": "apeguero@nsls.org",
@@ -765,15 +777,6 @@
     "manages": []
   },
   {
-    "name": "Alaynie Smith",
-    "title": "Workforce Specialist",
-    "manager": "Kimberly Campbell",
-    "email": "alsmith@nsls.org",
-    "slack": "U03EDCNTW5B",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
     "name": "Monica Cerrato",
     "title": "Member Experience Specialist",
     "manager": "Kara Klimuszko",
@@ -799,7 +802,6 @@
     "slack": "U021ZK0NW07",
     "department": "Member Experience",
     "manages": [
-      "Alaynie Smith",
       "Alejandro Gabriel",
       "Angel Guzman",
       "Edgar Segura",
@@ -820,6 +822,15 @@
     "manager": "Kimberly Campbell",
     "email": "rcalderon@nsls.org",
     "slack": "U0B1KCAN9SP",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
+    "name": "ELIANA VALLEJO",
+    "title": "Membership Experience Specialist",
+    "manager": "Alejandro Gabriel",
+    "email": "esantos@nsls.org",
+    "slack": "U0BAK4ZT3EF",
     "department": "Member Experience",
     "manages": []
   },
@@ -853,6 +864,15 @@
     "manages": []
   },
   {
+    "name": "Mia Vasquez",
+    "title": "Member Experience Specialist",
+    "manager": "Alejandro Gabriel",
+    "email": "mvasquez@nsls.org",
+    "slack": "U0B720AV5U7",
+    "department": "Member Experience",
+    "manages": []
+  },
+  {
     "name": "Saray Rosado",
     "title": "Membership Experience Specialist",
     "manager": "Kimberly Campbell",
@@ -869,6 +889,7 @@
     "slack": "U07TS8X7T7X",
     "department": "Engineering",
     "manages": [
+      "Angelica Evans",
       "Brandon Evans",
       "Chelsea Byers",
       "Chris Higbee",
@@ -924,8 +945,8 @@
   },
   {
     "name": "Angelica Evans",
-    "title": "Business Intelligence and Automation Lead",
-    "manager": "Jordyn Tannenbaum",
+    "title": "Technical Product Manager",
+    "manager": "Kevin Prentiss",
     "email": "avillalobos@nsls.org",
     "slack": "U02EQ4E2WDC",
     "department": "Engineering",
@@ -966,7 +987,6 @@
     "slack": "U0A5FNH2A01",
     "department": "Business Intelligence",
     "manages": [
-      "Angelica Evans",
       "Rumzy Khalil"
     ]
   },
