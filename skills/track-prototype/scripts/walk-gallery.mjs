@@ -143,13 +143,16 @@ async function readScreenDescriptor(fallback) {
 }
 
 // Poll .tp-ai-output until its text length stabilizes (stream complete) or a
-// timeout. Returns when stable/timed-out — never hangs.
+// timeout. Watches the LAST matching element (chat bubbles are nested in
+// justify-row wrappers in the fidelity markup, so :last-child is unreliable).
+// Returns when stable/timed-out — never hangs.
 async function waitForStream(selector, { interval = 600, maxMs = 30000, stableWindow = 3 } = {}) {
   const lengths = [];
   const deadline = Date.now() + maxMs;
   for (;;) {
     const len = await page.evaluate((sel) => {
-      const el = document.querySelector(sel);
+      const els = document.querySelectorAll(sel);
+      const el = els[els.length - 1];
       return el ? el.textContent.length : -1;
     }, selector);
     lengths.push(len);
@@ -177,7 +180,9 @@ for (let step = 1; step <= MAX_STEPS; step++) {
 
   // --- Wait for live AI on generate screens BEFORE capturing -----------------
   if (kind === "generate") {
-    await waitForStream(".tp-ai-output");
+    // Without a baked sample the generate body is .tp-ai-placeholder; the live
+    // stream writes into whichever exists — watch both.
+    await waitForStream(".tp-ai-output, .tp-ai-placeholder");
   }
 
   // --- Capture text/title/screenshot ----------------------------------------
@@ -203,6 +208,11 @@ for (let step = 1; step <= MAX_STEPS; step++) {
   const nextBtn = page.locator("[data-next]");
   const hasNext = (await nextBtn.count()) > 0;
 
+  // Auto-progress screens (image-multiselect autoProgressOnSelect) hide the
+  // Continue button — the player advances ~300ms after the option click.
+  const isAutoProgress = await page.evaluate(() =>
+    !!document.querySelector('[data-slug][data-auto-progress="true"]'));
+
   // --- Chat screen: send a persona reply, wait for the AI bubble, Continue ---
   if (kind === "chat") {
     const chatInput = page.locator("[data-chat-input]");
@@ -226,7 +236,7 @@ for (let step = 1; step <= MAX_STEPS; step++) {
     steps[steps.length - 1].text = (await page.evaluate(() => document.body.innerText)).trim();
   }
 
-  if (!hasNext && kind !== "chat") break; // genuinely no way forward
+  if (!hasNext && kind !== "chat" && !isAutoProgress) break; // genuinely no way forward
 
   // --- Fill the screen via the pure planner ---------------------------------
   if (kind === "collect" || (descriptor.hasInput || descriptor.optionValues.length > 0)) {
@@ -234,7 +244,17 @@ for (let step = 1; step <= MAX_STEPS; step++) {
     if (plan.problem) problems.push(`step ${step}: ${plan.problem}`);
 
     if (plan.action === "fill") {
-      await page.locator("[data-input]").first().fill(plan.value).catch(() => {});
+      // fieldType "select" renders a native <select data-input> — Playwright's
+      // fill() doesn't work on selects, use selectOption (option value = text).
+      const inputEl = page.locator("[data-input]").first();
+      const tag = await inputEl.evaluate((el) => el.tagName).catch(() => "");
+      if (tag === "SELECT") {
+        await inputEl.selectOption(plan.value).catch(() => {
+          problems.push(`step ${step}: select option ${JSON.stringify(plan.value)} not found`);
+        });
+      } else {
+        await inputEl.fill(plan.value).catch(() => {});
+      }
     } else if (plan.action === "click-options") {
       // The player only toggles aria-selected on option click; it never
       // auto-advances. Click every matched option (single-pick screens get one
@@ -247,6 +267,22 @@ for (let step = 1; step <= MAX_STEPS; step++) {
       }
     }
     // plan.action === "none" → nothing to fill; just advance via Continue.
+  }
+
+  // --- Auto-progress: the option click above already scheduled the advance ---
+  if (isAutoProgress && !hasNext) {
+    await page.waitForFunction((prev) => {
+      try { return (JSON.parse(localStorage.getItem("tp.v1"))?.i ?? -1) > prev; } catch { return false; }
+    }, idxBefore, { timeout: 5000 }).catch(() => {});
+    const idxAfterAuto = await playerIndex();
+    if (idxAfterAuto !== null && idxBefore !== null && idxAfterAuto > idxBefore) {
+      // We already advanced — record THIS screen's pre-advance text for the next
+      // iteration's loop check (the index check above proves we moved).
+      prevHash = text;
+      continue;
+    }
+    problems.push(`step ${step}: STUCK (auto-progress screen did not advance)`);
+    break;
   }
 
   // --- Loop detection (content unchanged since last step) -------------------

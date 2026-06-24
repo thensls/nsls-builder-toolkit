@@ -151,3 +151,22 @@ test("window clamps to a minimum of 2", () => {
 test("non-array input → not stable", () => {
   assert.equal(isStreamStable(null, 3), false);
 });
+
+// --- Fidelity pass: native <select data-input> (no [data-option] grid) -------
+
+test("select with an input and no rendered options falls through to fill (native select)", () => {
+  const plan = planFill(
+    { slug: "age", fieldType: "select", hasInput: true, optionValues: [] },
+    "20"
+  );
+  assert.deepEqual(plan, { action: "fill", value: "20" });
+});
+
+test("option-fieldType screen with neither options nor input still reports empty grid", () => {
+  const plan = planFill(
+    { slug: "x", fieldType: "multi-select", hasInput: false, optionValues: [] },
+    "A"
+  );
+  assert.equal(plan.action, "none");
+  assert.match(plan.problem, /option grid is empty/);
+});

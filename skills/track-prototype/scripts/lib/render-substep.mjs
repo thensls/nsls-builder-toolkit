@@ -1,6 +1,28 @@
-// Render one substep to static HTML using design-kit classes (tp- prefix to avoid
-// collisions). The player wires behavior via data-* hooks and does {slug} interpolation
-// at runtime. ctx.samples[slug] supplies baked AI text for generate/chat.
+// Render one substep to static HTML that mirrors the REAL ignite-next app.
+//
+// FIDELITY CONTRACT: the emitted DOM structure and class names are transcribed
+// from the production components (pinned commit in prototype/SYNC.md):
+//   - screen skeleton .... SubStepRenderer.tsx (layoutMode="page") + page.tsx
+//   - inputs ............. src/components/fields/*.tsx
+//   - buttons ............ src/components/ui/button.tsx (cva variants)
+//   - chat ............... ChatInterface.tsx
+//   - celebration ........ DeviceEmulator/CelebrationContent.tsx
+//   - results carousel ... AssessmentResults.tsx + StackedCarousel.tsx
+//   - progress tracker ... PersonalityProgressTracker.tsx
+// The classes are compiled into design-kit/app.css by scripts/build-design-kit.mjs
+// (real Tailwind v4 + the app's theme). Re-run that script after editing markup here.
+//
+// PLAYER CONTRACT (do not break): the player + walkers wire behavior via
+//   [data-next] [data-input][data-slug] [data-option][data-value] grids with
+//   data-multi, [data-chat]/[data-chat-log]/[data-chat-input]/[data-chat-send],
+//   [data-assessment-results], .tp-ai-output/.tp-ai-placeholder,
+//   [data-options-source], [data-tpl], plus marker classes .tp-screen .tp-title
+//   .tp-celebration .tp-options .tp-bubble-*. Real app classes coexist with these.
+
+import {
+  CHAT_ROW_AI, CHAT_BUBBLE_AI, MS_OPTION, MS_TITLE, MS_DESC,
+  MS_CHECK_WRAP, MS_CHECK_BADGE, MS_CHECK_SVG,
+} from "./runtime-classes.mjs";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -19,106 +41,504 @@ export function safeUrl(u) {
   return s; // bare relative filename (e.g. "intro.png")
 }
 
-const continueBtn = (label = "Continue") =>
-  `<button class="tp-btn tp-btn-default tp-btn-lg" data-next>${esc(label)}</button>`;
+// --- Icons (phosphor, inlined as the app renders them) ----------------------
+const ICON_ARROW_RIGHT = '<svg width="24" height="24" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224.49,136.49l-72,72a12,12,0,0,1-17-17L187,140H40a12,12,0,0,1,0-24H187L135.51,64.48a12,12,0,0,1,17-17l72,72A12,12,0,0,1,224.49,136.49Z"/></svg>';
+const ICON_PLUS_CIRCLE = '<svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm48-88a8,8,0,0,1-8,8H136v32a8,8,0,0,1-16,0V136H88a8,8,0,0,1,0-16h32V88a8,8,0,0,1,16,0v32h32A8,8,0,0,1,176,128Z"/></svg>';
+const ICON_CARET_DOWN = '<svg class="h-4 w-4 opacity-50 shrink-0" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"/></svg>';
+const ICON_CHECK_PHOSPHOR = '<svg class="w-5 h-5 overflow-hidden text-mocha tp-check-inline" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M232.49,80.49l-128,128a12,12,0,0,1-17,0l-56-56a12,12,0,1,1,17-17L96,183,215.51,63.51a12,12,0,0,1,17,17Z"/></svg>';
+const ICON_CHECK_BOLD_WHITE = '<svg class="w-4 h-4 text-white" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M232.49,80.49l-128,128a12,12,0,0,1-17,0l-56-56a12,12,0,1,1,17-17L96,183,215.51,63.51a12,12,0,0,1,17,17Z"/></svg>';
+const ICON_INFO = '<svg class="w-4 h-4" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,20A108,108,0,1,0,236,128,108.12,108.12,0,0,0,128,20Zm0,192a84,84,0,1,1,84-84A84.09,84.09,0,0,1,128,212Zm12-44a12,12,0,0,1-24,0V128a12,12,0,0,1,24,0Zm-28-56a16,16,0,1,1,16,16A16,16,0,0,1,112,112Z"/></svg>';
+// Stroke check used inside the success badge (mirrors CelebrationContent's inline svg)
+const ICON_CHECK_STROKE_SUCCESS = '<svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
 
-function renderSay(sub) {
-  if (sub.fieldType === "celebration") return renderCelebration(sub);
-  // banner / banner-multiple / default say
-  const extra = (sub.bannerTexts || []).map((t) => `<p class="tp-banner-line" data-tpl>${esc(t)}</p>`).join("");
-  return `<div class="tp-prose"><p data-tpl>${esc(sub.prompt)}</p>${extra}</div>${continueBtn()}`;
+// --- Buttons — mirrors src/components/ui/button.tsx cva ---------------------
+const BTN_BASE = "tp-btn inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap rounded-md text-sm font-medium transition-all duration-300 ease-in-out disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0";
+const BTN_VARIANT = {
+  default: "bg-primary text-primary-foreground hover:bg-primary/90",
+  secondary: "bg-medium text-mocha-foreground hover:bg-mediumPlus/80",
+  outline: "border-2 border-mocha bg-light hover:bg-mediumPlus hover:text-dark",
+  suggestion: "border-2 border-dashed border-mediumPlus rounded-lg hover:border-mocha hover:bg-mediumPlus transition-colors",
+};
+const BTN_SIZE = {
+  default: "h-10 px-4 py-2",
+  sm: "h-9 rounded-md px-3",
+  lg: "rounded-lg px-6 py-4 text-base font-semibold",
+  xl: "h-14 rounded-lg px-8 py-6 text-base font-semibold",
+};
+export function buttonClass({ variant = "default", size = "lg", align, extra = "" } = {}) {
+  const alignCls = align === "left" ? "justify-start" : align === "right" ? "justify-end" : "";
+  return [BTN_BASE, BTN_VARIANT[variant] || BTN_VARIANT.default, BTN_SIZE[size] || BTN_SIZE.lg, alignCls, extra]
+    .filter(Boolean).join(" ");
 }
 
-function renderCelebration(sub) {
-  const tasks = (sub.celebrationTasks || [])
-    .map((t) => `<li class="tp-task">${esc(t)}</li>`).join("");
-  const next = sub.celebrationNextStepsTitle
-    ? `<div class="tp-next"><h3>${esc(sub.celebrationNextStepsTitle)}</h3><p data-tpl>${esc(sub.celebrationNextStepsDescription || "")}</p></div>`
-    : "";
-  return `<div class="tp-celebration">
-    <div class="tp-confetti" data-confetti></div>
-    <p class="tp-prose" data-tpl>${esc(sub.prompt)}</p>
-    ${tasks ? `<ul class="tp-tasks">${tasks}</ul>` : ""}
-    ${next}
-  </div>${continueBtn(sub.celebrationButtonText || "Okay, got it!")}`;
+const continueBtn = (label = "Continue", { variant = "default", size = "lg", align, extra = "w-full", arrow = false } = {}) =>
+  `<button class="${buttonClass({ variant, size, align, extra })}" data-next>` +
+  (arrow ? `<span class="truncate text-left">${esc(label)}</span>${ICON_ARROW_RIGHT}` : esc(label)) +
+  `</button>`;
+
+// Sticky Continue row — mirrors the collect-type footer in SubStepRenderer (page mode).
+function stickyContinueRow(buttonsHtml) {
+  return `<div class="sticky bottom-0 left-0 right-0 z-10 bg-light py-4 ring-2 ring-light flex gap-3 max-w-md lg:max-w-lg mx-auto flex-wrap">${buttonsHtml}</div>`;
 }
 
-function optionList(sub) {
-  let opts = Array.isArray(sub.options) ? sub.options : [];
-  // dropdown-with-checkboxes carries its choices on dropdownOptions/checkboxOptions
-  // (a 1-10 scale, etc.) rather than `options`. Surface them as clickable options so
-  // the grid isn't empty and the answer is actually selectable.
-  if (opts.length === 0 && (sub.dropdownOptions || sub.checkboxOptions)) {
-    opts = [...(sub.dropdownOptions || []), ...(sub.checkboxOptions || [])];
+// --- Shared blocks (page-mode skeleton from SubStepRenderer.tsx) -------------
+
+function titleBlock(sub) {
+  if (!sub.showTitle || !sub.title) return "";
+  return `<div class="mb-6"><h3 class="tp-title text-xl font-semibold mb-4 max-w-md lg:max-w-lg mx-auto">${esc(sub.title)}</h3></div>`;
+}
+
+function imageBlock(sub) {
+  const url = safeUrl(sub.imageUrl);
+  if (!url) return "";
+  return `<div class="mb-6 max-h-[38dvh] w-full max-w-md lg:max-w-lg mx-auto aspect-square rounded-xl overflow-hidden place-content-center"><img src="${esc(url)}" alt="${esc(sub.title || "")}" class="max-w-full w-fit mx-auto h-full object-cover rounded-xl"></div>`;
+}
+
+// AIPrompt static-mode classes, per the clsx in SubStepRenderer.tsx.
+function promptClasses(sub) {
+  let c = "mb-8 text-center max-w-md lg:max-w-lg mx-auto text-pretty";
+  if (sub.type === "say") c += " font-base text-base text-left";
+  else c += " font-bold text-lg leading-snug";
+  // (The app's dream-job clsx has a precedence quirk; net effect is the
+  //  dream-job-requirements override — mirrored here.)
+  if (sub.fieldType === "dream-job-requirements") c += " text-left text-base! font-medium";
+  if (sub.fieldType === "image-multiselect") c += " text-left text-lg md:text-xl font-bold text-balance!";
+  if (sub.fieldType === "multi-select") c += " text-left font-normal text-base!";
+  return c;
+}
+
+function promptBlock(sub) {
+  if (sub.fieldType === "banner-multiple") {
+    const lines = (sub.bannerTexts || []).map((t, i) =>
+      `<div class="tp-banner-line text-base font-medium whitespace-pre-wrap transition-all duration-500 ease-in-out" style="animation-delay:${(i + 1) * 800}ms" data-tpl>${esc(t)}</div>`).join("");
+    return `<div class="mb-6 space-y-4 max-w-md lg:max-w-lg mx-auto"><div class="text-base font-medium whitespace-pre-wrap transition-all duration-500 ease-in-out" data-tpl>${esc(sub.prompt)}</div>${lines}</div>`;
   }
-  return opts.map((o, i) => {
-    const text = typeof o === "string" ? o : (o.text ?? "");
-    const desc = typeof o === "object" && o.description ? `<span class="tp-opt-desc">${esc(o.description)}</span>` : "";
-    const safeImg = typeof o === "object" ? safeUrl(o.imageUrl) : "";
-    const img = safeImg ? `<img class="tp-opt-img" src="${esc(safeImg)}" alt="">` : "";
-    return `<button class="tp-option" data-option data-value="${esc(text)}" data-index="${i}">${img}<span>${esc(text)}</span>${desc}</button>`;
-  }).join("");
+  if (!sub.prompt) return "";
+  return `<p class="whitespace-pre-wrap ${promptClasses(sub)}" data-tpl>${esc(sub.prompt)}</p>`;
 }
+
+function calloutBlock(sub) {
+  if (!sub.callout) return "";
+  return `<div class="max-w-md lg:max-w-lg mx-auto"><div class="mb-6 py-4 px-2 bg-mocha/20 rounded-lg"><div class="text-sm text-dark prose prose-sm max-w-none" data-tpl>${esc(sub.callout)}</div></div></div>`;
+}
+
+// --- Field inputs (src/components/fields/*) ----------------------------------
+
+function optionText(o, idx) {
+  return typeof o === "string" ? o : (o.text || o.label || `Option ${idx + 1}`);
+}
+
+// step-input text field — TextFieldInput.tsx (+ suggestion buttons)
+function textField(sub, slug) {
+  const suggestions = (sub.suggestions || []).length
+    ? `<div class="flex flex-wrap gap-2">${sub.suggestions.map((s) =>
+        `<button type="button" class="${buttonClass({ variant: "suggestion", size: "sm" })}" data-suggestion="${esc(s)}">${esc(s)}</button>`).join("")}</div>`
+    : "";
+  return `<input type="text" class="step-input w-full" data-input data-slug="${slug}" placeholder="Type your answer...">${suggestions}`;
+}
+
+// CurrencyFieldInput.tsx
+function currencyField(sub, slug) {
+  const label = sub.textFieldLabel
+    ? `<div class="flex items-center gap-2"><label class="block text-sm font-medium text-dark">${esc(sub.textFieldLabel)}</label></div>`
+    : "";
+  return `<div class="space-y-2">${label}<div class="relative"><div class="absolute left-4 top-1/2 -translate-y-1/2 text-mocha font-medium text-base pointer-events-none select-none">$</div><input type="text" inputmode="decimal" class="step-input w-full pl-8" data-input data-slug="${slug}" placeholder="0" aria-label="${esc(sub.textFieldLabel || "Dollar amount")}"></div></div>`;
+}
+
+// SelectFieldInput.tsx — the app uses a Radix dropdown; the static mirror is a
+// native <select> styled with the same selectTriggerVariants(xl) classes.
+// It carries data-input (captureCurrent reads .value) instead of an option grid.
+const SELECT_TRIGGER_XL = "flex w-full items-center justify-between rounded-lg border-2 border-mediumPlus bg-light px-3 text-left focus:outline-none focus:border-mocha h-14 py-3 text-base";
+function selectField(sub, slug) {
+  const opts = (sub.options || []).map((o, i) => {
+    const t = optionText(o, i);
+    return `<option value="${esc(t)}">${esc(t)}</option>`;
+  }).join("");
+  return `<div class="relative tp-select-wrap"><select class="tp-select appearance-none ${SELECT_TRIGGER_XL} text-dark" data-input data-slug="${slug}"><option value="" disabled selected>Select an option</option>${opts}</select><span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">${ICON_CARET_DOWN}</span></div>`;
+}
+
+// MultiselectFieldInput.tsx — checkbox rows. Selected state via aria-selected
+// (proto.css maps it to border-mediumPlus bg-mediumPlus/50 + visible check).
+function checkboxRow(value, idx, { name } = {}) {
+  return `<button type="button" class="tp-row group flex w-full items-center gap-2 cursor-pointer p-2.5 rounded-xl border-2 border-medium hover:border-mocha hover:bg-mediumPlus bg-transparent text-left text-dark text-base" data-option data-value="${esc(value)}" data-index="${idx}"${name ? ` data-name="${esc(name)}"` : ""}>${ICON_CHECK_PHOSPHOR}<span>${esc(value)}</span></button>`;
+}
+
+function multiCheckboxField(sub, slug) {
+  const rows = (sub.options || []).map((o, i) => checkboxRow(optionText(o, i), i)).join("");
+  return `<div class="tp-options space-y-3" data-slug="${slug}" data-multi="true">${rows}</div>`;
+}
+
+// RadioFieldInput.tsx
+function radioField(sub, slug) {
+  const rows = (sub.options || []).map((o, i) => {
+    const t = optionText(o, i);
+    return `<button type="button" class="tp-radio-row flex w-full items-center gap-3 cursor-pointer bg-transparent border-0 p-0 text-left" data-option data-value="${esc(t)}" data-index="${i}"><span class="tp-radio w-5 h-5 rounded-full border-2 border-gray-300 shrink-0"></span><span style="color:#003250">${esc(t)}</span></button>`;
+  }).join("");
+  return `<div class="tp-options space-y-3" data-slug="${slug}" data-multi="false">${rows}</div>`;
+}
+
+// MultiSelectInput.tsx — 2-col grid of selectable cards (+min/max status line).
+// Title – Description splitting mirrors splitDashText().
+function splitDashText(text) {
+  const m = String(text).match(/^(.+?) [–—-] (.+)$/);
+  return m ? { title: m[1], desc: m[2] } : { title: text, desc: undefined };
+}
+
+export function msOptionButton(option, idx) {
+  const value = optionText(option, idx);
+  let title, desc;
+  if (typeof option === "object" && option.description) {
+    title = value; desc = option.description;
+  } else {
+    ({ title, desc } = splitDashText(value));
+  }
+  const img = typeof option === "object" ? safeUrl(option.imageUrl) : "";
+  const imgHtml = img
+    ? `<div class="w-full h-20 mb-2 rounded-lg overflow-hidden bg-gray-100"><img src="${esc(img)}" alt="${esc(title)}" class="w-full h-full object-cover"></div>`
+    : "";
+  const descHtml = desc ? `<span class="${MS_DESC}">${esc(desc)}</span>` : "";
+  return `<button type="button" class="${MS_OPTION}" style="min-height:120px" data-option data-value="${esc(value)}" data-index="${idx}">${imgHtml}<div class="flex flex-col items-start w-full"><span class="${MS_TITLE}">${esc(title)}</span>${descHtml}</div><div class="${MS_CHECK_WRAP}"><div class="${MS_CHECK_BADGE}">${MS_CHECK_SVG}</div></div></button>`;
+}
+
+function multiSelectField(sub, slug) {
+  const min = sub.multiselectMinSelections;
+  const max = sub.multiselectMaxSelections;
+  let status = "";
+  if (min != null || max != null) {
+    const msg = min != null ? `Please select at least ${min} option${min !== 1 ? "s" : ""}`
+      : `Please select at most ${max} option${max !== 1 ? "s" : ""}`;
+    const range = min != null && max != null
+      ? `Selected: <span data-ms-count>0</span> / ${min === max ? max : `${min}-${max}`} required`
+      : min != null ? `Selected: <span data-ms-count>0</span> / Minimum: ${min}`
+      : `Selected: <span data-ms-count>0</span> / Maximum: ${max}`;
+    status = `<div class="pb-4 text-center ring-2 ring-light z-10 bg-light text-dark" data-ms-status data-min="${min ?? ""}" data-max="${max ?? ""}"><p class="text-sm font-medium" data-ms-msg>${msg}</p><p class="text-xs mt-1">${range}</p></div>`;
+  }
+  const source = sub.optionsSourceSlug ? ` data-options-source="${esc(sub.optionsSourceSlug)}"` : "";
+  const buttons = (sub.options || []).map((o, i) => msOptionButton(o, i)).join("");
+  return `<div class="space-y-4">${status}<div class="tp-options grid grid-cols-2 md:grid-cols-2 gap-3" data-slug="${slug}" data-multi="true"${source}>${buttons}</div></div>`;
+}
+
+// ImageMultiselectInput.tsx — SINGLE-select cards with image + success badge.
+// autoProgressOnSelect hides the Continue row; the player advances ~300ms after pick.
+function imageMultiselectField(sub, slug) {
+  const auto = sub.autoProgressOnSelect ? ` data-auto-progress="true"` : "";
+  const source = sub.optionsSourceSlug ? ` data-options-source="${esc(sub.optionsSourceSlug)}"` : "";
+  const cards = (sub.options || []).map((o, i) => {
+    const t = optionText(o, i);
+    const img = typeof o === "object" ? safeUrl(o.imageUrl) : "";
+    const imgHtml = img
+      ? `<div class="flex-1 shrink-0 w-auto h-48 bg-mediumPlus overflow-hidden aspect-square"><img src="${esc(img)}" alt="${esc(t)}" class="w-full h-full object-cover aspect-square"></div>`
+      : "";
+    return `<button type="button" class="tp-im cursor-pointer relative flex flex-row md:flex-row mx-auto w-full items-stretch p-0 rounded-xl overflow-hidden transition-all bg-medium" data-option data-value="${esc(t)}" data-index="${i}">${imgHtml}<div class="flex-1 px-4 md:px-6 py-4 text-left flex items-center"><span class="text-base font-medium leading-relaxed">${esc(t)}</span></div><div class="${MS_CHECK_WRAP.replace("top-2 right-2", "top-3 right-3")}"><div class="w-6 h-6 rounded-full bg-success flex items-center justify-center shadow-lg">${ICON_CHECK_BOLD_WHITE}</div></div></button>`;
+  }).join("");
+  return `<div class="tp-options space-y-4 my-6" data-slug="${slug}" data-multi="false"${auto}${source}>${cards}</div>`;
+}
+
+// WheelWithCheckboxesInput.tsx — ProfileWheel + rating + reason checkboxes.
+// The wheel is rendered as a STATIC svg (4 wedges, active category highlighted);
+// the interactive slider is approximated by a 0-10 pill scale (the player treats
+// the pills as options). Documented divergence — see SYNC.md.
+const WHEEL_CATEGORIES = ["Personal Network", "Professional Network", "Career Clarity", "Job Acquisition Confidence"];
+function wheelSvg(activeIndex, activeSecondary) {
+  const cx = 150, cy = 150, r = 110;
+  const wedge = (i, fill) => {
+    const a0 = (-90 + i * 90) * Math.PI / 180, a1 = (-90 + (i + 1) * 90) * Math.PI / 180;
+    const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
+    const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+    return `<path d="M${cx},${cy} L${x0.toFixed(1)},${y0.toFixed(1)} A${r},${r} 0 0 1 ${x1.toFixed(1)},${y1.toFixed(1)} Z" fill="${fill}" stroke="var(--color-light,#fff7f1)" stroke-width="3"/>`;
+  };
+  const wedges = WHEEL_CATEGORIES.map((_, i) =>
+    wedge(i, i === activeIndex ? activeSecondary : "var(--color-medium,#f2e8e0)")).join("");
+  const labelPos = [[225, 38], [225, 262], [75, 262], [75, 38]]; // NE SE SW NW quadrant labels
+  const labels = WHEEL_CATEGORIES.map((name, i) =>
+    `<div class="tp-wheel-label" style="left:${labelPos[i][0]}px;top:${labelPos[i][1]}px"><p class="text-xs font-medium" style="color:#003250">${esc(name)}</p></div>`).join("");
+  return `<div class="tp-wheel relative mx-auto" style="width:300px;height:300px">` +
+    `<svg width="300" height="300" style="position:absolute;top:0;left:0">${wedges}</svg>${labels}</div>`;
+}
+
+function wheelWithCheckboxesField(sub, slug) {
+  const isClarity = String(sub.title || "").toLowerCase().includes("clarity");
+  const isConfidence = String(sub.title || "").toLowerCase().includes("confidence");
+  const activeIndex = isClarity ? 2 : isConfidence ? 3 : 2;
+  const secondary = isClarity ? "#f5d6d0" : isConfidence ? "#f1d2d7" : "#f5d6d0";
+  const minLabel = isClarity ? "Very Unclear" : isConfidence ? "Very Low" : "0";
+  const maxLabel = isClarity ? "Crystal Clear" : isConfidence ? "Very High" : "10";
+
+  const scale = (sub.dropdownOptions || []).map((v, i) =>
+    `<button type="button" class="tp-scale-opt w-9 h-9 rounded-full border-2 border-medium bg-medium/25 hover:border-mocha flex items-center justify-center text-sm font-semibold text-dark cursor-pointer transition-all" data-option data-value="${esc(v)}" data-index="${i}">${esc(v)}</button>`).join("");
+  const scaleBlock = scale
+    ? `<div class="max-w-sm mx-auto"><div class="flex justify-between pointer-events-none mb-2"><span class="text-sm text-mocha">${esc(minLabel)}</span><span class="text-sm text-mocha">${esc(maxLabel)}</span></div><div class="flex flex-wrap justify-center gap-1.5">${scale}</div></div>`
+    : "";
+  const label = sub.textFieldLabel
+    ? `<div><p class="text-lg font-medium text-center">${esc(sub.textFieldLabel)}</p></div>`
+    : "";
+  const checks = (sub.checkboxOptions || []).map((o, i) =>
+    checkboxRow(String(o), (sub.dropdownOptions || []).length + i)).join("");
+  const checksBlock = checks
+    ? `<div class="space-y-2 grid grid-cols-1 gap-0.5 max-w-md mx-auto mb-8">${checks}</div>`
+    : "";
+  return `<div class="space-y-4 tp-options" data-slug="${slug}" data-multi="true">${wheelSvg(activeIndex, secondary)}${scaleBlock}${label}${checksBlock}</div>`;
+}
+
+// Education / Work entry forms — SubStepRenderer EducationInput/WorkInput.
+// The first field carries data-input (what the player captures); the rest of
+// the form is faithful chrome.
+function entryFormField(sub, slug, kind) {
+  const field = (labelText, placeholder, attrs = "") =>
+    `<div><label class="block text-sm font-medium mb-2">${esc(labelText)}</label><input type="text" class="w-full step-input" placeholder="${esc(placeholder)}"${attrs}></div>`;
+  if (kind === "education") {
+    return `<div class="space-y-6"><div class="space-y-4 max-w-md lg:max-w-lg mx-auto">` +
+      field("School Name", "e.g., MIT", ` data-input data-slug="${slug}"`) +
+      field("Major / Field of Study", "e.g., Computer Science") +
+      `<div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium mb-2">School Type</label><div class="relative tp-select-wrap"><select class="tp-select appearance-none w-full step-input"><option value="" disabled selected>Select an option</option><option>Undergraduate</option><option>Graduate</option><option>Certificate</option><option>Other</option></select><span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">${ICON_CARET_DOWN}</span></div></div>` +
+      field("Graduation Year", "2026") + `</div>` +
+      `<button type="button" class="${buttonClass({ variant: "secondary", size: "xl", extra: "w-full mb-4" })}">${ICON_PLUS_CIRCLE}Add Education</button></div></div>`;
+  }
+  return `<div class="space-y-6"><div class="space-y-4">` +
+    field("Company Name", "e.g., Google", ` data-input data-slug="${slug}"`) +
+    field("Role / Job Title", "e.g., Software Engineer") +
+    field("Years of Experience", "e.g., 2") +
+    `<button type="button" class="${buttonClass({ variant: "secondary", size: "xl", extra: "w-full mb-4" })}">${ICON_PLUS_CIRCLE}<span>Add Work Experience</span></button></div></div>`;
+}
+
+// DreamJobSelectInput.tsx — accordion (native <details>), select via the header
+// or the inner button (both carry data-option; selecting on header tap is a
+// documented divergence — Radix accordions need React).
+function dreamJobOptionFields(o, idx) {
+  if (typeof o === "string") return { text: o, short: undefined, detail: undefined };
+  const text = o.text || o.label || o.title || `Option ${idx + 1}`;
+  const short = o.shortDescription || (o.description && !o.detailedDescription && o.description.length < 100 ? o.description : undefined);
+  const detail = o.detailedDescription || (o.description && o.description.length >= 100 ? o.description : undefined);
+  return { text, short, detail };
+}
+
+function dreamJobSelectField(sub, slug) {
+  const items = (sub.options || []).map((o, i) => {
+    const { text, short, detail } = dreamJobOptionFields(o, i);
+    return `<details class="tp-acc w-full border-2 rounded-xl overflow-hidden transition-all border-medium bg-medium/25 hover:border-mocha">` +
+      `<summary class="w-full px-4 py-4 text-left flex items-start justify-between gap-3 bg-transparent hover:bg-medium/50 transition-colors text-dark font-medium cursor-pointer list-none" data-option data-value="${esc(text)}" data-index="${i}">` +
+      `<div class="flex-1 text-left min-w-0"><div class="flex items-center gap-2"><span class="font-semibold text-base">${esc(text)}</span><div class="tp-check w-5 h-5 rounded-full bg-dark flex items-center justify-center flex-shrink-0">${MS_CHECK_SVG}</div></div>` +
+      (short ? `<div class="text-sm text-dark/70 font-normal mt-1.5 leading-relaxed">${esc(short)}</div>` : "") +
+      `</div></summary>` +
+      `<div class="px-4 py-0"><div class="pt-2 pb-4 border-t border-medium/50">` +
+      (detail ? `<div class="prose prose-sm max-w-none text-dark"><p class="mb-3 last:mb-0 leading-relaxed">${esc(detail)}</p></div>`
+        : `<p class="text-sm text-dark/60 italic">No detailed description available.</p>`) +
+      `<button type="button" class="${buttonClass({ size: "lg", extra: "mt-4 w-full" })}" data-option data-value="${esc(text)}" data-index="${i}">Select This Job</button>` +
+      `</div></div></details>`;
+  }).join("");
+  return `<div class="tp-options space-y-3" data-slug="${slug}" data-multi="false">${items}</div>`;
+}
+
+// DreamJobRequirementsInput.tsx — read-only numbered accordion + info banner.
+function dreamJobRequirementsField(sub) {
+  const banner = `<div class="p-3 bg-dark/10 rounded-xl text-sm text-dark"><div class="flex items-start gap-2"><span class="text-dark mt-0.5">${ICON_INFO}</span><div><p class="font-semibold">Review Your Career Requirements</p><p class="text-dark mt-1">Expand each section to see the typical requirements for your dream job. This information will be saved when you continue.</p></div></div></div>`;
+  const items = (sub.options || []).map((o, i) => {
+    const raw = typeof o === "object" ? { ...o, text: o.title || o.text || o.label } : o;
+    const { text, short, detail } = dreamJobOptionFields(raw, i);
+    return `<details class="tp-acc w-full border-2 rounded-xl overflow-hidden transition-all border-medium bg-medium/25 hover:border-mocha">` +
+      `<summary class="w-full px-4 py-4 text-left flex items-start justify-between gap-3 bg-transparent hover:bg-medium/50 transition-colors text-dark font-medium cursor-pointer list-none">` +
+      `<div class="flex-1 text-left min-w-0"><div class="flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-dark/10 flex items-center justify-center text-xs font-semibold text-dark/70 flex-shrink-0">${i + 1}</span><span class="font-semibold text-base">${esc(text)}</span></div>` +
+      (short ? `<div class="text-sm text-dark/70 font-normal mt-1.5 ml-8 leading-relaxed">${esc(short)}</div>` : "") +
+      `</div></summary>` +
+      `<div class="px-4 py-0"><div class="pt-2 pb-4 border-t border-medium/50 ml-8">` +
+      (detail ? `<div class="prose prose-sm max-w-none text-dark"><p class="mb-3 last:mb-0 leading-relaxed">${esc(detail)}</p></div>`
+        : `<p class="text-sm text-dark/60 italic">No detailed information available.</p>`) +
+      `</div></div></details>`;
+  }).join("");
+  return `<div class="space-y-4">${banner}<div class="space-y-3">${items}</div></div>`;
+}
+
+// --- Collect assembly --------------------------------------------------------
 
 function renderCollect(sub) {
   const slug = esc(sub.slug || "");
-  const prompt = `<div class="tp-prose"><p data-tpl>${esc(sub.prompt)}</p></div>`;
+  let input;
   switch (sub.fieldType) {
-    case "select":
-    case "multi-select":
-    case "image-multiselect":
-    case "dropdown-with-checkboxes": {
-      // The narrowing pattern: a substep with no inline options inherits its choices
-      // from the answer chosen for optionsSourceSlug. Mark the grid so the player can
-      // populate it at runtime from state.answers (those options aren't known at build).
-      const source = sub.optionsSourceSlug ? ` data-options-source="${esc(sub.optionsSourceSlug)}"` : "";
-      return `${prompt}<div class="tp-options tp-options-grid" data-slug="${slug}" data-multi="${sub.fieldType !== "select"}"${source}>${optionList(sub)}</div>${continueBtn()}`;
-    }
-    case "currency":
-      return `${prompt}<div class="tp-input-wrap"><span class="tp-currency">$</span><input class="tp-input tp-input-currency" type="number" data-input data-slug="${slug}" placeholder="0"></div>${continueBtn()}`;
-    default: // text, textarea, work, education, dream-job-*, unknown -> generic text capture
-      return `${prompt}<input class="tp-input" type="text" data-input data-slug="${slug}" placeholder="Type your answer…">${continueBtn()}`;
+    case "currency": input = currencyField(sub, slug); break;
+    case "select": input = selectField(sub, slug); break;
+    case "multi-checkbox": input = multiCheckboxField(sub, slug); break;
+    case "multi-select": input = multiSelectField(sub, slug); break;
+    case "radio": input = radioField(sub, slug); break;
+    case "image-multiselect": input = imageMultiselectField(sub, slug); break;
+    case "dropdown-with-checkboxes": input = wheelWithCheckboxesField(sub, slug); break;
+    case "education": input = entryFormField(sub, slug, "education"); break;
+    case "work": input = entryFormField(sub, slug, "work"); break;
+    case "dream-job-select": input = dreamJobSelectField(sub, slug); break;
+    case "dream-job-requirements": input = dreamJobRequirementsField(sub); break;
+    default: input = textField(sub, slug); // text / textarea / unknown
   }
+
+  // Continue/Skip footer — hidden when image-multiselect auto-progresses (app parity).
+  const autoProgress = sub.fieldType === "image-multiselect" && (sub.autoProgressOnSelect ?? false);
+  let footer = "";
+  if (!autoProgress) {
+    const isEntryForm = sub.fieldType === "education" || sub.fieldType === "work";
+    const cont = continueBtn("Continue", { align: "left", extra: isEntryForm ? "flex-1" : "w-full" });
+    const skip = isEntryForm
+      ? `<button class="${buttonClass({ variant: "secondary", size: "lg", extra: "flex-1" })}" data-next>Skip (edit in profile)</button>`
+      : "";
+    footer = stickyContinueRow(cont + skip);
+  }
+  return `<div class="space-y-4 max-w-md lg:max-w-lg mx-auto">${input}${footer}</div>`;
 }
+
+// --- Celebration (CelebrationContent.tsx) ------------------------------------
+
+const CONFETTI_COLORS = ["#f16b68", "#ffb949", "#8eaf86", "#407faf", "#df1983", "#c1b7af"];
+function confettiHtml() {
+  const bits = Array.from({ length: 14 }, (_, i) =>
+    `<span class="tp-confetti-bit" style="--c:${CONFETTI_COLORS[i % CONFETTI_COLORS.length]};--dx:${(i % 7 - 3) * 34}px;--dr:${(i * 67) % 360}deg;animation-delay:${i * 45}ms"></span>`).join("");
+  return `<div class="tp-confetti w-full flex justify-center" data-confetti aria-hidden="true">${bits}</div>`;
+}
+
+function renderCelebration(sub) {
+  const isSection = !!sub.celebrationCompletedSection;
+  const desc = sub.callout || sub.prompt || "";
+  const head = isSection
+    ? `<div class="text-center mb-2"><p class="text-sm text-pretty text-dark">Congrats! You have completed:</p></div>` +
+      `<div class="text-center mb-6"><h2 class="text-2xl font-bold" style="color:#003250" data-tpl>${esc(sub.celebrationCompletedSection)}</h2></div>`
+    : (desc ? `<div class="text-center mb-4"><p class="text-sm text-pretty text-dark" data-tpl>${esc(desc)}</p></div>` : "");
+
+  const confetti = (sub.celebrationShowConfetti ?? true) ? confettiHtml() : "";
+
+  const heroUrl = safeUrl(sub.imageUrl);
+  let hero = "";
+  if (heroUrl) {
+    const isVideo = /\.(mp4|webm|ogg)$/i.test(heroUrl) || heroUrl.includes("/video/");
+    const media = isVideo
+      ? `<video src="${esc(heroUrl)}" autoplay loop muted playsinline class="w-full h-full object-cover"></video>`
+      : `<img src="${esc(heroUrl)}" alt="Celebration" class="absolute inset-0 w-full h-full object-cover">`;
+    hero = `<div class="relative w-full mb-4"><div class="relative w-full aspect-4/3 rounded-lg bg-medium overflow-hidden">${media}<div class="absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md">${ICON_CHECK_STROKE_SUCCESS}</div></div></div>`;
+  }
+
+  let card = "";
+  if (!isSection) {
+    const tasks = (sub.celebrationTasks || []).map((t) =>
+      `<li class="tp-task flex items-start gap-2"><span class="text-base leading-tight">✅</span><span class="text-sm text-dark leading-tight" data-tpl>${esc(t)}</span></li>`).join("");
+    const title = sub.celebrationNextStepsTitle ? `<h3 class="text-lg font-semibold text-dark mb-1">${esc(sub.celebrationNextStepsTitle)}</h3>` : "";
+    const sub2 = sub.celebrationNextStepsDescription ? `<p class="text-sm text-dark mb-3" data-tpl>${esc(sub.celebrationNextStepsDescription)}</p>` : "";
+    if (title || sub2 || tasks) card = `<div class="w-full rounded-xl p-4">${title}${sub2}${tasks ? `<ul class="tp-tasks space-y-2">${tasks}</ul>` : ""}</div>`;
+  }
+
+  const nextUp = isSection && sub.celebrationNextSection
+    ? `<div class="text-center mt-4 mb-6"><p class="text-sm italic" style="color:#003250">Next Up: ${esc(sub.celebrationNextSection)}</p></div>`
+    : "";
+
+  const label = isSection ? "Continue" : (sub.celebrationButtonText || "Okay, got it!");
+  return `<div class="tp-celebration flex-1 flex flex-col h-full bg-light">` +
+    `<div class="flex-1 overflow-y-auto px-4 pt-6 pb-4"><div class="flex flex-col items-center max-w-md lg:max-w-lg mx-auto">${head}${confetti}${hero}${card}${nextUp}</div></div>` +
+    `<div class="px-4 pb-6 pt-2"><div class="flex flex-col gap-3 w-full max-w-md lg:max-w-lg mx-auto">${continueBtn(label, { extra: "w-full flex items-center justify-between", arrow: true })}</div></div></div>`;
+}
+
+// --- Generate (SubStepRenderer generate branch) -------------------------------
 
 function renderGenerate(sub, ctx) {
   const sample = ctx.samples && ctx.samples[sub.slug];
+  const title = sub.showTitle === true && sub.title
+    ? `<h3 class="tp-title text-xl font-semibold mb-4 max-w-md lg:max-w-lg mx-auto">${esc(sub.title)}</h3>` : "";
+  const prompt = sub.prompt
+    ? `<div class="text-dark prose max-w-none"><p data-tpl>${esc(sub.prompt)}</p></div>` : "";
+  const pill = `<div class="flex justify-center mb-0"><div class="capitalize px-5 py-2 rounded-full text-sm font-medium bg-mocha text-light shadow-sm">${esc(sub.title || "Career Statement")}</div></div>`;
   const body = sample
-    ? `<div class="tp-ai-output">${esc(sample)}</div>`
-    : `<div class="tp-ai-placeholder">AI would write this from your answers. (No sample baked in.)</div>`;
-  return `<div class="tp-prose"><p data-tpl>${esc(sub.prompt)}</p></div>${body}${continueBtn()}`;
+    ? `<div class="tp-ai-output prose prose-sm max-w-none pt-2 whitespace-pre-wrap [&>p]:mb-4 [&>p]:last:mb-0 [&>p]:leading-relaxed">${esc(sample)}</div>`
+    : `<div class="tp-ai-placeholder prose prose-sm max-w-none pt-2 whitespace-pre-wrap">AI would write this from your answers. (No sample baked in.)</div>`;
+  const card = `<div class="mt-4"><div class="relative">${pill}<div class="rounded-2xl px-6 pt-8 pb-6 -mt-5 bg-medium">${body}</div></div></div>`;
+  return `<div class="tp-generate h-full relative flex flex-col bg-light text-dark">` +
+    `<div class="flex-1 overflow-y-auto p-4 pb-6">${title}${prompt}${card}${calloutBlock(sub)}</div>` +
+    `<div class="px-4 mb-6">${continueBtn("Continue", { extra: "w-full flex items-center justify-between", arrow: true })}</div></div>`;
 }
+
+// --- Chat (ChatInterface.tsx) --------------------------------------------------
 
 function renderChat(sub, ctx) {
   const slug = esc(sub.slug || "");
   const sample = (ctx.samples && ctx.samples[sub.slug]) || "Tell me what's on your mind.";
-  return `<div class="tp-chat" data-chat data-slug="${slug}">
-    <div class="tp-chat-log" data-chat-log>
-      <div class="tp-bubble tp-bubble-ai" data-tpl>${esc(sub.prompt)}</div>
-      <div class="tp-bubble tp-bubble-ai">${esc(sample)}</div>
-    </div>
-  </div>
-  <div class="tp-chat-input-row">
-    <input class="tp-input" data-chat-input placeholder="Reply…">
-    <button class="tp-btn tp-btn-default" data-chat-send>Send</button>
-  </div>
-  ${continueBtn("Continue")}`;
+  const bubble = (content) =>
+    `<div class="${CHAT_ROW_AI}"><div class="${CHAT_BUBBLE_AI}"><div class="prose max-w-none **:text-inherit" data-tpl>${esc(content)}</div></div></div>`;
+  return `<div class="tp-chat h-full flex flex-col bg-light text-dark relative" data-chat data-slug="${slug}">` +
+    `<div class="tp-chat-log flex-1 overflow-y-auto space-y-4 pt-4" data-chat-log>${bubble(sub.prompt)}${bubble(sample)}</div>` +
+    `<div class="shrink-0 py-4 sticky bottom-0 bg-light">` +
+    `<div class="flex gap-2 items-end"><textarea rows="1" class="step-input w-full resize-none overflow-y-auto" data-chat-input placeholder="Type your response and hit Enter..."></textarea>` +
+    `<button class="${buttonClass({ size: "default", extra: "h-14 w-14 shrink-0" })}" data-chat-send aria-label="Send">${ICON_ARROW_RIGHT}</button></div>` +
+    `<div class="flex justify-end mt-3"><button class="${buttonClass({ size: "default", extra: "w-fit" })}" data-next>Finish Chat &amp; Continue</button></div>` +
+    `</div></div>`;
 }
+
+// --- Assessment results (AssessmentResultsField + AssessmentResults) ----------
 
 function renderAssessmentResults(sub) {
-  // The player computes the real personality scores on render (compute-on-render,
-  // same pattern as generate) from window.__ASSESSMENT__ + the user's answers, then
-  // fills [data-assessment-results]. The inner text is a graceful fallback only.
-  return `<div class="tp-prose"><p data-tpl>${esc(sub.prompt)}</p></div><div class="tp-results" data-assessment-results>Computing your results…</div>${continueBtn()}`;
+  // The player computes the real personality scores on render from
+  // window.__ASSESSMENT__ + the user's answers, then builds the stacked
+  // carousel inside [data-assessment-results]. Inner text is a fallback only.
+  // Honor an authored prompt on the substep (data-tpl so {tokens} interpolate).
+  const promptHtml = sub && sub.prompt ? `<p class="text-center text-mocha mb-3" data-tpl>${esc(sub.prompt)}</p>` : "";
+  return `<div class="tp-results flex flex-col h-full max-w-md lg:max-w-lg mx-auto">` +
+    `<div class="flex-1"><h4 class="text-lg text-center font-bold">Personality Assessment Results</h4>${promptHtml}` +
+    `<div data-assessment-results>Computing your results…</div></div>` +
+    `<div class="flex gap-3 px-4 pb-4">${continueBtn("Continue", { extra: "w-full" })}</div></div>`;
 }
 
+// --- Personality progress tracker (PersonalityProgressTracker.tsx fallback) ---
+
+// Pure: compute per-substep section/question progress for one step's substeps.
+// Mirrors the component's fallback: questions = collect/image-multiselect, needs
+// >= 40 of them; sections bounded by say/celebration substeps.
+export function computeAssessmentProgress(substeps) {
+  const out = {};
+  const questions = (substeps || []).filter((s) => s.fieldType === "image-multiselect" && s.type === "collect");
+  if (questions.length < 40) return out;
+
+  const boundaries = [];
+  let current = [];
+  let start = 0;
+  let num = 1;
+  for (const s of substeps) {
+    if (questions.some((q) => q.id === s.id)) current.push(s);
+    if (s.fieldType === "celebration" && s.type === "say" && current.length > 0) {
+      boundaries.push({ start, end: start + current.length, number: num, count: current.length });
+      start += current.length; num++; current = [];
+    }
+  }
+  if (current.length > 0) boundaries.push({ start, end: start + current.length, number: num, count: current.length });
+
+  const total = boundaries.length;
+  questions.forEach((q, qi) => {
+    const sec = boundaries.find((b) => qi >= b.start && qi < b.end) || boundaries[0];
+    out[q.id] = { section: sec.number, totalSections: total, question: qi - sec.start + 1, questionsInSection: sec.count };
+  });
+  return out;
+}
+
+function progressTrackerBlock(sub, ctx) {
+  const p = ctx.progress && ctx.progress[sub.id];
+  if (!p) return "";
+  return `<div class="fixed top-30 left-0 right-0 w-full max-w-md lg:max-w-lg mx-auto px-6 sm:px-0 z-10"><p class="border-b border-medium pb-1 text-mocha text-sm mb-1">Personality Assessment</p></div>` +
+    `<div class="fixed bottom-6 left-0 right-0 w-full max-w-md lg:max-w-lg mx-auto px-6 sm:px-0 justify-between text-xs font-medium text-mocha z-10"><p class="border-t border-medium pb-1 flex items-end justify-between"><span class="mt-1">Section ${p.section} of ${p.totalSections}</span><span class="mt-1">Question ${p.question} of ${p.questionsInSection}</span></p></div>`;
+}
+
+// --- Top-level ----------------------------------------------------------------
+
 export function renderSubstep(sub, ctx = {}) {
-  const title = sub.showTitle && sub.title ? `<h2 class="tp-title">${esc(sub.title)}</h2>` : "";
-  let inner;
-  if (sub.fieldType === "assessment-results") inner = renderAssessmentResults(sub);
-  else if (sub.type === "chat") inner = renderChat(sub, ctx);
-  else if (sub.type === "generate") inner = renderGenerate(sub, ctx);
-  else if (sub.type === "say") inner = renderSay(sub);
-  else inner = renderCollect(sub);
-  return `<section class="tp-screen" data-substep="${esc(sub.id)}">${title}${inner}</section>`;
+  const open = `<section class="tp-screen px-4 py-8 sm:px-8 sm:py-12 bg-light relative" id="substep-content" data-substep="${esc(sub.id)}">`;
+  const close = `</section>`;
+
+  // Full-screen substep types (the app early-returns these before page layout)
+  if (sub.fieldType === "assessment-results") return open + renderAssessmentResults(sub) + close;
+  if (sub.type === "chat") return open + renderChat(sub, ctx) + close;
+  if (sub.type === "generate") return open + renderGenerate(sub, ctx) + close;
+  if (sub.fieldType === "celebration") return open + renderCelebration(sub) + close;
+
+  const tracker = sub.fieldType === "image-multiselect" && sub.type === "collect"
+    ? progressTrackerBlock(sub, ctx) : "";
+
+  const inner = `<div id="substep-content-inner">` +
+    titleBlock(sub) + imageBlock(sub) + promptBlock(sub) + calloutBlock(sub) +
+    (sub.type === "collect" ? renderCollect(sub) : "") +
+    `</div>`;
+
+  const sayFooter = (sub.type === "say" || sub.fieldType === "banner-multiple")
+    ? `<div class="flex justify-start max-w-md lg:max-w-lg mx-auto">${continueBtn("Continue", { extra: "w-full" })}</div>`
+    : "";
+
+  return open + tracker + inner + sayFooter + close;
 }

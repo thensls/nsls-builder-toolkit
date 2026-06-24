@@ -1,0 +1,117 @@
+/* Hand-authored prototype glue. design-kit/app.css carries the REAL compiled
+ * Tailwind theme + utilities (see scripts/build-design-kit.mjs); this file only
+ * adds what a static, React-free player needs:
+ *   - selected-state styling driven by [aria-selected] (the player toggles the
+ *     attribute; the app toggles className via React)
+ *   - the streaming caret, confetti, carousel stack positions, banner stagger
+ *   - tiny chrome bits with no app counterpart (watermark, restart)
+ * Palette constants mirror ignite-next globals.css. */
+
+:root {
+  --tp-light: #fff7f1;
+  --tp-dark: #003250;
+  --tp-medium: #f2e8e0;
+  --tp-mediumPlus: #e9ddd3;
+  --tp-mocha: #c1b7af;
+  --tp-success: #8eaf86;
+  --tp-primary: #f16b68;
+}
+
+/* --- screen transition (approximates framer-motion fade/slide) ------------ */
+.tp-screen { animation: tp-fade .25s ease; }
+@keyframes tp-fade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* --- selection states (player toggles aria-selected) ----------------------- */
+/* check badges hidden until selected */
+[data-option] .tp-check, .tp-acc .tp-check { display: none; }
+[data-option][aria-selected="true"] .tp-check,
+.tp-acc summary[aria-selected="true"] .tp-check { display: flex; }
+
+/* multi-select grid card (MultiSelectInput selected: border-dark bg-light ring-2 ring-mediumPlus) */
+.tp-ms[aria-selected="true"] {
+  border-color: var(--tp-dark);
+  background-color: var(--tp-light);
+  box-shadow: 0 0 0 2px var(--tp-mediumPlus);
+}
+
+/* image card (ImageMultiselectInput selected: bg-mediumPlus ring-4 ring-mediumPlus ring-offset-2) */
+.tp-im[aria-selected="true"] {
+  background-color: var(--tp-mediumPlus);
+  box-shadow: 0 0 0 2px var(--tp-light), 0 0 0 6px var(--tp-mediumPlus);
+}
+
+/* checkbox row (MultiselectFieldInput selected: border-mediumPlus bg-mediumPlus/50 + check slides in) */
+.tp-row .tp-check-inline { max-width: 0; transition: max-width .3s ease-in-out; }
+.tp-row[aria-selected="true"] { border-color: var(--tp-mediumPlus); background-color: color-mix(in srgb, var(--tp-mediumPlus) 50%, transparent); }
+.tp-row[aria-selected="true"] .tp-check-inline { max-width: 1.25rem; }
+
+/* radio row (RadioFieldInput) */
+.tp-radio { position: relative; }
+.tp-radio-row[aria-selected="true"] .tp-radio { border-color: var(--tp-dark); }
+.tp-radio-row[aria-selected="true"] .tp-radio::after {
+  content: ""; position: absolute; inset: 3px; border-radius: 9999px; background: var(--tp-dark);
+}
+
+/* rating scale pill (wheel screens) */
+.tp-scale-opt[aria-selected="true"] {
+  border-color: var(--tp-dark); background: var(--tp-dark); color: var(--tp-light);
+}
+
+/* dream-job accordion selected (DreamJobSelectInput: border-dark bg-light ring-2 ring-mediumPlus) */
+.tp-acc:has(summary[aria-selected="true"]),
+.tp-acc:has([data-option][aria-selected="true"]) {
+  border-color: var(--tp-dark); background-color: var(--tp-light);
+  box-shadow: 0 0 0 2px var(--tp-mediumPlus);
+}
+.tp-acc summary::-webkit-details-marker { display: none; }
+
+/* native select mirror of the Radix trigger */
+.tp-select:invalid, .tp-select option[value=""] { color: var(--tp-mocha); }
+
+/* --- multi-select min/max status (player updates the count live) ----------- */
+[data-ms-status].is-valid { background: color-mix(in srgb, var(--tp-success) 10%, transparent); color: var(--tp-success); }
+
+/* --- AI placeholder vs live content ----------------------------------------- */
+/* The "no sample baked in" placeholder reads muted/italic; once the player
+ * streams REAL content into the same node it must read as normal body copy. */
+.tp-ai-placeholder { color: color-mix(in srgb, var(--tp-dark) 50%, transparent); font-style: italic; }
+.tp-ai-placeholder.is-writing, .tp-ai-placeholder.is-live { color: inherit; font-style: normal; }
+
+/* --- streaming caret -------------------------------------------------------- */
+.tp-ai-output.is-writing::after, .tp-ai-placeholder.is-writing::after, .tp-bubble.is-writing::after {
+  content: "▋"; animation: tp-blink 1s steps(2) infinite;
+}
+@keyframes tp-blink { 50% { opacity: 0; } }
+
+/* --- banner-multiple stagger (app reveals lines every 800ms) ---------------- */
+.tp-banner-line { opacity: 0; animation: tp-rise .5s ease-in-out both; }
+@keyframes tp-rise { from { opacity: 0; transform: translateY(-1rem); } to { opacity: 1; transform: none; } }
+
+/* --- confetti (approximates react-confetti-explosion) ----------------------- */
+.tp-confetti { position: relative; height: 0; overflow: visible; }
+.tp-confetti-bit {
+  position: absolute; top: 0; left: 50%; width: 8px; height: 12px;
+  background: var(--c, #f16b68); border-radius: 2px; opacity: 0;
+  animation: tp-confetti-burst 1.6s ease-out both;
+}
+@keyframes tp-confetti-burst {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0); }
+  100% { opacity: 0; transform: translate(var(--dx, 0), 220px) rotate(var(--dr, 180deg)); }
+}
+
+/* --- assessment results carousel stack (StackedCarousel transforms) --------- */
+.tp-pos-active { z-index: 30; transform: none; opacity: 1; }
+.tp-pos-next { z-index: 20; transform: translate(10%, 5%) rotate(5deg) scale(.9); opacity: .8; }
+.tp-pos-prev { z-index: 20; transform: translate(-10%, 5%) rotate(-5deg) scale(.9); opacity: .8; }
+.tp-pos-hidden { z-index: 0; transform: scale(.5); opacity: 0; pointer-events: none; }
+
+/* --- profile wheel labels ---------------------------------------------------- */
+.tp-wheel-label { position: absolute; width: 100px; text-align: center; transform: translate(-50%, -50%); }
+
+/* --- watermark ---------------------------------------------------------------- */
+.tp-watermark {
+  position: fixed; bottom: 8px; right: 8px; z-index: 9999;
+  font: 11px/1 "Hanken Grotesk", system-ui, sans-serif;
+  padding: 4px 8px; border-radius: 4px; background: rgba(0,0,0,.06);
+  color: var(--tp-mocha); pointer-events: none;
+}
