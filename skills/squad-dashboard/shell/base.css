@@ -1,0 +1,81 @@
+/* squad-dashboard — shared shell stylesheet.
+   Brand themes via :root. Default = NSLS (navy/teal/gold). For Society, swap the palette.
+   Claude inlines this (or links it) when building a squad's index.html. */
+:root{
+  --navy:#003250; --teal:#0a8a8a; --gold:#e0a500; --ink:#1c2b36;
+  --bg:#f4f6f8; --card:#ffffff; --line:#e3e8ec;
+  --good:#1a9d6b; --bad:#d24b46; --warn:#e0a500; --muted:#6b7c89;
+}
+/* Society theme: set <body class="society"> */
+body.society{--navy:#1a1a2e; --teal:#c8a951; --gold:#c8a951; --bg:#fbf7ef; --card:#fffdf8;}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding:0 20px}
+
+/* hero + LOP legend */
+header.hero{background:var(--navy);color:#fff;padding:34px 0 28px}
+header.hero h1{font-size:30px;font-weight:700;letter-spacing:-.4px}
+header.hero .sub{opacity:.8;margin-top:6px;font-size:14px}
+.lop-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.lop-chip{font-size:12px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);padding:4px 10px;border-radius:20px}
+.lop-chip b{color:var(--gold)}
+
+/* section heads + tags */
+section.block{margin:30px 0}
+.block-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+.block-head h2{font-size:19px;color:var(--navy);font-weight:700}
+.tag{font-size:11px;font-weight:600;color:var(--teal);background:#e6f4f4;padding:3px 9px;border-radius:6px}
+
+/* classification badge */
+.cls{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px}
+.cls.good{background:#e3f5ec;color:#1a7d54}
+.cls.warn{background:#fcf3dc;color:#8a6500}
+.cls.bad{background:#fbe9e8;color:#b23a36}
+.cls.neutral{background:#eceff1;color:#5b6b75}
+
+/* metric-card */
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px}
+.kpi .toprow{display:flex;justify-content:space-between;align-items:center}
+.kpi .label{font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.kpi .big{font-size:38px;font-weight:800;color:var(--navy);margin:6px 0 2px}
+.kpi .period{font-size:12px;color:var(--muted)}
+.kpi .deltas{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.delta{font-size:13px;font-weight:600;padding:4px 10px;border-radius:8px;background:#f0f3f5}
+.delta .k{color:var(--muted);font-weight:600}
+.up{color:var(--good)} .down{color:var(--bad)}
+.progress{margin-top:14px;height:8px;background:#eef1f4;border-radius:6px;overflow:hidden}
+.progress > i{display:block;height:100%;background:var(--teal)}
+
+/* metric-group */
+.mgroup{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.stat .v{font-size:22px;font-weight:800;color:var(--navy)}
+.stat .l{font-size:12px;color:var(--muted);margin-top:2px}
+.note{font-size:12px;color:var(--muted);margin-top:10px;font-style:italic}
+
+/* item-list */
+.items{display:flex;flex-direction:column;gap:10px}
+.item{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px}
+.item .top{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.item .name{font-weight:700;color:var(--navy)}
+.item .date{font-size:12px;color:var(--muted)}
+.item .metrics{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:13px}
+.item .metrics b{color:var(--ink)} .item .metrics span{color:var(--muted)}
+.item .desc{font-size:13px;color:#3c4b56;margin-top:8px}
+
+/* status-board */
+.board{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ws{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start}
+.ws .name{font-weight:700;color:var(--navy);font-size:14px}
+.ws .n{font-size:12px;color:var(--muted);margin-top:3px}
+
+/* narrative */
+.narr{background:#fffdf5;border:1px solid #f0e3bd;border-left:4px solid var(--gold);border-radius:10px;padding:18px 20px;font-size:15px;color:#4a4326}
+
+/* footer / provenance */
+footer{margin:40px 0 30px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+footer .prov{margin-top:6px}
+
+@media(max-width:720px){.kpis,.board{grid-template-columns:1fr}.mgroup{grid-template-columns:1fr 1fr}}

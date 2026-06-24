@@ -1,0 +1,49 @@
+{
+  "_preset": "Shop — revenue + email + campaigns + operational workstreams. Hard metrics + operational status. Real, tested 2026-06-09.",
+  "_anchor_note": "The A1 `range` values below are illustrative. In practice, anchor each pull to a ROW LABEL or a NAMED RANGE (see SKILL.md → Data infrastructure), so an inserted row can't silently shift a number. Re-confirm anchors on first run.",
+  "squad": "shop",
+  "title": "NSLS Shop — SLT Update",
+  "brand": "nsls",
+  "netlify": { "site_id": null, "url": null },
+  "lops": [
+    { "id": "L3-1", "label": "Grow Shop revenue toward the $1.3M annual goal" },
+    { "id": "L3-2", "label": "Build the right audience through email + channels" },
+    { "id": "L3-3", "label": "Operational excellence: variants, checkout, fulfillment, SKUs" }
+  ],
+  "sources": [
+    {
+      "id": "shop_tracker",
+      "type": "google_sheet",
+      "url": "https://docs.google.com/spreadsheets/d/1AmdCIFp1CEbZBQCz-MGpp0vFXbA2miPFlEl1KCVoIEc/edit",
+      "pulls": [
+        { "metric": "revenue_ytd",      "range": "Weekly Squad Reporting!B9"  },
+        { "metric": "revenue_ytd_goal",  "range": "Weekly Squad Reporting!B10" },
+        { "metric": "revenue_ytd_pct",   "range": "Weekly Squad Reporting!B11" },
+        { "metric": "revenue_ytd_yoy25", "range": "Weekly Squad Reporting!B12" },
+        { "metric": "revenue_mtd",       "range": "Weekly Squad Reporting!C17" },
+        { "metric": "revenue_mtd_goal",  "range": "Weekly Squad Reporting!C20" },
+        { "metric": "campaigns",         "range": "Campaign Performance!A5:L11" }
+      ]
+    },
+    {
+      "id": "hex_email",
+      "type": "hex",
+      "url": "https://app.hex.tech/019847ea-73c2-7002-9a3a-cff99736a83d/app/NSLS-Shop-Reporting-Dashboard-033C9Q5MY8UZUhnZiPDpjq/latest",
+      "note": "Email→revenue dashboard. Hex MCP blocked → query via Slack bridge, OR prefer the sheet which already logs the same email stats. Source precedence: sheet first, Hex as cross-check.",
+      "pulls": []
+    }
+  ],
+  "classification_schemes": {
+    "goal":     { "auto": true,  "exceeded": "good", "met": "good", "ahead": "good", "on-track": "neutral", "behind": "bad", "missed": "bad" },
+    "campaign": { "auto": false, "overperformed": "good", "in-line": "neutral", "underperformed": "bad" },
+    "workstream": { "auto": false, "on-track": "good", "at-risk": "warn", "blocked": "bad", "in progress": "neutral" }
+  },
+  "sections": [
+    { "type": "metric-card",  "id": "rev_ytd",     "title": "Revenue — YTD",  "lop": "L3-1", "compare": ["goal", "yoy"], "classification": "goal" },
+    { "type": "metric-card",  "id": "rev_mtd",     "title": "Revenue — MTD",  "lop": "L3-1", "compare": ["goal", "yoy"], "classification": "goal" },
+    { "type": "metric-group", "id": "email",       "title": "Email Performance", "lop": "L3-2" },
+    { "type": "item-list",    "id": "campaigns",   "title": "Campaigns",      "lop": "L3-2", "classification": "campaign" },
+    { "type": "status-board", "id": "workstreams", "title": "Operational Workstreams", "lop": "L3-3", "classification": "workstream", "human": true },
+    { "type": "narrative",    "id": "the_read",    "title": "The Read",       "human": true, "classification": "goal" }
+  ]
+}
