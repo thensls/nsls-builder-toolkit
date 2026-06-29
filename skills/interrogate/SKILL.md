@@ -86,6 +86,37 @@ For each user segment:
 
 ---
 
+## Step 2.5: Reuse check — search the open-source building-blocks catalog
+
+Before synthesizing, check whether existing open-source projects could do part of the job — so
+the plan is "what to build vs. what to adopt," not "build everything from scratch." This is
+especially relevant for Society / Ignite Next (repo `ignite-next`) product work.
+
+**Only run this if the builder maintains the personal OSS catalog** at
+`$OBSIDIAN_VAULT_PATH/40-learning/oss-catalog.md` (created by the `/learn` skill). If the file
+doesn't exist, skip this step silently — it's a personal-toolkit add-on, not a requirement.
+
+1. From the Step 1–2 answers, derive 2–4 capability queries — the building blocks this project
+   would need (e.g. `auth`, `push notifications`, `in-app chat`, `agent framework`, `gamification`,
+   `content cms`, `analytics`).
+2. For each, run the `/learn` skill's **Search OSS Catalog** mode (`/learn oss <query>`) against
+   `oss-catalog.md`. (Operationally: grep/scan that file's `###` project blocks across name,
+   what-it-does, relevance, and tags.)
+3. Present any strong matches as *options to consider*, not prescriptions:
+   ```
+   Possible building blocks already in your catalog:
+   - <Capability> → <Project> — <one line>. [repo](<url>) (status: <status>)
+   Want to lean on any of these, or build it yourself? (This shapes scope + dependencies.)
+   ```
+4. Fold the builder's choices into the **Dependencies** and **Risks & Trade-offs** branches
+   (an adopted dependency is a dependency *and* a risk). If nothing matches, say so briefly and
+   move on — don't force a recommendation.
+
+This step reads the catalog only; it never writes to it. New projects are added to the catalog
+through `/learn inbox`, not here.
+
+---
+
 ## Step 3: Synthesize and Confirm
 
 After the interrogation, present a summary back to the user:
