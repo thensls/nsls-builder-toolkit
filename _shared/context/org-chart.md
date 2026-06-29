@@ -1,5 +1,5 @@
 # NSLS Org Chart
-_Last synced: 2026-06-22_
+_Last synced: 2026-06-29_
 
 ## Business Intelligence
 
@@ -18,6 +18,7 @@ _Last synced: 2026-06-22_
 | Arianne Stinson | Chapter Success Manager (Silver) | James Corriveau | astinson@nsls.org | U0393VBME00 |
 | Ashleigh Smith | Vice President, Client Services | Gary Tuerack | asmith@nsls.org | UEWBC2R08 |
 | Brielle Jones | Chapter Success Manager (Silver) | James Corriveau | bjones@nsls.org | U091ZV57M29 |
+| Chris Higbee | Senior Director of Sales Enablement | Ashleigh Smith | chigbee@nsls.org | U0A955W2BS4 |
 | Dejeahn Brown | Chapter Success Manager (Silver) | James Corriveau | dbrown@nsls.org | U098M2E1M5X |
 | Dillon Cook | Chapter Success Manager (Silver) | James Corriveau | dcook@nsls.org | U0A2A9Q95JN |
 | Gregg Gudelinis | Chapter Success Manager (Gold) | James Corriveau | ggudelinis@nsls.org | U034ZAPBHAT |
@@ -117,7 +118,6 @@ _Last synced: 2026-06-22_
 | Franklin Ortega | Member Experience Specialist | Alejandro Gabriel | fortega@nsls.org | U0A7BUY5EG6 |
 | Jorge Alberto | Trainer | Edgar Segura | jalberto@nsls.org | U0A7AHB67UM |
 | Kara Klimuszko | Member Experience Team Lead | Kimberly Campbell | kklimuszko@nsls.org | U01B6B0T831 |
-| Karla Mena | Member Experience Specialist | Alejandro Gabriel | kfernandez@nsls.org | U0A77JRUDS7 |
 | Kimberly Campbell | Director of Member Experience | Ashleigh Smith | kcampbell@nsls.org | U021ZK0NW07 |
 | Maikel Berbi | Membership Experience Specialist | Kimberly Campbell | mberbi@nsls.org | U0B1A9YPKHV |
 | Melissa Baggett | Membership Experience Specialist | Kara Klimuszko | mbaggett@nsls.org | U081X01AQA2 |
@@ -148,7 +148,6 @@ _Last synced: 2026-06-22_
 
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
-| Chris Higbee |  | Kevin Prentiss | chigbee@nsls.org | U0A955W2BS4 |
 | Davo Wood | AI Support | Kevin Prentiss | davowood@nsls.org | U0B2B0L7858 |
 | Jana Amsellem | AI Product Architect | Kevin Prentiss | rakasha@nsls.org | U070WE56UU9 |
 | Lauren Prentiss | Product Manager | Kevin Prentiss | lprentiss@nsls.org | U08RN7X685A |
@@ -164,12 +163,17 @@ _Last synced: 2026-06-22_
 | Karina Gonzalez | Senior Regional Director of Program Development | Hannah Stoneburner | ksolis@nsls.org | U03L6UNMEKZ |
 | Stephanie Repaci | Sr. Reg. Director Program Dev | Hannah Stoneburner | srepaci@nsls.org | U01RNQ6LLG6 |
 
+## RevOps
+
+| Name | Title | Manager | Email | Slack |
+|------|-------|---------|-------|-------|
+| Royce Rowan | Director, Revenue Enablement | Adam Stone | rrowan@nsls.org | U01D1JT0MQE |
+
 ## Sales
 
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
 | Devin Lasker | Vice President of Strategic Partnerships | Adam Stone | dlasker@nsls.org | UA1JFKPUP |
-| Royce Rowan | Director, Revenue Enablement | Ashleigh Smith | rrowan@nsls.org | U01D1JT0MQE |
 
 ## Student Program Development
 

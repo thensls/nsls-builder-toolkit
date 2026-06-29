@@ -67,6 +67,15 @@
     "manages": []
   },
   {
+    "name": "Chris Higbee",
+    "title": "Senior Director of Sales Enablement",
+    "manager": "Ashleigh Smith",
+    "email": "chigbee@nsls.org",
+    "slack": "U0A955W2BS4",
+    "department": "Client Services",
+    "manages": []
+  },
+  {
     "name": "Linda Condon",
     "title": "Senior Strategic Chapter Manager",
     "manager": "Marissa Curry",
@@ -182,9 +191,9 @@
     "slack": "UEWBC2R08",
     "department": "Client Services",
     "manages": [
+      "Chris Higbee",
       "Kimberly Campbell",
       "Melvin Rosal",
-      "Royce Rowan",
       "Timothy Duffy"
     ]
   },
@@ -230,15 +239,6 @@
     "manager": "Kevin Prentiss",
     "email": "tlagaly@nsls.org",
     "slack": "U09CYKGQZB2",
-    "department": "Product",
-    "manages": []
-  },
-  {
-    "name": "Chris Higbee",
-    "title": "",
-    "manager": "Kevin Prentiss",
-    "email": "chigbee@nsls.org",
-    "slack": "U0A955W2BS4",
     "department": "Product",
     "manages": []
   },
@@ -339,7 +339,8 @@
       "Jordyn Tannenbaum",
       "Joseph Cupka",
       "Julia Botz",
-      "Michael O'Brien"
+      "Michael O'Brien",
+      "Royce Rowan"
     ]
   },
   {
@@ -629,15 +630,6 @@
     ]
   },
   {
-    "name": "Karla Mena",
-    "title": "Member Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "kfernandez@nsls.org",
-    "slack": "U0A77JRUDS7",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
     "name": "Samantha Montas",
     "title": "Membership Experience Specialist",
     "manager": "Alejandro Gabriel",
@@ -708,7 +700,6 @@
       "Alex Arias",
       "ELIANA VALLEJO",
       "Franklin Ortega",
-      "Karla Mena",
       "Mia Vasquez",
       "Samantha Montas"
     ]
@@ -892,7 +883,6 @@
       "Angelica Evans",
       "Brandon Evans",
       "Chelsea Byers",
-      "Chris Higbee",
       "David Adams",
       "Davo Wood",
       "Jana Amsellem",
@@ -1191,10 +1181,10 @@
   {
     "name": "Royce Rowan",
     "title": "Director, Revenue Enablement",
-    "manager": "Ashleigh Smith",
+    "manager": "Adam Stone",
     "email": "rrowan@nsls.org",
     "slack": "U01D1JT0MQE",
-    "department": "Sales",
+    "department": "RevOps",
     "manages": [
       "Isaia Cirillo"
     ]
