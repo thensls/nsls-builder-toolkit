@@ -150,9 +150,28 @@ install_plugin() {
   fi
 }
 
+# Every renamed their marketplace from "every-marketplace" to
+# "compound-engineering-plugin" (and bumped the plugin to 3.x). Builders who
+# installed before the rename are pinned to the stale "every-marketplace"
+# registration: install_plugin's name-only grep sees "compound-engineering"
+# already in the list and never migrates them. This detects the old
+# registration and clears it so the install below pulls the current plugin.
+migrate_compound_marketplace() {
+  if "$CLAUDE_BIN" plugin marketplace list 2>/dev/null | grep -q "every-marketplace"; then
+    echo "  Migrating compound-engineering off the renamed 'every-marketplace'..."
+    # Disable at every scope so the uninstall isn't blocked by a shared
+    # project-scope enablement, then remove plugin + stale marketplace.
+    "$CLAUDE_BIN" plugin disable compound-engineering@every-marketplace --scope local 2>/dev/null || true
+    "$CLAUDE_BIN" plugin uninstall compound-engineering@every-marketplace 2>/dev/null || true
+    "$CLAUDE_BIN" plugin marketplace remove every-marketplace 2>/dev/null || true
+  fi
+}
+
 if [ -n "$CLAUDE_BIN" ]; then
   install_plugin "superpowers" "superpowers" ""
-  install_plugin "compound-engineering" "compound-engineering@compound-engineering-plugin" \
+  migrate_compound_marketplace
+  install_plugin "compound-engineering@compound-engineering-plugin" \
+    "compound-engineering@compound-engineering-plugin" \
     "https://github.com/EveryInc/compound-engineering-plugin.git"
 else
   echo ""
