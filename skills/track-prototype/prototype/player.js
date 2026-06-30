@@ -108,6 +108,16 @@ function maybeRunAssessmentResults() {
   const results = scoreAssessment({ answerIds, weights: data.weights, types: data.types });
   const cards = results.cards || buildCards(results, data.types || {});
   renderAssessmentCarousel(out, cards);
+
+  // Expose the computed profile as a {slug} value so downstream substeps (e.g. the
+  // coach chat's {your-personality-profile}) interpolate the real summary instead of
+  // rendering the literal token. Mirrors the app, where the profile is available to
+  // the coach. Only write if not already a real (non-empty) answer.
+  if (sub.slug && !state.answers[sub.slug]) {
+    state.answers[sub.slug] = cards
+      .map((c) => `${c.title}: ${c.result}`)
+      .join("; ");
+  }
 }
 
 // Stacked carousel — mirrors StackedCarousel.tsx (active/next/prev card stack,
