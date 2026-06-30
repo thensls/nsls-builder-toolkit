@@ -191,7 +191,7 @@ This phase catches the class of bug where the skill reads fine but Claude talks 
 
 Run this by saying: "pressure test this skill" or "review this skill for quality."
 
-**Phase 3: Spec audit and polish — `compound-engineering:create-agent-skills`**
+**Phase 3: Spec audit and polish — `skill-creator` (official Anthropic plugin)**
 Final pass against the official Claude Code skill spec:
 - Frontmatter compliance (name format, description length, field correctness)
 - Standard markdown headings, not XML
@@ -203,9 +203,9 @@ Final pass against the official Claude Code skill spec:
 
 Run this by saying: "audit this skill" or "check this skill against the spec."
 
-### Optional Phase 4: Quantitative Eval — `skill-creator` plugin
+### Optional Phase 4: Quantitative Eval — `skill-creator` eval/benchmark mode
 
-For skills that will be triggered across many sessions and many users (broadly-released toolkit skills, not personal/time-boxed skills), run the skill-creator eval loop:
+For skills that will be triggered across many sessions and many users (broadly-released toolkit skills, not personal/time-boxed skills), run the same `skill-creator` plugin's eval loop:
 - Subagents run the skill against real prompts
 - Quantitative benchmarks with variance analysis
 - Optimizes the frontmatter description for reliable auto-triggering
@@ -220,8 +220,8 @@ Run this by saying: "evaluate my skill" or "run evals on this skill."
 |------|--------------|---------------------------|
 | `/skill-creation` (this) | Shape — is the pattern complete? | Missing wound/gotcha list, no diagnostic loop, generic instead of domain-micro |
 | `superpowers:writing-skills` | Body hardness — does it survive rationalization? | Description summarizes workflow (Claude shortcuts), no rationalization table, no red flags |
-| `compound-engineering:create-agent-skills` | Spec compliance — does it conform to the Claude Code skill format? | XML tags, bad frontmatter, >500 lines, missing Quick Start, second-person drift |
-| `skill-creator` (optional) | Triggering reliability — does it auto-invoke for the right prompts? | Description matches too broadly (invokes for wrong topics) or too narrowly (misses obvious triggers) |
+| `skill-creator` (spec audit) | Spec compliance — does it conform to the Claude Code skill format? | XML tags, bad frontmatter, >500 lines, missing Quick Start, second-person drift |
+| `skill-creator` (eval mode, optional) | Triggering reliability — does it auto-invoke for the right prompts? | Description matches too broadly (invokes for wrong topics) or too narrowly (misses obvious triggers) |
 
 Skipping Phase 1 produces a skill that works but lacks depth. Skipping Phase 2 produces a skill that works in the happy path but breaks under pressure. Skipping Phase 3 produces a skill that violates the spec and may not load correctly. Skipping Phase 4 (when needed) produces a skill that's well-built but doesn't trigger reliably.
 

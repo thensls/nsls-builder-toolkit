@@ -203,7 +203,7 @@ WORKFLOW:
 
 OPTIONAL POWER-UPS:
   Compound Engineering adds advanced planning/review workflows
-  (/ce:brainstorm, /ce:plan, /ce:review). Ask me how to install it.
+  (/ce:brainstorm, /ce:plan, /ce:code-review). Ask me how to install it.
 
 ORG CONTEXT:
   Your toolkit includes current org chart, LOPs, and company strategy.
