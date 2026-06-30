@@ -112,8 +112,10 @@ function maybeRunAssessmentResults() {
   // Expose the computed profile as a {slug} value so downstream substeps (e.g. the
   // coach chat's {your-personality-profile}) interpolate the real summary instead of
   // rendering the literal token. Mirrors the app, where the profile is available to
-  // the coach. Only write if not already a real (non-empty) answer.
-  if (sub.slug && !state.answers[sub.slug]) {
+  // the coach. Always overwrite: this slug is only ever the computed profile (never a
+  // user-typed answer), so a revisit after changing earlier answers must refresh it to
+  // match the recomputed carousel — not keep a stale summary.
+  if (sub.slug) {
     state.answers[sub.slug] = cards
       .map((c) => `${c.title}: ${c.result}`)
       .join("; ");
