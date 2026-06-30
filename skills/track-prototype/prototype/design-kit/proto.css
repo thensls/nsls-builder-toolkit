@@ -7,15 +7,26 @@
  *   - tiny chrome bits with no app counterpart (watermark, restart)
  * Palette constants mirror ignite-next globals.css. */
 
+/* Palette mirrors ignite-next globals.css @theme (current rebrand: warm cream
+ * + charcoal, NOT the old navy/coral). Keep in sync with design-kit/app.css. */
 :root {
-  --tp-light: #fff7f1;
-  --tp-dark: #003250;
-  --tp-medium: #f2e8e0;
-  --tp-mediumPlus: #e9ddd3;
-  --tp-mocha: #c1b7af;
+  --tp-light: #faf7ef;
+  --tp-dark: #1e1414;
+  --tp-medium: #eee9dd;
+  --tp-mediumPlus: #ded8cc;
+  --tp-mocha: #c8beaa;
+  --tp-grey: #6b6460;
   --tp-success: #8eaf86;
-  --tp-primary: #f16b68;
+  --tp-green: #9bd778;
+  --tp-pink: #f3aee6;
+  --tp-primary: #1e1414;
 }
+
+/* Body copy is Inter in the app (injected by Next via --font-inter, which is
+ * absent in this static build). Provide a faithful fallback so body text reads
+ * as a clean grotesque rather than the browser serif default. The app's display
+ * font (HW Cigars) is real and loaded via app.css's @font-face for font-cigars. */
+:root { --font-inter: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
 
 /* --- screen transition (approximates framer-motion fade/slide) ------------ */
 .tp-screen { animation: tp-fade .25s ease; }
@@ -27,11 +38,10 @@
 [data-option][aria-selected="true"] .tp-check,
 .tp-acc summary[aria-selected="true"] .tp-check { display: flex; }
 
-/* multi-select grid card (MultiSelectInput selected: border-dark bg-light ring-2 ring-mediumPlus) */
+/* multi-select grid card (MultiSelectInput selected: border-dark bg-light) */
 .tp-ms[aria-selected="true"] {
   border-color: var(--tp-dark);
   background-color: var(--tp-light);
-  box-shadow: 0 0 0 2px var(--tp-mediumPlus);
 }
 
 /* image card (ImageMultiselectInput selected: bg-mediumPlus ring-4 ring-mediumPlus ring-offset-2) */
@@ -65,8 +75,9 @@
 }
 .tp-acc summary::-webkit-details-marker { display: none; }
 
-/* native select mirror of the Radix trigger */
-.tp-select:invalid, .tp-select option[value=""] { color: var(--tp-mocha); }
+/* native select mirror of the Radix trigger (placeholder = grey, per data-[placeholder]:text-grey) */
+.tp-select:invalid, .tp-select option[value=""] { color: var(--tp-grey); }
+.tp-select { color: var(--tp-dark); }
 
 /* --- multi-select min/max status (player updates the count live) ----------- */
 [data-ms-status].is-valid { background: color-mix(in srgb, var(--tp-success) 10%, transparent); color: var(--tp-success); }
@@ -111,7 +122,7 @@
 /* --- watermark ---------------------------------------------------------------- */
 .tp-watermark {
   position: fixed; bottom: 8px; right: 8px; z-index: 9999;
-  font: 11px/1 "Hanken Grotesk", system-ui, sans-serif;
+  font: 11px/1 system-ui, sans-serif;
   padding: 4px 8px; border-radius: 4px; background: rgba(0,0,0,.06);
   color: var(--tp-mocha); pointer-events: none;
 }

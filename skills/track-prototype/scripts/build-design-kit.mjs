@@ -34,13 +34,13 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const PROTO = join(HERE, "..", "prototype");
 const KIT = join(PROTO, "design-kit");
 
-// Font files declared by the app's @font-face blocks (globals.css).
+// Font files declared by the app's @font-face blocks (globals.css). The current
+// rebrand ships HW Cigars (display/headings); body copy is Inter, injected by
+// Next at runtime, so the static prototype falls back to system sans for body.
 const FONT_FILES = [
-  "HankenGrotesk-VariableFont_wght.ttf",
-  "HermeneusOne-Regular.ttf",
-  "Rand-Regular.otf",
-  "Rand-Medium.otf",
-  "Rand-Bold.otf",
+  "HWCigars-Regular.woff2",
+  "HWCigars-SemiBold.woff2",
+  "HWCigars-Bold.woff2",
 ];
 
 // --- Kitchen-sink corpus: exercise every markup path the renderer can emit ---
