@@ -251,7 +251,14 @@ function wire() {
     const input = root.querySelector("[data-input]");
     if (input) { input.value = btn.dataset.suggestion; input.focus(); }
   }));
-  root.querySelector("[data-input]")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); advance(); } });
+  // Enter submits a single-line <input>; in the multi-line text <textarea> a bare
+  // Enter must insert a newline (Shift+Enter still does), so only Cmd/Ctrl+Enter advances.
+  root.querySelector("[data-input]")?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const isTextarea = e.target.tagName === "TEXTAREA";
+    if (isTextarea && !(e.metaKey || e.ctrlKey)) return; // newline in textarea
+    e.preventDefault(); advance();
+  });
 }
 
 // ---------------------------------------------------------------------------

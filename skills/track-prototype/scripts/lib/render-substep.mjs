@@ -391,11 +391,15 @@ function renderCollect(sub) {
   let footer = "";
   if (!autoProgress) {
     const isEntryForm = sub.fieldType === "education" || sub.fieldType === "work";
-    const cont = continueBtn("Continue", { align: "left", extra: isEntryForm ? "flex-1" : "w-full" });
-    const skip = isEntryForm
-      ? `<button class="${buttonClass({ variant: "secondary", size: "lg", extra: "flex-1" })}" data-next>Skip (edit in profile)</button>`
-      : "";
-    footer = stickyContinueRow(cont + skip);
+    if (isEntryForm) {
+      // Continue + Skip share one row (the entry-form footer). The sticky wrapper
+      // is a stacked column, so nest the pair in their own flex row to keep parity.
+      const cont = continueBtn("Continue", { align: "left", extra: "flex-1" });
+      const skip = `<button class="${buttonClass({ variant: "secondary", size: "lg", extra: "flex-1" })}" data-next>Skip (edit in profile)</button>`;
+      footer = stickyContinueRow(`<div class="flex gap-3">${cont}${skip}</div>`);
+    } else {
+      footer = stickyContinueRow(continueBtn("Continue"));
+    }
   }
   return `<div class="space-y-4 max-w-md lg:max-w-lg mx-auto">${input}${footer}</div>`;
 }
