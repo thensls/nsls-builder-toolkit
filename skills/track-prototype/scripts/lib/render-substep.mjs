@@ -45,65 +45,81 @@ export function safeUrl(u) {
 const ICON_ARROW_RIGHT = '<svg width="24" height="24" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224.49,136.49l-72,72a12,12,0,0,1-17-17L187,140H40a12,12,0,0,1,0-24H187L135.51,64.48a12,12,0,0,1,17-17l72,72A12,12,0,0,1,224.49,136.49Z"/></svg>';
 const ICON_PLUS_CIRCLE = '<svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm48-88a8,8,0,0,1-8,8H136v32a8,8,0,0,1-16,0V136H88a8,8,0,0,1,0-16h32V88a8,8,0,0,1,16,0v32h32A8,8,0,0,1,176,128Z"/></svg>';
 const ICON_CARET_DOWN = '<svg class="h-4 w-4 opacity-50 shrink-0" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"/></svg>';
-const ICON_CHECK_PHOSPHOR = '<svg class="w-5 h-5 overflow-hidden text-mocha tp-check-inline" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M232.49,80.49l-128,128a12,12,0,0,1-17,0l-56-56a12,12,0,1,1,17-17L96,183,215.51,63.51a12,12,0,0,1,17,17Z"/></svg>';
+const ICON_CHECK_PHOSPHOR = '<svg class="w-5 h-5 overflow-hidden text-grey tp-check-inline" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M232.49,80.49l-128,128a12,12,0,0,1-17,0l-56-56a12,12,0,1,1,17-17L96,183,215.51,63.51a12,12,0,0,1,17,17Z"/></svg>';
 const ICON_CHECK_BOLD_WHITE = '<svg class="w-4 h-4 text-white" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M232.49,80.49l-128,128a12,12,0,0,1-17,0l-56-56a12,12,0,1,1,17-17L96,183,215.51,63.51a12,12,0,0,1,17,17Z"/></svg>';
 const ICON_INFO = '<svg class="w-4 h-4" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,20A108,108,0,1,0,236,128,108.12,108.12,0,0,0,128,20Zm0,192a84,84,0,1,1,84-84A84.09,84.09,0,0,1,128,212Zm12-44a12,12,0,0,1-24,0V128a12,12,0,0,1,24,0Zm-28-56a16,16,0,1,1,16,16A16,16,0,0,1,112,112Z"/></svg>';
-// Stroke check used inside the success badge (mirrors CelebrationContent's inline svg)
-const ICON_CHECK_STROKE_SUCCESS = '<svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+// Send affordance inside the chat input (phosphor ArrowCircleUp).
+const ICON_ARROW_CIRCLE_UP = '<svg class="h-6 w-6" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm45.66,109.66a8,8,0,0,1-11.32,0L136,107.31V168a8,8,0,0,1-16,0V107.31L93.66,133.66a8,8,0,0,1-11.32-11.32l40-40a8,8,0,0,1,11.32,0l40,40A8,8,0,0,1,173.66,133.66Z"/></svg>';
+// Bold phosphor check used inside the celebration success badge (CelebrationContent's CheckIcon weight="bold").
+const ICON_CHECK_CELEBRATION = '<svg class="w-7 h-7 text-white" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M232.49,80.49l-128,128a12,12,0,0,1-17,0l-56-56a12,12,0,1,1,17-17L96,183,215.51,63.51a12,12,0,0,1,17,17Z"/></svg>';
 
 // --- Buttons — mirrors src/components/ui/button.tsx cva ---------------------
-const BTN_BASE = "tp-btn inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap rounded-md text-sm font-medium transition-all duration-300 ease-in-out disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0";
+const BTN_BASE = "tp-btn inline-flex items-center gap-2 cursor-pointer whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-300 ease-in-out disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-6 [&_svg]:shrink-0";
 const BTN_VARIANT = {
-  default: "bg-primary text-primary-foreground hover:bg-primary/90",
-  secondary: "bg-medium text-mocha-foreground hover:bg-mediumPlus/80",
+  default: "bg-primary text-primary-foreground hover:bg-primary/90 font-cigars font-bold",
+  secondary: "bg-medium text-dark hover:bg-mediumPlus/80",
+  light: "bg-light text-dark hover:bg-mediumPlus/80",
   outline: "border-2 border-mocha bg-light hover:bg-mediumPlus hover:text-dark",
-  suggestion: "border-2 border-dashed border-mediumPlus rounded-lg hover:border-mocha hover:bg-mediumPlus transition-colors",
+  dashed: "border-2 border-dashed border-mocha bg-medium hover:bg-mediumPlus hover:text-dark",
+  suggestion: "border border-dashed border-mocha text-dark text-sm font-[400] rounded-full! px-4! hover:border-mocha hover:bg-mediumPlus transition-colors disabled:opacity-40 disabled:pointer-events-none",
 };
 const BTN_SIZE = {
   default: "h-10 px-4 py-2",
   sm: "h-9 rounded-md px-3",
-  lg: "rounded-lg px-6 py-4 text-base font-semibold",
-  xl: "h-14 rounded-lg px-8 py-6 text-base font-semibold",
+  lg: "rounded-lg px-6 py-4 text-base font-bold",
+  xl: "h-14 rounded-lg px-8 py-6 text-lg font-bold",
 };
-export function buttonClass({ variant = "default", size = "lg", align, extra = "" } = {}) {
-  const alignCls = align === "left" ? "justify-start" : align === "right" ? "justify-end" : "";
+// Default align mirrors the cva's center default; callers pass align:"left"/"between" etc.
+export function buttonClass({ variant = "default", size = "lg", align = "center", extra = "" } = {}) {
+  const alignCls = align === "left" ? "justify-start" : align === "right" ? "justify-end"
+    : align === "between" ? "justify-between" : "justify-center";
   return [BTN_BASE, BTN_VARIANT[variant] || BTN_VARIANT.default, BTN_SIZE[size] || BTN_SIZE.lg, alignCls, extra]
     .filter(Boolean).join(" ");
 }
 
-const continueBtn = (label = "Continue", { variant = "default", size = "lg", align, extra = "w-full", arrow = false } = {}) =>
+// The real app's primary Continue is always a between-aligned button with a
+// truncating label + bold ArrowRight (SubStepContinueButton / generate / celebration).
+const continueBtn = (label = "Continue", { variant = "default", size = "lg", align = "between", extra = "w-full flex items-center justify-between", arrow = true } = {}) =>
   `<button class="${buttonClass({ variant, size, align, extra })}" data-next>` +
   (arrow ? `<span class="truncate text-left">${esc(label)}</span>${ICON_ARROW_RIGHT}` : esc(label)) +
   `</button>`;
 
-// Sticky Continue row — mirrors the collect-type footer in SubStepRenderer (page mode).
+// Sticky Continue row — mirrors the collect-type footer in SubStepRenderer (page mode):
+// sticky bottom, light bg, gradient fade above, centered max-width column.
 function stickyContinueRow(buttonsHtml) {
-  return `<div class="sticky bottom-0 left-0 right-0 z-10 bg-light py-4 ring-2 ring-light flex gap-3 max-w-md lg:max-w-lg mx-auto flex-wrap">${buttonsHtml}</div>`;
+  return `<div class="sticky bottom-0 left-0 right-0 z-10 shrink-0 bg-light pt-2 pb-6 space-y-3 max-w-md lg:max-w-lg mx-auto w-full">${buttonsHtml}</div>`;
 }
 
 // --- Shared blocks (page-mode skeleton from SubStepRenderer.tsx) -------------
 
 function titleBlock(sub) {
   if (!sub.showTitle || !sub.title) return "";
-  return `<div class="mb-6"><h3 class="tp-title text-xl font-semibold mb-4 max-w-md lg:max-w-lg mx-auto">${esc(sub.title)}</h3></div>`;
+  return `<div class="mb-6"><h3 class="tp-title text-xl font-cigars font-bold mb-4 max-w-md lg:max-w-lg text-pretty">${esc(sub.title)}</h3></div>`;
 }
 
 function imageBlock(sub) {
+  // The app only renders the image block for non-say substeps.
+  if (sub.type === "say") return "";
   const url = safeUrl(sub.imageUrl);
   if (!url) return "";
-  return `<div class="mb-6 max-h-[38dvh] w-full max-w-md lg:max-w-lg mx-auto aspect-square rounded-xl overflow-hidden place-content-center"><img src="${esc(url)}" alt="${esc(sub.title || "")}" class="max-w-full w-fit mx-auto h-full object-cover rounded-xl"></div>`;
+  return `<div class="society-max-h mb-6 w-full max-w-md lg:max-w-lg mx-auto aspect-square rounded-xl overflow-hidden place-content-center"><img src="${esc(url)}" alt="${esc(sub.title || "")}" class="max-w-full w-full mx-auto h-full object-cover rounded-xl"></div>`;
 }
 
 // AIPrompt static-mode classes, per the clsx in SubStepRenderer.tsx.
 function promptClasses(sub) {
-  let c = "mb-8 text-center max-w-md lg:max-w-lg mx-auto text-pretty";
+  const hasVisual = sub.type !== "say" && !!safeUrl(sub.imageUrl);
+  let c = "mb-4 sm:mb-8 max-w-md lg:max-w-lg mx-auto text-pretty";
   if (sub.type === "say") c += " font-base text-base text-left";
-  else c += " font-bold text-lg leading-snug";
+  else {
+    c += " text-lg leading-snug";
+    if (!hasVisual) c += " text-left";
+  }
   // (The app's dream-job clsx has a precedence quirk; net effect is the
   //  dream-job-requirements override — mirrored here.)
   if (sub.fieldType === "dream-job-requirements") c += " text-left text-base! font-medium";
-  if (sub.fieldType === "image-multiselect") c += " text-left text-lg md:text-xl font-bold text-balance!";
+  if (sub.fieldType === "image-multiselect") c += " text-left text-lg md:text-xl font-bold";
   if (sub.fieldType === "multi-select") c += " text-left font-normal text-base!";
+  if (sub.fieldType === "dropdown-with-checkboxes" || sub.fieldType === "wheel") c += " text-center!";
   return c;
 }
 
@@ -111,7 +127,7 @@ function promptBlock(sub) {
   if (sub.fieldType === "banner-multiple") {
     const lines = (sub.bannerTexts || []).map((t, i) =>
       `<div class="tp-banner-line text-base font-medium whitespace-pre-wrap transition-all duration-500 ease-in-out" style="animation-delay:${(i + 1) * 800}ms" data-tpl>${esc(t)}</div>`).join("");
-    return `<div class="mb-6 space-y-4 max-w-md lg:max-w-lg mx-auto"><div class="text-base font-medium whitespace-pre-wrap transition-all duration-500 ease-in-out" data-tpl>${esc(sub.prompt)}</div>${lines}</div>`;
+    return `<div class="mb-6 space-y-2 sm:space-y-4 max-w-md lg:max-w-lg mx-auto"><div class="text-base font-medium whitespace-pre-wrap transition-all duration-500 ease-in-out" data-tpl>${esc(sub.prompt)}</div>${lines}</div>`;
   }
   if (!sub.prompt) return "";
   return `<p class="whitespace-pre-wrap ${promptClasses(sub)}" data-tpl>${esc(sub.prompt)}</p>`;
@@ -119,7 +135,7 @@ function promptBlock(sub) {
 
 function calloutBlock(sub) {
   if (!sub.callout) return "";
-  return `<div class="max-w-md lg:max-w-lg mx-auto"><div class="mb-6 py-4 px-2 bg-mocha/20 rounded-lg"><div class="text-sm text-dark prose prose-sm max-w-none" data-tpl>${esc(sub.callout)}</div></div></div>`;
+  return `<div class="max-w-md lg:max-w-lg mx-auto"><div class="mb-6 p-4 bg-mocha/20 rounded-lg"><div class="text-sm text-dark prose prose-sm max-w-none" data-tpl>${esc(sub.callout)}</div></div></div>`;
 }
 
 // --- Field inputs (src/components/fields/*) ----------------------------------
@@ -128,13 +144,14 @@ function optionText(o, idx) {
   return typeof o === "string" ? o : (o.text || o.label || `Option ${idx + 1}`);
 }
 
-// step-input text field — TextFieldInput.tsx (+ suggestion buttons)
+// step-input text field — TextFieldInput.tsx: a resizable <textarea> inside a
+// rounded medium wrapper, with a horizontally-scrolling row of suggestion pills.
 function textField(sub, slug) {
   const suggestions = (sub.suggestions || []).length
-    ? `<div class="flex flex-wrap gap-2">${sub.suggestions.map((s) =>
-        `<button type="button" class="${buttonClass({ variant: "suggestion", size: "sm" })}" data-suggestion="${esc(s)}">${esc(s)}</button>`).join("")}</div>`
+    ? `<div class="relative -mx-1"><div class="flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">${sub.suggestions.map((s) =>
+        `<button type="button" class="${buttonClass({ variant: "suggestion", size: "sm", extra: "shrink-0" })}" data-suggestion="${esc(s)}">${esc(s)}</button>`).join("")}</div></div>`
     : "";
-  return `<input type="text" class="step-input w-full" data-input data-slug="${slug}" placeholder="Type your answer...">${suggestions}`;
+  return `${suggestions}<div class="relative bg-medium rounded-lg focus-within:bg-medium/90 transition-all duration-300 ease-in-out"><textarea rows="3" class="step-input w-full resize-none bg-transparent!" data-input data-slug="${slug}" placeholder="Type your answer"></textarea></div>`;
 }
 
 // CurrencyFieldInput.tsx
@@ -142,13 +159,13 @@ function currencyField(sub, slug) {
   const label = sub.textFieldLabel
     ? `<div class="flex items-center gap-2"><label class="block text-sm font-medium text-dark">${esc(sub.textFieldLabel)}</label></div>`
     : "";
-  return `<div class="space-y-2">${label}<div class="relative"><div class="absolute left-4 top-1/2 -translate-y-1/2 text-mocha font-medium text-base pointer-events-none select-none">$</div><input type="text" inputmode="decimal" class="step-input w-full pl-8" data-input data-slug="${slug}" placeholder="0" aria-label="${esc(sub.textFieldLabel || "Dollar amount")}"></div></div>`;
+  return `<div class="space-y-2">${label}<div class="relative"><div class="absolute left-4 top-1/2 -translate-y-1/2 text-grey font-medium text-base pointer-events-none select-none">$</div><input type="text" inputmode="decimal" class="step-input w-full pl-8" data-input data-slug="${slug}" placeholder="0" aria-label="${esc(sub.textFieldLabel || "Dollar amount")}"></div></div>`;
 }
 
 // SelectFieldInput.tsx — the app uses a Radix dropdown; the static mirror is a
 // native <select> styled with the same selectTriggerVariants(xl) classes.
 // It carries data-input (captureCurrent reads .value) instead of an option grid.
-const SELECT_TRIGGER_XL = "flex w-full items-center justify-between rounded-lg border-2 border-mediumPlus bg-light px-3 text-left focus:outline-none focus:border-mocha h-14 py-3 text-base";
+const SELECT_TRIGGER_XL = "flex w-full items-center justify-between rounded-lg bg-medium px-4 text-left focus:outline-mocha h-14 py-3 text-base";
 function selectField(sub, slug) {
   const opts = (sub.options || []).map((o, i) => {
     const t = optionText(o, i);
@@ -172,7 +189,7 @@ function multiCheckboxField(sub, slug) {
 function radioField(sub, slug) {
   const rows = (sub.options || []).map((o, i) => {
     const t = optionText(o, i);
-    return `<button type="button" class="tp-radio-row flex w-full items-center gap-3 cursor-pointer bg-transparent border-0 p-0 text-left" data-option data-value="${esc(t)}" data-index="${i}"><span class="tp-radio w-5 h-5 rounded-full border-2 border-gray-300 shrink-0"></span><span style="color:#003250">${esc(t)}</span></button>`;
+    return `<button type="button" class="tp-radio-row flex w-full items-center gap-3 cursor-pointer bg-transparent border-0 p-0 text-left" data-option data-value="${esc(t)}" data-index="${i}"><span class="tp-radio w-5 h-5 rounded-full border-2 border-gray-300 shrink-0"></span><span class="text-dark">${esc(t)}</span></button>`;
   }).join("");
   return `<div class="tp-options space-y-3" data-slug="${slug}" data-multi="false">${rows}</div>`;
 }
@@ -227,9 +244,9 @@ function imageMultiselectField(sub, slug) {
     const t = optionText(o, i);
     const img = typeof o === "object" ? safeUrl(o.imageUrl) : "";
     const imgHtml = img
-      ? `<div class="flex-1 shrink-0 w-auto h-48 bg-mediumPlus overflow-hidden aspect-square"><img src="${esc(img)}" alt="${esc(t)}" class="w-full h-full object-cover aspect-square"></div>`
+      ? `<div class="flex-1 shrink-0 w-auto h-48 bg-mediumPlus overflow-hidden aspect-square max-h-[24dvh]"><img src="${esc(img)}" alt="${esc(t)}" class="w-full h-full object-cover aspect-square"></div>`
       : "";
-    return `<button type="button" class="tp-im cursor-pointer relative flex flex-row md:flex-row mx-auto w-full items-stretch p-0 rounded-xl overflow-hidden transition-all bg-medium" data-option data-value="${esc(t)}" data-index="${i}">${imgHtml}<div class="flex-1 px-4 md:px-6 py-4 text-left flex items-center"><span class="text-base font-medium leading-relaxed">${esc(t)}</span></div><div class="${MS_CHECK_WRAP.replace("top-2 right-2", "top-3 right-3")}"><div class="w-6 h-6 rounded-full bg-success flex items-center justify-center shadow-lg">${ICON_CHECK_BOLD_WHITE}</div></div></button>`;
+    return `<button type="button" class="tp-im cursor-pointer relative flex flex-row md:flex-row mx-auto w-full items-stretch p-0 rounded-xl overflow-hidden transition-all bg-medium" data-option data-value="${esc(t)}" data-index="${i}">${imgHtml}<div class="flex-1 px-4 md:px-6 py-4 text-left flex items-center"><span class="text-base font-medium leading-relaxed">${esc(t)}</span></div><div class="${MS_CHECK_WRAP.replace("top-2 right-2", "top-3 right-3")}"><div class="w-6 h-6 rounded-full bg-green flex items-center justify-center shadow-lg">${ICON_CHECK_BOLD_WHITE}</div></div></button>`;
   }).join("");
   return `<div class="tp-options space-y-4 my-6" data-slug="${slug}" data-multi="false"${auto}${source}>${cards}</div>`;
 }
@@ -251,7 +268,7 @@ function wheelSvg(activeIndex, activeSecondary) {
     wedge(i, i === activeIndex ? activeSecondary : "var(--color-medium,#f2e8e0)")).join("");
   const labelPos = [[225, 38], [225, 262], [75, 262], [75, 38]]; // NE SE SW NW quadrant labels
   const labels = WHEEL_CATEGORIES.map((name, i) =>
-    `<div class="tp-wheel-label" style="left:${labelPos[i][0]}px;top:${labelPos[i][1]}px"><p class="text-xs font-medium" style="color:#003250">${esc(name)}</p></div>`).join("");
+    `<div class="tp-wheel-label" style="left:${labelPos[i][0]}px;top:${labelPos[i][1]}px"><p class="text-xs font-medium text-dark">${esc(name)}</p></div>`).join("");
   return `<div class="tp-wheel relative mx-auto" style="width:300px;height:300px">` +
     `<svg width="300" height="300" style="position:absolute;top:0;left:0">${wedges}</svg>${labels}</div>`;
 }
@@ -260,7 +277,8 @@ function wheelWithCheckboxesField(sub, slug) {
   const isClarity = String(sub.title || "").toLowerCase().includes("clarity");
   const isConfidence = String(sub.title || "").toLowerCase().includes("confidence");
   const activeIndex = isClarity ? 2 : isConfidence ? 3 : 2;
-  const secondary = isClarity ? "#f5d6d0" : isConfidence ? "#f1d2d7" : "#f5d6d0";
+  // Active wedge highlight — mirror the app's warm accent (pink token #f3aee6).
+  const secondary = "#f3aee6";
   const minLabel = isClarity ? "Very Unclear" : isConfidence ? "Very Low" : "0";
   const maxLabel = isClarity ? "Crystal Clear" : isConfidence ? "Very High" : "10";
 
@@ -373,18 +391,22 @@ function renderCollect(sub) {
   let footer = "";
   if (!autoProgress) {
     const isEntryForm = sub.fieldType === "education" || sub.fieldType === "work";
-    const cont = continueBtn("Continue", { align: "left", extra: isEntryForm ? "flex-1" : "w-full" });
-    const skip = isEntryForm
-      ? `<button class="${buttonClass({ variant: "secondary", size: "lg", extra: "flex-1" })}" data-next>Skip (edit in profile)</button>`
-      : "";
-    footer = stickyContinueRow(cont + skip);
+    if (isEntryForm) {
+      // Continue + Skip share one row (the entry-form footer). The sticky wrapper
+      // is a stacked column, so nest the pair in their own flex row to keep parity.
+      const cont = continueBtn("Continue", { align: "left", extra: "flex-1" });
+      const skip = `<button class="${buttonClass({ variant: "secondary", size: "lg", extra: "flex-1" })}" data-next>Skip (edit in profile)</button>`;
+      footer = stickyContinueRow(`<div class="flex gap-3">${cont}${skip}</div>`);
+    } else {
+      footer = stickyContinueRow(continueBtn("Continue"));
+    }
   }
   return `<div class="space-y-4 max-w-md lg:max-w-lg mx-auto">${input}${footer}</div>`;
 }
 
 // --- Celebration (CelebrationContent.tsx) ------------------------------------
 
-const CONFETTI_COLORS = ["#f16b68", "#ffb949", "#8eaf86", "#407faf", "#df1983", "#c1b7af"];
+const CONFETTI_COLORS = ["#f2da4e", "#969bde", "#f3aee6", "#9bd778", "#8eaf86", "#c8beaa"];
 function confettiHtml() {
   const bits = Array.from({ length: 14 }, (_, i) =>
     `<span class="tp-confetti-bit" style="--c:${CONFETTI_COLORS[i % CONFETTI_COLORS.length]};--dx:${(i % 7 - 3) * 34}px;--dr:${(i * 67) % 360}deg;animation-delay:${i * 45}ms"></span>`).join("");
@@ -395,8 +417,8 @@ function renderCelebration(sub) {
   const isSection = !!sub.celebrationCompletedSection;
   const desc = sub.callout || sub.prompt || "";
   const head = isSection
-    ? `<div class="text-center mb-2"><p class="text-sm text-pretty text-dark">Congrats! You have completed:</p></div>` +
-      `<div class="text-center mb-6"><h2 class="text-2xl font-bold" style="color:#003250" data-tpl>${esc(sub.celebrationCompletedSection)}</h2></div>`
+    ? `<div class="text-center mb-2"><p class="text-sm text-pretty text-dark">Congrats! You have completed</p></div>` +
+      `<div class="text-center mb-6"><h2 class="text-2xl font-cigars font-bold text-dark" data-tpl>${esc(sub.celebrationCompletedSection)}</h2></div>`
     : (desc ? `<div class="text-center mb-4"><p class="text-sm text-pretty text-dark" data-tpl>${esc(desc)}</p></div>` : "");
 
   const confetti = (sub.celebrationShowConfetti ?? true) ? confettiHtml() : "";
@@ -408,7 +430,8 @@ function renderCelebration(sub) {
     const media = isVideo
       ? `<video src="${esc(heroUrl)}" autoplay loop muted playsinline class="w-full h-full object-cover"></video>`
       : `<img src="${esc(heroUrl)}" alt="Celebration" class="absolute inset-0 w-full h-full object-cover">`;
-    hero = `<div class="relative w-full mb-4"><div class="relative w-full aspect-4/3 rounded-lg bg-medium overflow-hidden">${media}<div class="absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md">${ICON_CHECK_STROKE_SUCCESS}</div></div></div>`;
+    // Badge: green circle centered at the bottom edge, overlapping the image (CelebrationContent.tsx).
+    hero = `<div class="relative w-full mb-8"><div class="relative w-full aspect-4/3 rounded-lg bg-medium overflow-hidden">${media}</div><div class="absolute -bottom-8 left-1/2 -translate-x-1/2 w-16 h-16 bg-green border-6 border-light rounded-full flex items-center justify-center">${ICON_CHECK_CELEBRATION}</div></div>`;
   }
 
   let card = "";
@@ -420,13 +443,12 @@ function renderCelebration(sub) {
     if (title || sub2 || tasks) card = `<div class="w-full rounded-xl p-4">${title}${sub2}${tasks ? `<ul class="tp-tasks space-y-2">${tasks}</ul>` : ""}</div>`;
   }
 
-  const nextUp = isSection && sub.celebrationNextSection
-    ? `<div class="text-center mt-4 mb-6"><p class="text-sm italic" style="color:#003250">Next Up: ${esc(sub.celebrationNextSection)}</p></div>`
-    : "";
-
-  const label = isSection ? "Continue" : (sub.celebrationButtonText || "Okay, got it!");
+  // The app folds "next section" into the button label ("Up Next: …") rather than a separate line.
+  const label = isSection
+    ? (sub.celebrationNextSection ? `Up Next: ${sub.celebrationNextSection}` : "Continue")
+    : (sub.celebrationButtonText || "Okay, got it!");
   return `<div class="tp-celebration flex-1 flex flex-col h-full bg-light">` +
-    `<div class="flex-1 overflow-y-auto px-4 pt-6 pb-4"><div class="flex flex-col items-center max-w-md lg:max-w-lg mx-auto">${head}${confetti}${hero}${card}${nextUp}</div></div>` +
+    `<div class="flex-1 overflow-y-auto px-4 pb-4 flex flex-col justify-center"><div class="flex flex-col items-center max-w-md lg:max-w-lg mx-auto">${head}${confetti}${hero}${card}</div></div>` +
     `<div class="px-4 pb-6 pt-2"><div class="flex flex-col gap-3 w-full max-w-md lg:max-w-lg mx-auto">${continueBtn(label, { extra: "w-full flex items-center justify-between", arrow: true })}</div></div></div>`;
 }
 
@@ -435,10 +457,10 @@ function renderCelebration(sub) {
 function renderGenerate(sub, ctx) {
   const sample = ctx.samples && ctx.samples[sub.slug];
   const title = sub.showTitle === true && sub.title
-    ? `<h3 class="tp-title text-xl font-semibold mb-4 max-w-md lg:max-w-lg mx-auto">${esc(sub.title)}</h3>` : "";
+    ? `<h3 class="tp-title text-xl font-cigars font-bold mb-4 max-w-md lg:max-w-lg text-pretty">${esc(sub.title)}</h3>` : "";
   const prompt = sub.prompt
     ? `<div class="text-dark prose max-w-none"><p data-tpl>${esc(sub.prompt)}</p></div>` : "";
-  const pill = `<div class="flex justify-center mb-0"><div class="capitalize px-5 py-2 rounded-full text-sm font-medium bg-mocha text-light shadow-sm">${esc(sub.title || "Career Statement")}</div></div>`;
+  const pill = `<div class="flex justify-center mb-0"><div class="capitalize px-5 py-2 rounded-full text-sm font-medium bg-mocha text-dark shadow-sm">${esc(sub.title || "Career Statement")}</div></div>`;
   const body = sample
     ? `<div class="tp-ai-output prose prose-sm max-w-none pt-2 whitespace-pre-wrap [&>p]:mb-4 [&>p]:last:mb-0 [&>p]:leading-relaxed">${esc(sample)}</div>`
     : `<div class="tp-ai-placeholder prose prose-sm max-w-none pt-2 whitespace-pre-wrap">AI would write this from your answers. (No sample baked in.)</div>`;
@@ -454,13 +476,19 @@ function renderChat(sub, ctx) {
   const slug = esc(sub.slug || "");
   const sample = (ctx.samples && ctx.samples[sub.slug]) || "Tell me what's on your mind.";
   const bubble = (content) =>
-    `<div class="${CHAT_ROW_AI}"><div class="${CHAT_BUBBLE_AI}"><div class="prose max-w-none **:text-inherit" data-tpl>${esc(content)}</div></div></div>`;
+    `<div class="${CHAT_ROW_AI}"><div class="${CHAT_BUBBLE_AI}"><div class="prose max-w-none prose-inherit [&>p]:mb-2 [&>p]:last:mb-0 **:text-inherit" data-tpl>${esc(content)}</div></div></div>`;
+  // Input: bordered box (focus-within recolors the border) with the send button
+  // tucked at bottom-right — mirrors ChatInterface.tsx's form.
+  const inputBox =
+    `<div class="border-2 border-mediumPlus bg-light rounded-lg overflow-hidden transition-all duration-300 ease-in-out focus-within:border-mocha focus-within:bg-medium/50">` +
+    `<textarea rows="1" class="w-full block resize-none overflow-y-auto bg-transparent outline-none px-4 py-4 text-base placeholder-grey" data-chat-input placeholder="Type your response..."></textarea>` +
+    `<div class="flex justify-end px-4 pb-3"><button class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full" data-chat-send aria-label="Send message">${ICON_ARROW_CIRCLE_UP}</button></div>` +
+    `</div>`;
   return `<div class="tp-chat h-full flex flex-col bg-light text-dark relative" data-chat data-slug="${slug}">` +
-    `<div class="tp-chat-log flex-1 overflow-y-auto space-y-4 pt-4" data-chat-log>${bubble(sub.prompt)}${bubble(sample)}</div>` +
-    `<div class="shrink-0 py-4 sticky bottom-0 bg-light">` +
-    `<div class="flex gap-2 items-end"><textarea rows="1" class="step-input w-full resize-none overflow-y-auto" data-chat-input placeholder="Type your response and hit Enter..."></textarea>` +
-    `<button class="${buttonClass({ size: "default", extra: "h-14 w-14 shrink-0" })}" data-chat-send aria-label="Send">${ICON_ARROW_RIGHT}</button></div>` +
-    `<div class="flex justify-end mt-3"><button class="${buttonClass({ size: "default", extra: "w-fit" })}" data-next>Finish Chat &amp; Continue</button></div>` +
+    `<div class="tp-chat-log flex-1 overflow-y-auto space-y-4 pt-4 max-w-md lg:max-w-xl mx-auto w-full" data-chat-log>${bubble(sub.prompt)}${bubble(sample)}</div>` +
+    `<div class="shrink-0 py-4 sticky bottom-0 bg-light max-w-md lg:max-w-xl mx-auto w-full">` +
+    inputBox +
+    `<div class="flex justify-end mt-3"><button class="${buttonClass({ variant: "secondary", size: "sm", extra: "w-fit" })}" data-next>Finish Chat &amp; Continue</button></div>` +
     `</div></div>`;
 }
 

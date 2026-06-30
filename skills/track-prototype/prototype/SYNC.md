@@ -13,8 +13,14 @@ approximation. Three things are extracted from ignite-next and committed here:
 mapping (`[aria-selected]` instead of React className toggles), the streaming
 caret, confetti, carousel stack positions, watermark. Keep it tiny.
 
-**Pinned source commit:** ad6bf06edecb1d2fcfd7dbf7408d28cfb45112e4
+**Pinned source commit:** 31376f4526e9dcf8e452af4dd81121b30f8c9877
 (also stamped in the header of `design-kit/app.css`)
+
+> Re-synced 2026-06-30 across the ignite-next rebrand: the warm cream/charcoal
+> palette (light `#faf7ef`, dark `#1e1414`, primary `#1e1414`) + HW Cigars
+> display font replaced the old navy/coral + Hanken/Rand kit. `FONT_FILES` now
+> lists the HW Cigars woff2s; body copy is Inter (Next-injected at runtime), so
+> the static build falls back to a system grotesque via `--font-inter` in proto.css.
 
 ## Markup ↔ component map
 

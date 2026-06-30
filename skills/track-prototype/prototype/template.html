@@ -5,12 +5,12 @@
 <link rel="stylesheet" href="design-kit/proto.css">
 </head><body>
 <!-- Chrome mirrors the real app: TrackHeader.tsx + SubStepNavigation.tsx + page.tsx main-grid-content -->
-<header class="sticky top-0 z-30 border-b" style="background-color:#F2E8E0;border-color:#E9DDD3">
+<header class="sticky top-0 z-30 border-b" style="background-color:#eee9dd;border-color:#ded8cc">
   <div class="flex items-center h-14 px-4 gap-3">
     <button class="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-mediumPlus transition-colors shrink-0" aria-label="Open menu">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" style="color:#003250" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" style="color:#1e1414" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
     </button>
-    <h1 class="text-base font-semibold truncate flex-shrink" style="color:#003250">__TRACK_TITLE__</h1>
+    <h1 class="text-base font-cigars font-bold truncate flex-shrink" style="color:#1e1414">__TRACK_TITLE__</h1>
     <div class="flex items-center gap-2 flex-1 min-w-0 ml-auto mr-2">
       <div class="flex-1 min-w-0">
         <div class="w-full bg-mediumPlus rounded-full h-1.5">
@@ -23,9 +23,9 @@
     </button>
   </div>
 </header>
-<div class="sticky z-20 flex items-center justify-between px-4 py-2 border-b shadow-xs" style="top:56px;background-color:#FFF7F1;border-color:#E9DDD3">
+<div class="sticky z-20 flex items-center justify-between px-4 py-2 border-b shadow-xs" style="top:56px;background-color:#faf7ef;border-color:#ded8cc">
   <button id="tp-back" class="flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 hover:bg-mediumPlus active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Navigate to previous question">
-    <svg class="w-5 h-5" style="color:#003250" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M168.49,199.51a12,12,0,0,1-17,17l-80-80a12,12,0,0,1,0-17l80-80a12,12,0,0,1,17,17L97,128Z"/></svg>
+    <svg class="w-5 h-5" style="color:#1e1414" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M168.49,199.51a12,12,0,0,1-17,17l-80-80a12,12,0,0,1,0-17l80-80a12,12,0,0,1,17,17L97,128Z"/></svg>
   </button>
   <div class="flex-1"></div>
   <button id="tp-reset" class="text-xs text-mocha hover:text-dark transition-colors cursor-pointer bg-transparent border-0" title="Restart the preview from the first screen">↻ Restart</button>

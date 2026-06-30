@@ -18,7 +18,7 @@ export const CHAT_ROW_AI = "flex justify-start";
 export const CHAT_BUBBLE_USER =
   "tp-bubble tp-bubble-user max-w-[90%] text-base px-4 py-4 rounded-xl bg-dark text-light rounded-br-none!";
 export const CHAT_BUBBLE_AI =
-  "tp-bubble tp-bubble-ai max-w-[90%] text-base px-4 py-4 rounded-xl bg-medium text-dark rounded-tl-none!";
+  "tp-bubble tp-bubble-ai max-w-[90%] text-base px-4 py-4 rounded-xl bg-medium text-dark hover:bg-medium/90 rounded-tl-none!";
 
 // --- Multi-select grid buttons (MultiSelectInput.tsx) ------------------------
 // Used both for baked options and for options the player populates at runtime
@@ -29,8 +29,9 @@ export const MS_OPTION =
 export const MS_TITLE = "text-base font-semibold text-left text-dark";
 export const MS_DESC = "text-sm mt-1 text-left text-dark/50";
 export const MS_CHECK_WRAP = "tp-check absolute top-2 right-2";
+// Selected badge — green circle (MultiSelectInput.tsx uses bg-green, no shadow).
 export const MS_CHECK_BADGE =
-  "w-5 h-5 rounded-full bg-dark flex items-center justify-center shadow-lg";
+  "w-5 h-5 rounded-full bg-green flex items-center justify-center";
 // Inline check (stroke) used inside the badge — mirrors the app's inline svg.
 export const MS_CHECK_SVG =
   '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>';

@@ -113,7 +113,7 @@ test("image-multiselect renders the real ImageMultiselectInput card classes, sin
   assert.match(html, /data-multi="false"/);                    // single-select like the app
   assert.match(html, /rounded-xl overflow-hidden transition-all bg-medium/); // card
   assert.match(html, /h-48 bg-mediumPlus overflow-hidden aspect-square/);    // image section
-  assert.match(html, /bg-success/);                            // selection badge
+  assert.match(html, /bg-green/);                              // selection badge (green circle)
   assert.match(html, /src="\/img\/a\.png"/);
 });
 
@@ -137,7 +137,7 @@ test("collect/select renders a native <select data-input> styled like the app tr
   const html = renderSubstep({ id: "x", slug: "age", title: "Age", prompt: "Age?", type: "collect", fieldType: "select",
     options: ["18", "19"] }, {});
   assert.match(html, /<select[^>]*data-input[^>]*data-slug="age"/);
-  assert.match(html, /border-2 border-mediumPlus bg-light/);   // selectTriggerVariants
+  assert.match(html, /rounded-lg bg-medium px-4/);             // selectTriggerVariants (xl)
   assert.match(html, /<option value="18">18<\/option>/);
   assert.doesNotMatch(html, /data-option/);                    // no grid — walker uses the fill path
 });
@@ -161,8 +161,10 @@ test("say screens use the app page skeleton (substep-content + bg-light section)
 });
 
 test("substep imageUrl renders the app's rounded image block", () => {
-  const html = renderSubstep({ id: "x", title: "T", prompt: "P", type: "say", fieldType: "banner", imageUrl: "/img/intro/intro-1.png" }, {});
-  assert.match(html, /max-h-\[38dvh\]/);
+  // The app only renders the image block for non-say substeps; use a collect substep here.
+  const html = renderSubstep({ id: "x", title: "T", prompt: "P", type: "collect", fieldType: "text", imageUrl: "/img/intro/intro-1.png" }, {});
+  assert.match(html, /society-max-h/);
+  assert.match(html, /aspect-square rounded-xl overflow-hidden/);
   assert.match(html, /src="\/img\/intro\/intro-1\.png"/);
 });
 
@@ -171,8 +173,9 @@ test("chat renders real ChatInterface rows/bubbles and keeps the contract hooks"
     { samples: { coach: "Seed." } });
   assert.match(html, /flex justify-start/);                     // bubble row
   assert.match(html, /tp-bubble tp-bubble-ai/);                 // walker contract class
-  assert.match(html, /bg-medium text-dark rounded-tl-none!/);   // app bubble classes
-  assert.match(html, /step-input w-full resize-none/);          // app textarea styling
+  assert.match(html, /bg-medium text-dark hover:bg-medium\/90 rounded-tl-none!/); // app bubble classes
+  assert.match(html, /border-2 border-mediumPlus bg-light rounded-lg/);           // app input box
+  assert.match(html, /focus-within:border-mocha/);                                // focus state
   assert.match(html, /data-chat-send/);
   assert.match(html, /data-next/);                              // way to advance
 });
@@ -180,7 +183,7 @@ test("chat renders real ChatInterface rows/bubbles and keeps the contract hooks"
 test("generate renders the title pill + content card around .tp-ai-output", () => {
   const html = renderSubstep({ id: "x", slug: "cs", title: "Career Statement", prompt: "Draft:", type: "generate", fieldType: "text" },
     { samples: { cs: "Your draft." } });
-  assert.match(html, /rounded-full text-sm font-medium bg-mocha text-light/); // pill
+  assert.match(html, /rounded-full text-sm font-medium bg-mocha text-dark/); // pill
   assert.match(html, /rounded-2xl px-6 pt-8 pb-6 -mt-5 bg-medium/);           // card
   assert.match(html, /tp-ai-output/);
   assert.match(html, /Your draft\./);
@@ -189,9 +192,9 @@ test("generate renders the title pill + content card around .tp-ai-output", () =
 test("celebration: section-completion format renders Congrats + section name + Continue", () => {
   const html = renderSubstep({ id: "x", title: "Done", prompt: "", type: "say", fieldType: "celebration",
     celebrationCompletedSection: "Professional Environment", celebrationNextSection: "Interests" }, {});
-  assert.match(html, /Congrats! You have completed:/);
+  assert.match(html, /Congrats! You have completed/);
   assert.match(html, /Professional Environment/);
-  assert.match(html, /Next Up: Interests/);
+  assert.match(html, /Up Next: Interests/);   // app folds next section into the button label
   assert.match(html, /data-next/);
 });
 
@@ -260,7 +263,7 @@ test("text collect renders step-input + suggestion chips", () => {
     suggestions: ["Maya"] }, {});
   assert.match(html, /step-input w-full/);
   assert.match(html, /data-suggestion="Maya"/);
-  assert.match(html, /border-dashed border-mediumPlus/);         // suggestion button variant
+  assert.match(html, /border border-dashed border-mocha/);       // suggestion button variant (pill)
 });
 
 test("currency renders the $ prefix and pl-8 input", () => {
