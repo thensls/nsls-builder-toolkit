@@ -10,8 +10,10 @@ field values and get explicit confirmation, *then* write.
 
 - **Base:** `appzDWu6GowvnACtv` (Track Studio — "Track Previews")
 - **Table:** `Tracks` (id `tblqDpGOYlgYnDZ66`)
-- **Auth:** an Airtable PAT with `data.records:write` + `schema.bases:read` on
-  this base. Kevin's toolkit PAT works; the Studio app's own key
+- **Auth:** an Airtable PAT with `data.records:read` + `data.records:write` +
+  `schema.bases:read` on this base. (`data.records:read` is needed to list
+  existing slugs for the uniqueness check before writing.) Kevin's toolkit PAT
+  works; the Studio app's own key
   (`AIRTABLE_API_KEY` in the track-studio repo's `.env.local` / Doppler) also
   works. If no token is available, run `/connect` or fall back to printing the
   field values for the user to paste. See the `/airtable` skill for token setup.
