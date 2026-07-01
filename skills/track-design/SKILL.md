@@ -177,8 +177,16 @@ Run the `build-prototype.mjs` script from the sibling `track-prototype` skill
 ```bash
 node <track-prototype>/scripts/build-prototype.mjs track.json \
   --prereq <prereq-track.json>,<...> --out demo/ \
+  --assets <ignite-next/public> \
   --proxy-url <proxy> --proxy-token <token>
+# then serve the static build and open it:
+cd demo && python3 -m http.server 8000   # → http://localhost:8000
 ```
+`demo/` is a static site — it must be **served**, not opened as `file://` (the
+module scripts + proxy fetch need an http origin). Any static server works.
+- **`--assets <ignite-next/public>`** copies the app images/videos the track
+  references (`/img/…`, `/video/…`) into the build so they resolve; omit it and
+  those URLs 404. Only referenced files are copied.
 - **`--prereq`** points at the prerequisite tracks' JSON (from Phase 0). The build
   seeds a synthetic prerequisite profile so cross-track generate/chat steps
   resolve, and each AI screen shows a **📌 prompt-context note** listing the data
