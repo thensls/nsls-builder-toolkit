@@ -19,22 +19,25 @@ export function slugify(s) {
 /** A representative synthetic value: keyword match on slug, then fieldType, then a labelled fallback. */
 export function synthValue(slug, fieldType) {
   const s = (slug || "").toLowerCase();
+  // Keywords match whole hyphen-delimited slug segments (optional trailing "s"),
+  // so e.g. "state" matches "home-state"/"states" but NOT "statement", and
+  // "rent" won't match "current", "value" won't match "evaluate".
   const kw = [
-    [/(^|-)major($|-)|field-of-study/, "Marketing"],
-    [/state|location|region|city|address/, "Ohio"],
-    [/(^|-)name($|-)|full-name|first-name/, "Jordan Lee"],
-    [/email/, "jordan.lee@example.edu"],
-    [/salary|income|target-pay|compensation/, "$65,000"],
-    [/cost|budget|expense|rent/, "$2,400/month"],
-    [/dream-job|target-role|role|job-title|occupation/, "Product Manager"],
-    [/goal|objective|aspiration/, "Become a product manager within 18 months"],
-    [/strength/, "Strategic; Empathetic; Analytical"],
-    [/value/, "Growth; Integrity; Impact"],
-    [/inspiration|motivation|interest/, "Building things that help people"],
-    [/personality|profile/, "Analytical, people-oriented, driven"],
-    [/school|college|university/, "State University"],
-    [/year|grad|class-of/, "Junior"],
-    [/mentor/, "Alex Rivera, Director of Product"],
+    [/(^|-)(major|field-of-study)s?($|-)/, "Marketing"],
+    [/(^|-)(state|location|region|city|address)s?($|-)/, "Ohio"],
+    [/(^|-)(name|full-name|first-name)s?($|-)/, "Jordan Lee"],
+    [/(^|-)(email)s?($|-)/, "jordan.lee@example.edu"],
+    [/(^|-)(salary|income|target-pay|compensation)s?($|-)/, "$65,000"],
+    [/(^|-)(cost|budget|expense|rent)s?($|-)/, "$2,400/month"],
+    [/(^|-)(dream-job|target-role|role|job-title|occupation)s?($|-)/, "Product Manager"],
+    [/(^|-)(goal|objective|aspiration)s?($|-)/, "Become a product manager within 18 months"],
+    [/(^|-)(strength)s?($|-)/, "Strategic; Empathetic; Analytical"],
+    [/(^|-)(value)s?($|-)/, "Growth; Integrity; Impact"],
+    [/(^|-)(inspiration|motivation|interest)s?($|-)/, "Building things that help people"],
+    [/(^|-)(personality|profile)s?($|-)/, "Analytical, people-oriented, driven"],
+    [/(^|-)(school|college|university)s?($|-)/, "State University"],
+    [/(^|-)(year|grad|class-of)s?($|-)/, "Junior"],
+    [/(^|-)(mentor)s?($|-)/, "Alex Rivera, Director of Product"],
   ];
   for (const [re, v] of kw) if (re.test(s)) return v;
   switch (fieldType) {

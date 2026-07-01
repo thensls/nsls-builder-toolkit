@@ -15,6 +15,10 @@ test("synthValue: keyword match, fieldType fallback, multiselect is a joined str
   assert.equal(synthValue("pick-images", "image-multiselect"), "<option A>, <option B>");
   assert.equal(synthValue("whatever", "number"), "42");
   assert.equal(synthValue("obscure-slug", "text"), "<sample obscure-slug>");
+  // keyword regexes are segment-bounded: no substring over-match
+  assert.equal(synthValue("career-statement", "text"), "<sample career-statement>"); // NOT "Ohio" (statement⊃state)
+  assert.equal(synthValue("current-role", "text"), "Product Manager");               // "role" matches; "rent"⊄current
+  assert.equal(synthValue("home-state", "text"), "Ohio");                            // segment match still works
 });
 
 test("extractProfileFields: collect + generate (slug derived) + assessment-results (explicit slug only)", () => {
