@@ -118,6 +118,11 @@ Draw out, conversationally (not as a form dump):
 - **Ending place** — what's different for them after?
 - **What they'll learn** — the substance.
 - **Prerequisites** — anything they should do first?
+- **Made-something vs. built-a-habit** — does the member finish *holding
+  something they keep* (a plan, a profile, a document) or *having built a habit /
+  self-understanding*? (This is the artifact-track vs. practice-track
+  classification `track-design` needs — ask it in plain words, don't use the
+  jargon.)
 - **Why now** — why does this idea earn development over others?
 
 Reflect answers back in the scratchpad as you go.
@@ -144,7 +149,10 @@ the evidence. Do not leave this phase with vibes-outcomes.
 material: goals (from outcomes), where the member is, **what information will be
 collected** (the fields, in rough order), what they'll learn (mapped to the
 collected info), the **outcome→evidence map** (which step yields each outcome's
-evidence), and sequencing + level.
+evidence), sequencing + level, and **track type + assumed context** (§8 —
+artifact-track vs. practice-track from the Phase 1 answer, plus the profile
+tokens inherited from prerequisites). §8 is what lets `track-design` start at its
+Phase 0 without re-interviewing — don't skip it.
 
 **Value moments — invoke `value-moment`.** Hand it the "what information will be
 collected" list + the audience/promise. **REQUIRED SUB-SKILL:** use

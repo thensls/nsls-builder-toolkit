@@ -12,25 +12,33 @@ memory — open that schema at emit time.
 ```json
 {
   "type": "generate",
-  "promptMode": "text",
   "title": "Careers your Marketing major opens up",
   "aiPromptConfig": {
-    "template": "The member's major is {major} and their state is {location}. Using ONLY the labor-market figures provided here — {data} — write two short second-person paragraphs: (1) the three most common careers for this major; (2) the two with the fastest projected demand growth. Warm, specific, plain language. Use only the provided figures; if a figure is missing, describe the trend qualitatively and do not invent a number.",
+    "template": "The member's major is {major} and their state is {location}. Write two short second-person paragraphs, warm and specific: (1) 3–4 real roles this major commonly leads into; (2) the directions where demand has been climbing, described QUALITATIVELY. Do NOT state any salary, percentage, growth rate, or ranking. If you feel the pull to add a number, describe the trend in words instead.",
     "executeOn": "enter"
   }
 }
 ```
+
+This example is a **model-reasoned** moment — it uses only real collected slugs
+(`{major}`, `{location}`) and forbids numbers in the prompt. For a **grounded**
+moment with real figures, see "The `{data}` token" below (future-only today).
 
 Keys that matter for a value moment:
 
 | Key | Value |
 |---|---|
 | `type` | `"generate"` — always, for a value moment. |
-| `promptMode` | `"text"`. |
 | `title` | The screen heading the member sees. |
 | `aiPromptConfig.template` | The authored prompt. Uses `{slug}` tokens for collected data; carries the grounding contract in its own words (see below). |
 | `aiPromptConfig.executeOn` | `"enter"` — generate when the member lands on the screen. |
 | `aiPromptConfig.model` | Optional; omit to use the app default. |
+
+**Do NOT emit `promptMode`** (or any of the other admin-only fields —
+`promptAiPrompt`, `suggestionsMode`, etc.). The schema lists them under
+"Admin-Only — Never Include in Import JSON": `seed.ts` never writes them on
+import, so an emitted `promptMode` is silently dropped (imported record keeps it
+`null`). See `track-design/references/track-json-schema.md` §5.
 
 ## Token mechanics (the trigger data)
 
@@ -39,24 +47,35 @@ substep with that `slug`, OR to a profile field from a completed prerequisite
 track. A value moment's `trigger` fields MUST be slugs collected **earlier** in
 the same track (or prerequisite profile tokens) — a token that resolves to
 nothing produces a generic, ungrounded paragraph, which is the exact failure the
-grounding rule exists to prevent. Verify each token's source before emitting.
+grounding rule exists to prevent.
 
-## The `{data}` token — how grounding reaches the prompt
+**The validator enforces this.** `track-design/scripts/validate-track-json.mjs`
+scans every string field for `{tokens}` and errors on any token not produced by
+an earlier substep (or an assumed prerequisite token passed via `--assume…`). So
+an invented token like `{data}` **fails validation today** — and even if it
+passed, the runtime player only forwards collected profile answers, so it would
+render unresolved. Only emit tokens that a real earlier `collect`/`generate`
+substep produces. Verify each token's source before emitting.
 
-For a **grounded** value moment, the real figures reach the prompt as context.
-Two ways, in preference order:
+## Grounding — how real figures reach the prompt
 
-1. **Fetched at build/runtime by the companion data tool** (future — see the
-   SKILL's "Companion" section). The tool supplies a `{data}` payload (e.g. BLS
-   OEWS rows by SOC/area, O*NET growth outlook) that the template references. The
-   template instructs the model to phrase, not invent.
-2. **Pasted into the template at authoring time** as a small literal block, when
-   the figure set is tiny and stable. Cite the source inline so a reviewer can
-   check it.
+For a **grounded** value moment, the real figures must reach the prompt without
+an unresolved token:
 
-For a **model-reasoned** or **illustrative** moment there is no `{data}` token —
-the template must instead carry the honesty framing directly (qualitative, or
-"roughly / as an illustration"). See the SKILL's faithfulness rule.
+- **Today:** paste the real figures **as literal text inside the template**
+  (not as a token), when the set is tiny and stable, and cite the source inline
+  so a reviewer can check it. e.g. `"…Ohio marketing-role entry wages (BLS OEWS,
+  May 2024): …"`. This validates and renders.
+- **Future:** a companion data-fetch tool (see the SKILL's "Companion" section)
+  will supply a `{data}` payload (BLS OEWS by SOC/area, O*NET growth outlook) as
+  a real, resolvable input. `{data}` is **not a supported token yet** — do not
+  emit it until that tool and validator support land. Design grounded prompts so
+  a supplied data block drops in cleanly when it does.
+
+For a **model-reasoned** or **illustrative** moment there is no data payload —
+the template carries the honesty framing directly (qualitative, or "roughly / as
+an illustration") and forbids numbers, as in the example above. See the SKILL's
+faithfulness rule.
 
 ## Placement
 

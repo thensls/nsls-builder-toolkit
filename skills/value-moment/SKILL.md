@@ -112,10 +112,15 @@ number, or cut the candidate.
    before it ships. The example must obey its own grounding (no invented numbers
    in a model-reasoned example).
 6. **Propose the top 3–5.** The author picks; this skill proposes, never
-   auto-inserts.
-7. **Emit the approved ones** as `generate` substeps — open
-   `references/generate-substep-emission.md` and the track schema; never author
-   the JSON from memory.
+   auto-inserts. **This ranked list — each candidate with its `example_output`
+   and `grounding` — is the deliverable when called from `track-brief`.** Stop
+   here in that context: the track structure doesn't exist yet, so there is
+   nothing to emit `generate` JSON into. The list becomes the Track Template
+   Brief's "Value moments" section.
+7. **Emit the approved ones** as `generate` substeps — **only in `track-design`
+   (Phase 5) or standalone track-editing, where the track structure already
+   exists.** Open `references/generate-substep-emission.md` and the track schema;
+   never author the JSON from memory.
 
 ## The candidate (output shape)
 
@@ -134,13 +139,17 @@ number, or cut the candidate.
 - **trigger:** `{major}` captured step 1.
 - **insight_type:** career-options + demand-growth.
 - **placement:** immediately after the major capture (pull-along).
-- **grounding:** grounded — fetch top SOC codes for the major + O*NET growth
-  outlook, supplied to the prompt as `{data}`.
-- **prompt_template:** *"The member's major is {major}. Using ONLY the provided
-  BLS/O\*NET data ({data}), write two short paragraphs: (1) the three most common
-  careers for this major; (2) the two with the fastest projected demand growth.
-  Warm, specific, second-person. Use only the provided figures; if one is
-  missing, describe the trend qualitatively and invent no number."*
+- **grounding:** grounded (future target) — top SOC codes for the major + O*NET
+  growth outlook, supplied as a real data block. Until the companion tool exists,
+  ground by pasting the real figures as literal text (cite the source); do NOT
+  emit a `{data}` token — it isn't a supported/resolvable token yet (see
+  `references/generate-substep-emission.md`).
+- **prompt_template:** *"The member's major is {major}. Using ONLY these figures
+  — [paste real BLS/O\*NET rows here, cited] — write two short paragraphs: (1) the
+  three most common careers for this major; (2) the two with the fastest
+  projected demand growth. Warm, specific, second-person. Use only the provided
+  figures; if one is missing, describe the trend qualitatively and invent no
+  number."*
 - **example_output:** *(rendered from real data at review time)*
 - **value_dim:** value.a + value.c.
 

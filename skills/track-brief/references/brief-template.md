@@ -73,6 +73,17 @@ structured*. `track-design` consumes it as its Phase-0 input. Sections:
 6. **Outcome → evidence map** — which step produces the evidence for each outcome
    in Part 1.
 7. **Sequencing + level** — prerequisites, member level(s).
+8. **Track type + assumed context** — the metadata `track-design` needs at its
+   Phase 0, so the handoff doesn't force a re-interview:
+   - **Track type:** `artifact-track` (produces a tangible output the member
+     keeps — a plan, a profile, a document) or `practice-track` (builds a habit
+     or self-knowledge). This drives `track-design`'s step structure, so decide
+     it here.
+   - **Assumed profile tokens:** from the prerequisites in §7, list the profile
+     fields a completed prerequisite track already produced that this track may
+     assume exist (e.g. Clarity → a saved target role). These become
+     `track-design`'s `--assume…` validator arguments. If none, say "none —
+     starts from scratch."
 
 ---
 
