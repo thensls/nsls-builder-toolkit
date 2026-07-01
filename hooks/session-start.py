@@ -17,6 +17,7 @@ import subprocess
 import sys
 import urllib.request
 import urllib.error
+from datetime import datetime, timezone
 from pathlib import Path
 
 HOME = Path.home()
@@ -24,6 +25,12 @@ PLUGIN_DIR = HOME / ".claude" / "local-plugins" / "nsls-builder-toolkit"
 SKILLS_DIR = HOME / ".claude" / "skills"
 ENV_FILE = HOME / ".claude" / "local-plugins" / "nsls-personal-toolkit" / ".env"
 PROXY_URL = "https://web-production-6281e.up.railway.app"
+
+# When a session-ping can't be delivered (timeout / network / proxy down), we
+# stash the payload here and replay it at the start of the next session so a
+# queued announcement or credit isn't lost. Deleted once delivery succeeds.
+PING_FAIL_MARKER = PLUGIN_DIR / ".last-ping-failed"
+PING_TIMEOUT = 20  # was 8 — cold first-call paths regularly exceeded it.
 
 # Plugins to sync, in precedence order — earlier entries win on name collision.
 SYNC_PLUGINS = [
@@ -152,6 +159,39 @@ def read_env(key):
     return ""
 
 
+def _post_session_ping(body, timeout=PING_TIMEOUT):
+    """POST a session-ping body dict. Returns parsed response, or raises."""
+    req = urllib.request.Request(
+        f"{PROXY_URL}/session-ping",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode())
+
+
+def replay_failed_ping():
+    """Replay a previously failed session-ping before the current one.
+
+    Runs at session start, ahead of the live ping. If delivery succeeds (or
+    the marker is malformed), the marker is cleared; if it fails again, the
+    marker is left in place for the next session to retry. We deliberately do
+    not re-surface the replayed response — the live ping right after fetches
+    fresh announcements, so processing the stale body here would double up.
+    """
+    if not PING_FAIL_MARKER.exists():
+        return
+    try:
+        saved = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
+        body = saved.get("payload")
+        if body:
+            _post_session_ping(body)
+        PING_FAIL_MARKER.unlink()
+    except Exception:
+        pass  # still unreachable — keep the marker for the next attempt
+
+
 def session_ping():
     """Ping the automation tracker for points, PR credits, and announcements."""
     email = read_env("BUILDER_EMAIL")
@@ -176,24 +216,36 @@ def session_ping():
     platform_map = {"darwin": "mac", "win32": "windows", "linux": "linux"}
     platform = platform_map.get(sys.platform, sys.platform)
 
-    payload = json.dumps({
+    body = {
         "builder_email": email,
         "toolkit": toolkit,
         "github_username": github,
         "platform": platform,
-    }).encode()
+    }
 
     try:
-        req = urllib.request.Request(
-            f"{PROXY_URL}/session-ping",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode())
+        data = _post_session_ping(body)
     except Exception:
+        # Delivery failed (timeout / network / proxy down). Stash the payload
+        # so the next session start replays it. Best-effort — never raise.
+        try:
+            PING_FAIL_MARKER.parent.mkdir(parents=True, exist_ok=True)
+            PING_FAIL_MARKER.write_text(
+                json.dumps({
+                    "payload": body,
+                    "attempted_at": datetime.now(timezone.utc).isoformat(),
+                }),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
         return
+
+    # Delivered — clear any stale failure marker from a prior session.
+    try:
+        PING_FAIL_MARKER.unlink()
+    except OSError:
+        pass
 
     output = []
 
@@ -260,6 +312,7 @@ def session_ping():
 def main():
     git_pull()
     sync_pointers()
+    replay_failed_ping()
     session_ping()
 
 
