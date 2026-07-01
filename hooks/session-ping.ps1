@@ -27,9 +27,44 @@ $builderDir = Join-Path $env:USERPROFILE '.claude\local-plugins\nsls-builder-too
 $toolkit = if (Test-Path $builderDir) { 'both' } else { 'personal' }
 
 $payload = @{ builder_email = $email; toolkit = $toolkit; github_username = $github; platform = 'windows' } | ConvertTo-Json -Compress
+
+# Retry marker (parity with session-start.py A-4). When a ping can't be
+# delivered, stash the payload here and replay it at the next session start so a
+# queued credit/announcement isn't lost. Deleted once delivery succeeds.
+$MarkerFile = if (Test-Path $builderDir) {
+    Join-Path $builderDir '.last-ping-failed'
+} else {
+    Join-Path (Join-Path $env:USERPROFILE '.claude') '.last-ping-failed'
+}
+
+# Replay a previously failed ping BEFORE the live one. Delete the marker on
+# success; keep it if delivery still fails. We don't process the replayed
+# response — the live ping right after fetches fresh announcements.
+if (Test-Path $MarkerFile) {
+    try {
+        $saved = Get-Content $MarkerFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($saved.payload_json) {
+            Invoke-RestMethod -Uri "$ProxyUrl/session-ping" -Method Post -Body $saved.payload_json -ContentType 'application/json' -TimeoutSec 30 -ErrorAction Stop | Out-Null
+        }
+        Remove-Item $MarkerFile -Force -ErrorAction SilentlyContinue
+    } catch { }  # still unreachable — keep the marker for the next attempt
+}
+
 try {
     $resp = Invoke-RestMethod -Uri "$ProxyUrl/session-ping" -Method Post -Body $payload -ContentType 'application/json' -TimeoutSec 30 -ErrorAction Stop
-} catch { exit 0 }
+} catch {
+    # Delivery failed — stash for replay next session. Best-effort, never throw.
+    try {
+        $dir = Split-Path $MarkerFile -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $marker = @{ payload_json = $payload; attempted_at = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json -Compress
+        Set-Content -Path $MarkerFile -Value $marker -Encoding UTF8
+    } catch { }
+    exit 0
+}
+
+# Delivered — clear any stale failure marker from a prior session.
+Remove-Item $MarkerFile -Force -ErrorAction SilentlyContinue
 
 $out = @()
 foreach ($pr in @($resp.new_pr_credits)) { if ($pr) { $out += "PR $($pr.pr) to $($pr.repo) credited." } }
