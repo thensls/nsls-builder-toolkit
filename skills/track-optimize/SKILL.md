@@ -49,16 +49,22 @@ says *why*; the gate says *good enough*.
 ### 1 — Signal: find where members leave (PostHog)
 Read the track's `PostHogActuals`: **`step_to_step_continuation`** (the primary
 live metric — average share continuing step→step), **`dropoff_by_step`** (the
-per-step counts), and `step1_dropoff`. Identify the **weakest step** — the
+per-step counts), and `step1_dropoff`. **Pick the row for the *current* live
+version** — a track may have several rows across versions; use the one whose
+`live_track_version` matches the shipped build (else the latest `period`), so
+you're optimizing what's actually live. Identify the **weakest step** — the
 largest single continuation drop. For depth or a fresh cut, use `/posthog` on the
 track's events. Report the weak step with its numbers (real, sourced — never a
 guessed figure).
 
 ### 2 — Diagnose: why that step underperforms (focus-group)
 Run `track-prototype`'s synthetic focus-group panel **on the current live
-content**, focused on the weak step. Read the panel's friction notes against the
-four dimensions (Value / Pacing / Copy / Fit). The signal says a step loses
-people; the panel says which dimension is failing and why.
+content**, focused on the weak step. If the track has prerequisites, pass their
+assumed tokens (the track's `--assume` / `--prereq` set, as in `track-design`
+Phase 0 / the demo build) so the walk doesn't error on token ordering. Read the
+panel's friction notes against the four dimensions (Value / Pacing / Copy / Fit).
+The signal says a step loses people; the panel says which dimension is failing
+and why.
 
 ### 3 — Propose: one concrete change
 From the diagnosis, propose a specific change to the weak step — reword (Copy),
