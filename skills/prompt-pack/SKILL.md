@@ -34,15 +34,21 @@ inferred.
 
 ## The runtime contract (why the pack is shaped this way)
 
-From the `track-prototype` skill's `prototype/player.js`: a `generate`/`chat` substep sends its
-prompt string **verbatim** to the AI, plus a **separate `profile` object** — the
-member's collected answers, keyed by slug (`state.answers`). Crucially, `{slug}`
-tokens inside a generate/chat prompt are **NOT substituted** — the prompt is
-expected to read the profile object. So the developer's real job is: *produce the
-`profile` object this substep expects.* The pack makes that object explicit.
+In the **live app**, `{slug}` tokens in `aiPromptConfig.template`,
+`chatSystemPrompt`, and `prompt` are replaced at runtime with the member's stored
+response for that slug (see the `track-design` skill's
+`references/track-json-schema.md` §8). So whether a prompt references data by
+`{slug}` tokens or reads it from context, the underlying data contract is the
+same: **the set of stored responses the prompt draws on.** The developer's real
+job is to *produce that data object* and wire the tokens to it — which is exactly
+what the pack makes explicit (the object + which substep each field comes from).
 
-(Display fields — `say`/`collect` prompts — DO interpolate `{slug}`. The pack
-covers the AI substeps, where the profile-object contract is what matters.)
+**Prototype vs. live nuance:** the standalone prototype player
+(`track-prototype`'s `prototype/player.js`) does *not* substitute tokens inside a
+generate/chat template — it sends the template verbatim plus the whole profile
+block, so prototype-authored prompts often read the profile block directly. The
+shipped implementation substitutes per the schema. Either way the data object is
+the contract; the pack gives devs the object so both paths resolve.
 
 ## When to use
 
@@ -83,8 +89,8 @@ the `.md` (or drop it into a Google Doc via `gdoc-build`).
 
 - **Prompt** — verbatim, with the source field (`aiPromptConfig.template` or
   `chatSystemPrompt`), sent to the AI as-is.
-- **Tokens in the prompt** — any `{slug}` the author wrote, flagged as *intent,
-  not auto-substituted* (so devs don't expect substitution that doesn't happen).
+- **Tokens in the prompt** — any `{slug}` the author wrote; these resolve from
+  the data object below at runtime (live app), so each must have a matching key.
 - **profile object** — the JSON object the data model must provide, keyed by
   slug, with a representative value each.
 - **Source table** — each profile key → the substep that collects it → its type.

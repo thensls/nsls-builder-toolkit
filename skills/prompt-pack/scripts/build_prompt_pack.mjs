@@ -70,8 +70,8 @@ function extractPrompt(sub) {
     return { text: null, field: null, note: "No template found." };
   }
   if (sub.type === "chat")
-    return { text: sub.chatSystemPrompt || null, field: "chatSystemPrompt",
-      note: sub.chatSystemPrompt ? null : "No chatSystemPrompt set." };
+    return { text: sub.chatSystemPrompt ?? null, field: "chatSystemPrompt",
+      note: sub.chatSystemPrompt === undefined ? "No chatSystemPrompt set." : null };
   return { text: null, field: null, note: null };
 }
 
@@ -85,7 +85,8 @@ function build(tracks) {
           const { text, field, note } = extractPrompt(sub);
           const contract = {};
           for (const slug of available) contract[slug.slug] = {
-            from_substep: slug.id, fieldType: slug.fieldType || "text",
+            from_substep: slug.id, source_type: slug.source_type,
+            fieldType: slug.fieldType || "text",
             example: synthValue(slug.slug, slug.fieldType),
           };
           const tokens = text ? [...new Set([...text.matchAll(TOKEN_RE)].map((m) => m[1]))] : [];
@@ -103,9 +104,14 @@ function build(tracks) {
             profile_contract: contract,
           });
         }
-        // collect substeps produce a slug the runtime stores in the profile.
-        if (sub.type === "collect" && sub.slug)
-          available.push({ slug: sub.slug, id: sub.id, fieldType: sub.fieldType });
+        // collect AND generate substeps produce a slug the runtime stores in the
+        // profile (the validator treats both as downstream data sources); chat
+        // does not. Mark origin so devs know member-entered vs AI-generated.
+        if ((sub.type === "collect" || sub.type === "generate") && sub.slug)
+          available.push({
+            slug: sub.slug, id: sub.id, fieldType: sub.fieldType,
+            source_type: sub.type === "collect" ? "collected" : "generated",
+          });
       }
     }
   }
@@ -117,12 +123,15 @@ function toMarkdown(entries) {
   L.push("# Developer Prompt Pack");
   L.push("");
   L.push("Every `generate` / `chat` substep in the track, with the exact prompt and the");
-  L.push("profile data object the runtime passes alongside it. **Runtime contract:** the");
-  L.push("prompt string is sent to the AI **verbatim**, plus a separate `profile` object");
-  L.push("(the member's collected answers, keyed by slug). `{slug}` tokens inside a");
-  L.push("generate/chat prompt are **not** substituted — the prompt reads the profile");
-  L.push("object. Verify your data model produces the `profile` object shown; the prompt");
-  L.push("text drops in as-is.");
+  L.push("**data object it draws from** — the member's stored responses, keyed by slug.");
+  L.push("");
+  L.push("**Runtime contract.** In the live app, `{slug}` tokens in `template` /");
+  L.push("`chatSystemPrompt` / `prompt` are replaced with the member's stored response");
+  L.push("for that slug (track schema §8). So the data your model must provide is the");
+  L.push("stored-response object below; every `{slug}` in the prompt resolves from it.");
+  L.push("(The standalone *prototype* player differs — it sends the template verbatim");
+  L.push("plus the whole profile block rather than substituting — but the shipped");
+  L.push("implementation substitutes, so wire the tokens to these values.)");
   L.push("");
   for (const e of entries) {
     L.push(`## ${e.step} — \`${e.substep_id}\` (${e.type})`);
@@ -136,9 +145,9 @@ function toMarkdown(entries) {
       L.push("```");
     }
     if (e.tokens_in_prompt.length)
-      L.push(`_Tokens written in the prompt (author intent; not auto-substituted): ${e.tokens_in_prompt.map((t) => "`{" + t + "}`").join(", ")}_`);
+      L.push(`_Tokens in the prompt (resolved from the data object below at runtime): ${e.tokens_in_prompt.map((t) => "`{" + t + "}`").join(", ")}_`);
     L.push("");
-    L.push("**profile object your data model must provide** (representative values):");
+    L.push("**data object your model must provide** (stored responses; representative values):");
     L.push("```json");
     const obj = {};
     for (const [slug, meta] of Object.entries(e.profile_contract)) obj[slug] = meta.example;
@@ -146,10 +155,10 @@ function toMarkdown(entries) {
     L.push("```");
     if (Object.keys(e.profile_contract).length) {
       L.push("");
-      L.push("| profile key | from substep | type |");
-      L.push("|---|---|---|");
+      L.push("| key | from substep | origin | type |");
+      L.push("|---|---|---|---|");
       for (const [slug, meta] of Object.entries(e.profile_contract))
-        L.push(`| \`${slug}\` | \`${meta.from_substep}\` | ${meta.fieldType} |`);
+        L.push(`| \`${slug}\` | \`${meta.from_substep}\` | ${meta.source_type} | ${meta.fieldType} |`);
     } else {
       L.push("_(no collected fields available before this substep)_");
     }
