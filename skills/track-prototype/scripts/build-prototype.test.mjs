@@ -19,6 +19,20 @@ test("buildSite returns index.html with injected track + screens", () => {
   assert.ok(screens.some((s) => s.includes("Hi {name}!")));
 });
 
+test("injects the synthetic prerequisite profile as window.__PREREQ_PROFILE__", () => {
+  const { indexHtml } = buildSite(track, {
+    prereqProfile: { "welcome-goal": { value: "Become a PM", from: "Welcome" } },
+  });
+  assert.match(indexHtml, /window\.__PREREQ_PROFILE__ =/);
+  assert.match(indexHtml, /welcome-goal/);
+  assert.match(indexHtml, /Become a PM/);
+});
+
+test("defaults __PREREQ_PROFILE__ to an empty object when no prerequisites", () => {
+  const { indexHtml } = buildSite(track, {});
+  assert.match(indexHtml, /window\.__PREREQ_PROFILE__ = \{\}/);
+});
+
 test("escapes < in injected JSON so track copy containing </script> can't break out", () => {
   const t = { id: "t", title: "D", steps: [{ id: "s", title: "S", substeps: [
     { id: "a", title: "A", prompt: "</script><b>x</b>", type: "say", fieldType: "banner" },

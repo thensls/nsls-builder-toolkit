@@ -14,6 +14,15 @@ const KEY = "tp.v1";
 const track = window.__TRACK__;            // injected by build (the full track object)
 const screens = window.__SCREENS__;        // injected by build: array of pre-rendered HTML strings
 const subs = flattenSubsteps(track);
+// Synthetic prerequisite profile: { slug: { value, from } } from prerequisite
+// tracks, seeded so cross-track generate/chat steps resolve in the demo. The
+// prompt-context note labels these as synthetic; real answers override them.
+const prereqProfile = window.__PREREQ_PROFILE__ || {};
+const prereqValues = Object.fromEntries(
+  Object.entries(prereqProfile).map(([slug, meta]) => [slug, meta && meta.value]));
+// Slugs this track collects/produces itself — used to tell "entered this demo"
+// from "synthetic prerequisite" in the context note.
+const ownSlugs = new Set(subs.map((s) => s && s.slug).filter(Boolean));
 const root = document.getElementById("tp-body");
 const bar = document.getElementById("tp-progress-bar");
 
@@ -23,11 +32,13 @@ let aiController = null;   // AbortController for the current in-flight AI strea
 let autoTimer = null;      // pending auto-progress timer (image-multiselect autoProgressOnSelect)
 
 function load() {
+  // Seed synthetic prerequisite values as the base; real answers (entered this
+  // run, restored from localStorage) always override them.
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s) return { i: clampIndex(s.i, subs.length), answers: s.answers || {}, chat: s.chat || {} };
+    if (s) return { i: clampIndex(s.i, subs.length), answers: { ...prereqValues, ...(s.answers || {}) }, chat: s.chat || {} };
   } catch { /* corrupt — fall through */ }
-  return { i: 0, answers: {}, chat: {} };
+  return { i: 0, answers: { ...prereqValues }, chat: {} };
 }
 function persist() { localStorage.setItem(KEY, JSON.stringify(state)); }
 
@@ -79,6 +90,43 @@ function render() {
   wireChatAI();
   // Compute + render the real personality scores when an assessment-results screen shows
   maybeRunAssessmentResults();
+  // Author aid: show what data fed an AI step, grouped real vs synthetic-prereq.
+  renderPromptContextNote();
+}
+
+// ---------------------------------------------------------------------------
+// Prompt-context note — a sticky on generate/chat screens listing the profile
+// fields feeding the prompt, grouped by origin (entered this demo vs synthetic
+// prerequisite). Lets the track author confirm the context behind the AI output
+// they're seeing. It is the live-demo twin of the prompt-pack data object.
+// ---------------------------------------------------------------------------
+function renderPromptContextNote() {
+  const sub = subs[state.i];
+  if (!sub || (sub.type !== "generate" && sub.type !== "chat")) return;
+  const entered = [], synthetic = [];
+  for (const [slug, val] of Object.entries(state.answers)) {
+    if (val == null || val === "") continue;
+    if (ownSlugs.has(slug)) entered.push([slug, val]);
+    else if (prereqProfile[slug]) synthetic.push([slug, val, (prereqProfile[slug] || {}).from]);
+  }
+  if (!entered.length && !synthetic.length) return;
+  const clip = (v) => { const s = String(v); return escapeHtml(s.length > 70 ? s.slice(0, 67) + "…" : s); };
+  const group = (title, rows) => rows.length
+    ? `<div style="margin-top:6px"><div style="font-weight:600;opacity:.7;text-transform:uppercase;letter-spacing:.04em;font-size:9px">${title}</div>`
+      + rows.map((r) => `<div style="margin-top:2px"><code style="opacity:.85">${escapeHtml(r[0])}</code> = ${clip(r[1])}`
+        + (r[2] ? ` <em style="opacity:.6">(${escapeHtml(r[2])})</em>` : "") + `</div>`).join("") + `</div>`
+    : "";
+  const note = document.createElement("div");
+  note.className = "tp-context-note";
+  note.setAttribute("style",
+    "position:fixed;right:12px;bottom:12px;max-width:300px;max-height:45vh;overflow:auto;z-index:50;"
+    + "background:#fffbe6;border:1px solid #e6d9a8;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.15);"
+    + "padding:10px 12px;font-size:11px;line-height:1.35;color:#3d2f1f;font-family:system-ui,sans-serif");
+  note.innerHTML = `<div style="font-weight:700;font-size:11px;margin-bottom:2px">📌 Prompt context note</div>`
+    + `<div style="opacity:.6;font-size:10px;margin-bottom:4px">Data behind this AI output</div>`
+    + group("Entered in this demo", entered)
+    + group("Synthetic — prerequisite", synthetic);
+  root.appendChild(note);
 }
 
 // ---------------------------------------------------------------------------

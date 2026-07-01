@@ -3,6 +3,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderSubstep, computeAssessmentProgress, safeUrl } from "./lib/render-substep.mjs";
 import { findOrderingErrors } from "./lib/ordering-lint.mjs";
+import { buildPrereqProfile } from "./lib/synth-profile.mjs";
 import { flattenSubsteps } from "../prototype/player-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -109,6 +110,7 @@ export function buildSite(input, opts = {}) {
     .replace("%%SCREENS%%", () => jsonForScript(screens))
     .replace("%%PROXY%%", () => jsonForScript(opts.proxy || null))
     .replace("%%ASSESSMENT%%", () => jsonForScript(assessment || null))
+    .replace("%%PREREQ%%", () => jsonForScript(opts.prereqProfile || {}))
     .replace("__TRACK_TITLE__", () => String(track.title || "Track Preview").replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])))
     .replace("__DATE__", () => opts.date || "");
@@ -121,20 +123,32 @@ function parseArgs(argv) {
     persona: get("--persona"), samplesPath: get("--samples"),
     out: get("--out") || "prototype-build", assume: (get("--assume") || "").split(",").filter(Boolean),
     proxyUrl: get("--proxy-url"), proxyToken: get("--proxy-token"),
-    assets: get("--assets") };
+    assets: get("--assets"),
+    prereq: (get("--prereq") || "").split(",").map((s) => s.trim()).filter(Boolean) };
 }
 
 // fileURLToPath decodes percent-encoding so the check survives paths with spaces.
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
-  const { file, samplesPath, out, assume, proxyUrl, proxyToken, assets } = parseArgs(process.argv.slice(2));
-  if (!file) { console.error("Usage: build-prototype.mjs <track.json> [--persona name] [--samples samples.json] [--out dir] [--assume a,b] [--proxy-url url] [--proxy-token token] [--assets <app-public-dir>]"); process.exit(2); }
+  const { file, samplesPath, out, assume, proxyUrl, proxyToken, assets, prereq } = parseArgs(process.argv.slice(2));
+  if (!file) { console.error("Usage: build-prototype.mjs <track.json> [--persona name] [--samples samples.json] [--out dir] [--assume a,b] [--prereq prereqA.json,prereqB.json] [--proxy-url url] [--proxy-token token] [--assets <app-public-dir>]"); process.exit(2); }
   const raw = JSON.parse(readFileSync(file, "utf8"));
   const track = Array.isArray(raw) ? raw[0] : raw; // track files may be wrapped in a top-level array
   const samples = samplesPath ? JSON.parse(readFileSync(samplesPath, "utf8")) : {};
   const date = new Date().toISOString().slice(0, 10);
   const proxy = proxyUrl ? { url: proxyUrl, token: proxyToken || "" } : undefined;
-  const { indexHtml } = buildSite(track, { samples, assume, date, proxy });
+  // Prerequisite tracks → a synthetic profile seeded into the demo so cross-track
+  // generate/chat steps resolve. Each is a track.json (array-wrapped ok), in order.
+  const prereqTracks = prereq.map((p) => {
+    const r = JSON.parse(readFileSync(p, "utf8"));
+    return Array.isArray(r) ? r[0] : r;
+  });
+  const prereqProfile = buildPrereqProfile(prereqTracks);
+  if (prereq.length) console.log(`prereq: seeded ${Object.keys(prereqProfile).length} synthetic field(s) from ${prereq.length} track(s)`);
+  // Prerequisite slugs are available as tokens (they're seeded into the profile),
+  // so treat them as assumed for the ordering validator — union with explicit --assume.
+  const assumeAll = [...new Set([...assume, ...Object.keys(prereqProfile)])];
+  const { indexHtml } = buildSite(track, { samples, assume: assumeAll, date, proxy, prereqProfile });
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, "index.html"), indexHtml);
   cpSync(join(PROTO, "design-kit"), join(out, "design-kit"), { recursive: true });
