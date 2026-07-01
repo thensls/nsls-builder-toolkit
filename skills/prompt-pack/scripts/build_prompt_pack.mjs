@@ -26,6 +26,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 const TOKEN_RE = /\{([a-z0-9][a-z0-9-]*)\}/g;
 
+// Mirror the track schema / validator: an omitted slug is auto-derived from title.
+function slugify(s) {
+  return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
 // Synthetic representative values — keyword match on slug first, then fieldType,
 // then a labeled fallback. Never real member data.
 function synthValue(slug, fieldType) {
@@ -107,11 +112,14 @@ function build(tracks) {
         // collect AND generate substeps produce a slug the runtime stores in the
         // profile (the validator treats both as downstream data sources); chat
         // does not. Mark origin so devs know member-entered vs AI-generated.
-        if ((sub.type === "collect" || sub.type === "generate") && sub.slug)
-          available.push({
-            slug: sub.slug, id: sub.id, fieldType: sub.fieldType,
-            source_type: sub.type === "collect" ? "collected" : "generated",
-          });
+        if (sub.type === "collect" || sub.type === "generate") {
+          const slug = sub.slug || slugify(sub.title || "");
+          if (slug)
+            available.push({
+              slug, id: sub.id, fieldType: sub.fieldType,
+              source_type: sub.type === "collect" ? "collected" : "generated",
+            });
+        }
       }
     }
   }
