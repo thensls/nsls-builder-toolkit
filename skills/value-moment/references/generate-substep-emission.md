@@ -17,7 +17,7 @@ memory — open that schema at emit time.
   "title": "Careers your Marketing major opens up",
   "prompt": "",
   "aiPromptConfig": {
-    "template": "The member's major is {major} and their state is {location}. Write two short second-person paragraphs, warm and specific: (1) 3–4 real roles this major commonly leads into; (2) the directions where demand has been climbing, described QUALITATIVELY. Do NOT state any salary, percentage, growth rate, or ranking. If you feel the pull to add a number, describe the trend in words instead.",
+    "template": "The member's profile data (their major, home state, and other answers) is provided to you alongside this instruction. Read it, then write two short second-person paragraphs, warm and specific: (1) 3–4 real roles the member's major commonly leads into; (2) the directions where demand has been climbing, described QUALITATIVELY. Do NOT state any salary, percentage, growth rate, or ranking. If you feel the pull to add a number, describe the trend in words instead.",
     "executeOn": "enter"
   }
 }
@@ -29,9 +29,10 @@ generated content — set it to `""` when the generated paragraphs stand alone, 
 a short lead-in line. The AI instruction lives in `aiPromptConfig.template`, not
 in `prompt`.
 
-This example is a **model-reasoned** moment — it uses only real collected slugs
-(`{major}`, `{location}`) and forbids numbers in the prompt. For a **grounded**
-moment with real figures, see "The `{data}` token" below (future-only today).
+**Note the template references the profile block, not `{slug}` tokens** — see
+"Token mechanics" below for why. This example is a **model-reasoned** moment: it
+forbids numbers in the prompt. For a **grounded** moment with real figures, see
+"Grounding" below (real data payload is future-only today).
 
 Keys that matter for a value moment:
 
@@ -42,7 +43,7 @@ Keys that matter for a value moment:
 | `type` | `"generate"` — always, for a value moment. |
 | `title` | **Required** — the screen heading the member sees. |
 | `prompt` | **Required** (validator errors if missing/null). Display text above the generated content; `""` is valid. |
-| `aiPromptConfig.template` | The authored prompt. Uses `{slug}` tokens for collected data; carries the grounding contract in its own words (see below). |
+| `aiPromptConfig.template` | The authored AI prompt. Reference the supplied profile block for the member's data (NOT `{slug}` tokens — see below); carries the grounding contract in its own words. |
 | `aiPromptConfig.executeOn` | `"enter"` — generate when the member lands on the screen. |
 | `aiPromptConfig.model` | Optional; omit to use the app default. |
 
@@ -54,25 +55,33 @@ import, so an emitted `promptMode` is silently dropped (imported record keeps it
 
 ## Token mechanics (the trigger data)
 
-`{slug}` placeholders resolve at runtime to the member's stored response for the
-substep with that `slug`, OR to a profile field from a completed prerequisite
-track. A value moment's `trigger` fields MUST be slugs from an earlier **`collect`**
-substep in the same track (or prerequisite profile tokens) — a token that
-resolves to nothing produces a generic, ungrounded paragraph, which is the exact
-failure the grounding rule exists to prevent. **Use only collected data as a
-trigger:** the validator technically also accepts a slug produced by an earlier
-`generate` substep, but the prototype runtime (`player.js`) only forwards
-collected answers, so a token pointing at another `generate`'s output validates
-yet renders unresolved. For value moments the trigger is always something the
-member entered anyway — keep it to `collect` slugs.
+There are **two different runtime paths**, and value moments live on the one
+that does NOT substitute tokens — get this right or the AI sees literal
+`{major}`:
 
-**The validator enforces this.** The `track-design` skill's `scripts/validate-track-json.mjs`
-scans every string field for `{tokens}` and errors on any token not produced by
-an earlier substep (or an assumed prerequisite token passed via `--assume…`). So
-an invented token like `{data}` **fails validation today** — and even if it
-passed, the runtime player only forwards collected profile answers, so it would
-render unresolved. Only emit tokens that a real earlier `collect`/`generate`
-substep produces. Verify each token's source before emitting.
+- **Display fields** (`say`/`collect` `prompt`, screen copy): the player calls
+  `interpolate(screen, answers)` and replaces `{slug}` with the member's stored
+  answer live. Tokens work here.
+- **AI fields** (`generate` `aiPromptConfig.template`, `chat` `chatSystemPrompt`):
+  the prototype player (`player.js`) sends the template **verbatim** to the proxy
+  and passes the member's answers as a **separate `profile` block** — it does NOT
+  substitute `{slug}` inside the template. So `{major}` in a `generate` template
+  reaches the model as the literal text `{major}`. **Write the template to read
+  the supplied profile block** ("the member's major and state are in the profile
+  data provided…"), not to embed `{slug}` tokens.
+
+A value moment's `trigger` still names the collected data it depends on (for your
+reasoning and for ranking), but the emitted `template` references the **profile
+block**, not tokens. The data must still be collected earlier by a `collect`
+substep — an empty profile produces a generic, ungrounded paragraph, the exact
+failure the grounding rule exists to prevent.
+
+**The validator also scans for tokens.** The `track-design` skill's
+`scripts/validate-track-json.mjs` errors on any `{token}` (in any string field)
+not produced by an earlier substep, or an assumed prerequisite token passed via
+`--assume…`. So an invented token like `{data}` fails validation *and* wouldn't
+be substituted in the AI path anyway. If you use a `{slug}` in a display field,
+make sure an earlier `collect` substep produces it.
 
 ## Grounding — how real figures reach the prompt
 

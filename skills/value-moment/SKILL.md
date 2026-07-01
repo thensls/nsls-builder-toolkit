@@ -144,12 +144,14 @@ number, or cut the candidate.
   ground by pasting the real figures as literal text (cite the source); do NOT
   emit a `{data}` token — it isn't a supported/resolvable token yet (see
   `references/generate-substep-emission.md`).
-- **prompt_template:** *"The member's major is {major}. Using ONLY these figures
-  — [paste real BLS/O\*NET rows here, cited] — write two short paragraphs: (1) the
-  three most common careers for this major; (2) the two with the fastest
-  projected demand growth. Warm, specific, second-person. Use only the provided
-  figures; if one is missing, describe the trend qualitatively and invent no
-  number."*
+- **prompt_template:** *"The member's major is in the profile data provided to
+  you. Using ONLY these figures — [paste real BLS/O\*NET rows here, cited] — write
+  two short paragraphs: (1) the three most common careers for that major; (2) the
+  two with the fastest projected demand growth. Warm, specific, second-person.
+  Use only the provided figures; if one is missing, describe the trend
+  qualitatively and invent no number."* (The generate template is sent verbatim
+  with a separate profile block — reference that block, don't embed `{slug}`
+  tokens; see `references/generate-substep-emission.md`.)
 - **example_output:** *(rendered from real data at review time)*
 - **value_dim:** value.a + value.c.
 
