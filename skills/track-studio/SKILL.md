@@ -41,9 +41,11 @@ tracks; this skill is the *doer*.)
 
 1. **Ask the lifecycle question:** *"What would you like to do — add an idea,
    build a prototype, refine for production, or optimize something live?"*
-2. **Show what's in the Studio** (skip only when adding a brand-new idea):
+2. **Show what's in the Studio** (skip only when adding a brand-new idea). Run
+   the bundled listing script — it lives in **this skill's own `scripts/`
+   directory**, so run it from there (or give its full path):
    ```bash
-   AIRTABLE_API_KEY=… node scripts/list_studio_tracks.mjs
+   cd "<this skill's directory>" && AIRTABLE_API_KEY=… node scripts/list_studio_tracks.mjs
    ```
    Lists every track grouped by stage (Backlog / In Development / Live /
    Optimization), with owner. Ask which one they want to work on. (Token: a PAT
@@ -51,16 +53,19 @@ tracks; this skill is the *doer*.)
    `/airtable`.)
 3. **Sanity-check the stage vs. the intent** (see Guardrails), then
 4. **Hand off** to the matching skill, carrying whatever context the chosen track
-   has: `slug`, `title`, `stage`, and any of `brief_doc_url` / `outcomes_doc_url`
-   that exist (early-stage tracks legitimately have blank fields — carry what's
-   there, don't wait for all of them). Tell the builder which skill you're
-   invoking and why.
+   has: `slug`, `title`, `stage`, the location of its **`track.json`** (required
+   by `track-design` / `track-prototype` / `academic-outcomes` / `prompt-pack`,
+   which all read it), and any of `brief_doc_url` / `outcomes_doc_url` that exist
+   (early-stage tracks legitimately have blank fields — carry what's there, don't
+   wait for all of them). Tell the builder which skill you're invoking and why.
 
-**The router is re-entrant.** Each hand-off advances the track one stage. A
-builder whose goal is "production" from a Backlog idea will pass through
-`track-design` (→ In Development) and then come *back* here to run
-`track-prototype` (→ Live) — two hops, not one. Say so, so their expectation is
-right.
+**The router is re-entrant.** Each hand-off routes to the work that moves the
+track toward its next stage; the `Tracks.stage` field itself is updated in
+Airtable as that work lands (e.g. `track-brief` writes `stage=backlog`; flipping
+to `in-development` happens when the prototype is authored) — the router doesn't
+write it. A builder whose goal is "production" from a Backlog idea passes through
+`track-design` and then comes *back* here to run `track-prototype` — two hops,
+not one. Say so, so their expectation is right.
 
 ## Guardrails — match intent to the track's real state
 
@@ -73,7 +78,8 @@ on that:
   prototype exists yet. Route to `track-design` (build a prototype) first; note
   production is then a second hop through `track-prototype`.
 - **"Build a prototype" on a Live track** → confirm they mean a new version /
-  optimization, and route to `track-optimize` if so.
+  optimization; if so, use the optimize path (the interim workflow below, until
+  `track-optimize` ships).
 - **"Optimize" a track that isn't Live** → nothing to optimize yet; route to the
   step its current stage actually calls for.
 - **"Add an idea" that duplicates an existing track** (same slug/title in the
