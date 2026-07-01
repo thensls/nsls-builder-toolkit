@@ -95,7 +95,12 @@ Violating the letter of these rules violates their spirit.
 5. Review the sequence for token-ordering: no step may reference a token that hasn't been collected yet.
 6. Check register coverage: do any steps need register-conditional copy?
 
-**Output:** An ordered step/substep outline. For each step: single-sentence purpose, action types used, and the profile fields/tokens it produces or consumes.
+**Plan the value moments.** As you sequence, mark where the track can hand
+personalized insight back to the member right after it collects the data for it
+(a pull-along moment). These become GENERATE substeps authored via `value-moment`
+in Phase 5 — note the trigger field + intent now; author the grounded prompt then.
+
+**Output:** An ordered step/substep outline. For each step: single-sentence purpose, action types used, the profile fields/tokens it produces or consumes, and any planned value moments.
 
 ---
 
@@ -142,7 +147,7 @@ Violating the letter of these rules violates their spirit.
 - **SAY substeps:** Full copy with any register-conditional branches. Named, specific celebration language — never generic ("You just mapped your leadership values for the first time — that matters.").
 - **COLLECT substeps:** Prompt text, field key, input type, placeholder text, validation rules (required? max length?). Use derived-not-asked where possible.
 - **CHAT substeps:** Full system prompt — this is the most important content for any chat substep. Inject profile data explicitly using token syntax. The system prompt should tell the AI what the member has shared so far, what role to play, and what outcome to drive toward.
-- **GENERATE substeps:** Full generation config — model, system prompt, output field, trigger condition.
+- **GENERATE substeps:** Full generation config — model, system prompt, output field, trigger condition. **For personalized insight nuggets (value moments), use the `value-moment` skill** — hand it the fields collected up to that point + the value promise; it returns ranked, grounded generate substeps (with example outputs) to author in. Don't hand-write value-moment prompts (you'd skip its faithfulness rule). Write the template to read the supplied profile block, not `{slug}` tokens (the generate path passes a profile object; see `value-moment`).
 - **Option sets:** Every option label, value, and any downstream token it sets.
 
 **Emit both artifacts from the same authoring pass:**
@@ -160,6 +165,37 @@ Emit as a JSON array. Rules:
 - Stable `id` fields (slug-based, agreed at authoring time, never change)
 - Only author-provided fields — no `order`, `version`, `isDraft`, `trackId`, `stepId`, or timestamps
 - Matches the schema in `references/track-json-schema.md` exactly
+
+**(c) Preview it working in the demo**
+
+Build the prototype so the authored track — including any value-moment generate
+substeps — is **showable and actually runs**: answer the questions and the
+generate steps stream real AI output from the proxy.
+
+Run the `build-prototype.mjs` script from the sibling `track-prototype` skill
+(resolve its path in your install; shown here as `<track-prototype>`):
+```bash
+node <track-prototype>/scripts/build-prototype.mjs track.json \
+  --prereq <prereq-track.json>,<...> --out demo/ \
+  --assets <ignite-next/public> \
+  --proxy-url <proxy> --proxy-token <token>
+# then serve the static build and open it:
+cd demo && python3 -m http.server 8000   # → http://localhost:8000
+```
+`demo/` is a static site — it must be **served**, not opened as `file://` (the
+module scripts + proxy fetch need an http origin). Any static server works.
+- **`--assets <ignite-next/public>`** copies the app images/videos the track
+  references (`/img/…`, `/video/…`) into the build so they resolve; omit it and
+  those URLs 404. Only referenced files are copied.
+- **`--prereq`** points at the prerequisite tracks' JSON (from Phase 0). The build
+  seeds a synthetic prerequisite profile so cross-track generate/chat steps
+  resolve, and each AI screen shows a **📌 prompt-context note** listing the data
+  behind the output (entered-this-demo vs. synthetic-prerequisite) — so you can
+  confirm the context that produced what you're seeing.
+- **Iterate (tight loop):** edit a substep → rebuild → the demo restores your
+  position (localStorage) and re-runs that generate step. Tweak the prompt and
+  re-preview until the value moment lands.
+- Without a proxy, generate steps fall back to their baked sample text.
 
 ---
 
@@ -198,7 +234,7 @@ node scripts/validate-track-json.mjs my-track.json --assume goal,strengths --ass
 | Phase 2 | `references/track-ontology.md` (6-step framework) | — |
 | Phase 3 | `references/member-personas.md` | — |
 | Phase 4 | — | `ux-audit` |
-| Phase 5 | `references/track-json-schema.md`, `references/examples/` | `gdoc-build` |
+| Phase 5 | `references/track-json-schema.md`, `references/examples/` | `gdoc-build`, `value-moment`, `track-prototype` (build-prototype for the demo preview) |
 | Phase 6 | — | `scripts/validate-track-json.mjs` (CLI) |
 
 ---
