@@ -55,8 +55,9 @@ function synthValue(slug, fieldType) {
   for (const [re, v] of kw) if (re.test(s)) return v;
   switch (fieldType) {
     case "number": return 42;
+    // Runtime stores multi-select as a comma-joined string (player.js join(", ")).
     case "multiselect":
-    case "multipleSelect": return ["<option A>", "<option B>"];
+    case "multipleSelect": return "<option A>, <option B>";
     case "email": return "jordan.lee@example.edu";
     default: return `<sample ${slug || "value"}>`;
   }
