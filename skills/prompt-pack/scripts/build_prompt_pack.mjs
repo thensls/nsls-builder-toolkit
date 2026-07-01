@@ -23,45 +23,14 @@
  * synthetic values with better domain judgment before handing the pack to devs.
  */
 import { readFileSync, writeFileSync } from "node:fs";
+// Shared synth logic (slug derivation + synthetic values) lives in the
+// track-prototype skill's synth-profile module — ONE source of truth, so the dev
+// prompt-pack and the demo's live prompt-context note show identical sample
+// values (spec Component 5). Both skills ship together in the nsls-builder-toolkit
+// plugin, so this sibling import resolves wherever the plugin is installed.
+import { slugify, synthValue } from "../../track-prototype/scripts/lib/synth-profile.mjs";
 
 const TOKEN_RE = /\{([a-z0-9][a-z0-9-]*)\}/g;
-
-// Mirror the track schema / validator: an omitted slug is auto-derived from title.
-function slugify(s) {
-  return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-// Synthetic representative values — keyword match on slug first, then fieldType,
-// then a labeled fallback. Never real member data.
-function synthValue(slug, fieldType) {
-  const s = (slug || "").toLowerCase();
-  const kw = [
-    [/(^|-)major($|-)|field-of-study/, "Marketing"],
-    [/state|location|region|city|address/, "Ohio"],
-    [/(^|-)name($|-)|full-name|first-name/, "Jordan Lee"],
-    [/email/, "jordan.lee@example.edu"],
-    [/salary|income|target-pay|compensation/, "$65,000"],
-    [/cost|budget|expense|rent/, "$2,400/month"],
-    [/dream-job|target-role|role|job-title|occupation/, "Product Manager"],
-    [/goal|objective|aspiration/, "Become a product manager within 18 months"],
-    [/strength/, "Strategic; Empathetic; Analytical"],
-    [/value/, "Growth; Integrity; Impact"],
-    [/inspiration|motivation|interest/, "Building things that help people"],
-    [/personality|profile/, "Analytical, people-oriented, driven"],
-    [/school|college|university/, "State University"],
-    [/year|grad|class-of/, "Junior"],
-    [/mentor/, "Alex Rivera, Director of Product"],
-  ];
-  for (const [re, v] of kw) if (re.test(s)) return v;
-  switch (fieldType) {
-    case "number": return 42;
-    // Runtime stores multi-select as a comma-joined string (player.js join(", ")).
-    case "multiselect":
-    case "multipleSelect": return "<option A>, <option B>";
-    case "email": return "jordan.lee@example.edu";
-    default: return `<sample ${slug || "value"}>`;
-  }
-}
 
 function extractPrompt(sub) {
   if (sub.type === "generate") {
