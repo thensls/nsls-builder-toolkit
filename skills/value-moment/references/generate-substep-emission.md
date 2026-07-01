@@ -3,7 +3,7 @@
 A value moment ships as a `generate` substep in the track JSON — the same substep
 type the prototype player and the live Society app already render through the
 proxy AI. This file is the exact shape to emit. For the full track/step/substep
-grammar, open `track-design/references/track-json-schema.md` (Section 7 covers
+grammar, open the `track-design` skill's `references/track-json-schema.md` (Section 7 covers
 `aiPromptConfig`; Section 8 covers token mechanics). Never author the JSON from
 memory — open that schema at emit time.
 
@@ -46,7 +46,7 @@ Keys that matter for a value moment:
 `promptAiPrompt`, `suggestionsMode`, etc.). The schema lists them under
 "Admin-Only — Never Include in Import JSON": `seed.ts` never writes them on
 import, so an emitted `promptMode` is silently dropped (imported record keeps it
-`null`). See `track-design/references/track-json-schema.md` §5.
+`null`). See the `track-design` skill's `references/track-json-schema.md` §5.
 
 ## Token mechanics (the trigger data)
 
@@ -62,7 +62,7 @@ collected answers, so a token pointing at another `generate`'s output validates
 yet renders unresolved. For value moments the trigger is always something the
 member entered anyway — keep it to `collect` slugs.
 
-**The validator enforces this.** `track-design/scripts/validate-track-json.mjs`
+**The validator enforces this.** The `track-design` skill's `scripts/validate-track-json.mjs`
 scans every string field for `{tokens}` and errors on any token not produced by
 an earlier substep (or an assumed prerequisite token passed via `--assume…`). So
 an invented token like `{data}` **fails validation today** — and even if it
