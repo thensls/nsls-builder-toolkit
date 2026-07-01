@@ -99,7 +99,7 @@ function build(tracks) {
             track: track.id || track.title,
             step: step.title,
             substep_id: sub.id,
-            slug: sub.slug || null,
+            slug: sub.slug || slugify(sub.title || "") || null,
             type: sub.type,
             executeOn: sub.aiPromptConfig?.executeOn || null,
             prompt_field: field,
@@ -109,9 +109,13 @@ function build(tracks) {
             profile_contract: contract,
           });
         }
-        // collect AND generate substeps produce a slug the runtime stores in the
-        // profile (the validator treats both as downstream data sources); chat
-        // does not. Mark origin so devs know member-entered vs AI-generated.
+        // What the runtime stores in the profile (state.answers):
+        //  - collect responses (member-entered)
+        //  - generate outputs (the validator treats these as downstream data)
+        //    → slug auto-derived from title when omitted, matching the validator.
+        //  - an `assessment-results` substep with an explicit slug writes the
+        //    computed personality profile (player.js maybeRunAssessmentResults,
+        //    gated on sub.slug) — regardless of the substep's `type`.
         if (sub.type === "collect" || sub.type === "generate") {
           const slug = sub.slug || slugify(sub.title || "");
           if (slug)
@@ -119,6 +123,11 @@ function build(tracks) {
               slug, id: sub.id, fieldType: sub.fieldType,
               source_type: sub.type === "collect" ? "collected" : "generated",
             });
+        } else if (sub.fieldType === "assessment-results" && sub.slug) {
+          available.push({
+            slug: sub.slug, id: sub.id, fieldType: sub.fieldType,
+            source_type: "computed",
+          });
         }
       }
     }
