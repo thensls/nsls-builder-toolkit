@@ -11,6 +11,8 @@ memory — open that schema at emit time.
 
 ```json
 {
+  "id": "ss_vm_marketing_careers",
+  "slug": "vm-marketing-careers",
   "type": "generate",
   "title": "Careers your Marketing major opens up",
   "prompt": "",
@@ -35,8 +37,10 @@ Keys that matter for a value moment:
 
 | Key | Value |
 |---|---|
+| `id` | **Required** — unique across the whole track (validator errors if missing/duplicate). |
+| `slug` | Optional but recommended — unique within the step; falls back to a slugified `title` if omitted. |
 | `type` | `"generate"` — always, for a value moment. |
-| `title` | The screen heading the member sees. |
+| `title` | **Required** — the screen heading the member sees. |
 | `prompt` | **Required** (validator errors if missing/null). Display text above the generated content; `""` is valid. |
 | `aiPromptConfig.template` | The authored prompt. Uses `{slug}` tokens for collected data; carries the grounding contract in its own words (see below). |
 | `aiPromptConfig.executeOn` | `"enter"` — generate when the member lands on the screen. |
