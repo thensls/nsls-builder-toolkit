@@ -82,8 +82,13 @@ function extractPrompt(sub) {
 
 function build(tracks) {
   const out = [];
+  // `available` accumulates ACROSS tracks: pass a track plus its prerequisites in
+  // order (e.g. [Welcome, Personal Insights, Clarity]) and a dependent track's
+  // prompts see upstream fields, matching the runtime's cross-track profile
+  // (the validator's assumed-prerequisite tokens). Single-track input just uses
+  // its own fields.
+  const available = []; // collect/generate/computed slugs seen so far, in order
   for (const track of tracks) {
-    const available = []; // collect slugs seen so far, in order
     for (const step of track.steps || []) {
       for (const sub of step.substeps || []) {
         if (sub.type === "generate" || sub.type === "chat") {
