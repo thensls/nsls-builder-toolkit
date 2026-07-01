@@ -18,6 +18,12 @@ export function slugify(s) {
 
 /** A representative synthetic value: keyword match on slug, then fieldType, then a labelled fallback. */
 export function synthValue(slug, fieldType) {
+  // Multi-selects MUST be comma-joined — downstream narrowing splits on ", ", so
+  // a semicolon-joined keyword value would collapse to one malformed option.
+  // Shape wins over a nicer keyword match here.
+  if (fieldType === "multi-select" || fieldType === "image-multiselect"
+      || fieldType === "multiselect" || fieldType === "multipleSelect")
+    return "<option A>, <option B>";
   const s = (slug || "").toLowerCase();
   // Keywords match whole hyphen-delimited slug segments (optional trailing "s"),
   // so e.g. "state" matches "home-state"/"states" but NOT "statement", and
@@ -42,12 +48,6 @@ export function synthValue(slug, fieldType) {
   for (const [re, v] of kw) if (re.test(s)) return v;
   switch (fieldType) {
     case "number": return "42";
-    // Runtime stores multi-selects as a comma-joined string. The real field-type
-    // strings are "multi-select" / "image-multiselect" (aliases kept tolerant).
-    case "multi-select":
-    case "image-multiselect":
-    case "multiselect":
-    case "multipleSelect": return "<option A>, <option B>";
     case "email": return "jordan.lee@example.edu";
     default: return `<sample ${slug || "value"}>`;
   }
