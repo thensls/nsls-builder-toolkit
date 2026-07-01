@@ -11,7 +11,8 @@ test("synthValue: keyword match, fieldType fallback, multiselect is a joined str
   assert.equal(synthValue("major", "text"), "Marketing");
   assert.equal(synthValue("home-state", "text"), "Ohio");
   assert.equal(synthValue("top-strengths", "multiselect"), "Strategic; Empathetic; Analytical"); // keyword wins over fieldType
-  assert.equal(synthValue("favorite-topics", "multiselect"), "<option A>, <option B>");            // no keyword → multiselect shape
+  assert.equal(synthValue("favorite-topics", "multi-select"), "<option A>, <option B>");            // real field-type string
+  assert.equal(synthValue("pick-images", "image-multiselect"), "<option A>, <option B>");
   assert.equal(synthValue("whatever", "number"), "42");
   assert.equal(synthValue("obscure-slug", "text"), "<sample obscure-slug>");
 });

@@ -39,7 +39,10 @@ export function synthValue(slug, fieldType) {
   for (const [re, v] of kw) if (re.test(s)) return v;
   switch (fieldType) {
     case "number": return "42";
-    // Runtime stores multi-select as a comma-joined string.
+    // Runtime stores multi-selects as a comma-joined string. The real field-type
+    // strings are "multi-select" / "image-multiselect" (aliases kept tolerant).
+    case "multi-select":
+    case "image-multiselect":
     case "multiselect":
     case "multipleSelect": return "<option A>, <option B>";
     case "email": return "jordan.lee@example.edu";

@@ -119,7 +119,11 @@ export function buildSite(input, opts = {}) {
 
 function parseArgs(argv) {
   const get = (flag) => { const i = argv.indexOf(flag); return i !== -1 ? argv[i + 1] : undefined; };
-  return { file: argv.find((a) => !a.startsWith("--") && a.endsWith(".json")),
+  // Indices consumed as flag VALUES (e.g. --prereq a.json,b.json) must not be
+  // mistaken for the positional track file, whatever the argument order.
+  const flagValue = new Set();
+  argv.forEach((a, i) => { if (a.startsWith("--")) flagValue.add(i + 1); });
+  return { file: argv.find((a, i) => !a.startsWith("--") && !flagValue.has(i) && a.endsWith(".json")),
     persona: get("--persona"), samplesPath: get("--samples"),
     out: get("--out") || "prototype-build", assume: (get("--assume") || "").split(",").filter(Boolean),
     proxyUrl: get("--proxy-url"), proxyToken: get("--proxy-token"),

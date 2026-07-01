@@ -461,7 +461,9 @@ function appendBubble(log, role, content) {
 document.getElementById("tp-back").addEventListener("click", back);
 document.getElementById("tp-reset")?.addEventListener("click", () => {
   localStorage.removeItem(KEY);
-  state = { i: 0, answers: {}, chat: {} };
+  // Re-seed the synthetic prerequisite values so cross-track generate/chat still
+  // resolve after a reset (only the real, entered answers are cleared).
+  state = { i: 0, answers: { ...prereqValues }, chat: {} };
   aiController?.abort(); chatInFlight = false;
   render();
 });
