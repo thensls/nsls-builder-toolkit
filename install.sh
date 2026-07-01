@@ -99,6 +99,31 @@ if not already:
 else:
     print('  Auto-update hook already registered')
 
+# Register the skill-event hook (PreToolUse:Skill) globally (idempotent).
+# The plugin ships this in hooks/hooks.json, but a *locally enabled* plugin
+# does not reliably load bundled hooks (especially on Claude Code desktop) —
+# the same reason Step 3.5 has to register bundled MCP servers by hand. So we
+# merge it into the global settings.json to make it the primary firing path.
+# The server dedupes per builder/skill/day, so this is safe even on surfaces
+# that also fire the plugin hook or a pointer file's inline bash.
+SKILL_HOOK_CMD = 'bash \$HOME/.claude/local-plugins/nsls-builder-toolkit/hooks/skill-event.sh'
+SKILL_MARKER = 'nsls-builder-toolkit/hooks/skill-event.sh'
+pre_tool_use = hooks.setdefault('PreToolUse', [])
+skill_entry = None
+for entry in pre_tool_use:
+    if entry.get('matcher') == 'Skill':
+        skill_entry = entry
+        break
+if skill_entry is None:
+    skill_entry = {'matcher': 'Skill', 'hooks': []}
+    pre_tool_use.append(skill_entry)
+skill_hooks = skill_entry.setdefault('hooks', [])
+if not any(SKILL_MARKER in h.get('command', '') for h in skill_hooks):
+    skill_hooks.append({'type': 'command', 'command': SKILL_HOOK_CMD, 'timeout': 5})
+    print('  Registered skill-event hook (PreToolUse:Skill)')
+else:
+    print('  Skill-event hook already registered')
+
 with open(SETTINGS_PATH, 'w', encoding='utf-8') as f: json.dump(cfg, f, indent=2)
 " 2>/dev/null || echo "  Note: Could not update settings.json — add the hook manually"
 else
