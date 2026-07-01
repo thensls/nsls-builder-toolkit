@@ -218,7 +218,7 @@ def build(document):
 def main():
     if len(sys.argv) != 3:
         sys.exit("usage: render_academic_outcomes.py <document.json> <out.docx>")
-    with open(sys.argv[1]) as f:
+    with open(sys.argv[1], encoding="utf-8") as f:
         document = json.load(f)
     doc = build(document)
     doc.save(sys.argv[2])
