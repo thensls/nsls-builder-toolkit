@@ -70,18 +70,28 @@ const primary = (t) => norm(String(t).split(/[/,;:]/)[0]);
 
 // Resolve free-text major → CIP (mirrors track-studio lib/grounding matchMajor):
 // exact title → primary-term → substring, preferring "General" then shortest.
+// Returns { cip, exact, alternatives } — exact=true when title/primary matched
+// exactly (a picklist value); false for a loose substring match, where the
+// author should eyeball the alternatives. (Canonical disambiguation of ambiguous
+// common names — e.g. "Nursing" → Registered vs. Science — needs popularity
+// ranking via IPEDS completions; a fast-follow. Figures are always real either way.)
 function matchMajor(want) {
   want = norm(want);
   if (!want) return null;
   const entries = Object.entries(snap.majors);
-  const exact = entries.find(([, m]) => norm(m.title) === want);
-  if (exact) return exact[0];
-  let cands = entries.filter(([, m]) => primary(m.title) === want);
-  if (!cands.length) cands = entries.filter(([, m]) => norm(m.title).includes(want));
-  if (!cands.length) return null;
-  cands.sort((a, b) => (/general/i.test(a[1].title) ? 0 : 1) - (/general/i.test(b[1].title) ? 0 : 1)
+  const rank = (list) => list.slice().sort((a, b) =>
+    (/general/i.test(a[1].title) ? 0 : 1) - (/general/i.test(b[1].title) ? 0 : 1)
     || a[1].title.length - b[1].title.length);
-  return cands[0][0];
+
+  const exactTitle = entries.find(([, m]) => norm(m.title) === want);
+  if (exactTitle) return { cip: exactTitle[0], exact: true, alternatives: [] };
+  const primaryExact = rank(entries.filter(([, m]) => primary(m.title) === want));
+  if (primaryExact.length) return { cip: primaryExact[0][0], exact: true, alternatives: [] };
+
+  let cands = rank(entries.filter(([, m]) => primary(m.title).includes(want)));
+  if (!cands.length) cands = rank(entries.filter(([, m]) => norm(m.title).includes(want)));
+  if (!cands.length) return null;
+  return { cip: cands[0][0], exact: false, alternatives: cands.slice(1, 5).map(([cip, m]) => `${m.title} [${cip}]`) };
 }
 
 if (has("--list")) {
@@ -103,8 +113,8 @@ if (!major) {
   process.exit(0);
 }
 
-const cip = matchMajor(major);
-const hit = cip ? { cip, ...snap.majors[cip] } : null;
+const m = matchMajor(major);
+const hit = m ? { cip: m.cip, ...snap.majors[m.cip] } : null;
 if (!hit) {
   console.log(
     `No CIP match for "${major}" in the snapshot (${Object.keys(snap.majors).length} majors). ` +
@@ -121,6 +131,9 @@ if (has("--json")) {
 }
 
 console.log(`REAL grounding data for "${hit.title}" (CIP ${hit.cip}) — use these figures verbatim:\n`);
+if (!m.exact && m.alternatives.length) {
+  console.log(`(Loose match on "${major}". If you meant another program, re-run with the exact title or CIP. Other matches: ${m.alternatives.join(", ")})\n`);
+}
 for (const c of hit.careers) {
   const wage = c.medianWageAnnual
     ? `national median $${c.medianWageAnnual.toLocaleString()} (${c.wageYear})`
