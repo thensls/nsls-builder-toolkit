@@ -1,0 +1,397 @@
+{
+  "vintage": {
+    "crosswalk": "NCES CIP2020\u2192SOC2018",
+    "oews": "BLS OEWS May 2024 (national)",
+    "growth": "BLS Employment Projections \u2014 not yet ingested (growthPct null)"
+  },
+  "attribution": [
+    "Wage data: U.S. Bureau of Labor Statistics, Occupational Employment and Wage Statistics, May 2024 (public domain).",
+    "Major\u2194occupation mapping: NCES/IPEDS CIP2020\u2194SOC2018 crosswalk (U.S. Dept. of Education)."
+  ],
+  "majors": {
+    "09.0101": {
+      "title": "Communication, General",
+      "careers": [
+        {
+          "soc": "11-2032",
+          "title": "Public Relations Managers",
+          "medianWageAnnual": 138520,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "25-1122",
+          "title": "Communications Teachers, Postsecondary",
+          "medianWageAnnual": 77800,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "27-3011",
+          "title": "Broadcast Announcers and Radio Disc Jockeys",
+          "medianWageAnnual": 45680,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "27-3031",
+          "title": "Public Relations Specialists",
+          "medianWageAnnual": 69780,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "27-3043",
+          "title": "Writers and Authors",
+          "medianWageAnnual": 72270,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "27-3099",
+          "title": "Media and Communication Workers, All Other",
+          "medianWageAnnual": 71770,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        }
+      ]
+    },
+    "11.0701": {
+      "title": "Computer Science",
+      "careers": [
+        {
+          "soc": "11-3021",
+          "title": "Computer and Information Systems Managers",
+          "medianWageAnnual": 171200,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "15-1212",
+          "title": "Information Security Analysts",
+          "medianWageAnnual": 124910,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "15-1221",
+          "title": "Computer and Information Research Scientists",
+          "medianWageAnnual": 140910,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "15-1231",
+          "title": "Computer Network Support Specialists",
+          "medianWageAnnual": 73340,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "15-1243",
+          "title": "Database Architects",
+          "medianWageAnnual": 135980,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "15-1251",
+          "title": "Computer Programmers",
+          "medianWageAnnual": 98670,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        }
+      ]
+    },
+    "26.0101": {
+      "title": "Biology/Biological Sciences",
+      "careers": [
+        {
+          "soc": "11-9121",
+          "title": "Natural Sciences Managers",
+          "medianWageAnnual": 161180,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "19-1029",
+          "title": "Biological Scientists, All Other",
+          "medianWageAnnual": 93330,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "19-1099",
+          "title": "Life Scientists, All Other",
+          "medianWageAnnual": 87800,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "19-4012",
+          "title": "Agricultural Technicians",
+          "medianWageAnnual": 46790,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "19-4013",
+          "title": "Food Science Technicians",
+          "medianWageAnnual": 49430,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "19-4021",
+          "title": "Biological Technicians",
+          "medianWageAnnual": 52000,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        }
+      ]
+    },
+    "42.0101": {
+      "title": "Psychology",
+      "careers": [
+        {
+          "soc": "11-9199",
+          "title": "Managers, All Other",
+          "medianWageAnnual": 136550,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "19-3032",
+          "title": "Industrial-Organizational Psychologists",
+          "medianWageAnnual": 109840,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "19-3033",
+          "title": "Clinical and Counseling Psychologists",
+          "medianWageAnnual": 95830,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "19-3039",
+          "title": "Psychologists, All Other",
+          "medianWageAnnual": 117580,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "19-4061",
+          "title": "Social Science Research Assistants",
+          "medianWageAnnual": 58040,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "25-1066",
+          "title": "Psychology Teachers, Postsecondary",
+          "medianWageAnnual": 80330,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        }
+      ]
+    },
+    "45.1001": {
+      "title": "Political Science and Government",
+      "careers": [
+        {
+          "soc": "11-9199",
+          "title": "Managers, All Other",
+          "medianWageAnnual": 136550,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "19-3094",
+          "title": "Political Scientists",
+          "medianWageAnnual": 139380,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "19-4061",
+          "title": "Social Science Research Assistants",
+          "medianWageAnnual": 58040,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "25-1065",
+          "title": "Political Science Teachers, Postsecondary",
+          "medianWageAnnual": 94680,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "25-2031",
+          "title": "Secondary School Teachers, Except Special and Career/Technical Education",
+          "medianWageAnnual": 64580,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        }
+      ]
+    },
+    "51.3801": {
+      "title": "Registered Nursing",
+      "careers": [
+        {
+          "soc": "25-1072",
+          "title": "Nursing Instructors and Teachers, Postsecondary",
+          "medianWageAnnual": 79940,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "29-1141",
+          "title": "Registered Nurses",
+          "medianWageAnnual": 93600,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        }
+      ]
+    },
+    "52.0201": {
+      "title": "Business Administration and Management",
+      "careers": [
+        {
+          "soc": "11-1011",
+          "title": "Chief Executives",
+          "medianWageAnnual": 206420,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "11-1021",
+          "title": "General and Operations Managers",
+          "medianWageAnnual": 102950,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "11-2022",
+          "title": "Sales Managers",
+          "medianWageAnnual": 138060,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "11-3012",
+          "title": "Administrative Services Managers",
+          "medianWageAnnual": 108390,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "11-3013",
+          "title": "Facilities Managers",
+          "medianWageAnnual": 104690,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "11-3051",
+          "title": "Industrial Production Managers",
+          "medianWageAnnual": 121440,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        }
+      ]
+    },
+    "52.1401": {
+      "title": "Marketing",
+      "careers": [
+        {
+          "soc": "11-2011",
+          "title": "Advertising and Promotions Managers",
+          "medianWageAnnual": 126960,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "11-2021",
+          "title": "Marketing Managers",
+          "medianWageAnnual": 161030,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "11-2022",
+          "title": "Sales Managers",
+          "medianWageAnnual": 138060,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "11-2033",
+          "title": "Fundraising Managers",
+          "medianWageAnnual": 123480,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "13-1131",
+          "title": "Fundraisers",
+          "medianWageAnnual": 66490,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        },
+        {
+          "soc": "13-1161",
+          "title": "Market Research Analysts and Marketing Specialists",
+          "medianWageAnnual": 76950,
+          "wageArea": "National",
+          "wageYear": "May 2024",
+          "growthPct": null
+        }
+      ]
+    }
+  }
+}
