@@ -109,7 +109,10 @@ function renderPromptContextNote() {
     if (ownSlugs.has(slug)) entered.push([slug, val]);
     else if (prereqProfile[slug]) synthetic.push([slug, val, (prereqProfile[slug] || {}).from]);
   }
-  if (!entered.length && !synthetic.length) return;
+  // v1 grounds GENERATE substeps only (the generate POST forwards the spec; chat
+  // does not). Only claim "grounded" where it's actually true.
+  const groundingSpec = sub.type === "generate" ? sub.aiPromptConfig?.grounding : null;
+  if (!entered.length && !synthetic.length && !groundingSpec) return;
   const clip = (v) => { const s = String(v); return escapeHtml(s.length > 70 ? s.slice(0, 67) + "…" : s); };
   const group = (title, rows) => rows.length
     ? `<div style="margin-top:6px"><div style="font-weight:600;opacity:.7;text-transform:uppercase;letter-spacing:.04em;font-size:9px">${title}</div>`
@@ -122,10 +125,21 @@ function renderPromptContextNote() {
     "position:fixed;right:12px;bottom:12px;max-width:300px;max-height:45vh;overflow:auto;z-index:50;"
     + "background:#fffbe6;border:1px solid #e6d9a8;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.15);"
     + "padding:10px 12px;font-size:11px;line-height:1.35;color:#3d2f1f;font-family:system-ui,sans-serif");
+  // Grounded line: this substep pulls REAL cited figures (via the proxy) for the
+  // mapped major, so the numbers in the output are real, not model-guessed.
+  let groundedBlock = "";
+  if (groundingSpec) {
+    const majorSlug = groundingSpec.from?.major;
+    const majorVal = majorSlug ? state.answers[majorSlug] : null;
+    groundedBlock = `<div style="margin-top:6px"><div style="font-weight:600;opacity:.7;text-transform:uppercase;letter-spacing:.04em;font-size:9px">Grounded — real data</div>`
+      + `<div style="margin-top:2px">🔎 Real BLS figures injected for `
+      + `<code style="opacity:.85">${escapeHtml(majorVal || majorSlug || "major")}</code></div></div>`;
+  }
   note.innerHTML = `<div style="font-weight:700;font-size:11px;margin-bottom:2px">📌 Prompt context note</div>`
     + `<div style="opacity:.6;font-size:10px;margin-bottom:4px">Data behind this AI output</div>`
     + group("Entered in this demo", entered)
-    + group("Synthetic — prerequisite", synthetic);
+    + group("Synthetic — prerequisite", synthetic)
+    + groundedBlock;
   root.appendChild(note);
 }
 
@@ -330,7 +344,10 @@ async function maybeRunGenerateAI() {
   aiController = new AbortController();
 
   const ok = await streamFromProxy(
-    { type: "generate", template: sub.aiPromptConfig?.template || sub.prompt, profile: state.answers },
+    // `grounding` (if the substep declares it) lets the proxy inject REAL cited
+    // labor-market figures into the template before the AI call — the value-moment
+    // grounding companion. Omitted → the proxy forwards the template unchanged.
+    { type: "generate", template: sub.aiPromptConfig?.template || sub.prompt, profile: state.answers, grounding: sub.aiPromptConfig?.grounding },
     (d) => { out.textContent += d; },
     aiController.signal
   );
