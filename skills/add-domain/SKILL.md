@@ -121,10 +121,16 @@ curl -sX POST "$NSLS_DNS_PROXY_URL/vercel-verify" \
   -d '{"value":"vc-domain-verify=<sub>.nsls.org,<code from Vercel>"}'
 ```
 
-All Vercel verifications share the single `_vercel.nsls.org` record (one value
-per subdomain), so the proxy **appends** — it won't disturb other sites'
-verification (e.g. `ignite`). After Vercel flips to *Valid Configuration*, the
-value can be removed with `DELETE /vercel-verify` (same body) — optional cleanup.
+Why append, not overwrite: every value is keyed to its own subdomain — the
+subdomain is *inside* the string (`vc-domain-verify=chapterconsult.nsls.org,…`
+vs `…roadshow-preso.nsls.org,…`). Vercel looks up `_vercel.nsls.org`, finds all
+the TXT values, and checks whether the one for *the subdomain it's verifying* is
+present; other values are ignored. So multiple pending verifications coexist at
+that single name, and the proxy **appends** rather than replacing — overwriting
+would delete a concurrent subdomain's still-pending value and break it. After
+Vercel flips to *Valid Configuration* the value is no longer needed and can be
+removed with `DELETE /vercel-verify` (same body) — optional cleanup, and the
+usual reason the record is normally near-empty.
 
 If `/health` shows `"vercelVerify": false`, the Vercel flow isn't enabled yet —
 a one-time admin step: widen the verify IAM policy to include `_vercel.*` and set
