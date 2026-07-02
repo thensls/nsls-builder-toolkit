@@ -30,7 +30,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
 const flag = (f) => { const i = argv.indexOf(f); return i !== -1 ? argv[i + 1] : undefined; };
 const has = (f) => argv.includes(f);
-const major = argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--snapshot");
+// The positional major must skip any token consumed as a flag VALUE (the arg
+// right after any --flag), so `--state CA Marketing` picks "Marketing", not "CA".
+const flagValueIdx = new Set(argv.map((a, i) => (a.startsWith("--") ? i + 1 : -1)));
+const major = argv.find((a, i) => !a.startsWith("--") && !flagValueIdx.has(i));
 
 function findSnapshot() {
   // An EXPLICIT --snapshot must exist — don't silently fall back to a different
@@ -68,6 +71,19 @@ const snap = JSON.parse(readFileSync(path, "utf-8"));
 const norm = (s) => (s ?? "").trim().toLowerCase().replace(/\.$/, "");
 const primary = (t) => norm(String(t).split(/[/,;:]/)[0]);
 
+// Minimal location → 2-letter state resolver, for --state (state-specific wages).
+const STATES = { alabama:"AL",alaska:"AK",arizona:"AZ",arkansas:"AR",california:"CA",colorado:"CO",connecticut:"CT",delaware:"DE","district of columbia":"DC",florida:"FL",georgia:"GA",hawaii:"HI",idaho:"ID",illinois:"IL",indiana:"IN",iowa:"IA",kansas:"KS",kentucky:"KY",louisiana:"LA",maine:"ME",maryland:"MD",massachusetts:"MA",michigan:"MI",minnesota:"MN",mississippi:"MS",missouri:"MO",montana:"MT",nebraska:"NE",nevada:"NV","new hampshire":"NH","new jersey":"NJ","new mexico":"NM","new york":"NY","north carolina":"NC","north dakota":"ND",ohio:"OH",oklahoma:"OK",oregon:"OR",pennsylvania:"PA","rhode island":"RI","south carolina":"SC","south dakota":"SD",tennessee:"TN",texas:"TX",utah:"UT",vermont:"VT",virginia:"VA",washington:"WA","west virginia":"WV",wisconsin:"WI",wyoming:"WY","puerto rico":"PR" };
+const ABBRS = new Set(Object.values(STATES));
+function resolveState(loc) {
+  const s = norm(loc);
+  if (!s) return null;
+  if (s.length === 2 && ABBRS.has(s.toUpperCase())) return s.toUpperCase();
+  return STATES[s] || null;
+}
+const stateArg = flag("--state");
+const st = resolveState(stateArg);
+const stName = st ? Object.keys(STATES).find((n) => STATES[n] === st).replace(/\b\w/g, (c) => c.toUpperCase()) : null;
+
 // Resolve free-text major → CIP (mirrors track-studio lib/grounding matchMajor):
 // exact title → primary-term → substring, preferring "General" then shortest.
 // Returns { cip, exact, alternatives } — exact=true when title/primary matched
@@ -80,7 +96,8 @@ function matchMajor(want) {
   if (!want) return null;
   const entries = Object.entries(snap.majors);
   const rank = (list) => list.slice().sort((a, b) =>
-    (/general/i.test(a[1].title) ? 0 : 1) - (/general/i.test(b[1].title) ? 0 : 1)
+    (b[1].popularity ?? 0) - (a[1].popularity ?? 0)          // most-awarded first (IPEDS)
+    || (/general/i.test(a[1].title) ? 0 : 1) - (/general/i.test(b[1].title) ? 0 : 1)
     || a[1].title.length - b[1].title.length);
 
   const exactTitle = entries.find(([, m]) => norm(m.title) === want);
@@ -124,8 +141,17 @@ if (!hit) {
   process.exit(0);
 }
 
+// Apply the state median wage (if --state resolved) ONCE, so JSON and human
+// output agree. Careers keep national when no state figure exists.
+const careersOut = hit.careers.map((c) => {
+  const sw = st ? snap.stateWages?.[c.soc]?.[st] : undefined;
+  return sw != null
+    ? { ...c, medianWageAnnual: sw, wageArea: stName }
+    : { ...c, wageArea: c.wageArea ?? (c.medianWageAnnual != null ? "National" : null) };
+});
+
 if (has("--json")) {
-  console.log(JSON.stringify({ cip: hit.cip, major: hit.title, careers: hit.careers,
+  console.log(JSON.stringify({ cip: hit.cip, major: hit.title, state: st, careers: careersOut,
     vintage: snap.vintage, attribution: snap.attribution }, null, 2));
   process.exit(0);
 }
@@ -134,11 +160,12 @@ console.log(`REAL grounding data for "${hit.title}" (CIP ${hit.cip}) — use the
 if (!m.exact && m.alternatives.length) {
   console.log(`(Loose match on "${major}". If you meant another program, re-run with the exact title or CIP. Other matches: ${m.alternatives.join(", ")})\n`);
 }
-for (const c of hit.careers) {
-  const wage = c.medianWageAnnual
-    ? `national median $${c.medianWageAnnual.toLocaleString()} (${c.wageYear})`
+if (stateArg && !st) console.log(`(--state "${stateArg}" not recognized; showing national wages)\n`);
+for (const c of careersOut) {
+  const wage = c.medianWageAnnual != null
+    ? `${c.wageArea && c.wageArea !== "National" ? c.wageArea + " median" : "national median"} $${c.medianWageAnnual.toLocaleString()} (${c.wageYear || snap.vintage?.oews || ""})`
     : "wage not available — describe qualitatively";
-  const growth = c.growthPct != null ? `, projected growth ${c.growthPct}%` : "";
+  const growth = c.growthPct != null ? `, projected ${c.growthPct}% growth` : "";
   console.log(`  • ${c.title} (SOC ${c.soc}): ${wage}${growth}`);
 }
 console.log(`\nVintage: ${snap.vintage?.oews ?? "n/a"}  |  Growth: ${snap.vintage?.growth ?? "not yet ingested"}`);
