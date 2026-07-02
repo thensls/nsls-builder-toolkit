@@ -106,11 +106,15 @@ an unresolved token:
     "executeOn": "enter"
   }
   ```
-  `from` maps which collected slugs feed the lookup. If the major isn't in the
-  snapshot (or a figure is missing), the proxy injects nothing/less and the prompt
-  stays qualitative — the faithfulness fallback. Write the template to *use the
-  provided figures*, never to state a number itself. (v1 = national salary; state/
-  metro wages + BLS EP growth are fast-follows.)
+  `from` maps which collected slugs feed the lookup — including **`location`**: map
+  it to the member's state slug and the proxy injects that **state's** median wage
+  (e.g. Ohio) instead of the national figure. Each career also carries **projected
+  % growth** (BLS EP 2024–34). If the major isn't in the snapshot (or a figure is
+  missing) the proxy injects less and the prompt stays qualitative — the
+  faithfulness fallback. Write the template to *use the provided figures*, never to
+  state a number itself. (Covered now: national + per-state salary, growth %, full
+  CIP catalog. Fast-follow: metro-level wages.) The authoring-time `--state` flag
+  on `lookup-grounding.mjs` previews the same state wages while designing.
 
 For a **model-reasoned** or **illustrative** moment there is no data payload —
 the template carries the honesty framing directly (qualitative, or "roughly / as

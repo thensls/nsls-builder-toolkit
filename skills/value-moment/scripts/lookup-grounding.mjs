@@ -30,7 +30,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
 const flag = (f) => { const i = argv.indexOf(f); return i !== -1 ? argv[i + 1] : undefined; };
 const has = (f) => argv.includes(f);
-const major = argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--snapshot");
+// The positional major must skip any token consumed as a flag VALUE (the arg
+// right after any --flag), so `--state CA Marketing` picks "Marketing", not "CA".
+const flagValueIdx = new Set(argv.map((a, i) => (a.startsWith("--") ? i + 1 : -1)));
+const major = argv.find((a, i) => !a.startsWith("--") && !flagValueIdx.has(i));
 
 function findSnapshot() {
   // An EXPLICIT --snapshot must exist — don't silently fall back to a different
@@ -138,8 +141,17 @@ if (!hit) {
   process.exit(0);
 }
 
+// Apply the state median wage (if --state resolved) ONCE, so JSON and human
+// output agree. Careers keep national when no state figure exists.
+const careersOut = hit.careers.map((c) => {
+  const sw = st ? snap.stateWages?.[c.soc]?.[st] : undefined;
+  return sw != null
+    ? { ...c, medianWageAnnual: sw, wageArea: stName }
+    : { ...c, wageArea: c.wageArea ?? (c.medianWageAnnual != null ? "National" : null) };
+});
+
 if (has("--json")) {
-  console.log(JSON.stringify({ cip: hit.cip, major: hit.title, careers: hit.careers,
+  console.log(JSON.stringify({ cip: hit.cip, major: hit.title, state: st, careers: careersOut,
     vintage: snap.vintage, attribution: snap.attribution }, null, 2));
   process.exit(0);
 }
@@ -149,12 +161,9 @@ if (!m.exact && m.alternatives.length) {
   console.log(`(Loose match on "${major}". If you meant another program, re-run with the exact title or CIP. Other matches: ${m.alternatives.join(", ")})\n`);
 }
 if (stateArg && !st) console.log(`(--state "${stateArg}" not recognized; showing national wages)\n`);
-for (const c of hit.careers) {
-  const stateWage = st ? snap.stateWages?.[c.soc]?.[st] : undefined;
-  const median = stateWage != null ? stateWage : c.medianWageAnnual;
-  const area = stateWage != null ? `${stName} median` : "national median";
-  const wage = median != null
-    ? `${area} $${median.toLocaleString()} (${c.wageYear || snap.vintage?.oews || ""})`
+for (const c of careersOut) {
+  const wage = c.medianWageAnnual != null
+    ? `${c.wageArea && c.wageArea !== "National" ? c.wageArea + " median" : "national median"} $${c.medianWageAnnual.toLocaleString()} (${c.wageYear || snap.vintage?.oews || ""})`
     : "wage not available — describe qualitatively";
   const growth = c.growthPct != null ? `, projected ${c.growthPct}% growth` : "";
   console.log(`  • ${c.title} (SOC ${c.soc}): ${wage}${growth}`);
