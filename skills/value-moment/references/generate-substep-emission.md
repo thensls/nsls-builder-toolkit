@@ -31,8 +31,8 @@ in `prompt`.
 
 **Note the template references the profile block, not `{slug}` tokens** — see
 "Token mechanics" below for why. This example is a **model-reasoned** moment: it
-forbids numbers in the prompt. For a **grounded** moment with real figures, see
-"Grounding" below (real data payload is future-only today).
+forbids numbers in the prompt. For a **grounded** moment with real figures, add a
+`grounding` spec — the companion is shipped; see "Grounding" below.
 
 Keys that matter for a value moment:
 
@@ -92,11 +92,25 @@ an unresolved token:
   (not as a token), when the set is tiny and stable, and cite the source inline
   so a reviewer can check it. e.g. `"…Ohio marketing-role entry wages (BLS OEWS,
   May 2024): …"`. This validates and renders.
-- **Future:** a companion data-fetch tool (see the SKILL's "Companion" section)
-  will supply a `{data}` payload (BLS OEWS by SOC/area, O*NET growth outlook) as
-  a real, resolvable input. `{data}` is **not a supported token yet** — do not
-  emit it until that tool and validator support land. Design grounded prompts so
-  a supplied data block drops in cleanly when it does.
+- **Automatic (grounding companion, v1 shipped):** declare a `grounding` spec on
+  the substep's `aiPromptConfig`. At runtime the demo proxy (Track Studio
+  `/api/generate`) resolves REAL cited figures from the baked snapshot (NCES
+  CIP↔SOC crosswalk + BLS OEWS) for the member's mapped major and **injects them
+  into the template** with a strict "use ONLY these figures" instruction — so the
+  AI phrases true numbers and invents none. No `{data}` token; the proxy appends
+  the block. Shape:
+  ```json
+  "aiPromptConfig": {
+    "template": "The member's major is in the profile. Using ONLY the labor-market figures provided, name the roles it commonly leads to and their pay.",
+    "grounding": { "need": ["careers","salary"], "from": { "major": "major", "location": "home-state" } },
+    "executeOn": "enter"
+  }
+  ```
+  `from` maps which collected slugs feed the lookup. If the major isn't in the
+  snapshot (or a figure is missing), the proxy injects nothing/less and the prompt
+  stays qualitative — the faithfulness fallback. Write the template to *use the
+  provided figures*, never to state a number itself. (v1 = national salary; state/
+  metro wages + BLS EP growth are fast-follows.)
 
 For a **model-reasoned** or **illustrative** moment there is no data payload —
 the template carries the honesty framing directly (qualitative, or "roughly / as
