@@ -29,15 +29,23 @@ const has = (f) => argv.includes(f);
 const major = argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--snapshot");
 
 function findSnapshot() {
+  // An EXPLICIT --snapshot must exist — don't silently fall back to a different
+  // (possibly stale) snapshot on a typo.
+  const explicit = flag("--snapshot");
+  if (explicit) return existsSync(explicit) ? explicit : { error: explicit };
   const candidates = [
-    flag("--snapshot"),
     process.env.GROUNDING_SNAPSHOT,
     join(homedir(), "code/track-studio/data/grounding-snapshot.json"),
   ].filter(Boolean);
-  return candidates.find((p) => existsSync(p));
+  return candidates.find((p) => existsSync(p)) || null;
 }
 
-const path = findSnapshot();
+const found = findSnapshot();
+if (found && typeof found === "object") {
+  console.error(`--snapshot path not found: ${found.error}. Fix the path or omit --snapshot to use the default.`);
+  process.exit(1);
+}
+const path = found;
 if (!path) {
   console.log(
     "No grounding snapshot found. Looked at: --snapshot, $GROUNDING_SNAPSHOT, " +
@@ -55,7 +63,7 @@ const norm = (s) => (s ?? "").trim().toLowerCase();
 if (has("--list")) {
   const majors = Object.entries(snap.majors).map(([cip, m]) => `  ${m.title}  [${cip}]`);
   console.log(`Majors covered in the snapshot (${majors.length}):\n${majors.join("\n")}`);
-  console.log(`\nVintage: ${snap.vintage.oews}`);
+  console.log(`\nVintage: ${snap.vintage?.oews ?? "n/a"}`);
   process.exit(0);
 }
 
@@ -92,7 +100,7 @@ for (const c of hit.careers) {
   const growth = c.growthPct != null ? `, projected growth ${c.growthPct}%` : "";
   console.log(`  • ${c.title} (SOC ${c.soc}): ${wage}${growth}`);
 }
-console.log(`\nVintage: ${snap.vintage.oews}  |  Growth: ${snap.vintage.growth}`);
+console.log(`\nVintage: ${snap.vintage?.oews ?? "n/a"}  |  Growth: ${snap.vintage?.growth ?? "not yet ingested"}`);
 console.log(`Attribution (carry into the doc): ${snap.attribution.join(" ")}`);
 console.log(
   "\nUse ONLY these figures in the nugget's example_output. Anything not listed → " +

@@ -34,8 +34,10 @@ preference order:
 
 - **grounded** — backed by a real data source (BLS OEWS by SOC/area, O*NET
   bright-outlook / growth, or a dataset we wire in). **Get the real figures now**
-  by running the grounding lookup — `node scripts/lookup-grounding.mjs "<major>"`
-  — which reads the shipped snapshot (NCES crosswalk + BLS OEWS) and returns the
+  by running the grounding lookup from **this skill's directory**:
+  `node scripts/lookup-grounding.mjs "<major>"` (the script lives in this skill's
+  `scripts/`; run it from there, or give its full path). It reads the shipped
+  snapshot (NCES crosswalk + BLS OEWS) and returns the
   actual careers + median wages you'll ground against. Use those numbers in the
   `example_output`, and emit a `grounding` spec so the runtime injects them (see
   `references/generate-substep-emission.md`). **Preferred.**
