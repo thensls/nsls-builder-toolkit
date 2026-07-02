@@ -126,10 +126,10 @@ per subdomain), so the proxy **appends** — it won't disturb other sites'
 verification (e.g. `ignite`). After Vercel flips to *Valid Configuration*, the
 value can be removed with `DELETE /vercel-verify` (same body) — optional cleanup.
 
-If `/health` shows `"vercelVerify": false`, the verify credential isn't
-configured/scoped for `_vercel.*` yet — an admin needs to widen the verify IAM
-policy (add `_vercel.*`, see `iam/nsls-dns-railway-verify.json` in nsls-dns-proxy)
-once. Flag it and fall back to an admin adding the TXT by hand.
+If `/health` shows `"vercelVerify": false`, the Vercel flow isn't enabled yet —
+a one-time admin step: widen the verify IAM policy to include `_vercel.*` and set
+`VERCEL_VERIFY=true` in Doppler (see `docs/SETUP.md` §1b in nsls-dns-proxy). Flag
+it and fall back to an admin adding the TXT by hand until it's on.
 
 ### 3. Dry-run the DNS change
 
