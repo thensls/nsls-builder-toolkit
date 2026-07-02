@@ -74,9 +74,13 @@ the exact CNAME target to use.
   endpoint (backed by a separate, ultra-narrow credential that can write only
   `_railway-verify.*` TXT records — nothing else). So the Railway flow is:
   fetch the token → `POST /railway-verify {subdomain, token}` → then the CNAME.
-  (Vercel and Netlify don't need this — their CNAME alone verifies.)
-- **Vercel:** `vercel domains add signal.nsls.org <project>` — Vercel shows the
-  CNAME target (`cname.vercel-dns.com`).
+  (Netlify never needs this — its CNAME alone verifies. Vercel usually doesn't,
+  but see the exception in step 2c.)
+- **Vercel:** `vercel domains add signal.nsls.org <project>` (or the dashboard:
+  Project → Settings → Domains → Add). Vercel shows the CNAME target
+  (`cname.vercel-dns.com`). Usually the CNAME alone verifies — **but** if Vercel
+  says *"This domain is linked to another Vercel account"* and asks for a TXT at
+  `_vercel.nsls.org`, do step 2c before the CNAME.
 - **Netlify:** Site → Domain settings → Add custom domain — Netlify shows the
   CNAME target.
 
@@ -97,6 +101,35 @@ curl -sX POST "$NSLS_DNS_PROXY_URL/railway-verify" \
 
 If `/health` shows `"railwayVerify": false`, the verify credential isn't
 configured on the proxy — fall back to an admin adding the TXT once, and flag it.
+
+### 2c. Vercel only — the "linked to another account" TXT
+
+Only needed when Vercel shows *"This domain is linked to another Vercel account"*
+and asks for a TXT at `_vercel.nsls.org`. This happens because the `nsls.org`
+apex is registered to a different Vercel account (the one that predates this
+team); the TXT proves *this* account controls the DNS so it can claim the
+subdomain. It does **not** move the domain or touch DNS hosting — nsls.org stays
+in Route 53.
+
+Copy the exact `vc-domain-verify=...` value from the Vercel domain screen and
+have the proxy append it (same narrow verify credential as Railway):
+
+```bash
+curl -sX POST "$NSLS_DNS_PROXY_URL/vercel-verify" \
+  -H "authorization: Bearer $NSLS_DNS_PROXY_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"value":"vc-domain-verify=<sub>.nsls.org,<code from Vercel>"}'
+```
+
+All Vercel verifications share the single `_vercel.nsls.org` record (one value
+per subdomain), so the proxy **appends** — it won't disturb other sites'
+verification (e.g. `ignite`). After Vercel flips to *Valid Configuration*, the
+value can be removed with `DELETE /vercel-verify` (same body) — optional cleanup.
+
+If `/health` shows `"vercelVerify": false`, the verify credential isn't
+configured/scoped for `_vercel.*` yet — an admin needs to widen the verify IAM
+policy (add `_vercel.*`, see `iam/nsls-dns-railway-verify.json` in nsls-dns-proxy)
+once. Flag it and fall back to an admin adding the TXT by hand.
 
 ### 3. Dry-run the DNS change
 
