@@ -109,7 +109,9 @@ function renderPromptContextNote() {
     if (ownSlugs.has(slug)) entered.push([slug, val]);
     else if (prereqProfile[slug]) synthetic.push([slug, val, (prereqProfile[slug] || {}).from]);
   }
-  const groundingSpec = sub.aiPromptConfig?.grounding;
+  // v1 grounds GENERATE substeps only (the generate POST forwards the spec; chat
+  // does not). Only claim "grounded" where it's actually true.
+  const groundingSpec = sub.type === "generate" ? sub.aiPromptConfig?.grounding : null;
   if (!entered.length && !synthetic.length && !groundingSpec) return;
   const clip = (v) => { const s = String(v); return escapeHtml(s.length > 70 ? s.slice(0, 67) + "…" : s); };
   const group = (title, rows) => rows.length
