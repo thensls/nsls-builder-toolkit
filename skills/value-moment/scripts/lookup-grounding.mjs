@@ -14,14 +14,18 @@
  *   node lookup-grounding.mjs "Marketing" --json     # structured output
  *   node lookup-grounding.mjs "Marketing" --snapshot /path/to/grounding-snapshot.json
  *
- * Snapshot resolution order: --snapshot → $GROUNDING_SNAPSHOT →
- * ~/code/track-studio/data/grounding-snapshot.json. If none is found, this prints
- * how to point at it and exits 0 — the author then keeps the nugget qualitative
- * (the faithfulness fallback), never fabricating a number.
+ * Snapshot resolution order: --snapshot → $GROUNDING_SNAPSHOT → a live
+ * ~/code/track-studio checkout → the copy BUNDLED with this skill
+ * (data/grounding-snapshot.json). track-studio's ingest is the source of record;
+ * the bundled copy is refreshed from it (re-copy after re-ingesting), so the
+ * lookup works in any toolkit checkout without track-studio present.
  */
 import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 const argv = process.argv.slice(2);
 const flag = (f) => { const i = argv.indexOf(f); return i !== -1 ? argv[i + 1] : undefined; };
@@ -35,7 +39,10 @@ function findSnapshot() {
   if (explicit) return existsSync(explicit) ? explicit : { error: explicit };
   const candidates = [
     process.env.GROUNDING_SNAPSHOT,
+    // A live track-studio checkout (freshest if the author maintains it)…
     join(homedir(), "code/track-studio/data/grounding-snapshot.json"),
+    // …else the copy bundled with this skill, so the lookup always resolves.
+    join(HERE, "..", "data", "grounding-snapshot.json"),
   ].filter(Boolean);
   return candidates.find((p) => existsSync(p)) || null;
 }

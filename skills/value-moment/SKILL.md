@@ -36,8 +36,10 @@ preference order:
   bright-outlook / growth, or a dataset we wire in). **Get the real figures now**
   by running the grounding lookup from **this skill's directory**:
   `node scripts/lookup-grounding.mjs "<major>"` (the script lives in this skill's
-  `scripts/`; run it from there, or give its full path). It reads the shipped
-  snapshot (NCES crosswalk + BLS OEWS) and returns the
+  `scripts/`; run it from there, or give its full path). It reads a snapshot
+  bundled with this skill (`data/grounding-snapshot.json`, built from the NCES
+  crosswalk + BLS OEWS; track-studio is the source of record) — or a live
+  track-studio checkout / `--snapshot` override — and returns the
   actual careers + median wages you'll ground against. Use those numbers in the
   `example_output`, and emit a `grounding` spec so the runtime injects them (see
   `references/generate-substep-emission.md`). **Preferred.**
