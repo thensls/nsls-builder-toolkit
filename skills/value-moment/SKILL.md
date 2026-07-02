@@ -33,9 +33,12 @@ Every value-moment candidate MUST declare a `grounding`, and its
 preference order:
 
 - **grounded** — backed by a real data source (BLS OEWS by SOC/area, O*NET
-  bright-outlook / growth, cost-of-living by metro, or a dataset we wire in). The
-  real figures are supplied to the prompt as a `{data}` context payload; the
-  prompt is instructed to *phrase* them, never to invent. **Preferred.**
+  bright-outlook / growth, or a dataset we wire in). **Get the real figures now**
+  by running the grounding lookup — `node scripts/lookup-grounding.mjs "<major>"`
+  — which reads the shipped snapshot (NCES crosswalk + BLS OEWS) and returns the
+  actual careers + median wages you'll ground against. Use those numbers in the
+  `example_output`, and emit a `grounding` spec so the runtime injects them (see
+  `references/generate-substep-emission.md`). **Preferred.**
 - **model-reasoned** — qualitative and defensible from general knowledge
   ("marketing majors commonly move into brand, growth, and product roles").
   Allowed, but framed as general — **no precise statistics.**
@@ -109,8 +112,11 @@ number, or cut the candidate.
 4. **Rank** by expected value to the member × groundedness × pull-along strength
    (fires right after the relevant capture). Prefer grounded over clever.
 5. **Give each a rendered `example_output`** so a human can judge the value
-   before it ships. The example must obey its own grounding (no invented numbers
-   in a model-reasoned example).
+   before it ships. The example must obey its own grounding — for a **grounded**
+   candidate, run `node scripts/lookup-grounding.mjs "<major>"` and write the
+   example with those **real** figures (and carry the attribution it prints); for
+   model-reasoned/illustrative, no invented numbers. (`--list` shows covered
+   majors; an uncovered major stays qualitative until it's added to the snapshot.)
 6. **Propose the top 3–5.** The author picks; this skill proposes, never
    auto-inserts. **This ranked list — each candidate with its `example_output`
    and `grounding` — is the deliverable when called from `track-brief`.** Stop
@@ -139,38 +145,38 @@ number, or cut the candidate.
 - **trigger:** `{major}` captured step 1.
 - **insight_type:** career-options + demand-growth.
 - **placement:** immediately after the major capture (pull-along).
-- **grounding:** grounded (future target) — top SOC codes for the major + O*NET
-  growth outlook, supplied as a real data block. Until the companion tool exists,
-  ground by pasting the real figures as literal text (cite the source); do NOT
-  emit a `{data}` token — it isn't a supported/resolvable token yet (see
+- **grounding:** grounded — run `node scripts/lookup-grounding.mjs "Marketing"`,
+  which returns the real careers + BLS median wages (e.g. Marketing Managers
+  $161,030, May 2024). Emit a `grounding` spec so the runtime injects those
+  figures; the template references the provided block, not `{slug}` tokens (see
   `references/generate-substep-emission.md`).
-- **prompt_template:** *"The member's major is in the profile data provided to
-  you. Using ONLY these figures — [paste real BLS/O\*NET rows here, cited] — write
-  two short paragraphs: (1) the three most common careers for that major; (2) the
-  two with the fastest projected demand growth. Warm, specific, second-person.
-  Use only the provided figures; if one is missing, describe the trend
-  qualitatively and invent no number."* (The generate template is sent verbatim
-  with a separate profile block — reference that block, don't embed `{slug}`
-  tokens; see `references/generate-substep-emission.md`.)
-- **example_output:** *(rendered from real data at review time)*
+- **prompt_template:** *"The member's major is in the profile provided. Using ONLY
+  the labor-market figures provided, write two short second-person paragraphs on
+  the careers this major commonly leads to and their pay. Use only the provided
+  figures; if one is missing, describe the trend qualitatively and invent no
+  number."*  plus `grounding: { need: ["careers","salary"], from: { major: "major" } }`.
+- **example_output:** *"A marketing degree opens a range of roles — Marketing
+  Managers (national median $161,030), Sales Managers ($138,060), and Market
+  Research Analysts ($76,950), among others…"* — real figures from the lookup.
 - **value_dim:** value.a + value.c.
 
 Contrast — the SAME idea done wrong (do not ship): *"Marketing grads earn
-~$63,000 and the field is growing 19% — fastest in Ohio."* No source is supplied,
-so those numbers are fabricated. Either supply real BLS figures (→ grounded) or
-cut the numbers: *"Marketing degrees open a wide range of roles, and demand for
-data-and-digital marketing skills has been climbing"* (→ model-reasoned).
+~$63,000 and the field is growing 19% — fastest in Ohio."* No source — fabricated.
+Run the lookup and use the real numbers, or cut them and stay model-reasoned.
 
-## Companion (future): a data-fetch tool
+## The grounding companion (v1 shipped)
 
-To make `grounded` the default, a small tool will pull real labor-market data
-(BLS OEWS by SOC/area, O*NET bright-outlook/growth, cost-of-living by metro) and
-hand it to the `generate` prompt as `{data}`. This sub-skill proposes *which*
-data each nugget needs; the fetch tool supplies it. Out of scope to build here —
-but design every grounded prompt to accept a supplied `{data}` payload so it
-drops in cleanly when the tool lands. Until then, a grounded moment requires the
-figures to be pasted in from a real source at authoring time (cite it), or it is
-not grounded.
+The data-fetch companion this sub-skill named now exists:
+- **Authoring (here):** `scripts/lookup-grounding.mjs "<major>"` reads the baked
+  snapshot (NCES CIP↔SOC crosswalk + BLS OEWS median wages) and hands you the real
+  careers + figures to write into a grounded nugget's `example_output`.
+- **Runtime:** the `grounding` spec you emit is honored by the Track Studio demo
+  proxy, which injects the same figures into the AI call — so preview and (once
+  wired into ignite-next) production show real numbers.
+
+Coverage today: the majors in `--list`, national median salary. Fast-follow: BLS
+Employment Projections growth %, state/metro wages, more majors. For an uncovered
+major or a missing figure, stay model-reasoned — never fabricate.
 
 ## How it's scored
 
