@@ -178,9 +178,11 @@ The data-fetch companion this sub-skill named now exists:
   proxy, which injects the same figures into the AI call — so preview and (once
   wired into ignite-next) production show real numbers.
 
-Coverage today: the majors in `--list`, national median salary. Fast-follow: BLS
-Employment Projections growth %, state/metro wages, more majors. For an uncovered
-major or a missing figure, stay model-reasoned — never fabricate.
+Coverage today: the **full CIP catalog (~2,143 majors)** with national median
+salary; free-text major names resolve via the matcher. Fast-follow: BLS
+Employment Projections growth %, state/metro wages, better major-name aliasing.
+For a genuinely uncovered major or a missing figure, stay model-reasoned — never
+fabricate.
 
 ## How it's scored
 
