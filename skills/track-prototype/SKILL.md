@@ -80,6 +80,13 @@ Gate: a working Phase-1 build (local or deployed). **Turn live AI ON** (build wi
 
 4. **Handoff:** the Google Doc link + the scorecard + the checks-met total.
 
+5. **Ship = flip the board.** When a run clears the ship-bar AND the version actually ships to members (merged + deployed in ignite-next), advance the Studio stage so the board stays truthful:
+   ```
+   AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv \
+     node scripts/set-stage.mjs <slug> live --live-version <contentHash>
+   ```
+   Sets `stage=live`, `is_live`, `current_version` (the hash `PostHogActuals.live_track_version` joins on for calibration). **Gate pass alone is not Live** — run this at the actual ship moment; if shipping happens later or by someone else, say so in the handoff and leave the stage as-is until it ships.
+
 ### The iteration loop
 Builder says **"implement the focus-group changes"** → read `recommendations.md`, edit `track.json` per each `fix` rec's `change` (CONTESTED `review` recs go to a human, not auto-applied), re-run Phase 1 → Phase 2 → a v{N+1} ScoreRun showing the delta. **Scores are a ranking + ship-bar gate, NOT a calibrated prediction** — celebrate green checks; don't over-read the number (synthetic personas overstate adoption).
 

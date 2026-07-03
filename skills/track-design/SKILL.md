@@ -59,6 +59,12 @@ Violating the letter of these rules violates their spirit.
 2. Classify: artifact-track (produces a tangible output) or practice-track (builds a habit or self-knowledge). Reference the two examples in `references/examples/` for the difference.
 3. Identify prerequisites. List any tracks that should run first. From that list, enumerate which profile tokens the track may assume already exist. This set becomes the `--assume` arguments for the Phase 6 validator. If Clarity is a prerequisite, note `--assume-clarity`.
 4. Decide which registers this track targets: Student / Early Pro / Established / Transitional / Returning (or a subset).
+5. **Advance the Studio board.** Authoring has now started — if the track has a Studio row (`track-brief` writes one at `stage=backlog`), move it to In Development so studio.nsls.org stays truthful:
+   ```
+   AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv \
+     node <track-prototype>/scripts/set-stage.mjs <slug> in-development
+   ```
+   Heartbeat: report the transition ("stage: <slug> backlog → in-development"). If there's no Studio row yet (idea arrived without a brief), say so explicitly and continue — never skip silently.
 
 **HARD GATE: Do not proceed to Phase 1 without a crisp, agreed value promise.** If the builder can't articulate it, keep working here.
 
