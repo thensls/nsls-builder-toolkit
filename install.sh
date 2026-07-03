@@ -108,7 +108,10 @@ HOOK_CMD = 'python3 -c \"exec(open(\'' + _SS + '\').read())\"'
 HOOK_ENTRY = {
     'type': 'command',
     'command': HOOK_CMD,
-    'timeout': 15,
+    # Must exceed session-start.py's worst case: git pull (10s) + a replayed
+    # ping (35s) + the live ping (35s). At 15s the hook was killed mid-delivery
+    # on Railway cold starts (observed live 2026-07-03).
+    'timeout': 90,
     'statusMessage': 'Syncing builder toolkit...'
 }
 MARKER = 'nsls-builder-toolkit/hooks/session-start.py'
@@ -138,10 +141,15 @@ if startup_entry is None:
     session_start.insert(0, startup_entry)
 
 hook_list = startup_entry.setdefault('hooks', [])
-already = any(MARKER in h.get('command', '') for h in hook_list)
-if not already:
+existing = next((h for h in hook_list if MARKER in h.get('command', '')), None)
+if existing is None:
     hook_list.insert(0, HOOK_ENTRY)
     print('  Registered session auto-update hook')
+elif existing.get('timeout', 0) < HOOK_ENTRY['timeout']:
+    # Repair installs registered when the budget was 15s — that killed the
+    # hook mid-ping on cold starts.
+    existing['timeout'] = HOOK_ENTRY['timeout']
+    print('  Raised session hook timeout to', HOOK_ENTRY['timeout'])
 else:
     print('  Auto-update hook already registered')
 

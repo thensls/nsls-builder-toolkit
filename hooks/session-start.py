@@ -34,7 +34,11 @@ PROXY_URL = "https://web-production-6281e.up.railway.app"
 # stash the payload here and replay it at the start of the next session so a
 # queued announcement or credit isn't lost. Deleted once delivery succeeds.
 PING_FAIL_MARKER = PLUGIN_DIR / ".last-ping-failed"
-PING_TIMEOUT = 20  # was 8 — cold first-call paths regularly exceeded it.
+# was 8, then 20 — live measurement (2026-07-03): /session-ping takes ~8s WARM
+# (server-side Airtable writes + announcement scan) and 15-27s on Railway cold
+# start, so 20 was still marginal. The SessionStart hook budget must stay
+# comfortably above this (install.sh sets 60).
+PING_TIMEOUT = 35
 
 # Plugins to sync, in precedence order — earlier entries win on name collision.
 SYNC_PLUGINS = [
@@ -185,21 +189,33 @@ def replay_failed_ping():
     marker is left in place for the next session to retry. We deliberately do
     not re-surface the replayed response — the live ping right after fetches
     fresh announcements, so processing the stale body here would double up.
+
+    Returns the successfully replayed payload (dict) or None. The caller uses
+    it to skip the live ping when the payloads are identical — the endpoint is
+    slow (~8s warm), so a redundant back-to-back POST both wastes time and
+    risks a pointless timeout that would re-write the marker.
     """
     if not PING_FAIL_MARKER.exists():
-        return
+        return None
     try:
         saved = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
         body = saved.get("payload")
         if body:
             _post_session_ping(body)
         PING_FAIL_MARKER.unlink()
+        return body
     except Exception:
-        pass  # still unreachable — keep the marker for the next attempt
+        return None  # still unreachable — keep the marker for the next attempt
 
 
-def session_ping():
-    """Ping the automation tracker for points, PR credits, and announcements."""
+def session_ping(replayed=None):
+    """Ping the automation tracker for points, PR credits, and announcements.
+
+    replayed: payload dict just delivered by replay_failed_ping(), or None.
+    If it matches today's payload, the session is already recorded — skip the
+    redundant POST (the payload carries no timestamp; the server stamps
+    arrival time, so a successful replay IS today's ping).
+    """
     email = read_env("BUILDER_EMAIL")
     if not email:
         try:
@@ -228,6 +244,9 @@ def session_ping():
         "github_username": github,
         "platform": platform,
     }
+
+    if replayed == body:
+        return  # this exact payload was just delivered by the replay
 
     try:
         data = _post_session_ping(body)
@@ -318,8 +337,8 @@ def session_ping():
 def main():
     git_pull()
     sync_pointers()
-    replay_failed_ping()
-    session_ping()
+    replayed = replay_failed_ping()
+    session_ping(replayed=replayed)
 
 
 if __name__ == "__main__":
