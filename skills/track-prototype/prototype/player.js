@@ -10,8 +10,10 @@ import {
   POS_ACTIVE, POS_NEXT, POS_PREV, POS_HIDDEN,
 } from "./runtime-classes.mjs"; // build copies it alongside player.js
 
-const KEY = "tp.v1";
 const track = window.__TRACK__;            // injected by build (the full track object)
+// Per-track storage key: hosted demos share one origin (studio.nsls.org), so a
+// global key would leak one track's persisted answers into every other demo.
+const KEY = `tp.v1:${(track && track.slug) || "track"}`;
 const screens = window.__SCREENS__;        // injected by build: array of pre-rendered HTML strings
 const subs = flattenSubsteps(track);
 // Synthetic prerequisite profile: { slug: { value, from } } from prerequisite
@@ -40,10 +42,11 @@ function load() {
       // persist() stores ALL of state.answers, including the seeded synthetic
       // prereq values — so a persisted copy must not shadow a rebuilt bundle's
       // fresh __PREREQ_PROFILE__ (e.g. updated education/location grounding
-      // seeds). Keep only persisted answers the user could actually have
-      // entered here (this track's own slugs); re-seed the rest fresh.
+      // seeds), and legacy shared-key state may carry other tracks' slugs.
+      // Keep ONLY answers enterable in this track (its own slugs); re-seed the
+      // rest fresh from prereqValues.
       const entered = Object.fromEntries(
-        Object.entries(s.answers || {}).filter(([k]) => ownSlugs.has(k) || !prereqProfile[k]));
+        Object.entries(s.answers || {}).filter(([k]) => ownSlugs.has(k)));
       return { i: clampIndex(s.i, subs.length), answers: { ...prereqValues, ...entered }, chat: s.chat || {} };
     }
   } catch { /* corrupt — fall through */ }
