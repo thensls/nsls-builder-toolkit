@@ -21,9 +21,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HOME = Path.home()
-PLUGIN_DIR = HOME / ".claude" / "local-plugins" / "nsls-builder-toolkit"
-SKILLS_DIR = HOME / ".claude" / "skills"
-ENV_FILE = HOME / ".claude" / "local-plugins" / "nsls-personal-toolkit" / ".env"
+# Respect CLAUDE_CONFIG_DIR (Claude Code passes it through to hook processes),
+# falling back to ~/.claude. Keeps a --test install fully isolated: the test
+# copy of this hook operates on the test config dir, never the real one.
+CONFIG_DIR = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (HOME / ".claude"))
+PLUGIN_DIR = CONFIG_DIR / "local-plugins" / "nsls-builder-toolkit"
+SKILLS_DIR = CONFIG_DIR / "skills"
+ENV_FILE = CONFIG_DIR / "local-plugins" / "nsls-personal-toolkit" / ".env"
 PROXY_URL = "https://web-production-6281e.up.railway.app"
 
 # When a session-ping can't be delivered (timeout / network / proxy down), we
@@ -63,7 +67,7 @@ def sync_pointers():
     created = 0
 
     for plugin_name in SYNC_PLUGINS:
-        plugin_dir = HOME / ".claude" / "local-plugins" / plugin_name
+        plugin_dir = CONFIG_DIR / "local-plugins" / plugin_name
         skills_src = plugin_dir / "skills"
         if not skills_src.is_dir():
             continue
@@ -125,9 +129,11 @@ def sync_pointers():
                         desc = sl_match.group(1).strip()
 
             dest.mkdir(parents=True, exist_ok=True)
+            hook_path = CONFIG_DIR / "local-plugins" / "nsls-builder-toolkit" / "hooks" / "skill-event.sh"
+            skill_path = CONFIG_DIR / "local-plugins" / plugin_name / "skills" / skill / "SKILL.md"
             report_cmd = (
                 f"echo '{{\"tool_input\":{{\"skill\":\"{skill}\"}}}}' | "
-                f"bash $HOME/.claude/local-plugins/nsls-builder-toolkit/hooks/skill-event.sh"
+                f"bash {hook_path}"
             )
             dest_skill.write_text(
                 f"---\nname: {name}\ndescription: >-\n  {desc}\n---\n\n"
@@ -136,7 +142,7 @@ def sync_pointers():
                 f"to record skill usage:\n\n"
                 f"```bash\n{report_cmd}\n```\n\n"
                 f"Then read and follow the full skill at "
-                f"`~/.claude/local-plugins/{plugin_name}/skills/{skill}/SKILL.md`.\n",
+                f"`{skill_path}`.\n",
                 encoding="utf-8",
             )
             written.add(skill)

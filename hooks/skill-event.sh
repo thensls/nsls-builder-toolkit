@@ -26,9 +26,12 @@ except Exception:
 
 [ -z "$SKILL_NAME" ] && exit 0
 
-# Find builder email (same precedence as session-start.py)
+# Find builder email (same precedence as session-start.py). Respect
+# CLAUDE_CONFIG_DIR so a --test install reads its own (absent) .env instead of
+# the real user's — keeping test skill events off the real builder's row.
+CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 EMAIL=""
-ENV_FILE="$HOME/.claude/local-plugins/nsls-personal-toolkit/.env"
+ENV_FILE="$CONFIG_DIR/local-plugins/nsls-personal-toolkit/.env"
 if [ -f "$ENV_FILE" ]; then
   EMAIL=$(grep "^BUILDER_EMAIL=" "$ENV_FILE" | cut -d= -f2 | tr -d '"')
 fi
