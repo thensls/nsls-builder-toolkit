@@ -9,6 +9,11 @@ test("slugify mirrors the validator's derivation", () => {
 
 test("synthValue: keyword match, fieldType fallback, multiselect is a joined string", () => {
   assert.equal(synthValue("major", "text"), "Marketing");
+  // education/degree carry the major too: value-moment grounding resolves the
+  // profile's education field to a CIP major, so the synthetic value must BE a
+  // plain matchable major (not "<sample education>").
+  assert.equal(synthValue("education", "education"), "Marketing");
+  assert.equal(synthValue("degree", "text"), "Marketing");
   assert.equal(synthValue("home-state", "text"), "Ohio");
   assert.equal(synthValue("top-strengths", "text"), "Strategic; Empathetic; Analytical");           // keyword value for a text field
   assert.equal(synthValue("top-strengths", "multi-select"), "<option A>, <option B>");               // multi-select SHAPE wins over keyword

@@ -29,7 +29,10 @@ export function synthValue(slug, fieldType) {
   // so e.g. "state" matches "home-state"/"states" but NOT "statement", and
   // "rent" won't match "current", "value" won't match "evaluate".
   const kw = [
-    [/(^|-)(major|field-of-study)s?($|-)/, "Marketing"],
+    // education/degree resolve to a plain major: value-moment grounding maps the
+    // profile's education field → CIP major, so the synthetic value must be a
+    // real matchable major name, not a "<sample …>" placeholder.
+    [/(^|-)(major|field-of-study|education|degree)s?($|-)/, "Marketing"],
     [/(^|-)(state|location|region|city|address)s?($|-)/, "Ohio"],
     [/(^|-)(name|full-name|first-name)s?($|-)/, "Jordan Lee"],
     [/(^|-)(email)s?($|-)/, "jordan.lee@example.edu"],
