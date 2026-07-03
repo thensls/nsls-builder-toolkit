@@ -46,6 +46,14 @@ says *why*; the gate says *good enough*.
 
 ## Process
 
+### 0 — Flag it: move the card to Optimization
+If the track is still in the **Live** column, flag the optimization work on the
+board before digging in (heartbeat: report the transition):
+```
+AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv \
+  node <track-prototype>/scripts/set-stage.mjs <slug> optimization
+```
+
 ### 1 — Signal: find where members leave (PostHog)
 Read the track's `PostHogActuals`: **`step_to_step_continuation`** (the primary
 live metric — average share continuing step→step), **`dropoff_by_step`** (the
@@ -77,7 +85,12 @@ step N because X; this change should lift it because Y."*
 Author the change as a **new version** of the `track.json`, preview it in the
 demo (build-prototype, with the prompt-context note so the change is legible),
 then hand to **`track-prototype`** to walk → focus-group → score → gate. On pass,
-a human ships it and the track returns to **Live** (the Studio flips the stage).
+a human ships it — and at that ship moment, flip the board back yourself (nothing
+else writes stage):
+```
+AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv \
+  node <track-prototype>/scripts/set-stage.mjs <slug> live --live-version <contentHash>
+```
 Do not bypass the gate.
 
 ## Guardrails
