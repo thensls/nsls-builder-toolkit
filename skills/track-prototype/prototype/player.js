@@ -36,7 +36,16 @@ function load() {
   // run, restored from localStorage) always override them.
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s) return { i: clampIndex(s.i, subs.length), answers: { ...prereqValues, ...(s.answers || {}) }, chat: s.chat || {} };
+    if (s) {
+      // persist() stores ALL of state.answers, including the seeded synthetic
+      // prereq values — so a persisted copy must not shadow a rebuilt bundle's
+      // fresh __PREREQ_PROFILE__ (e.g. updated education/location grounding
+      // seeds). Keep only persisted answers the user could actually have
+      // entered here (this track's own slugs); re-seed the rest fresh.
+      const entered = Object.fromEntries(
+        Object.entries(s.answers || {}).filter(([k]) => ownSlugs.has(k) || !prereqProfile[k]));
+      return { i: clampIndex(s.i, subs.length), answers: { ...prereqValues, ...entered }, chat: s.chat || {} };
+    }
   } catch { /* corrupt — fall through */ }
   return { i: 0, answers: { ...prereqValues }, chat: {} };
 }

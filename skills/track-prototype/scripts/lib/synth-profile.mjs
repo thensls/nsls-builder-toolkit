@@ -24,15 +24,20 @@ export function synthValue(slug, fieldType) {
   if (fieldType === "multi-select" || fieldType === "image-multiselect"
       || fieldType === "multiselect" || fieldType === "multipleSelect")
     return "<option A>, <option B>";
+  // The structured education field collapses to a bare major in the flat
+  // synthetic profile — deliberately. Grounding resolves this value against the
+  // CIP catalog via matchMajor, whose cascade requires the input to be a
+  // substring of a catalog title, so "Marketing" grounds and "Marketing at
+  // State University" doesn't. The school name is dropped; the major is the
+  // part the coach prompts actually use. fieldType-gated (not a slug keyword)
+  // so unrelated slugs like "continuing-education-plan" don't over-match.
+  if (fieldType === "education") return "Marketing";
   const s = (slug || "").toLowerCase();
   // Keywords match whole hyphen-delimited slug segments (optional trailing "s"),
   // so e.g. "state" matches "home-state"/"states" but NOT "statement", and
   // "rent" won't match "current", "value" won't match "evaluate".
   const kw = [
-    // education/degree resolve to a plain major: value-moment grounding maps the
-    // profile's education field → CIP major, so the synthetic value must be a
-    // real matchable major name, not a "<sample …>" placeholder.
-    [/(^|-)(major|field-of-study|education|degree)s?($|-)/, "Marketing"],
+    [/(^|-)(major|field-of-study)s?($|-)/, "Marketing"],
     [/(^|-)(state|location|region|city|address)s?($|-)/, "Ohio"],
     [/(^|-)(name|full-name|first-name)s?($|-)/, "Jordan Lee"],
     [/(^|-)(email)s?($|-)/, "jordan.lee@example.edu"],
