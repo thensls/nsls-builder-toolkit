@@ -3,10 +3,12 @@
 Read this BEFORE proposing any change to the Welcome track — it is the app's
 onboarding, and onboarding follows different rules than mid-journey tracks.
 Compiled 2026-07-04 from (a) *Product-Led Onboarding* (Ramli John) — summary
-doc linked on the Welcome track's Studio page under Context & references — and
+doc linked on the Welcome track's Studio page under Context & references —
 (b) a deep-research sweep of 2023–2026 B2C onboarding evidence (23 sources,
-25 claims adversarially verified 3-vote, 24 confirmed / 1 refuted). Claims
-below carry their evidence grade; don't quote a "medium/blog" figure as fact.
+25 claims adversarially verified 3-vote, 24 confirmed / 1 refuted), and
+(c) Reforge member content (§4b: activation modules + experiment artifacts;
+login required for the sources). Claims below carry their evidence grade;
+don't quote a "medium/blog" or member-artifact figure as peer-reviewed fact.
 
 ## 1. The activation architecture: three moments, defined backward
 
@@ -113,6 +115,106 @@ Ranked by evidence strength; the moderators are the design guidance.
    from the label itself. (Reinforces the standing rule: stage, not identity;
    internal segment names never member-facing.)
 
+## 4b. Reforge methodology (member content, summarized 2026-07-04)
+
+Extracted from Reforge's *Mastering Retention & Engagement* activation
+modules, *Optimize new user onboarding* (Phil Carter), and published member
+experiment artifacts. Practitioner-grade (not peer-reviewed) but the most
+operational material in this playbook — grade it accordingly.
+
+### Validating activation moments quantitatively (the missing procedure)
+
+Setup/aha/habit moments are *chosen by data*, not named by intuition. Each
+moment is validated against the NEXT moment (setup→aha→habit→retention), not
+directly against vibes:
+
+1. **Exploration** — segment retention curves by action count (1-of-28 vs
+   3-of-28 vs 4-of-28 of the candidate action) to shortlist candidates.
+2. **Correlation** — build a matrix: rows = action-count hypotheses, columns
+   = time windows. Score each cell on correlation with the next-moment metric
+   (want ≥~0.8, discard <0.3), sample size, and positive/negative predictive
+   value. Pick the **inflection point** where correlation jumps (Reforge's
+   Zoom example: 3 meetings ≈ .35 → 4 meetings ≈ .81). Then simplify and
+   brand the metric (simple / focused / measurable).
+3. **Causation** — ship experiments pushing more users past the threshold;
+   if downstream retention doesn't move, the metric was correlated-not-causal.
+
+Lighter variant for our data volume (Carter): scatterplot cohort activation
+rate vs retention, compare R² across candidates; **decision rule: activated
+users should retain ≥2× non-activated**, and the metric must sit in the
+goldilocks zone — predictive AND actionable (signup completion = actionable
+but not predictive; compound metrics = predictive but not actionable).
+Small-sample fallbacks: the "after which action did you feel confident this
+product solves your problem?" survey; 2× cohort-curve comparison; session
+recordings. **Hard rule: time-bound the aha metric** (fX-of-a-in-Y) —
+retention probability decays fast post-signup, and an unbounded aha metric
+has you chasing dead users with notifications.
+
+Famous correction: Facebook's "7 friends in 10 days" is a **setup** metric,
+not the aha — the aha is first engagement with an interesting feed. Welcome
+candidates to validate: setup = both wheels + needs answered; aha = segment
+reveal reached in first session; habit = N active days of first 7 (find N).
+
+### Psych Score: audit the flow as a fuel gauge
+
+Score every screen: user arrives with initial psych set by acquisition
+source (referral/organic > ad-click); each element adds (+) or drains (−);
+users quit where a step's cost exceeds remaining psych. Operational rules:
+- **Ask–Value loop**: every ask must visibly return value. "If you can't use
+  the ask to return value, don't make the ask." Each wheel/checklist answer
+  should produce an interim micro-payoff, with the reveal as the big one.
+- **Order of operations**: front-load quick wins and the lightest ask that
+  enables re-engagement (Reddit collects email + topics before password so
+  it can win back droppers; Quora front-loads all asks and can't).
+- Cognitive friction counts: unfamiliar naming is a psych drain — another
+  reason internal segment names stay internal.
+
+### Four Activation Fits (when personalization is mandatory)
+
+Users arrive asking: *Is this for me?* (Audience), *Does it do what I want?*
+(Promise — restate it at every step), *How badly do I want it now?*
+(Intent), *Do I know how to get it?* (Knowledge — flow forcefulness should
+be **inversely proportional** to user knowledge). Classify each fit's
+incoming population as singular / hard-lines / **gradient — any gradient fit
+demands personalization** of the flow. Our clarity×confidence and need-type
+data are gradient by construction: the framework says Welcome *should*
+personalize, and acquisition source should set the opening frame.
+
+### Habit-moment engineering (week-1 loop design)
+
+Define the **organic loop first** (organic trigger → core action → reward
+that reinforces the trigger), then accelerate: manufactured loops (trigger
+types: time / location / change / peer / programmatic; rewards: extrinsic /
+intrinsic / social), environment loops (place cues where the organic trigger
+already fires), use-case transition (move to a higher-frequency use case),
+grand exit (amplify the aha delta). **Warning**: some products (Zoom, Uber)
+can't credibly manufacture the trigger — notifications read as spam. Test
+whether career-development has a manufacturable trigger before building one.
+Pre-habit notifications behave "like a personal assistant, not a marketer"
+— only ever pointing at the single core action. Empty states must redirect
+to the core action, never dead-end. Aha experiences get a **warm start**:
+first experience pre-built from setup data (the wheels/needs answers should
+visibly shape the first screen after the reveal).
+
+### Experiment evidence from member artifacts (practitioner-grade numbers)
+
+- **AdRoll**: conversational step-by-step onboarding beat the all-on-one-page
+  version, +20% signup-to-launch.
+- **Noom**: a 100+ screen, ~20-minute quiz onboarding generates *positive*
+  psych in high-pain self-improvement categories (health, finance — and
+  plausibly careers) because it builds credibility and signals
+  personalization. Length is not the enemy; unreciprocated asks are.
+- **Airtable**: onboarding personalization lifted completion +15% while
+  *hurting* the downstream collaboration metric −10%; a team-use-case
+  reframe got +15% completion AND +10% activation. **Rule: every
+  personalization experiment instruments both the local step and the
+  downstream habit metric.**
+- **GoDaddy** (Psych framework): the diagnosed friction was *failing to
+  collect user intent/goals during onboarding* — supports intent capture
+  early, framed as personalization.
+- **Heap**: customize onboarding by **JTBD, not persona** — matches our
+  needs-based segmentation rule exactly.
+
 ## 5. Welcome-specific rules of thumb
 
 - **Day-One win**: the first session must end with the member having
@@ -148,13 +250,17 @@ Ranked by evidence strength; the moderators are the design guidance.
 
 ## 7. Known gaps (tested in-house or not at all)
 
-The sweep found NO surviving external evidence on: question-count tolerance
-and per-question skip rates; survey placement before vs after value
-explanation (A/B-grade); optimal onboarding length; progressive profiling;
-streak/notification ethics and effectiveness for our category. These are
-exactly what our own pre-registered experiments must answer — the
-wheel-up-front hypothesis (logged 2026-07-04, day-2 return 44.1% → ≥48%) is
-the first; a reveal-vs-no-label holdout is the highest-value second.
+The public-evidence sweep found NO surviving peer-reviewed/benchmark evidence
+on: question-count tolerance and per-question skip rates; survey placement
+before vs after value explanation (A/B-grade); optimal onboarding length;
+progressive profiling; streak/notification ethics and effectiveness for our
+category. Reforge member artifacts (§4b) partially fill the quiz-placement
+gap at practitioner grade (AdRoll +20% conversational; Noom long-quiz works
+in high-pain self-improvement; GoDaddy intent-capture) — directional support,
+not category-proof. Our own pre-registered experiments are still the answer:
+the wheel-up-front hypothesis (logged 2026-07-04, day-2 return 44.1% → ≥48%)
+is the first; a reveal-vs-no-label holdout is the highest-value second; the
+aha-validation matrix (§4b) on our own event data is the third.
 
 ## Sources (verified set)
 
@@ -165,4 +271,8 @@ Political Psychology (labeling null, primary) · Mazal, "How Duolingo reignited
 user growth" (Lenny's, first-person primary) · Reforge activation guides
 (secondary) · Airship via eMarketer (secondary) · growth.design Headspace
 teardown (blog, 2-1) · *Product-Led Onboarding*, Ramli John (book summary doc
-on the Welcome track's Studio page).
+on the Welcome track's Studio page) · Reforge member content (login required):
+*Mastering Retention & Engagement* activation modules, *Optimize new user
+onboarding* (Phil Carter), experiment artifacts (Airtable, AdRoll, GoDaddy,
+Heap) — edu.reforge.com learning plans "User Onboarding" (106) and
+"Activation Strategy" (108).
