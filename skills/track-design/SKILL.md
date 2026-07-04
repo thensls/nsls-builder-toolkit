@@ -52,7 +52,7 @@ Violating the letter of these rules violates their spirit.
 
 **Purpose:** Lock the value promise and the structural classification before any design work begins.
 
-**Read:** Open `references/track-ontology.md`. Study the Track/Step/Substep grammar, the SAY/COLLECT/CHAT/GENERATE action types, the profile token system, and the 6-step "Designing a New Track" framework.
+**Read:** Open `references/track-ontology.md`. Study the Track/Step/Substep grammar, the SAY/COLLECT/CHAT/GENERATE action types, the profile token system, and the 6-step "Designing a New Track" framework. **If the track is an onboarding track** (Welcome, or any track greeting brand-new members), also read `../track-optimize/references/onboarding-playbook.md` — its verified methodology (activation moments, benchmarks, behavioral evidence + moderators, anti-patterns) constrains the design space.
 
 **Work:**
 1. Elicit or draft the value promise: *"When a student finishes this track, they will have ___ they didn't have before."* Make it concrete — a deliverable, a clarity, a capability, not a feeling.

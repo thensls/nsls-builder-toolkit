@@ -45,7 +45,7 @@ machinery, don't invent parallel process:
 | EUREKA step | NSLS implementation |
 |---|---|
 | **E**stablish the team | Society Studio is the shared surface; owner on the Tracks row |
-| **U**nderstand desired outcomes | Segments (clarity×confidence) + stated-needs data (`/audience`), JTBD per segment in `segment-lens.md` |
+| **U**nderstand desired outcomes | Segments (clarity×confidence) + stated-needs data (Studio's Audience page, studio.nsls.org/audience), JTBD per segment in `segment-lens.md` |
 | **R**efine success milestones | Setup/aha/habit table above; pre-registered metrics in the `Hypotheses` table |
 | **E**valuate the path | Substep funnel from `substep_save_result` (per-substep reach = quit-probability curve); Bowling-Alley the straightest path to the aha |
 | **K**eep users engaged | Fogg B=MAP: prompts at the right moment, ability high (defaults, templates, empty-state guidance), motivation via progress + celebration |
