@@ -182,12 +182,31 @@ brainstorm with them, but every answer must land concretely:
 
 1. **What outcome are you trying to move?** The ladder:
    **adoption** (start → continue → complete → *next-track adoption*) →
-   **satisfaction** (clarity/confidence deltas — the ratings are a time
-   series, so a track can provably move them) →
-   **revenue** (future: Society is freemium today; upsell conversion becomes a
-   metric on this same ladder once charging starts — the Studio is the place
-   those experiments will run).
+   **satisfaction** → **revenue** (future: Society is freemium today; upsell
+   conversion becomes a metric on this same ladder once charging starts — the
+   Studio is the place those experiments will run).
    Pick ONE metric from the `metric` menu.
+
+   **Measuring satisfaction without the survivor trap.** An end-of-track
+   rating only hears from finishers — the member offended by page 2 who quit
+   on page 3 never answers it. Three survivorship-aware measures:
+   - **Abandonment hazard (behavioral, available now).** Where members quit
+     and how fast IS their satisfaction signal. `substep_save_result` fires
+     per answered substep with track context, so per-substep reach counts
+     (distinct persons per `substep_slug`, ordered by the track.json substep
+     order) give a quit-probability curve per version per segment. A
+     satisfaction hypothesis reads: "the page-2 rewrite lowers the quit spike
+     across pages 2–4" — measured for everyone, including leavers.
+   - **Sampled one-tap pulse (light ignite-next feature, not yet built).**
+     One tap ("worth your time so far?") shown to a random 1-in-N members at
+     a random step boundary — satisfaction by position, comparable across
+     versions at the same position.
+   - **Clarity/confidence deltas (available now).** The ratings are a time
+     series; "completion flat but they liked it more" can appear as a larger
+     per-completer lift. Slowest signal; it's the *outcome* satisfaction the
+     product promises.
+   The lifecycle-nudge rail can additionally ask lapsed members one tap
+   ("what made you stop?") — the only stated signal leavers can give.
 2. **For whom?** Name the segment (or justify `all` — flat-across-segments is
    itself a finding, not a default).
 3. **What's the baseline?** Pull the real number with the recipes above —
@@ -219,8 +238,15 @@ Then log it in the Studio base (`appzDWu6GowvnACtv`) table **`Hypotheses`**
 | `baseline` | The sourced numbers behind X, with n |
 | `status` | `proposed` → `in-gate` (entered score→gate) → `shipped` → `validated` / `refuted` |
 | `version` | The `content_hash` of the version carrying the change — **tag it at ship** so version ↔ hypothesis is queryable |
+| `measure_query` | The exact HogQL that measures the metric — pre-registered so **Studio can watch**: the track's detail page re-runs it and shows "Results pending: current vs target". Return small labeled rows (e.g. segment, value) |
+| `window_end` | ISO date the measurement window closes. Studio shows **Unclear** past this date until a conclusion is set |
 | `result` | Post-ship measurement vs the prediction |
 | `created` | ISO date |
+
+Studio renders each track's hypothesis history on its detail page — every
+change, its hypothesis, and a conclusion state (**Results pending →
+Hypothesis confirmed / Proven false / Unclear**). Write rows knowing they are
+the track's permanent experiment record.
 
 After the tagged version has been live long enough for real n, re-run the same
 recipe and fill `result` — **validated** if the predicted movement happened,
