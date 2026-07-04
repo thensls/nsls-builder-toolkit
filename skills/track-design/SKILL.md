@@ -243,6 +243,11 @@ node scripts/validate-track-json.mjs my-track.json --assume goal,strengths --ass
 | Phase 5 | `references/track-json-schema.md`, `references/examples/` | `gdoc-build`, `value-moment`, `track-prototype` (build-prototype for the demo preview) |
 | Phase 6 | — | `scripts/validate-track-json.mjs` (CLI) |
 
+**Onboarding tracks** (Welcome, or any track greeting brand-new members): also
+read `../track-optimize/references/onboarding-playbook.md` in Phase 0 — the
+verified onboarding methodology (activation moments, benchmarks, behavioral
+evidence + moderators, anti-patterns) constrains the design space.
+
 ---
 
 ## Definition of Done

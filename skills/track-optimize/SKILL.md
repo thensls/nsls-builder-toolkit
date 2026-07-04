@@ -94,6 +94,14 @@ diagnosed cause, not a rewrite. **Log the hypothesis to the Studio base's
 `Hypotheses` table** (fields + template in the reference), status `proposed`.
 Every hypothesis names a segment.
 
+**Onboarding tracks (Welcome, or any track that greets brand-new members):
+read `references/onboarding-playbook.md` before the workshop.** It carries the
+verified methodology — setup/aha/habit moments, benchmark tables with their
+definitional traps, the endowed-progress / IKEA-completion / reciprocity
+evidence and moderators, the contested labeling effect, and Welcome's
+anti-patterns. Onboarding hypotheses that ignore it tend to re-propose
+already-refuted patterns.
+
 ### 4 — New version → re-enter the gate
 Author the change as a **new version** of the `track.json`, preview it in the
 demo (build-prototype, with the prompt-context note so the change is legible),
@@ -132,4 +140,5 @@ prediction is a finding — return to step 2 with that knowledge.
 ## Reference index
 - `references/reading-the-signal.md` — the `PostHogActuals` fields + `/posthog` cut for the weak step.
 - `references/segment-lens.md` — the four segments, HogQL recipes (per-step × segment, next-track adoption), the focus-group segment overlay, the hypothesis workshop + `Hypotheses` Airtable log, guardrails (segment n, Welcome survivorship).
+- `references/onboarding-playbook.md` — REQUIRED for Welcome / onboarding work: activation moments (setup/aha/habit), verified B2C benchmarks + definitional discipline, behavioral-science toolbox with evidence grades (endowed progress, IKEA completion boundary, reciprocity, contested labeling effect), EUREKA→NSLS mapping, anti-patterns, known evidence gaps.
 - Hand-offs: `track-prototype` (focus-group + score→gate), `value-moment` (if the fix is a nugget), `track-design` (larger structural changes).
