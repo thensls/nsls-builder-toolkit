@@ -54,39 +54,54 @@ AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv \
   node <track-prototype>/scripts/set-stage.mjs <slug> optimization
 ```
 
-### 1 — Signal: find where members leave (PostHog)
+### 1 — Signal: find where members leave — and who (PostHog)
 Read the track's `PostHogActuals`: **`step_to_step_continuation`** (the primary
 live metric — average share continuing step→step), **`dropoff_by_step`** (the
 per-step counts), and `step1_dropoff`. **Pick the row for the *current* live
 version** — a track may have several rows across versions; use the one whose
 `live_track_version` matches the shipped build (else the latest `period`), so
 you're optimizing what's actually live. Identify the **weakest step** — the
-largest single continuation drop. For depth or a fresh cut, use `/posthog` on the
-track's events. Report the weak step with its numbers (real, sourced — never a
-guessed figure).
+largest single continuation drop. Then apply the **segment lens**
+(`references/segment-lens.md`): slice the weak step by Seeker / Explorer /
+Doubter / Accelerator to find WHO is leaving — the target segment is the one
+whose continuation falls furthest below its peers (report n; small segment
+slices are directional, not significant). For depth or a fresh cut, use
+`/posthog` on the track's events. Report the weak step and target segment with
+their numbers (real, sourced — never a guessed figure). Caveat: Welcome's
+per-segment numbers are survivorship — see the guardrail in the reference.
 
 ### 2 — Diagnose: why that step underperforms (focus-group)
 Run `track-prototype`'s synthetic focus-group panel **on the current live
-content**, focused on the weak step. If the track has prerequisites, pass their
+content**, focused on the weak step — with the panel overlaid as the target
+segment (each persona keeps its register, adds the segment's ratings + 
+job-to-be-done; see "Running the focus-group as a segment" in
+`references/segment-lens.md`). If the track has prerequisites, pass their
 assumed tokens (the track's `--assume` / `--prereq` set, as in `track-design`
 Phase 0 / the demo build) so the walk doesn't error on token ordering. Read the
 panel's friction notes against the four dimensions (Value / Pacing / Copy / Fit).
 The signal says a step loses people; the panel says which dimension is failing
 and why.
 
-### 3 — Propose: one concrete change
-From the diagnosis, propose a specific change to the weak step — reword (Copy),
-re-pace / split / cut (Pacing), sharpen the payoff or **add/adjust a value
-moment** (Value, via `value-moment`), or re-target (Fit). One change tied to one
-diagnosed cause, not a rewrite. State the hypothesis: *"continuation drops at
-step N because X; this change should lift it because Y."*
+### 3 — The hypothesis workshop: pre-register the experiment
+Walk the author through the five workshop questions in
+`references/segment-lens.md` — outcome (the adoption → satisfaction → revenue
+ladder), segment, sourced baseline, causal story, and a **pre-registered
+prediction** (from X to Y, by when — committed before shipping). The change
+itself: one concrete edit to the diagnosed step — reword (Copy), re-pace /
+split / cut (Pacing), sharpen the payoff or **add/adjust a value moment**
+(Value, via `value-moment`), or re-target (Fit). One change tied to one
+diagnosed cause, not a rewrite. **Log the hypothesis to the Studio base's
+`Hypotheses` table** (fields + template in the reference), status `proposed`.
+Every hypothesis names a segment.
 
 ### 4 — New version → re-enter the gate
 Author the change as a **new version** of the `track.json`, preview it in the
 demo (build-prototype, with the prompt-context note so the change is legible),
-then hand to **`track-prototype`** to walk → focus-group → score → gate. On pass,
-a human ships it — and at that ship moment, flip the board back yourself (nothing
-else writes stage):
+then hand to **`track-prototype`** to walk → focus-group → score → gate (set
+the Hypotheses row to `in-gate`). On pass, a human ships it — and at that ship
+moment: **tag the version** (write the shipped `content_hash` to the
+Hypotheses row's `version` field, status `shipped`) and flip the board back
+yourself (nothing else writes stage):
 ```
 AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv \
   node <track-prototype>/scripts/set-stage.mjs <slug> live --live-version <contentHash>
@@ -109,9 +124,12 @@ Do not bypass the gate.
 
 TRY (read the signal) → OBSERVE (weakest step + numbers) → DIAGNOSE (focus-group:
 which dimension) → ADAPT (one targeted change) → RE-GATE (track-prototype) →
-measure again once live. If the new version doesn't lift continuation, the
-hypothesis was wrong — return to step 2 with that knowledge.
+measure again once live: when the tagged version has enough n, re-run the
+segment-sliced recipe against the **pre-registered prediction** and mark the
+Hypotheses row `validated` or `refuted` (with the measured `result`). A refuted
+prediction is a finding — return to step 2 with that knowledge.
 
 ## Reference index
 - `references/reading-the-signal.md` — the `PostHogActuals` fields + `/posthog` cut for the weak step.
+- `references/segment-lens.md` — the four segments, HogQL recipes (per-step × segment, next-track adoption), the focus-group segment overlay, the hypothesis workshop + `Hypotheses` Airtable log, guardrails (segment n, Welcome survivorship).
 - Hand-offs: `track-prototype` (focus-group + score→gate), `value-moment` (if the fix is a nugget), `track-design` (larger structural changes).
