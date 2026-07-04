@@ -74,7 +74,7 @@ per_person AS (
           AND properties.substep_slug IN ('direction-clarity','direction-clarity-rating','job-acquisition-confidence','job-acquisition-confidence-rating')
           AND JSONHas(properties.answer, 'dropdown'))
       )
-      AND timestamp >= now() - INTERVAL 2 YEAR
+      AND timestamp >= toDateTime('2026-03-01') -- launch-era anchor: covers ALL rating history (events begin 2026-03-15). A rolling now()-interval would silently age members out into 'unsegmented'.
   )
   WHERE dim != '' AND v >= 1
   GROUP BY person_id
@@ -103,7 +103,7 @@ steps AS (
   FROM events
   WHERE event = 'step_completed'
     AND properties.track_slug = '<track-slug>'
-    AND timestamp >= now() - INTERVAL 2 YEAR
+    AND timestamp >= toDateTime('2026-03-01')
   GROUP BY person_id, step_number
 )
 SELECT <bucket expression> , s.step_number, count(DISTINCT s.person_id) AS members
@@ -148,16 +148,20 @@ WITH per_person AS ( … as above … ),
 journeys AS (
   SELECT person_id,
     countIf(properties.track_slug = '<this-track>' AND properties.action = 'complete') > 0 AS completed_a,
-    countIf(properties.track_slug = '<next-track>' AND properties.action = 'start') > 0 AS started_b
+    minIf(timestamp, properties.track_slug = '<this-track>' AND properties.action = 'complete') AS completed_a_at,
+    countIf(properties.track_slug = '<next-track>' AND properties.action = 'start') > 0 AS started_b,
+    minIf(timestamp, properties.track_slug = '<next-track>' AND properties.action = 'start') AS started_b_at
   FROM events
   WHERE event = 'session_lifecycle'
-    AND timestamp >= now() - INTERVAL 2 YEAR
+    AND timestamp >= toDateTime('2026-03-01')
   GROUP BY person_id
 )
 SELECT <bucket expression>,
   countIf(j.completed_a) AS completed_a,
-  countIf(j.completed_a AND j.started_b) AS continued,
-  round(100 * countIf(j.completed_a AND j.started_b) / countIf(j.completed_a), 1) AS pct
+  -- ordering gate: B's first start must follow A's first completion, else a
+  -- member who tried B before finishing A inflates continuation
+  countIf(j.completed_a AND j.started_b AND j.started_b_at >= j.completed_a_at) AS continued,
+  round(100 * countIf(j.completed_a AND j.started_b AND j.started_b_at >= j.completed_a_at) / countIf(j.completed_a), 1) AS pct
 FROM journeys j LEFT JOIN per_person p ON j.person_id = p.person_id
 WHERE j.completed_a GROUP BY segment
 ```
