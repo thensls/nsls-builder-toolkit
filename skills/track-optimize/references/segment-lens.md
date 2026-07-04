@@ -35,7 +35,9 @@ Ratings live in three events; take the **latest value per person** across all
 of them (project 128379, HogQL via `/posthog`):
 
 - `substep_save_result` (server-side, since 2026-03-15) — value in the answer
-  JSON as `{"dropdown": N}`; match by `properties.substep_slug`:
+  JSON as `{"dropdown": N}` (`properties.answer` — verified by execution
+  against project 128379 on 2026-07-03: 2,526 of 2,855 clarity-slug events
+  carry a `dropdown` key); match by `properties.substep_slug`:
   clarity = `direction-clarity`, `direction-clarity-rating`;
   confidence = `job-acquisition-confidence`, `job-acquisition-confidence-rating`.
   (The unsuffixed slugs are the pre-May-2026 combined substeps — ~40% of
