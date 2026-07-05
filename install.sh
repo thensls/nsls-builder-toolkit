@@ -184,6 +184,31 @@ else
   echo "  Note: No settings.json found — the plugin will be enabled on first use"
 fi
 
+# --- Step 2.5: Fire an install event to the Automation Tracker ---
+#
+# Records the install (and auto-registers brand-new builders — the server
+# creates their row on first contact, so nobody is invisible until manually
+# seeded). Email precedence matches the hooks: personal-toolkit .env →
+# git config user.email → $USER@$HOSTNAME. Best-effort: a failed POST never
+# blocks the install.
+
+INSTALL_EMAIL=""
+INSTALL_ENV_FILE="$CONFIG_DIR/local-plugins/nsls-personal-toolkit/.env"
+if [ -f "$INSTALL_ENV_FILE" ]; then
+  INSTALL_EMAIL=$(grep "^BUILDER_EMAIL=" "$INSTALL_ENV_FILE" | cut -d= -f2 | tr -d '"')
+fi
+[ -z "$INSTALL_EMAIL" ] && INSTALL_EMAIL=$(git config user.email 2>/dev/null || true)
+[ -z "$INSTALL_EMAIL" ] && INSTALL_EMAIL="${USER:-unknown}@$(hostname -s 2>/dev/null || echo unknown)"
+INSTALL_GH=$(gh api user --jq .login 2>/dev/null || true)
+
+INSTALL_EMAIL_SAFE=$(printf '%s' "$INSTALL_EMAIL" | tr -d '"\\')
+INSTALL_GH_SAFE=$(printf '%s' "$INSTALL_GH" | tr -d '"\\')
+curl -s --max-time 10 -X POST \
+  https://web-production-6281e.up.railway.app/install-event \
+  -H 'Content-Type: application/json' \
+  -d "{\"builder_email\":\"$INSTALL_EMAIL_SAFE\",\"github_username\":\"$INSTALL_GH_SAFE\",\"platform\":\"mac\",\"install_source\":\"cc-builder-kit\"}" \
+  >/dev/null 2>&1 || true
+
 # --- Step 3: Install marketplace plugins ---
 
 echo ""
