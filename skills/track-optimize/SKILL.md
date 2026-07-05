@@ -48,14 +48,17 @@ says *why*; the gate says *good enough*.
 
 ### 0 — Flag it: move the card to Optimization
 If the track is still in the **Live** column, flag the optimization work on the
-board before digging in (heartbeat: report the transition):
+board before digging in (heartbeat: report the transition). Prefer the Studio
+MCP tool `set_stage`; script fallback:
 ```
 AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv \
   node <track-prototype>/scripts/set-stage.mjs <slug> optimization
 ```
 
 ### 1 — Signal: find where members leave — and who (PostHog)
-Read the track's `PostHogActuals`: **`step_to_step_continuation`** (the primary
+Prefer the Studio MCP tool `get_telemetry` (`society-studio` server) — latest +
+previous measurement, week-over-week deltas, and the board's flag in one call.
+Fallback: read the track's `PostHogActuals`: **`step_to_step_continuation`** (the primary
 live metric — average share continuing step→step), **`dropoff_by_step`** (the
 per-step counts), and `step1_dropoff`. **Pick the row for the *current* live
 version** — a track may have several rows across versions; use the one whose
@@ -90,8 +93,10 @@ prediction** (from X to Y, by when — committed before shipping). The change
 itself: one concrete edit to the diagnosed step — reword (Copy), re-pace /
 split / cut (Pacing), sharpen the payoff or **add/adjust a value moment**
 (Value, via `value-moment`), or re-target (Fit). One change tied to one
-diagnosed cause, not a rewrite. **Log the hypothesis to the Studio base's
-`Hypotheses` table** (fields + template in the reference), status `proposed`.
+diagnosed cause, not a rewrite. **Log the hypothesis** — prefer the Studio
+MCP tool `record_hypothesis` (`society-studio` server; links the Tracks row
+automatically), fields + template in the reference; direct Airtable write is
+the fallback. Status `proposed`.
 Every hypothesis names a segment.
 
 **Onboarding tracks (Welcome, or any track that greets brand-new members):

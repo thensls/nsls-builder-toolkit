@@ -173,6 +173,10 @@ markdown. Keep the URL; it's the `brief_doc_url`.
 
 **Purpose:** land the idea in the Studio Backlog.
 
+**Prefer the Studio MCP tool** `create_brief_card` (`society-studio` server) — it
+validates fields, rejects duplicate slugs against a FRESH board read, and needs
+no Airtable PAT. Fallback when the MCP server isn't configured:
+
 **Read** `references/backlog-airtable-write.md`. Confirm the field values with the
 user (Tier-3 write), verify the slug is unique, then create the `Tracks` row with
 `stage="backlog"` and `brief_doc_url` set. If no write token is available, print

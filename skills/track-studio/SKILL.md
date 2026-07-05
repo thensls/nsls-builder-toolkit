@@ -45,6 +45,11 @@ tracks; this skill is the *doer*.)
    the bundled listing script — it lives in **this skill's own `scripts/`
    directory**, so run it from there (or give its full path):
    ```bash
+   **Prefer the Studio MCP tools when available** (`society-studio` server, ships
+   with this toolkit): `list_tracks` / `get_track` need no Airtable PAT and see
+   exactly what the board sees. The script below is the fallback when the MCP
+   server isn't configured (no `STUDIO_MCP_TOKEN`).
+
    cd "<this skill's directory>" && AIRTABLE_API_KEY=… node scripts/list_studio_tracks.mjs
    ```
    Lists every track grouped by stage (Backlog / In Development / Live /

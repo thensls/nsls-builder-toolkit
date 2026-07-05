@@ -76,11 +76,13 @@ Gate: a working Phase-1 build (local or deployed). **Turn live AI ON** (build wi
    - `recommendations.mjs` → write `focus-group/v{N}/recommendations.md` (one rec per UNMET; CONTESTED = human-review flag).
    - Write `focus-group/v{N}/conversation.md` (persona dialogue + the **expert roundtable**) and `scorecard.md` (sub-checks + total).
    - Google Doc via **`gdoc-build`** (python-docx; **new draft, org-restricted, never overwrite a shared doc**): per-attribute scorecard + per-persona summary + persona conversation + **expert roundtable** (dialogue + converged top-3) + adversarial skeptic + ranked optimization plan.
-   - **Ledger:** `AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv node scripts/ledger-write.mjs <run.json>` — POSTs the ScoreRun to the "Track Previews" base and appends the local `scores.md`. `run.json` = `{ trackSlug, version, contentHash, date, scorecard, gdocUrl, persona, buildUrl, scoresMdPath }`.
+   - **Ledger:** prefer the Studio MCP tool `record_score_run` (`society-studio` server — same fields, no PAT); script fallback: `AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv node scripts/ledger-write.mjs <run.json>` — POSTs the ScoreRun to the "Track Previews" base and appends the local `scores.md`. `run.json` = `{ trackSlug, version, contentHash, date, scorecard, gdocUrl, persona, buildUrl, scoresMdPath }`.
 
 4. **Handoff:** the Google Doc link + the scorecard + the checks-met total.
 
 5. **Ship = flip the board.** When a run clears the ship-bar AND the version actually ships to members (merged + deployed in ignite-next), advance the Studio stage so the board stays truthful:
+   Prefer the Studio MCP tool `set_stage` with `live_version` (`society-studio`
+   server); script fallback:
    ```
    AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv \
      node scripts/set-stage.mjs <slug> live --live-version <contentHash>
