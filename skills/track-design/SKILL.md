@@ -60,6 +60,8 @@ Violating the letter of these rules violates their spirit.
 3. Identify prerequisites. List any tracks that should run first. From that list, enumerate which profile tokens the track may assume already exist. This set becomes the `--assume` arguments for the Phase 6 validator. If Clarity is a prerequisite, note `--assume-clarity`.
 4. Decide which registers this track targets: Student / Early Pro / Established / Transitional / Returning (or a subset).
 5. **Advance the Studio board.** Authoring has now started — if the track has a Studio row (`track-brief` writes one at `stage=backlog`), move it to In Development so studio.nsls.org stays truthful:
+   Prefer the Studio MCP tool `set_stage` (`society-studio` server) — same
+   semantics, no PAT, no sibling-path resolution. Script fallback:
    ```
    AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv \
      node <track-prototype>/scripts/set-stage.mjs <slug> in-development
