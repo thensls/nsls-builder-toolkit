@@ -76,6 +76,7 @@ Gate: a working Phase-1 build (local or deployed). **Turn live AI ON** (build wi
    - `recommendations.mjs` → write `focus-group/v{N}/recommendations.md` (one rec per UNMET; CONTESTED = human-review flag).
    - Write `focus-group/v{N}/conversation.md` (persona dialogue + the **expert roundtable**) and `scorecard.md` (sub-checks + total).
    - Google Doc via **`gdoc-build`** (python-docx; **new draft, org-restricted, never overwrite a shared doc**): per-attribute scorecard + per-persona summary + persona conversation + **expert roundtable** (dialogue + converged top-3) + adversarial skeptic + ranked optimization plan.
+   - **Save-then-score (the hash contract):** BEFORE writing the ledger, save the exact content being scored — Studio MCP `save_draft(slug, track_json, note: "scored vN")`. **Use the returned `content_hash` as run.json's `contentHash`** — save_draft is the canonical hasher (fallback: `node scripts/lib/content-hash.mjs <track.json>`, same algorithm). This is what chains draft → ScoreRun → live telemetry and lets the Studio's Publish gate find the scored file.
    - **Ledger:** prefer the Studio MCP tool `record_score_run` (`society-studio` server — same fields, no PAT); script fallback: `AIRTABLE_API_KEY=… AIRTABLE_BASE_ID=appzDWu6GowvnACtv node scripts/ledger-write.mjs <run.json>` — POSTs the ScoreRun to the "Track Previews" base and appends the local `scores.md`. `run.json` = `{ trackSlug, version, contentHash, date, scorecard, gdocUrl, persona, buildUrl, scoresMdPath }`.
 
 4. **Handoff:** the Google Doc link + the scorecard + the checks-met total.
@@ -90,7 +91,7 @@ Gate: a working Phase-1 build (local or deployed). **Turn live AI ON** (build wi
    Sets `stage=live`, `is_live`, `current_version` (the hash `PostHogActuals.live_track_version` joins on for calibration). **Gate pass alone is not Live** — run this at the actual ship moment; if shipping happens later or by someone else, say so in the handoff and leave the stage as-is until it ships.
 
 ### The iteration loop
-Builder says **"implement the focus-group changes"** → read `recommendations.md`, edit `track.json` per each `fix` rec's `change` (CONTESTED `review` recs go to a human, not auto-applied), re-run Phase 1 → Phase 2 → a v{N+1} ScoreRun showing the delta. **Scores are a ranking + ship-bar gate, NOT a calibrated prediction** — celebrate green checks; don't over-read the number (synthetic personas overstate adoption).
+Builder says **"implement the focus-group changes"** → read `recommendations.md`, edit `track.json` per each `fix` rec's `change` (CONTESTED `review` recs go to a human, not auto-applied), **`save_draft` the edited JSON** (note = which recs were applied; pass the previous hash as `parent_hash`), re-run Phase 1 → Phase 2 → a v{N+1} ScoreRun showing the delta. **Scores are a ranking + ship-bar gate, NOT a calibrated prediction** — celebrate green checks; don't over-read the number (synthetic personas overstate adoption).
 
 ### Calibration (accruing; needs PostHog)
 Every Phase-2 run adds a ScoreRun. Once a track is live in PostHog, add its actuals to the `PostHogActuals` table, then run `node scripts/calibrate.mjs` (Spearman/Kendall via `scripts/lib/calibration.mjs`, joining by slug + `content_hash`).

@@ -108,7 +108,11 @@ anti-patterns. Onboarding hypotheses that ignore it tend to re-propose
 already-refuted patterns.
 
 ### 4 — New version → re-enter the gate
-Author the change as a **new version** of the `track.json`, preview it in the
+Author the change as a **new version** of the `track.json` and **`save_draft`
+it immediately** (Studio MCP; note = the hypothesis one-liner; `parent_hash` =
+the LIVE version's hash so lineage shows what this candidate is based on — the
+returned hash is the one the re-score and, at ship, `set_stage --live-version`
+must use). Then preview it in the
 demo (build-prototype, with the prompt-context note so the change is legible),
 then hand to **`track-prototype`** to walk → focus-group → score → gate (set
 the Hypotheses row to `in-gate`). On pass, a human ships it — and at that ship
