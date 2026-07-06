@@ -1,5 +1,5 @@
 # NSLS Org Chart
-_Last synced: 2026-06-29_
+_Last synced: 2026-07-06_
 
 ## Business Intelligence
 
@@ -47,7 +47,6 @@ _Last synced: 2026-06-29_
 
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
-| Angelica Evans | Technical Product Manager | Kevin Prentiss | avillalobos@nsls.org | U02EQ4E2WDC |
 | Brandon Evans | AWS Engineer | Kevin Prentiss | bevans@nsls.org | U08CSE1A9CK |
 | David Adams | Vice President of Technology | Kevin Prentiss | dadams@nsls.org | U0A9KTSG4J2 |
 | Evgeny Pokrovskiy | Software QA Automation Eng | Juan Maggi | epokrovskiy@nsls.org | U01AEB1JQ8Y |
@@ -79,7 +78,7 @@ _Last synced: 2026-06-29_
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
 | Danielle Mariani | Senior Culture and Organizational Strategist | Heather Darnell | dmariani@nsls.org | UHXFN781L |
-| Heather Darnell | Senior Director, Human Resources | Cory Capoccia | hdarnell@nsls.org | U03D1HK963E |
+| Heather Darnell | Senior Director, Human Resources | Jenna Fontanez | hdarnell@nsls.org | U03D1HK963E |
 | Jenna Fontanez | Director, Talent Management | Heather Darnell | jfontanez@nsls.org | U03RR8TKEDA |
 | Joanne Sandoval | Early Talent Acquisition Specialist | Jenna Fontanez | jsandoval@nsls.org | U04UQR9SBFH |
 | Lillian Collazo | HR Generalist | Heather Darnell | lcollazo@nsls.org | U023CU7BTSM |
@@ -94,7 +93,7 @@ _Last synced: 2026-06-29_
 | Dylan Blaty | Design Lead, Product & Growth | Adam Stone | dblaty@nsls.org | U0ANJR7P66S |
 | Eric Gerbehy | Sr Logistics Coordinator | Rachel Porter | egerbehy@nsls.org | U02CHG5GJCV |
 | Joshua Hrala | Senior Demand Generation Manager | Michael O'Brien | jhrala@nsls.org | U02EG6LTV4P |
-| Julia Botz | Junior UX Designer | Adam Stone | jbotz@nsls.org | U094PH0JU03 |
+| Julia Botz | Senior Growth Lead | Adam Stone | jbotz@nsls.org | U094PH0JU03 |
 | Michael Adamian | Marketing Operations Coordinator | Michael O'Brien | madamian@nsls.org | U05PM53KJ3T |
 | Michael O'Brien | Senior Director, Marketing | Adam Stone | mobrien@nsls.org | U015FETV4KW |
 | Noah Camenker | Video and Media Producer | Tatiana McGrath | ncamenker@nsls.org | U03ATLQ2BL1 |
@@ -135,7 +134,7 @@ _Last synced: 2026-06-29_
 
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
-| Chelsea Byers | Head of Operations (Fractional) | Kevin Prentiss | cbyers@nsls.org | U0AT9R3DAT1 |
+| Chelsea Byers | Head of Operations | Kevin Prentiss | cbyers@nsls.org | U0AT9R3DAT1 |
 | Dasha Cherkasov | Chapter Event Manager | Jordan Perry | dcherkasov@nsls.org | U02A8NJN1QF |
 | Derald Dryman | Senior Manager of Brand and Community Engagement | Joseph Cupka | ddryman@nsls.org | UCG6HQQ05 |
 | Freda Hobbs | Chapter Events Manager | Jordan Perry | fhobbs@nsls.org | U06QJ0XDH0E |
@@ -148,9 +147,10 @@ _Last synced: 2026-06-29_
 
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
+| Angelica Evans | Technical Product Manager | Kevin Prentiss | aevans@nsls.org | U02EQ4E2WDC |
 | Davo Wood | AI Support | Kevin Prentiss | davowood@nsls.org | U0B2B0L7858 |
 | Jana Amsellem | AI Product Architect | Kevin Prentiss | rakasha@nsls.org | U070WE56UU9 |
-| Lauren Prentiss | Product Manager | Kevin Prentiss | lprentiss@nsls.org | U08RN7X685A |
+| Lauren Prentiss | Senior Product Manager | Heather Darnell | lprentiss@nsls.org | U08RN7X685A |
 | Trina Limpert | Product Manager | Kevin Prentiss | tlimpert@nsls.org | U0AJ5H67WET |
 | Tyler Lagaly | Senior Product Designer | Kevin Prentiss | tlagaly@nsls.org | U09CYKGQZB2 |
 

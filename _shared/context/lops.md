@@ -1,5 +1,5 @@
 # Lines of Priority (LOPs)
-_Last synced: 2026-06-22_
+_Last synced: 2026-07-06_
 
 ## L1: Simplification/Efficiency
 **Owner**: Anish Patel | **Health**: On Track
@@ -19,8 +19,8 @@ _Last synced: 2026-06-22_
 > Team is actively working through migration requirements for both lifecycle and email-only invites. Currently building tracking plans to ensure existing HubSpot functionality transfers and to align tracking across NSLs and Society.
 
 ### L2: Dashboards for SLT and Core Revenue: 2026 data by the end of Q2 and 2025 data by Q4
-**Owner**: Anish Patel | **Health**: At Risk | **Deadline**: 2026-06-30
-> Progress accelerated last week with Jordan shipping updated Chapter & Revenue Dashboard and initial NSLS SLT Dashboard, both requiring QA and refinement. Two blockers cleared: legacy Enrollments dashboard deprecation and Chapter Health Dashboard ownership clarified. New scope added for Hex app embedding into app.nsls.org with architecture review in progress (feedback due 5/29). SLT dashboard QA, budget/forecast refinement, and SLT direction incorporation remain before 6/30 deadline; 2025 backfill on track for Q4.
+**Owner**: Anish Patel | **Health**: On Track | **Deadline**: 2026-06-30
+> DRI confirms the dashboard project for SLT and Core Revenue is progressing on schedule, targeting 2026 data completion by end of Q2 and 2025 data by Q4.
 
 ### L2: Build a repeatable system to track and engage 100% of advisors and E-board members each season.
 **Owner**: Adam Stone | **Health**: On Track | **Deadline**: 2026-06-30
@@ -40,8 +40,8 @@ _Last synced: 2026-06-22_
 > We're making progress on talent acquisition and hiring, but the job framework project is at risk due to incomplete Signal process data needed for validation. We need to decide whether to proceed with the compensation leveling timeline or delay pending Signal rollout completion across all groups.
 
 ### L2: Establish baseline and methodology for the strategic alignment score and rubric
-**Owner**: Heather Darnell | **Health**: Hit Goal | **Deadline**: 2026-06-01
-> Goal was completed in April. Baseline and methodology for the strategic alignment score and rubric have been established.
+**Owner**: Heather Darnell | **Health**: At Risk | **Deadline**: 2026-06-01
+> DRI reports mixed progress with some wins but also frustrations. Mentions friction between SLT and Board, and uncertainty about available resources/support. Goal methodology establishment is unclear.
 
 ### L2: Host Successful Impact Days
 **Owner**: Chelsea Byers | **Health**: On Track | **Deadline**: 2026-12-31
@@ -57,7 +57,7 @@ _Last synced: 2026-06-22_
 
 ### L2: Review and improve talent acquisition process by Q2
 **Owner**: Jenna Fontanez | **Health**: On Track | **Deadline**: 2026-06-30
-> Secured outbound sourcing platform and is now in the learning phase before piloting with the first role. Making significant progress toward process improvement.
+> DRI has completed major process improvements: centralized Airtable intake system, dedicated outbound sourcing process with first role in pipeline, and structured screening process with question bank. Core work is done; minor dependencies remain (sourcing tools, logins, SOPs) expected to wrap by Q2 deadline.
 
 ## L1: Core Revenue
 

@@ -244,10 +244,19 @@
   },
   {
     "name": "Lauren Prentiss",
-    "title": "Product Manager",
-    "manager": "Kevin Prentiss",
+    "title": "Senior Product Manager",
+    "manager": "Heather Darnell",
     "email": "lprentiss@nsls.org",
     "slack": "U08RN7X685A",
+    "department": "Product",
+    "manages": []
+  },
+  {
+    "name": "Angelica Evans",
+    "title": "Technical Product Manager",
+    "manager": "Kevin Prentiss",
+    "email": "aevans@nsls.org",
+    "slack": "U02EQ4E2WDC",
     "department": "Product",
     "manages": []
   },
@@ -382,7 +391,7 @@
   },
   {
     "name": "Julia Botz",
-    "title": "Junior UX Designer",
+    "title": "Senior Growth Lead",
     "manager": "Adam Stone",
     "email": "jbotz@nsls.org",
     "slack": "U094PH0JU03",
@@ -604,6 +613,7 @@
     "slack": "U03RR8TKEDA",
     "department": "Human Resources",
     "manages": [
+      "Heather Darnell",
       "Joanne Sandoval"
     ]
   },
@@ -619,13 +629,14 @@
   {
     "name": "Heather Darnell",
     "title": "Senior Director, Human Resources",
-    "manager": "Cory Capoccia",
+    "manager": "Jenna Fontanez",
     "email": "hdarnell@nsls.org",
     "slack": "U03D1HK963E",
     "department": "Human Resources",
     "manages": [
       "Danielle Mariani",
       "Jenna Fontanez",
+      "Lauren Prentiss",
       "Lillian Collazo"
     ]
   },
@@ -888,7 +899,6 @@
       "Jana Amsellem",
       "Juan Maggi",
       "Kyle Coberly",
-      "Lauren Prentiss",
       "Trina Limpert",
       "Tyler Lagaly"
     ]
@@ -932,15 +942,6 @@
       "Kibaek Kim",
       "Vadim Geroim"
     ]
-  },
-  {
-    "name": "Angelica Evans",
-    "title": "Technical Product Manager",
-    "manager": "Kevin Prentiss",
-    "email": "avillalobos@nsls.org",
-    "slack": "U02EQ4E2WDC",
-    "department": "Engineering",
-    "manages": []
   },
   {
     "name": "Kibaek Kim",
@@ -1045,7 +1046,7 @@
   },
   {
     "name": "Chelsea Byers",
-    "title": "Head of Operations (Fractional)",
+    "title": "Head of Operations",
     "manager": "Kevin Prentiss",
     "email": "cbyers@nsls.org",
     "slack": "U0AT9R3DAT1",
@@ -1068,9 +1069,7 @@
     "email": "ccapoccia@nsls.org",
     "slack": "U097DDH3371",
     "department": "Executive",
-    "manages": [
-      "Heather Darnell"
-    ]
+    "manages": []
   },
   {
     "name": "Gary Tuerack",
