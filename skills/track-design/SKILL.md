@@ -224,6 +224,8 @@ node scripts/validate-track-json.mjs my-track.json --assume goal,strengths --ass
 
 **Fix ALL errors.** Warnings should be reviewed — address any that reflect a real design problem (token reference to uncollected field, missing celebration screen, empty system prompt).
 
+**Save the draft (heartbeat: report the returned hash).** Once the JSON validates, give it a durable home — the Studio MCP tool `save_draft` (slug, the track_json string, a one-line note like "initial authored draft", `base_version` = the numeric version lineage). It returns the **content_hash**, which is THE identity everything joins on (ScoreRuns, live telemetry, the Studio's Drafts card, Publish). Same-content saves dedupe, so calling it again after edits is always safe. Fallback without the MCP server: compute the hash with `node <track-prototype>/scripts/lib/content-hash.mjs <track.json>` and note that the draft file itself has no durable home until saved.
+
 **Write the handoff note.** Include:
 - How to load: write the JSON into `ignite-next/src/data/tracks-export.json`, run `pnpm db:seed`; the upsert-by-id means re-seeding is safe.
 - What's auto-generated on seed (do NOT manually set these fields).
