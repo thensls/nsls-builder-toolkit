@@ -21,9 +21,9 @@ The install script sets up three things:
 - These are lightweight — find root cause, verify the fix, move on
 
 ### Feature work (multi-step, needs a plan)
-- Use **Compound Engineering** pipeline: `ce:brainstorm` → `ce:plan` → `ce:work`
+- Use **Compound Engineering** pipeline: `ce-brainstorm` → `ce-plan` → `ce-work`
 - Produces durable requirements docs and implementation plans
-- Use `ce:code-review` for code review (parallel reviewer personas, structured findings); `ce:doc-review` for plan/requirements docs
+- Use `ce-code-review` for code review (parallel reviewer personas, structured findings); `ce-doc-review` for plan/requirements docs
 
 ### Data intelligence (any question about users, systems, or operations)
 - If tools for a system aren't available, run `/connect` to set up the connection
@@ -36,7 +36,7 @@ The install script sets up three things:
 - These override generic skills when the task is NSLS-related
 
 ### Git operations
-- Use **Compound Engineering**: `ce:commit`, `ce:commit-push-pr` (and `ce:worktree` for isolated branches)
+- Use **Compound Engineering**: `ce-commit`, `ce-commit-push-pr` (and `ce-worktree` for isolated branches)
 - `/feature-branch-protocol-template` — optional template for builders who want their own work-discipline skill (setup, checkpoints, irreversible-step rules, final handoff). Includes Red's developer version as a seed.
 
 ### Process discipline (always active)

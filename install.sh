@@ -157,13 +157,30 @@ install_plugin() {
 # already in the list and never migrates them. This detects the old
 # registration and clears it so the install below pulls the current plugin.
 migrate_compound_marketplace() {
+  "$CLAUDE_BIN" plugin marketplace list 2>/dev/null | grep -q "every-marketplace" || return 0
+  echo "  Migrating compound-engineering off the renamed 'every-marketplace'..."
+
+  # Disable across every scope first so nothing keeps the stale install pinned
+  # (a shared project-scope enablement otherwise blocks uninstall).
+  for scope in local project user; do
+    "$CLAUDE_BIN" plugin disable compound-engineering@every-marketplace --scope "$scope" 2>/dev/null || true
+  done
+
+  # Uninstall the old plugin. Different CLI versions accept either the
+  # marketplace-qualified spec or the bare manifest name, so try both — each is
+  # idempotent and a no-op if the other already worked.
+  "$CLAUDE_BIN" plugin uninstall compound-engineering@every-marketplace 2>/dev/null || true
+  "$CLAUDE_BIN" plugin uninstall compound-engineering 2>/dev/null || true
+
+  # Removing the marketplace is the reliable cleanup: it cascades and drops any
+  # plugin still registered against it, so the migration completes even if the
+  # uninstall calls above were no-ops.
+  "$CLAUDE_BIN" plugin marketplace remove every-marketplace 2>/dev/null || true
+
+  # Confirm the stale registration is actually gone before we reinstall.
   if "$CLAUDE_BIN" plugin marketplace list 2>/dev/null | grep -q "every-marketplace"; then
-    echo "  Migrating compound-engineering off the renamed 'every-marketplace'..."
-    # Disable at every scope so the uninstall isn't blocked by a shared
-    # project-scope enablement, then remove plugin + stale marketplace.
-    "$CLAUDE_BIN" plugin disable compound-engineering@every-marketplace --scope local 2>/dev/null || true
-    "$CLAUDE_BIN" plugin uninstall compound-engineering@every-marketplace 2>/dev/null || true
-    "$CLAUDE_BIN" plugin marketplace remove every-marketplace 2>/dev/null || true
+    echo "  Warning: could not fully remove 'every-marketplace'. Run manually:"
+    echo "    claude plugin uninstall compound-engineering && claude plugin marketplace remove every-marketplace"
   fi
 }
 
