@@ -187,7 +187,10 @@ migrate_compound_marketplace() {
 if [ -n "$CLAUDE_BIN" ]; then
   install_plugin "superpowers" "superpowers" ""
   migrate_compound_marketplace
-  install_plugin "compound-engineering@compound-engineering-plugin" \
+  # Grep key is the bare plugin id (what `plugin list` prints); migrate_* above
+  # has already cleared the stale every-marketplace install, so a bare-name
+  # match here can only be the current compound-engineering-plugin one.
+  install_plugin "compound-engineering" \
     "compound-engineering@compound-engineering-plugin" \
     "https://github.com/EveryInc/compound-engineering-plugin.git"
 else
