@@ -15,9 +15,14 @@ curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/i
 **Windows (PowerShell):** `install.sh` needs `bash`, so Windows builders clone
 the toolkit and run `install.ps1` instead. Clone it, then run the installer:
 ```powershell
-New-Item -ItemType Directory -Force "$HOME\.claude\local-plugins" | Out-Null
-git clone https://github.com/thensls/nsls-builder-toolkit.git "$HOME\.claude\local-plugins\nsls-builder-toolkit"
-powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\.claude\local-plugins\nsls-builder-toolkit\install.ps1"
+$dst = "$HOME\.claude\local-plugins\nsls-builder-toolkit"
+if (Test-Path "$dst\.git") {
+    git -C $dst pull
+} else {
+    New-Item -ItemType Directory -Force "$HOME\.claude\local-plugins" | Out-Null
+    git clone https://github.com/thensls/nsls-builder-toolkit.git $dst
+}
+powershell -NoProfile -ExecutionPolicy Bypass -File "$dst\install.ps1"
 ```
 `install.ps1` installs the marketplace plugins (Superpowers + Compound
 Engineering, migrating off Every's renamed marketplace), and registers the
