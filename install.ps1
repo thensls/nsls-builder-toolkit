@@ -1,19 +1,90 @@
 <#
-install.ps1 — Windows installer for the NSLS Builder Toolkit hooks.
+install.ps1 — Windows installer for the NSLS Builder Toolkit.
 
-The toolkit's plugin hooks (hooks/hooks.json) use python3 (SessionStart) and
-bash (PreToolUse skill logging), neither of which runs on Windows — so Windows
-builders never pinged the tracker or logged skill usage. This registers the
-PowerShell equivalents in ~/.claude/settings.json:
+Does two things Windows builders otherwise miss (install.sh, the macOS/Linux
+installer, does both natively):
 
-  SessionStart  -> hooks/session-start.ps1   (pull + sync pointers + ping)
-  PreToolUse    -> hooks/skill-event.ps1      (log skill usage, deduped)
+  1. Installs the marketplace plugins — Superpowers and Compound Engineering —
+     and migrates anyone stranded on Every's renamed 'every-marketplace'.
+  2. Registers the PowerShell hook equivalents in ~/.claude/settings.json,
+     because the bundled hooks use python3/bash which Windows lacks:
+       SessionStart  -> hooks/session-start.ps1   (pull + sync pointers + ping)
+       PreToolUse    -> hooks/skill-event.ps1      (log skill usage, deduped)
 
-Idempotent: re-running replaces only the NSLS entries, preserving everything
-else in settings.json. Run once on a Windows machine after cloning the toolkit:
+Idempotent: re-running skips already-installed plugins and replaces only the
+NSLS hook entries, preserving everything else in settings.json. Run once on a
+Windows machine after cloning the toolkit:
   powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 #>
 $ErrorActionPreference = 'Stop'
+
+# --- Install marketplace plugins (Superpowers + Compound Engineering) --------
+# Mirror of install.sh Step 2. Wrapped so a plugin hiccup can't abort the hook
+# registration below (install.sh uses `|| true` for the same reason).
+try {
+    $claude = $null
+    $cmd = Get-Command claude -ErrorAction SilentlyContinue
+    if ($cmd) { $claude = $cmd.Source }
+    if (-not $claude) {
+        foreach ($c in @(
+            (Join-Path $env:USERPROFILE '.local\bin\claude.exe'),
+            (Join-Path $env:USERPROFILE '.claude\bin\claude.exe'),
+            (Join-Path $env:APPDATA 'npm\claude.cmd'))) {
+            if ($c -and (Test-Path $c)) { $claude = $c; break }
+        }
+    }
+
+    if (-not $claude) {
+        Write-Host "  Could not find the 'claude' CLI in PATH. Install plugins manually:"
+        Write-Host "    claude plugin install superpowers"
+        Write-Host "    claude plugin marketplace add https://github.com/EveryInc/compound-engineering-plugin.git"
+        Write-Host "    claude plugin install compound-engineering@compound-engineering-plugin"
+    } else {
+        function Install-Plugin {
+            param([string]$Name, [string]$Spec, [string]$Market)
+            # Grep key is the bare plugin id, matched against `plugin list`.
+            $installed = (& $claude plugin list 2>$null | Out-String)
+            if ($installed -match [regex]::Escape($Name)) {
+                Write-Host "  ${Name}: already installed"
+                return
+            }
+            if ($Market) {
+                Write-Host "  Adding $Name marketplace..."
+                & $claude plugin marketplace add $Market 2>&1 | Out-Null
+            }
+            Write-Host "  Installing $Name..."
+            & $claude plugin install $Spec 2>&1 | Out-Null
+        }
+
+        # Every renamed 'every-marketplace' -> 'compound-engineering-plugin' and
+        # bumped to 3.x. Builders installed before the rename are pinned to the
+        # stale registration; clear it before installing so the current plugin
+        # is pulled. Removing the marketplace cascades to drop its plugin, so the
+        # migration completes even if the uninstall calls are no-ops.
+        function Migrate-CompoundMarketplace {
+            if ((& $claude plugin marketplace list 2>$null | Out-String) -notmatch 'every-marketplace') { return }
+            Write-Host "  Migrating compound-engineering off the renamed 'every-marketplace'..."
+            foreach ($scope in 'local', 'project', 'user') {
+                & $claude plugin disable compound-engineering@every-marketplace --scope $scope 2>$null | Out-Null
+            }
+            & $claude plugin uninstall compound-engineering@every-marketplace 2>$null | Out-Null
+            & $claude plugin uninstall compound-engineering 2>$null | Out-Null
+            & $claude plugin marketplace remove every-marketplace 2>$null | Out-Null
+            if ((& $claude plugin marketplace list 2>$null | Out-String) -match 'every-marketplace') {
+                Write-Host "  Warning: could not fully remove 'every-marketplace'. Run manually:"
+                Write-Host "    claude plugin uninstall compound-engineering; claude plugin marketplace remove every-marketplace"
+            }
+        }
+
+        Write-Host "Installing recommended plugins..."
+        Install-Plugin 'superpowers' 'superpowers' ''
+        Migrate-CompoundMarketplace
+        Install-Plugin 'compound-engineering' 'compound-engineering@compound-engineering-plugin' `
+            'https://github.com/EveryInc/compound-engineering-plugin.git'
+    }
+} catch {
+    Write-Host "  Note: plugin install step failed ($($_.Exception.Message)) — run the manual commands above later."
+}
 
 $ClaudeDir   = Join-Path $env:USERPROFILE '.claude'
 $Settings    = Join-Path $ClaudeDir 'settings.json'

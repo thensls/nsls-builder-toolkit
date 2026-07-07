@@ -12,15 +12,18 @@ The NSLS Builder Toolkit gives every NSLS employee with Claude Code a set of ski
 curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash
 ```
 
-**Windows (PowerShell):** the toolkit's hooks use `python3`/`bash`, which Windows
-lacks, so Windows builders register the PowerShell equivalents. After the plugin
-is cloned to `~/.claude/local-plugins/nsls-builder-toolkit`:
+**Windows (PowerShell):** `install.sh` needs `bash`, so Windows builders clone
+the toolkit and run `install.ps1` instead. Clone it, then run the installer:
 ```powershell
+git clone https://github.com/thensls/nsls-builder-toolkit.git "$HOME\.claude\local-plugins\nsls-builder-toolkit"
 powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\.claude\local-plugins\nsls-builder-toolkit\install.ps1"
 ```
-This registers the Windows SessionStart hook (`hooks/session-start.ps1` — pull +
-sync + tracker ping) and the PreToolUse skill hook (`hooks/skill-event.ps1`) in
-`settings.json`. Idempotent; re-run anytime. Restart Claude Code afterward.
+`install.ps1` installs the marketplace plugins (Superpowers + Compound
+Engineering, migrating off Every's renamed marketplace), and registers the
+Windows SessionStart hook (`hooks/session-start.ps1` — pull + sync + tracker
+ping) and PreToolUse skill hook (`hooks/skill-event.ps1`) in `settings.json`,
+since the bundled hooks use `python3`/`bash`. Idempotent; re-run anytime.
+Restart Claude Code afterward.
 
 Then open Claude Code and say `/setup` to connect your tools and optionally install personal productivity skills.
 
