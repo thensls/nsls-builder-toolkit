@@ -150,9 +150,48 @@ install_plugin() {
   fi
 }
 
+# Every renamed their marketplace from "every-marketplace" to
+# "compound-engineering-plugin" (and bumped the plugin to 3.x). Builders who
+# installed before the rename are pinned to the stale "every-marketplace"
+# registration: install_plugin's name-only grep sees "compound-engineering"
+# already in the list and never migrates them. This detects the old
+# registration and clears it so the install below pulls the current plugin.
+migrate_compound_marketplace() {
+  "$CLAUDE_BIN" plugin marketplace list 2>/dev/null | grep -q "every-marketplace" || return 0
+  echo "  Migrating compound-engineering off the renamed 'every-marketplace'..."
+
+  # Disable across every scope first so nothing keeps the stale install pinned
+  # (a shared project-scope enablement otherwise blocks uninstall).
+  for scope in local project user; do
+    "$CLAUDE_BIN" plugin disable compound-engineering@every-marketplace --scope "$scope" 2>/dev/null || true
+  done
+
+  # Uninstall the old plugin. Different CLI versions accept either the
+  # marketplace-qualified spec or the bare manifest name, so try both — each is
+  # idempotent and a no-op if the other already worked.
+  "$CLAUDE_BIN" plugin uninstall compound-engineering@every-marketplace 2>/dev/null || true
+  "$CLAUDE_BIN" plugin uninstall compound-engineering 2>/dev/null || true
+
+  # Removing the marketplace is the reliable cleanup: it cascades and drops any
+  # plugin still registered against it, so the migration completes even if the
+  # uninstall calls above were no-ops.
+  "$CLAUDE_BIN" plugin marketplace remove every-marketplace 2>/dev/null || true
+
+  # Confirm the stale registration is actually gone before we reinstall.
+  if "$CLAUDE_BIN" plugin marketplace list 2>/dev/null | grep -q "every-marketplace"; then
+    echo "  Warning: could not fully remove 'every-marketplace'. Run manually:"
+    echo "    claude plugin uninstall compound-engineering && claude plugin marketplace remove every-marketplace"
+  fi
+}
+
 if [ -n "$CLAUDE_BIN" ]; then
   install_plugin "superpowers" "superpowers" ""
-  install_plugin "compound-engineering" "compound-engineering@compound-engineering-plugin" \
+  migrate_compound_marketplace
+  # Grep key is the bare plugin id (what `plugin list` prints); migrate_* above
+  # has already cleared the stale every-marketplace install, so a bare-name
+  # match here can only be the current compound-engineering-plugin one.
+  install_plugin "compound-engineering" \
+    "compound-engineering@compound-engineering-plugin" \
     "https://github.com/EveryInc/compound-engineering-plugin.git"
 else
   echo ""

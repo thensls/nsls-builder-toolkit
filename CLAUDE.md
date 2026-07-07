@@ -21,9 +21,9 @@ The install script sets up three things:
 - These are lightweight — find root cause, verify the fix, move on
 
 ### Feature work (multi-step, needs a plan)
-- Use **Compound Engineering** pipeline: `ce:brainstorm` → `ce:plan` → `ce:work`
+- Use **Compound Engineering** pipeline: `ce-brainstorm` → `ce-plan` → `ce-work`
 - Produces durable requirements docs and implementation plans
-- Use `ce:review` for code review (parallel reviewer personas, structured findings)
+- Use `ce-code-review` for code review (parallel reviewer personas, structured findings); `ce-doc-review` for plan/requirements docs
 
 ### Data intelligence (any question about users, systems, or operations)
 - If tools for a system aren't available, run `/connect` to set up the connection
@@ -36,7 +36,7 @@ The install script sets up three things:
 - These override generic skills when the task is NSLS-related
 
 ### Git operations
-- Use **Compound Engineering**: `git-commit`, `git-commit-push-pr`, `git-clean-gone-branches`
+- Use **Compound Engineering**: `ce-commit`, `ce-commit-push-pr` (and `ce-worktree` for isolated branches)
 - `/feature-branch-protocol-template` — optional template for builders who want their own work-discipline skill (setup, checkpoints, irreversible-step rules, final handoff). Includes Red's developer version as a seed.
 
 ### Process discipline (always active)
@@ -73,9 +73,9 @@ These live anywhere: `_shared/learnings/` corrections, `agents/` or `skills/` re
 When building a new skill, use three tools in sequence. Each tests a different quality axis:
 1. **`/skill-creation`** (this toolkit) — design rubric: purpose, safety, macro/micro, diagnostics, domain-specific gotchas
 2. **`superpowers:writing-skills`** — pressure test: pure-trigger description, rationalization table, Red Flags list, TDD-for-documentation discipline
-3. **`compound-engineering:create-agent-skills`** — spec audit: official frontmatter compliance, Quick Start, line count, writing style
+3. **`skill-creator`** (official Anthropic plugin) — spec audit: official frontmatter compliance, Quick Start, line count, writing style
 
-**Optional Phase 4**: For broadly-released skills that need reliable auto-triggering across many sessions, add `skill-creator` plugin for quantitative eval. Skip for personal / time-boxed / Kevin-only skills.
+**Optional Phase 4**: For broadly-released skills that need reliable auto-triggering across many sessions, run `skill-creator`'s eval/benchmark mode for quantitative trigger accuracy. Skip for personal / time-boxed / Kevin-only skills.
 
 See `/skill-creation` for the full cascade including a worked example (gary-meeting-prep build, 2026-04-18).
 

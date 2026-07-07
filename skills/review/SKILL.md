@@ -1,6 +1,6 @@
 ---
 name: kw:review
-description: "Review an NSLS plan, brief, or strategy doc for strategic alignment and data accuracy before sharing with stakeholders. Runs two reviewers in parallel — one checks LOP grounding, goals, hypothesis, metrics, scope; the other audits every number for source, date, and freshness. Returns merged P1/P2/P3 findings. Trigger phrases: review this plan, review for alignment, check data accuracy, kw:review, /kw:review, is this ready to share, review before leadership. NOT for code review (use ce:review)."
+description: "Review an NSLS plan, brief, or strategy doc for strategic alignment and data accuracy before sharing with stakeholders. Runs two reviewers in parallel — one checks LOP grounding, goals, hypothesis, metrics, scope; the other audits every number for source, date, and freshness. Returns merged P1/P2/P3 findings. Trigger phrases: review this plan, review for alignment, check data accuracy, kw:review, /kw:review, is this ready to share, review before leadership. NOT for code review (use ce-code-review)."
 argument-hint: "[path to plan, or leave empty to review the most recent plans/*.md]"
 ---
 
@@ -18,7 +18,7 @@ Run two reviewers in parallel. Surface what would embarrass you in front of a sk
 
 ## When NOT to Use
 
-- Code review → `ce:review` or `/review`
+- Code review → `ce-code-review` or `/review`
 - Security audit → `/security-review`
 - Plan still in "ideas" stage → run `/kw:plan` first, then review the structured output
 

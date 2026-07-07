@@ -58,7 +58,7 @@ For non-software work — campaigns, strategy docs, briefs, research synthesis. 
 | **/kw:review** | Two-reviewer parallel check on a plan — one audits LOP grounding and goals, the other audits every number for source and freshness. P1/P2/P3 findings before you share. |
 | **/kw:compound** | Extract 1–3 learnings from a finished session and route them to the right tier (personal Obsidian, team `_shared/learnings/`, SLT knowledge graph). |
 
-Use these for strategy/knowledge work. For software features use `/ce:brainstorm` → `/ce:plan` → `/ce:work` → `/ce:review` from the Compound Engineering plugin. For new automations start with `/interrogate`.
+Use these for strategy/knowledge work. For software features use `/ce-brainstorm` → `/ce-plan` → `/ce-work` → `/ce-code-review` from the Compound Engineering plugin. For new automations start with `/interrogate`.
 
 ## Bundled Plugins
 
@@ -67,7 +67,7 @@ These are installed automatically by the install script:
 | Plugin | What it gives you |
 |--------|-------------------|
 | **Superpowers** | `/brainstorm`, `/debug`, `/verify`, `/plan`, `/tdd` |
-| **Compound Engineering** | `/ce:brainstorm`, `/ce:plan`, `/ce:work`, `/ce:review`, `/git-commit` |
+| **Compound Engineering** | `/ce-brainstorm`, `/ce-plan`, `/ce-work`, `/ce-code-review`, `/ce-commit` |
 
 ## Personal Productivity Skills (Optional)
 
