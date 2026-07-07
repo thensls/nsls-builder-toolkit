@@ -3,6 +3,7 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash
+#   curl -fsSL .../install.sh | bash -s -- --test      # isolated "new user" test install
 #
 # What this does:
 #   1. Installs the NSLS org skills (local plugin)
@@ -11,11 +12,34 @@
 
 set -euo pipefail
 
-PLUGIN_DIR="$HOME/.claude/local-plugins/nsls-builder-toolkit"
+# --- Config dir resolution -------------------------------------------------
+# Claude Code respects CLAUDE_CONFIG_DIR everywhere; so does this installer, so
+# everything lands in one place and stays consistent with how Claude Code is
+# launched. `-t` / `--test` points that at a throwaway config dir
+# ($HOME/.claude-kit-test by default, override with $CLAUDE_KIT_TEST_DIR) so you
+# can install exactly like a brand-new user WITHOUT touching your real
+# ~/.claude. To reset back to "new user", delete that dir. Launch a test
+# install with:  CLAUDE_CONFIG_DIR="$HOME/.claude-kit-test" claude
+TEST_MODE=0
+for arg in "$@"; do
+  case "$arg" in
+    -t|--test) TEST_MODE=1 ;;
+    *) ;;
+  esac
+done
+if [ "$TEST_MODE" = "1" ] && [ -z "${CLAUDE_CONFIG_DIR:-}" ]; then
+  export CLAUDE_CONFIG_DIR="${CLAUDE_KIT_TEST_DIR:-$HOME/.claude-kit-test}"
+fi
+CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+
+PLUGIN_DIR="$CONFIG_DIR/local-plugins/nsls-builder-toolkit"
 REPO_URL="https://github.com/thensls/nsls-builder-toolkit.git"
 
 echo ""
 echo "=== NSLS Builder Toolkit ==="
+if [ "$TEST_MODE" = "1" ]; then
+  echo "  (TEST MODE — installing into $CONFIG_DIR; your real ~/.claude is untouched)"
+fi
 echo ""
 
 # --- Prerequisites ---
@@ -26,8 +50,11 @@ if ! command -v git &>/dev/null; then
   exit 1
 fi
 
-if [ ! -d "$HOME/.claude" ]; then
-  echo "Error: Claude Code doesn't appear to be set up (~/.claude/ not found)."
+if [ "$TEST_MODE" = "1" ]; then
+  # Test config dir is fresh — create it so we install as a brand-new user.
+  mkdir -p "$CONFIG_DIR"
+elif [ ! -d "$CONFIG_DIR" ]; then
+  echo "Error: Claude Code doesn't appear to be set up ($CONFIG_DIR not found)."
   echo "  Install Claude Code first, then re-run this script."
   exit 1
 fi
@@ -35,7 +62,7 @@ fi
 # --- Step 1: Install the org toolkit ---
 
 echo "Step 1: Installing org skills..."
-mkdir -p "$HOME/.claude/local-plugins"
+mkdir -p "$CONFIG_DIR/local-plugins"
 
 if [ -d "$PLUGIN_DIR" ]; then
   echo "  Updating existing installation..."
@@ -49,20 +76,42 @@ echo "  Done."
 
 # --- Step 2: Enable the local plugin and register the auto-update hook in settings.json ---
 
-SETTINGS="$HOME/.claude/settings.json"
-HOOK_CMD='python3 -c "exec(open(__import__('"'"'pathlib'"'"').Path.home() / '"'"'.claude/local-plugins/nsls-builder-toolkit/hooks/session-start.py'"'"').read())"'
+SETTINGS="$CONFIG_DIR/settings.json"
+
+# A fresh test config dir has no settings.json yet (a real user already has one
+# from Claude Code). Seed an empty object so the merge below runs.
+if [ "$TEST_MODE" = "1" ] && [ ! -f "$SETTINGS" ]; then echo '{}' > "$SETTINGS"; fi
+
+# In test mode, seed a +test builder email so skill events land on a separate,
+# obviously-test tracker row instead of polluting your real one (skill-event.sh
+# would otherwise fall back to git config user.email). The +test address still
+# reaches the proxy, so you can verify end-to-end delivery in Airtable.
+if [ "$TEST_MODE" = "1" ]; then
+  TEST_ENV_DIR="$CONFIG_DIR/local-plugins/nsls-personal-toolkit"
+  if [ ! -f "$TEST_ENV_DIR/.env" ]; then
+    mkdir -p "$TEST_ENV_DIR"
+    REAL_EMAIL=$(git config user.email 2>/dev/null || echo "unknown@test.local")
+    echo "BUILDER_EMAIL=${REAL_EMAIL%%@*}+test@${REAL_EMAIL#*@}" > "$TEST_ENV_DIR/.env"
+    echo "  Test builder email: ${REAL_EMAIL%%@*}+test@${REAL_EMAIL#*@} (keeps test events off your real tracker row)"
+  fi
+fi
 
 if [ -f "$SETTINGS" ]; then
-  python3 -c "
-import json, sys
+  CONFIG_DIR="$CONFIG_DIR" python3 -c "
+import json, os, sys
 from pathlib import Path
 
-SETTINGS_PATH = Path.home() / '.claude' / 'settings.json'
-HOOK_CMD = 'python3 -c \"exec(open(__import__(\'pathlib\').Path.home() / \'.claude/local-plugins/nsls-builder-toolkit/hooks/session-start.py\').read())\"'
+CONFIG_DIR = os.environ['CONFIG_DIR']
+SETTINGS_PATH = Path(CONFIG_DIR) / 'settings.json'
+_SS = os.path.join(CONFIG_DIR, 'local-plugins/nsls-builder-toolkit/hooks/session-start.py')
+HOOK_CMD = 'python3 -c \"exec(open(\'' + _SS + '\').read())\"'
 HOOK_ENTRY = {
     'type': 'command',
     'command': HOOK_CMD,
-    'timeout': 15,
+    # Must exceed session-start.py's worst case: git pull (10s) + a replayed
+    # ping (35s) + the live ping (35s). At 15s the hook was killed mid-delivery
+    # on Railway cold starts (observed live 2026-07-03).
+    'timeout': 90,
     'statusMessage': 'Syncing builder toolkit...'
 }
 MARKER = 'nsls-builder-toolkit/hooks/session-start.py'
@@ -92,18 +141,73 @@ if startup_entry is None:
     session_start.insert(0, startup_entry)
 
 hook_list = startup_entry.setdefault('hooks', [])
-already = any(MARKER in h.get('command', '') for h in hook_list)
-if not already:
+existing = next((h for h in hook_list if MARKER in h.get('command', '')), None)
+if existing is None:
     hook_list.insert(0, HOOK_ENTRY)
     print('  Registered session auto-update hook')
+elif existing.get('timeout', 0) < HOOK_ENTRY['timeout']:
+    # Repair installs registered when the budget was 15s — that killed the
+    # hook mid-ping on cold starts.
+    existing['timeout'] = HOOK_ENTRY['timeout']
+    print('  Raised session hook timeout to', HOOK_ENTRY['timeout'])
 else:
     print('  Auto-update hook already registered')
+
+# Register the skill-event hook (PreToolUse:Skill) globally (idempotent).
+# The plugin ships this in hooks/hooks.json, but a *locally enabled* plugin
+# does not reliably load bundled hooks (especially on Claude Code desktop) —
+# the same reason Step 3.5 has to register bundled MCP servers by hand. So we
+# merge it into the global settings.json to make it the primary firing path.
+# The server dedupes per builder/skill/day, so this is safe even on surfaces
+# that also fire the plugin hook or a pointer file's inline bash.
+SKILL_HOOK_CMD = 'bash ' + os.path.join(CONFIG_DIR, 'local-plugins/nsls-builder-toolkit/hooks/skill-event.sh')
+SKILL_MARKER = 'nsls-builder-toolkit/hooks/skill-event.sh'
+pre_tool_use = hooks.setdefault('PreToolUse', [])
+skill_entry = None
+for entry in pre_tool_use:
+    if entry.get('matcher') == 'Skill':
+        skill_entry = entry
+        break
+if skill_entry is None:
+    skill_entry = {'matcher': 'Skill', 'hooks': []}
+    pre_tool_use.append(skill_entry)
+skill_hooks = skill_entry.setdefault('hooks', [])
+if not any(SKILL_MARKER in h.get('command', '') for h in skill_hooks):
+    skill_hooks.append({'type': 'command', 'command': SKILL_HOOK_CMD, 'timeout': 5})
+    print('  Registered skill-event hook (PreToolUse:Skill)')
+else:
+    print('  Skill-event hook already registered')
 
 with open(SETTINGS_PATH, 'w', encoding='utf-8') as f: json.dump(cfg, f, indent=2)
 " 2>/dev/null || echo "  Note: Could not update settings.json — add the hook manually"
 else
   echo "  Note: No settings.json found — the plugin will be enabled on first use"
 fi
+
+# --- Step 2.5: Fire an install event to the Automation Tracker ---
+#
+# Records the install (and auto-registers brand-new builders — the server
+# creates their row on first contact, so nobody is invisible until manually
+# seeded). Email precedence matches the hooks: personal-toolkit .env →
+# git config user.email → $USER@$HOSTNAME. Best-effort: a failed POST never
+# blocks the install.
+
+INSTALL_EMAIL=""
+INSTALL_ENV_FILE="$CONFIG_DIR/local-plugins/nsls-personal-toolkit/.env"
+if [ -f "$INSTALL_ENV_FILE" ]; then
+  INSTALL_EMAIL=$(grep "^BUILDER_EMAIL=" "$INSTALL_ENV_FILE" | cut -d= -f2 | tr -d '"')
+fi
+[ -z "$INSTALL_EMAIL" ] && INSTALL_EMAIL=$(git config user.email 2>/dev/null || true)
+[ -z "$INSTALL_EMAIL" ] && INSTALL_EMAIL="${USER:-unknown}@$(hostname -s 2>/dev/null || echo unknown)"
+INSTALL_GH=$(gh api user --jq .login 2>/dev/null || true)
+
+INSTALL_EMAIL_SAFE=$(printf '%s' "$INSTALL_EMAIL" | tr -d '"\\')
+INSTALL_GH_SAFE=$(printf '%s' "$INSTALL_GH" | tr -d '"\\')
+curl -s --max-time 10 -X POST \
+  https://web-production-6281e.up.railway.app/install-event \
+  -H 'Content-Type: application/json' \
+  -d "{\"builder_email\":\"$INSTALL_EMAIL_SAFE\",\"github_username\":\"$INSTALL_GH_SAFE\",\"platform\":\"mac\",\"install_source\":\"cc-builder-kit\"}" \
+  >/dev/null 2>&1 || true
 
 # --- Step 3: Install marketplace plugins ---
 
@@ -277,7 +381,7 @@ fi
 
 echo ""
 echo "Step 4: Creating slash-command pointers..."
-SKILLS_DIR="$HOME/.claude/skills"
+SKILLS_DIR="$CONFIG_DIR/skills"
 mkdir -p "$SKILLS_DIR"
 
 count=0
@@ -318,7 +422,7 @@ description: >-
   $desc
 ---
 
-Read and follow the full skill at \`~/.claude/local-plugins/nsls-builder-toolkit/skills/$skill/SKILL.md\`.
+Read and follow the full skill at \`$PLUGIN_DIR/skills/$skill/SKILL.md\`.
 POINTER
   count=$((count + 1))
 done
@@ -330,29 +434,35 @@ echo "  $count skill pointers synced"
 echo ""
 echo "Step 5: Adding 'cc' shortcut..."
 
-# Detect shell config file
-SHELL_RC=""
-if [ -f "$HOME/.zshrc" ]; then
-  SHELL_RC="$HOME/.zshrc"
-elif [ -f "$HOME/.bashrc" ]; then
-  SHELL_RC="$HOME/.bashrc"
-elif [ -f "$HOME/.bash_profile" ]; then
-  SHELL_RC="$HOME/.bash_profile"
-fi
-
-if [ -n "$SHELL_RC" ]; then
-  if grep -q "alias cc=" "$SHELL_RC" 2>/dev/null; then
-    echo "  cc shortcut: already configured"
-  else
-    echo "" >> "$SHELL_RC"
-    echo "# Claude Code shortcut" >> "$SHELL_RC"
-    echo "alias cc='claude'" >> "$SHELL_RC"
-    echo "  Added 'cc' shortcut to $(basename "$SHELL_RC") — type cc to launch Claude Code"
-    echo "  (takes effect in new terminal windows, or run: source $SHELL_RC)"
-  fi
+if [ "$TEST_MODE" = "1" ]; then
+  # Never touch the real shell profile in test mode — the test install must be
+  # fully contained in $CONFIG_DIR and leave no trace outside it.
+  echo "  Skipped in test mode (won't modify your shell profile)."
 else
-  echo "  Could not find shell config (.zshrc, .bashrc, .bash_profile)"
-  echo "  Add this manually: alias cc='claude'"
+  # Detect shell config file
+  SHELL_RC=""
+  if [ -f "$HOME/.zshrc" ]; then
+    SHELL_RC="$HOME/.zshrc"
+  elif [ -f "$HOME/.bashrc" ]; then
+    SHELL_RC="$HOME/.bashrc"
+  elif [ -f "$HOME/.bash_profile" ]; then
+    SHELL_RC="$HOME/.bash_profile"
+  fi
+
+  if [ -n "$SHELL_RC" ]; then
+    if grep -q "alias cc=" "$SHELL_RC" 2>/dev/null; then
+      echo "  cc shortcut: already configured"
+    else
+      echo "" >> "$SHELL_RC"
+      echo "# Claude Code shortcut" >> "$SHELL_RC"
+      echo "alias cc='claude'" >> "$SHELL_RC"
+      echo "  Added 'cc' shortcut to $(basename "$SHELL_RC") — type cc to launch Claude Code"
+      echo "  (takes effect in new terminal windows, or run: source $SHELL_RC)"
+    fi
+  else
+    echo "  Could not find shell config (.zshrc, .bashrc, .bash_profile)"
+    echo "  Add this manually: alias cc='claude'"
+  fi
 fi
 
 # --- Done ---
@@ -371,17 +481,40 @@ echo "  PLUGINS:"
 echo "    superpowers              — planning, debugging, verification workflows"
 echo "    compound-engineering     — brainstorm, plan, build, review pipeline"
 echo ""
-echo "  SHORTCUT:"
-echo "    cc                       — type 'cc' in any terminal to launch Claude Code"
-echo ""
-echo "=== NEXT STEP ==="
-echo ""
-echo "  1. Open a new terminal window (so the 'cc' shortcut loads)"
-echo ""
-echo "  2. Type:  cc"
-echo ""
-echo "  3. Say:  /setup"
-echo "     This connects your tools (Slack, Asana, etc.) and optionally"
-echo "     installs personal productivity skills (daily planning, weekly"
-echo "     reviews, project logging — yours to customize)."
-echo ""
+if [ "$TEST_MODE" != "1" ]; then
+  echo "  SHORTCUT:"
+  echo "    cc                       — type 'cc' in any terminal to launch Claude Code"
+  echo ""
+fi
+
+if [ "$TEST_MODE" = "1" ]; then
+  echo "=== TEST INSTALL — how to run and reset ==="
+  echo ""
+  echo "  Everything went into:  $CONFIG_DIR"
+  echo "  Your real ~/.claude was NOT touched."
+  echo ""
+  echo "  1. Launch Claude Code against this test install:"
+  echo ""
+  echo "       CLAUDE_CONFIG_DIR=\"$CONFIG_DIR\" claude"
+  echo ""
+  echo "  2. Try it: say  /setup  (or  open day )  as a first-time user would."
+  echo ""
+  echo "  3. Reset back to a brand-new user (wipes the test install only):"
+  echo ""
+  echo "       rm -rf \"$CONFIG_DIR\""
+  echo ""
+  echo "     Then re-run this installer with --test to start clean again."
+  echo ""
+else
+  echo "=== NEXT STEP ==="
+  echo ""
+  echo "  1. Open a new terminal window (so the 'cc' shortcut loads)"
+  echo ""
+  echo "  2. Type:  cc"
+  echo ""
+  echo "  3. Say:  /setup"
+  echo "     This connects your tools (Slack, Asana, etc.) and optionally"
+  echo "     installs personal productivity skills (daily planning, weekly"
+  echo "     reviews, project logging — yours to customize)."
+  echo ""
+fi

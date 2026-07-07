@@ -17,13 +17,28 @@ import subprocess
 import sys
 import urllib.request
 import urllib.error
+from datetime import datetime, timezone
 from pathlib import Path
 
 HOME = Path.home()
-PLUGIN_DIR = HOME / ".claude" / "local-plugins" / "nsls-builder-toolkit"
-SKILLS_DIR = HOME / ".claude" / "skills"
-ENV_FILE = HOME / ".claude" / "local-plugins" / "nsls-personal-toolkit" / ".env"
+# Respect CLAUDE_CONFIG_DIR (Claude Code passes it through to hook processes),
+# falling back to ~/.claude. Keeps a --test install fully isolated: the test
+# copy of this hook operates on the test config dir, never the real one.
+CONFIG_DIR = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (HOME / ".claude"))
+PLUGIN_DIR = CONFIG_DIR / "local-plugins" / "nsls-builder-toolkit"
+SKILLS_DIR = CONFIG_DIR / "skills"
+ENV_FILE = CONFIG_DIR / "local-plugins" / "nsls-personal-toolkit" / ".env"
 PROXY_URL = "https://web-production-6281e.up.railway.app"
+
+# When a session-ping can't be delivered (timeout / network / proxy down), we
+# stash the payload here and replay it at the start of the next session so a
+# queued announcement or credit isn't lost. Deleted once delivery succeeds.
+PING_FAIL_MARKER = PLUGIN_DIR / ".last-ping-failed"
+# was 8, then 20 — live measurement (2026-07-03): /session-ping takes ~8s WARM
+# (server-side Airtable writes + announcement scan) and 15-27s on Railway cold
+# start, so 20 was still marginal. The SessionStart hook budget must stay
+# comfortably above this (install.sh sets 60).
+PING_TIMEOUT = 35
 
 # Plugins to sync, in precedence order — earlier entries win on name collision.
 SYNC_PLUGINS = [
@@ -56,7 +71,7 @@ def sync_pointers():
     created = 0
 
     for plugin_name in SYNC_PLUGINS:
-        plugin_dir = HOME / ".claude" / "local-plugins" / plugin_name
+        plugin_dir = CONFIG_DIR / "local-plugins" / plugin_name
         skills_src = plugin_dir / "skills"
         if not skills_src.is_dir():
             continue
@@ -118,9 +133,11 @@ def sync_pointers():
                         desc = sl_match.group(1).strip()
 
             dest.mkdir(parents=True, exist_ok=True)
+            hook_path = CONFIG_DIR / "local-plugins" / "nsls-builder-toolkit" / "hooks" / "skill-event.sh"
+            skill_path = CONFIG_DIR / "local-plugins" / plugin_name / "skills" / skill / "SKILL.md"
             report_cmd = (
                 f"echo '{{\"tool_input\":{{\"skill\":\"{skill}\"}}}}' | "
-                f"bash $HOME/.claude/local-plugins/nsls-builder-toolkit/hooks/skill-event.sh"
+                f"bash {hook_path}"
             )
             dest_skill.write_text(
                 f"---\nname: {name}\ndescription: >-\n  {desc}\n---\n\n"
@@ -129,7 +146,7 @@ def sync_pointers():
                 f"to record skill usage:\n\n"
                 f"```bash\n{report_cmd}\n```\n\n"
                 f"Then read and follow the full skill at "
-                f"`~/.claude/local-plugins/{plugin_name}/skills/{skill}/SKILL.md`.\n",
+                f"`{skill_path}`.\n",
                 encoding="utf-8",
             )
             written.add(skill)
@@ -152,8 +169,53 @@ def read_env(key):
     return ""
 
 
-def session_ping():
-    """Ping the automation tracker for points, PR credits, and announcements."""
+def _post_session_ping(body, timeout=PING_TIMEOUT):
+    """POST a session-ping body dict. Returns parsed response, or raises."""
+    req = urllib.request.Request(
+        f"{PROXY_URL}/session-ping",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode())
+
+
+def replay_failed_ping():
+    """Replay a previously failed session-ping before the current one.
+
+    Runs at session start, ahead of the live ping. If delivery succeeds (or
+    the marker is malformed), the marker is cleared; if it fails again, the
+    marker is left in place for the next session to retry. We deliberately do
+    not re-surface the replayed response — the live ping right after fetches
+    fresh announcements, so processing the stale body here would double up.
+
+    Returns the successfully replayed payload (dict) or None. The caller uses
+    it to skip the live ping when the payloads are identical — the endpoint is
+    slow (~8s warm), so a redundant back-to-back POST both wastes time and
+    risks a pointless timeout that would re-write the marker.
+    """
+    if not PING_FAIL_MARKER.exists():
+        return None
+    try:
+        saved = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
+        body = saved.get("payload")
+        if body:
+            _post_session_ping(body)
+        PING_FAIL_MARKER.unlink()
+        return body
+    except Exception:
+        return None  # still unreachable — keep the marker for the next attempt
+
+
+def session_ping(replayed=None):
+    """Ping the automation tracker for points, PR credits, and announcements.
+
+    replayed: payload dict just delivered by replay_failed_ping(), or None.
+    If it matches today's payload, the session is already recorded — skip the
+    redundant POST (the payload carries no timestamp; the server stamps
+    arrival time, so a successful replay IS today's ping).
+    """
     email = read_env("BUILDER_EMAIL")
     if not email:
         try:
@@ -176,24 +238,39 @@ def session_ping():
     platform_map = {"darwin": "mac", "win32": "windows", "linux": "linux"}
     platform = platform_map.get(sys.platform, sys.platform)
 
-    payload = json.dumps({
+    body = {
         "builder_email": email,
         "toolkit": toolkit,
         "github_username": github,
         "platform": platform,
-    }).encode()
+    }
+
+    if replayed == body:
+        return  # this exact payload was just delivered by the replay
 
     try:
-        req = urllib.request.Request(
-            f"{PROXY_URL}/session-ping",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode())
+        data = _post_session_ping(body)
     except Exception:
+        # Delivery failed (timeout / network / proxy down). Stash the payload
+        # so the next session start replays it. Best-effort — never raise.
+        try:
+            PING_FAIL_MARKER.parent.mkdir(parents=True, exist_ok=True)
+            PING_FAIL_MARKER.write_text(
+                json.dumps({
+                    "payload": body,
+                    "attempted_at": datetime.now(timezone.utc).isoformat(),
+                }),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
         return
+
+    # Delivered — clear any stale failure marker from a prior session.
+    try:
+        PING_FAIL_MARKER.unlink()
+    except OSError:
+        pass
 
     output = []
 
@@ -260,7 +337,8 @@ def session_ping():
 def main():
     git_pull()
     sync_pointers()
-    session_ping()
+    replayed = replay_failed_ping()
+    session_ping(replayed=replayed)
 
 
 if __name__ == "__main__":
