@@ -48,12 +48,24 @@ try {
                 Write-Host "  ${Name}: already installed"
                 return
             }
+            # A non-zero exit from a native command does NOT trip the outer
+            # try/catch (that needs $PSNativeCommandUseErrorActionPreference),
+            # and Out-Null swallows the message — so check $LASTEXITCODE and warn
+            # explicitly rather than printing "Installing..." and moving on as if
+            # it worked.
             if ($Market) {
                 Write-Host "  Adding $Name marketplace..."
                 & $claude plugin marketplace add $Market 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "  Warning: failed to add $Name marketplace (exit $LASTEXITCODE). Retry: claude plugin marketplace add $Market"
+                    return
+                }
             }
             Write-Host "  Installing $Name..."
             & $claude plugin install $Spec 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "  Warning: '$Name' install failed (exit $LASTEXITCODE). Retry: claude plugin install $Spec"
+            }
         }
 
         # Every renamed 'every-marketplace' -> 'compound-engineering-plugin' and

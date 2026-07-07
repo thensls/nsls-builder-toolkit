@@ -15,6 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/i
 **Windows (PowerShell):** `install.sh` needs `bash`, so Windows builders clone
 the toolkit and run `install.ps1` instead. Clone it, then run the installer:
 ```powershell
+New-Item -ItemType Directory -Force "$HOME\.claude\local-plugins" | Out-Null
 git clone https://github.com/thensls/nsls-builder-toolkit.git "$HOME\.claude\local-plugins\nsls-builder-toolkit"
 powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\.claude\local-plugins\nsls-builder-toolkit\install.ps1"
 ```
