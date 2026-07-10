@@ -60,7 +60,9 @@ must exit 0. If it does not, stop and send the builder back to track-design Phas
 
 ## Phase 2 — Walkthrough & Focus Group (opt-in)
 
-Gate: a working Phase-1 build (local or deployed). **Turn live AI ON** (build with `--proxy-url https://studio.nsls.org --proxy-token <your-smt_-token>`) — the panel scores the *live* `generate`/`chat` output, not the baked fallback. Studio forwards to the AI proxy server-side.
+Gate: a working Phase-1 build. **Turn live AI ON** for scoring — run the panel against a **local live-AI build** (build with `--proxy-url https://studio.nsls.org --proxy-token <your-smt_-token>`). The panel scores the *live* `generate`/`chat` output, not the baked fallback. Studio forwards to the AI proxy server-side.
+
+*Note:* A personal `smt_` token baked into the build is safe locally (your machine, localhost). For a **deployed or shareable build** to run on studio, use `--proxy-token ""` instead — no token in the HTML, live AI still works via the session.
 
 1. **Walkthrough:** `node scripts/walk-gallery.mjs <served-url> focus-group/v{N}` → a screenshot per screen + `report.json`. (Requires Playwright installed.) If `report.json.problems` is non-empty (blank screen, unresolved `{token}`, stuck/no-advance, console error), **STOP and fix the build before the panel runs** — don't score a broken prototype.
 
