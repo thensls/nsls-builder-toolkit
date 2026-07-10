@@ -37,15 +37,16 @@ must exit 0. If it does not, stop and send the builder back to track-design Phas
    (Opening `index.html` via `file://` breaks ES modules and fetch — always serve over HTTP.)
 5. **Deploy:** invoke the `netlify-deploy` skill on `prototype-build/`. Record the URL.
 
-   **Live AI (optional):** pass `--proxy-url <url> --proxy-token <token>` to the build command
-   to enable real streaming responses. Set these once, org-wide, and share the same build flags.
-   Without them the prototype is baked-only (AI samples are pre-written). With them:
-   - `generate` substeps auto-stream a fresh draft when the screen loads.
-   - `chat` substeps are an interactive multi-turn exchange.
-   - Any proxy failure (network, auth, timeout) automatically falls back to the baked sample —
-     reviewers always see something, never a blank screen.
-   AI output is illustrative: the real app runs on Braintrust with different prompts and
-   guardrails. Do not present prototype AI output as production fidelity.
+   **Live AI (optional):** pass `--proxy-url https://studio.nsls.org --proxy-token <your-smt_-token>`
+   to the build command. Studio verifies your author token (the same one you mint at
+   studio.nsls.org/mcp-token for editing) and forwards to the AI proxy server-side —
+   you never handle the shared proxy secret.
+
+   **Security — do not bake personal tokens into public sites.** A personal `smt_`
+   token is fine in a **local** preview (localhost, your own machine). For a
+   **shareable / publicly hosted** prototype, host it on studio (session-gated) and
+   build with `--proxy-token ""` so no secret ships in the HTML. Never deploy a
+   public Netlify bundle with a personal token baked into the URL.
 
    The `netlify-deploy` skill handles auth and the CLI. For a prebuilt folder use:
    `netlify deploy --dir=<abs>/prototype-build --no-build --json`
@@ -59,7 +60,9 @@ must exit 0. If it does not, stop and send the builder back to track-design Phas
 
 ## Phase 2 — Walkthrough & Focus Group (opt-in)
 
-Gate: a working Phase-1 build (local or deployed). **Turn live AI ON** (build with `--proxy-url`/`--proxy-token`) — the panel scores the *live* `generate`/`chat` output, not the baked fallback. The deployed proxy is `https://track-preview-proxy-production.up.railway.app` (token in Doppler `track-preview-proxy/prd` → `PROXY_TOKEN`).
+Gate: a working Phase-1 build. **Turn live AI ON** for scoring — run the panel against a **local live-AI build** (build with `--proxy-url https://studio.nsls.org --proxy-token <your-smt_-token>`). The panel scores the *live* `generate`/`chat` output, not the baked fallback. Studio forwards to the AI proxy server-side.
+
+*Note:* A personal `smt_` token baked into the build is safe locally (your machine, localhost). For a **deployed or shareable build** to run on studio, use `--proxy-token ""` instead — no token in the HTML, live AI still works via the session.
 
 1. **Walkthrough:** `node scripts/walk-gallery.mjs <served-url> focus-group/v{N}` → a screenshot per screen + `report.json`. (Requires Playwright installed.) If `report.json.problems` is non-empty (blank screen, unresolved `{token}`, stuck/no-advance, console error), **STOP and fix the build before the panel runs** — don't score a broken prototype.
 
