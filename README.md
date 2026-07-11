@@ -185,6 +185,7 @@ They form a cycle: `/data-model-discovery` explores a new system → maps it aga
 | **deployment-guide** | How to deploy to Railway, Airtable, GAS, Cloudflare |
 | **nsls-auth** | Wire SSO via auth.nsls.org into any NSLS-controlled app |
 | **web-research** | Web research with AI overview extraction |
+| **macroscope** | Turn a Macroscope review bot's PR comments into one root-cause fix pass — fix the class, not each comment |
 | **interrogate** | Scope a new project through structured conversation |
 | **kw:brainstorm / kw:plan / kw:review / kw:compound** | Strategy & knowledge-work pipeline (non-software) |
 
