@@ -48,13 +48,14 @@ Get the current inline findings and the review verdict:
 Get the **still-unresolved** threads (these are what block merge). Resolution status only
 comes from GraphQL:
 
-    gh api graphql -f query='
-    query($owner:String!,$repo:String!,$pr:Int!){
+    gh api graphql --paginate -f query='
+    query($owner:String!,$repo:String!,$pr:Int!,$endCursor:String){
       repository(owner:$owner,name:$repo){
         pullRequest(number:$pr){
-          reviewThreads(first:100){ nodes{
-            isResolved isOutdated
-            comments(first:1){ nodes{ author{login} path line body } } } } } } }' \
+          reviewThreads(first:100, after:$endCursor){
+            pageInfo{ hasNextPage endCursor }
+            nodes{ isResolved isOutdated
+              comments(first:1){ nodes{ author{login} path line body } } } } } } }' \
       -F owner="${REPO%/*}" -F repo="${REPO#*/}" -F pr="$PR"
 
 Filter to `isResolved == false` and author `macroscopeapp[bot]`. Confirm which commit the
