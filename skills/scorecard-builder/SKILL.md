@@ -176,7 +176,7 @@ Full render mechanics: `/gdoc-build`.
 - About to promote a Signal Quick Note straight into an accountability → **STOP.** Reality-check, not source.
 - About to implement ±15% values math → **STOP.** Binary gate.
 - About to overwrite the prior Doc in edit mode → **STOP.** Render a new version.
-- About to hand back 8+ accountabilities or task-shaped lines → **STOP.** Vital few, outcomes.
+- About to hand back 7+ accountabilities or task-shaped lines → **STOP.** Vital few (3–6), outcomes.
 
 ## References
 
