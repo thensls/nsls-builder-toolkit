@@ -200,8 +200,9 @@ gws auth status 2>/dev/null | grep -q '"storage": "none"' && echo "gws NOT authe
   ```
   To edit/create Google Docs from Claude, do the one-time gws login:
     ~/.claude/local-plugins/nsls-builder-toolkit/skills/gdoc-edit/references/setup.md
-  Short version: get the shared OAuth client from the nsls-gdocs-skill project
-  (needs group read access — ask in #builders), then:  gws auth login --services docs,drive
+  Short version: get the shared client_secret.json from the NSLS builders Drive
+  location (ask in #builders), drop it at ~/.config/gws/client_secret.json,
+  then:  gws auth login --services docs,drive
   ```
 
 ## Step 6: Wrap Up + Pitch Personal Productivity

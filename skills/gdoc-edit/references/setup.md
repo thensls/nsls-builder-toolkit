@@ -22,23 +22,27 @@ gws --version || curl --proto '=https' --tlsv1.2 -LsSf \
 ### 2. Get the NSLS OAuth client
 
 `gdoc-edit` uses one shared OAuth **client** (a Desktop client in the `nsls-gdocs-skill`
-GCP project). The client is *not* a secret you type — you download it once and drop it in
-place. It only lets you *start* a Google sign-in; the actual access is your own per-user
-token, minted in the next step.
+GCP project). The client file is *not* something you type — you fetch it once and drop it
+in place. It only lets you *start* a Google sign-in; the actual access is your own
+per-user token, minted in the next step.
 
-1. You need read access to the `nsls-gdocs-skill` project. This is granted to a builder
-   group once (ask in #builders if `gws docs` fails with a project/permission error).
-2. Go to **console.cloud.google.com → project `nsls-gdocs-skill` → APIs & Services →
-   Credentials**, find the **"gdoc-edit desktop client"**, and **Download JSON**.
-3. Save it as `~/.config/gws/client_secret.json`:
+> Why a shared file and not "download it from the console"? Google only shows a client
+> secret **once, at creation** — it can never be viewed or re-downloaded afterwards. So
+> the client JSON is distributed as a file instead.
+
+1. Get `client_secret.json` from the **NSLS builders shared location** (Drive — ask in
+   #builders for the current link; it's restricted to @nsls.org).
+2. Save it as `~/.config/gws/client_secret.json`:
 
 ```bash
-mkdir -p ~/.config/gws && mv ~/Downloads/client_secret_*.json ~/.config/gws/client_secret.json
+mkdir -p ~/.config/gws && cp ~/Downloads/client_secret*.json ~/.config/gws/client_secret.json
+chmod 600 ~/.config/gws/client_secret.json
 ```
 
-> Prefer not to touch the console? You can instead set the client via env vars in your
-> shell profile (values from the same client): `GOOGLE_WORKSPACE_CLI_CLIENT_ID` and
-> `GOOGLE_WORKSPACE_CLI_CLIENT_SECRET`. Either path works.
+The file is low-sensitivity by design: it's a Desktop-type client on an **Internal**
+consent screen, so it is useless to anyone without an @nsls.org Google account — all it
+can do is start a sign-in that only NSLS accounts can complete. Still, don't commit it
+to any repo.
 
 ### 3. Log in (per-user, minimal scopes)
 
@@ -78,30 +82,30 @@ for reference at `references/legacy/gas-doc-webhook.gs` only.
 ## Admin: creating the shared OAuth client (one-time, done once for the org)
 
 Only needed once, by whoever stands up the `nsls-gdocs-skill` project. Requires GCP access
-to that project.
+to that project. **Done 2026-07-12** (client `gdoc-edit desktop client`,
+ID `598752584124-4t7bdffqchrt8b6nlv1uuhpkl1b24vtc.apps.googleusercontent.com`) — recorded
+here in case it ever has to be recreated.
 
 1. **Reauth gcloud** (interactive): `gcloud auth login` and
    `gcloud config set project nsls-gdocs-skill`.
-2. **Create the consent screen + Desktop client** the way `gws auth login` expects:
-
-   ```bash
-   gws auth setup --project nsls-gdocs-skill
-   ```
-
-   This enables the Workspace APIs on the project and creates the OAuth **consent screen +
-   Desktop client**, writing `~/.config/gws/client_secret.json`. (It enables the full set of
-   Workspace APIs on this dedicated project — harmless; per-user *token* scope is still
-   controlled by the `--services docs,drive` flag at login time.)
-3. **Set the consent screen to Internal** (User type: Internal) in the console so only
-   `@nsls.org` users can authorize and no Google verification review is needed. Set the app
-   name to `NSLS gdoc-edit` and support/developer email to an NSLS address.
-4. **Grant the builder group read access** to the project once (e.g. `roles/viewer` on
-   `nsls-gdocs-skill` for `gcp-builders@nsls.org`) so builders can download the client JSON
-   in step 2 above — a single group grant, not per-person sharing.
-5. **Log in and verify** as above (`gws auth login --services docs,drive`, then the smoke
-   test). The `client_id` + `client_secret` from `~/.config/gws/client_secret.json` are the
-   "client details" to register/track centrally.
+2. **Enable the Workspace APIs**: `gws auth setup --project nsls-gdocs-skill`. This enables
+   the APIs, then **stops with a validation error at OAuth-client creation** — that part is
+   console-only (Google removed API/CLI creation of desktop clients). Expected; continue.
+3. **Create the consent screen** (console → Google Auth Platform → Overview → Get started,
+   project `nsls-gdocs-skill`): App name `NSLS gdoc-edit`, support email an NSLS address,
+   **Audience: Internal** ← the critical choice: only `@nsls.org` can authorize, and the
+   sensitive Docs/Drive scopes need no Google verification review. Agree + Create.
+4. **Create the client** (Clients → Create client): Application type **Desktop app**, name
+   `gdoc-edit desktop client`. **Download the JSON immediately from the creation dialog** —
+   Google shows/downloads a client secret **only at creation**; there is no retrieval later.
+   (Missed the window? Open the client → **Add secret** → capture the new secret in the same
+   dialog, disable+delete the old one. A client holds max 2 secrets.)
+5. **Distribute**: save the JSON as `~/.config/gws/client_secret.json` (mode 600) and put a
+   copy in the NSLS builders shared Drive location (restricted to @nsls.org) — that's what
+   builder-setup step 2 points at.
+6. **Log in and verify**: `gws auth login --services docs,drive`, then the smoke test. The
+   `client_id` is the detail to register/track centrally.
 
 Do **not** commit `client_secret.json` (or the id/secret) to the toolkit repo. It's a
-Desktop-type client — low sensitivity by Google's model — but the NSLS pattern is that no
-credential lives in the repo. Distribution is via project access, not git.
+Desktop-type client — low sensitivity by Google's model, useless outside @nsls.org thanks
+to the Internal consent screen — but the NSLS pattern is that no credential lives in git.
