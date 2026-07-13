@@ -67,15 +67,6 @@
     "manages": []
   },
   {
-    "name": "Chris Higbee",
-    "title": "Senior Director of Sales Enablement",
-    "manager": "Ashleigh Smith",
-    "email": "chigbee@nsls.org",
-    "slack": "U0A955W2BS4",
-    "department": "Client Services",
-    "manages": []
-  },
-  {
     "name": "Linda Condon",
     "title": "Senior Strategic Chapter Manager",
     "manager": "Marissa Curry",
@@ -191,7 +182,6 @@
     "slack": "UEWBC2R08",
     "department": "Client Services",
     "manages": [
-      "Chris Higbee",
       "Kimberly Campbell",
       "Melvin Rosal",
       "Timothy Duffy"
@@ -709,7 +699,6 @@
     "department": "Member Experience",
     "manages": [
       "Alex Arias",
-      "ELIANA VALLEJO",
       "Franklin Ortega",
       "Mia Vasquez",
       "Samantha Montas"
@@ -806,6 +795,7 @@
     "manages": [
       "Alejandro Gabriel",
       "Angel Guzman",
+      "ELIANA VALLEJO",
       "Edgar Segura",
       "Elian Castro",
       "Emilia Santana",
@@ -829,8 +819,8 @@
   },
   {
     "name": "ELIANA VALLEJO",
-    "title": "Membership Experience Specialist",
-    "manager": "Alejandro Gabriel",
+    "title": "Workforce and AI Operations Analyst",
+    "manager": "Kimberly Campbell",
     "email": "esantos@nsls.org",
     "slack": "U0BAK4ZT3EF",
     "department": "Member Experience",
@@ -971,6 +961,15 @@
     "manages": []
   },
   {
+    "name": "Aner Huang",
+    "title": "Data Analyst",
+    "manager": "Jordyn Tannenbaum",
+    "email": "ahuang@nsls.org",
+    "slack": "",
+    "department": "Business Intelligence",
+    "manages": []
+  },
+  {
     "name": "Jordyn Tannenbaum",
     "title": "Head of Data",
     "manager": "Adam Stone",
@@ -978,6 +977,7 @@
     "slack": "U0A5FNH2A01",
     "department": "Business Intelligence",
     "manages": [
+      "Aner Huang",
       "Rumzy Khalil"
     ]
   },

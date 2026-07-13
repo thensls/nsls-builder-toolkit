@@ -1,10 +1,11 @@
 # NSLS Org Chart
-_Last synced: 2026-07-06_
+_Last synced: 2026-07-13_
 
 ## Business Intelligence
 
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
+| Aner Huang | Data Analyst | Jordyn Tannenbaum | ahuang@nsls.org |  |
 | Jordyn Tannenbaum | Head of Data | Adam Stone | jtannenbaum@nsls.org | U0A5FNH2A01 |
 | Rumzy Khalil | Data Engineer | Jordyn Tannenbaum | rkhalil@nsls.org | U0B1ZU3CC2C |
 
@@ -18,7 +19,6 @@ _Last synced: 2026-07-06_
 | Arianne Stinson | Chapter Success Manager (Silver) | James Corriveau | astinson@nsls.org | U0393VBME00 |
 | Ashleigh Smith | Vice President, Client Services | Gary Tuerack | asmith@nsls.org | UEWBC2R08 |
 | Brielle Jones | Chapter Success Manager (Silver) | James Corriveau | bjones@nsls.org | U091ZV57M29 |
-| Chris Higbee | Senior Director of Sales Enablement | Ashleigh Smith | chigbee@nsls.org | U0A955W2BS4 |
 | Dejeahn Brown | Chapter Success Manager (Silver) | James Corriveau | dbrown@nsls.org | U098M2E1M5X |
 | Dillon Cook | Chapter Success Manager (Silver) | James Corriveau | dcook@nsls.org | U0A2A9Q95JN |
 | Gregg Gudelinis | Chapter Success Manager (Gold) | James Corriveau | ggudelinis@nsls.org | U034ZAPBHAT |
@@ -110,7 +110,7 @@ _Last synced: 2026-07-06_
 | Angel Guzman | Membership Experience Specialist | Kimberly Campbell | aguzman@nsls.org | U0B1VBGR6DS |
 | Atrayu Polhemus | Membership Experience Specialist | Kara Klimuszko | apolhemus@nsls.org | U08E6QG6KUM |
 | Charlotte Donnelly | Member Experience Specialist | Kara Klimuszko | cdonnelly@nsls.org | U05DKQE1J3H |
-| ELIANA VALLEJO | Membership Experience Specialist | Alejandro Gabriel | esantos@nsls.org | U0BAK4ZT3EF |
+| ELIANA VALLEJO | Workforce and AI Operations Analyst | Kimberly Campbell | esantos@nsls.org | U0BAK4ZT3EF |
 | Edgar Segura | Client Services Manager | Kimberly Campbell | esegura@nsls.org | U0A3PH5EA3G |
 | Elian Castro | Membership Experience Specialist | Kimberly Campbell | ecastro@nsls.org | U0B1NBFJACD |
 | Emilia Santana | Membership Experience Specialist | Kimberly Campbell | esantana@nsls.org | U0B1PMSKT0E |
