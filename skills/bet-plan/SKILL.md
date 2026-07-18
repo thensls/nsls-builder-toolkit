@@ -18,8 +18,8 @@ description: >-
 1. **Read-only** — `get_bet`, `list_assumptions`, `list_bets`,
    `get_stack_rank`. Free, no confirmation needed.
 2. **Configuration / new-content** — `update_section` (`econ.*`/`exec.*`/
-   `proof.*` on this bet), `add_experiment`, `upsert_assumption`,
-   `score_rubric`. Say out loud what's being written as you go — which
+   `proof.*` on this bet), `add_experiment`, `update_experiment`,
+   `upsert_assumption`, `score_rubric`. Say out loud what's being written as you go — which
    field, what tag or grade — no per-call confirmation.
 3. **Write to shared systems** — `advance_stage`, `set_status`. **Confirm
    the exact values with the human before writing.** No-token/no-server
