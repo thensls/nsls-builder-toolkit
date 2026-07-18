@@ -44,6 +44,20 @@ new regulation, a shift in how a segment buys, a technology now available) —
 not just "we haven't done this yet." If why_now reduces to "it's a good
 idea," timing hasn't actually been argued.
 
+## Internal-origin bets: don't let internal validation bleed outward
+
+For an internal-origin (dogfood) bet, **Feasibility** and often **Clarity**
+start green — the thing already exists and runs, so build risk is genuinely
+low and the one-liner is easy to say plainly; the rating's one-line why
+should say so ("we run this internally today"). That's the whole point of
+this origin, not a shortcut being taken. It concentrates scrutiny where it
+belongs: **Desirability, Viability, and Timing**, rated strictly against the
+**external** market — an institution outside NSLS wanting it, paying for it,
+and there being a reason to sell it now. Internal usage is real evidence for
+Feasibility; it is never evidence for Desirability. Don't let a green
+Feasibility rating soften a red or yellow external-demand rating — they're
+answering different questions.
+
 ## Rating definitions (verbatim, LEANSpark)
 
 - **Red** — "existential risks — things that could kill your business if

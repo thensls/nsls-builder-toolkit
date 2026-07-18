@@ -7,7 +7,9 @@ description: >-
   intake front door of the Strategy Studio pipeline; upstream of bet-research.
   Triggers: "I have a business idea", "new bet", "bet idea", "add a bet",
   "business model idea", "lean canvas this", "sketch a business", "should we
-  sell X to Y", "capture this idea".
+  sell X to Y", "capture this idea", "should we sell this thing we built",
+  "we built this for ourselves — is it a product", "productize",
+  "commercialize an internal tool".
 ---
 
 # bet-idea
@@ -68,7 +70,10 @@ low-confidence score.
 - **AI-drafted content is never `data`.** Every section you draft — not the
   human — is written via `update_section` with `evidence_tag: "assumption"`
   (a reasoned guess) or `"opinion"` (a pure hunch). Only the human's own
-  first-hand knowledge earns `data`, and only they can supply it.
+  first-hand knowledge earns `data`, and only they can supply it. The one
+  exception: internal-origin bets, where `data`/`estimate` on
+  problem/solution content must cite the internal usage it's grounded in
+  (Step 1) — still never for anything about the *external* market.
 - **The human corrects; you don't author from nothing they said.** Draft from
   their one-liner/conversation/pasted material — extrapolate, don't invent
   facts that weren't implied.
@@ -97,6 +102,25 @@ low-confidence score.
 ## Step 1 — Sketch capture
 
 **Purpose:** get the whole canvas + thesis on the page in minutes, not hours.
+
+**Origin question, first.** Ask: *"Where does this bet come from — (a) a
+market hypothesis (we think others will pay), or (b) an internal need (we
+built/are building it for ourselves)?"*
+
+- **Market-origin** — proceed exactly as the rest of this workflow is
+  written.
+- **Internal-origin (dogfood)** — problem/solution boxes may be tagged
+  `data` or `estimate` *when grounded in our real internal usage* (name the
+  internal system in the section content); log that usage as evidence —
+  `log_evidence(bet_id, kind: "external"` or `"experiment_result", title:
+  "<internal system> usage", evidence_tag: "data", via: "bet-idea")`, no
+  `signal_strength` (internal use is not market demand). Step 4's chain then
+  centers on the commercialization leap — "an institution outside NSLS has
+  this problem" / "they'll pay rather than build or ignore it" get
+  `priority` 1–2, `risk_type: customer`/`market` — and `thesis.right_to_win`
+  should name NSLS as the first, live customer. **Guard: internal
+  enthusiasm is `interest`, never demand — external evidence still climbs
+  the commitment ladder.**
 
 From whatever the person hands you — a one-liner, a rambling conversation, a
 pasted doc — draft all **9 canvas boxes** (`canvas.problem`, `.segments`,

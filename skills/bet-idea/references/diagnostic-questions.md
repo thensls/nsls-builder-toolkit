@@ -60,6 +60,23 @@ referral) → reputation (an intro to their boss, a public yes) → money (a
 pre-order, a deposit, a signed LOI). A warm "that's interesting" sits below
 all three rungs and proves nothing on its own.
 
+## Internal-origin variant
+
+For a dogfood bet, the forcing questions above still apply — but pointed
+**outward**, not at our own usage (we already know we have the problem; that
+was never in question):
+
+- *"Name the actual EXTERNAL human."* Not a colleague, not "the team" — we
+  don't count. Who outside NSLS has their title, their P&L, their job on the
+  line for this?
+- *"What do outsiders do today without our internal tool?"* Their status
+  quo, not ours — our own workaround-before-we-built-this is irrelevant now.
+- *"What's the smallest version an outsider would pay for THIS WEEK?"* Same
+  narrowest-wedge test, aimed at a stranger instead of us.
+
+**Guard:** we are the friendliest customer of all — internal enthusiasm for
+our own tool proves nothing about anyone else's willingness to pay.
+
 ## Using the answers
 
 Once a sharper answer lands, update the relevant section
