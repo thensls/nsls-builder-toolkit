@@ -61,10 +61,15 @@ lifecycle question, reads the live portfolio, and hands off — the real work
    and rendering rules: `references/portfolio-views.md`. Ask which bet they
    want, or confirm the intent is genuinely a new one.
 3. **Sanity-check stage vs. intent.** The bet's `stage` (from the listing) is
-   the signal — an idea-stage bet has no economics to plan yet ("research a
-   bet" on it should route to research first, or straight to `bet-idea` if the
-   canvas itself isn't done); a bet already `planned`+ has nothing left for
-   `bet-idea` to do. A request that duplicates an existing bet (same name/
+   the signal — an idea-stage bet has no economics to plan yet. "Research a
+   bet" on an IDEA-stage bet needs the stage gate first: evidence logged
+   while the bet sits at Idea is preliminary and does not advance anything.
+   Route to `bet-idea` if the canvas itself isn't done; if the canvas is done
+   and the owner judges it worth a research slot, draft the
+   `advance_stage(bet_id, to_stage: "research", attest: { worth_researching:
+   true })` call for the OWNER to fire (bet-studio stays read-only — same
+   draft-don't-fire rule as `log_evidence`), then show the returned gate
+   checklist. A bet already `planned`+ has nothing left for `bet-idea` to do. A request that duplicates an existing bet (same name/
    one-liner in the listing) surfaces the existing one before anything new
    gets created. When intent and stage don't line up, say so and route to what
    actually fits.
