@@ -10,7 +10,8 @@ description: >-
   sell X to Y", "capture this idea", "should we sell this thing we built",
   "we built this for ourselves — is it a product", "productize",
   "commercialize an internal tool", "finish my bet", "continue my bet idea",
-  "resume a bet", "pick up where I left off on the bet".
+  "resume a bet", "pick up where I left off on the bet", "capture Gary's
+  idea", "drive a bet session for", "facilitated bet intake".
 ---
 
 # bet-idea
@@ -117,6 +118,16 @@ origin question only if it can't be inferred from existing content.
 
 **Starting a genuinely new bet:** before `create_bet`, check `list_bets` for a
 same-name/one-liner match and surface it as a resume candidate first.
+
+## Entry: facilitated intake
+
+Also supported: a session where the IDEA OWNER (often an SLT member with no
+Studio token) talks and a builder with Studio access drives. Confirm the
+owner's email out loud before `create_bet` — `owner` is the idea owner's
+email, never the driver's. Revisions still attribute the driver's token +
+`via` automatically (correct — they typed it). Every attestation
+(`worth_researching`, step 7) is the OWNER's spoken call in session; the
+driver never attests on their behalf.
 
 ## Step 1 — Sketch capture
 
