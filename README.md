@@ -69,6 +69,23 @@ For non-software work — campaigns, strategy docs, briefs, research synthesis. 
 
 Use these for strategy/knowledge work. For software features use `/ce-brainstorm` → `/ce-plan` → `/ce-work` → `/ce-code-review` from the Compound Engineering plugin. For new automations start with `/interrogate`.
 
+## Strategy Studio
+
+The Strategy Studio skills let you capture, interrogate, and stress-test business bets into the org's portfolio pipeline. Bets flow through two entry points:
+
+| Skill | What it does |
+|-------|-------------|
+| **/bet-studio** | Portfolio front door and router — surface all open bets, filter by status/owner, navigate to detail |
+| **/bet-idea** | Capture, interrogate, stress-test a business bet and push it into the funnel |
+
+**Setup:** Tokens are minted by Kevin — one per person, SLT authors only. To enable these skills, set your token in `~/.zshrc`:
+
+```bash
+export STRATEGY_MCP_TOKEN=<your-token-here>
+```
+
+The engine lives at `https://market.nsls.org/` (repo: `thensls/market-exploration`).
+
 ## Bundled Plugins
 
 These are installed automatically by the install script:
