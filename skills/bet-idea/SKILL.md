@@ -130,8 +130,9 @@ pasted doc — draft all **9 canvas boxes** (`canvas.problem`, `.segments`,
 Nothing is written to the engine until step 2's `create_bet` returns a
 `bet_id` — all 9+6 drafts live in conversation until then, and then become
 the first `update_section(bet_id, field_key, content_md, evidence_tag)`
-calls. Every box is `assumption` or `opinion` — never `data`, no matter how
-confident the draft sounds.
+calls. Every box is `assumption` or `opinion` — never `data` — with ONE
+exception: internal-origin problem/solution content grounded in cited
+internal usage (see the origin fork above) may be `data` or `estimate`.
 
 As you go, **note the order** in which the human actively engages with (adds
 to, argues with, corrects) the first three boxes. Don't overthink this — it's
