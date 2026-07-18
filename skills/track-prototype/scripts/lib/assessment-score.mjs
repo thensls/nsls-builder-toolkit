@@ -138,12 +138,18 @@ export function resolveAnswerIds(track, answers = {}) {
   if (!step) return [];
   const subs = step.substeps || step.subSteps || [];
 
-  // text -> answerId, scoped to this step's options
+  // text -> answerId, scoped to this step's options. Keys are TRIMMED to match
+  // matchOptionTexts, which compares against a trimmed answer string — trimming
+  // BOTH sides is the semantics that can't drop answers: an option authored
+  // with stray leading/trailing whitespace still resolves, whereas an untrimmed
+  // key could never match the trimmed answer and would silently drop it from
+  // answerIds. (Two options differing only by surrounding whitespace collapse
+  // to one key — an authoring error, not a case the player can produce.)
   const textToId = new Map();
   for (const sub of subs) {
     for (const o of sub.options || []) {
       if (o && typeof o === "object" && o.answerId != null && o.text != null) {
-        textToId.set(o.text, o.answerId);
+        textToId.set(String(o.text).trim(), o.answerId);
       }
     }
   }
