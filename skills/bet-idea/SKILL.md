@@ -102,12 +102,12 @@ From whatever the person hands you — a one-liner, a rambling conversation, a
 pasted doc — draft all **9 canvas boxes** (`canvas.problem`, `.segments`,
 `.uvp`, `.solution`, `.channels`, `.revenue`, `.costs`, `.metrics`,
 `.unfair_advantage`) and all **6 thesis fields** (`thesis.customer`,
-`.problem`, `.offering`, `.why_now`, `.right_to_win`, `.ambition_2028`). Write
-each via `update_section(bet_id, field_key, content_md, evidence_tag)` —
-`bet_id` won't exist until step 2's `create_bet`, so hold the drafts in the
-conversation until then, or draft the two or three clearest boxes first to
-anchor the create call. Every box is `assumption` or `opinion` — never
-`data`, no matter how confident the draft sounds.
+`.problem`, `.offering`, `.why_now`, `.right_to_win`, `.ambition_2028`).
+Nothing is written to the engine until step 2's `create_bet` returns a
+`bet_id` — all 9+6 drafts live in conversation until then, and then become
+the first `update_section(bet_id, field_key, content_md, evidence_tag)`
+calls. Every box is `assumption` or `opinion` — never `data`, no matter how
+confident the draft sounds.
 
 As you go, **note the order** in which the human actively engages with (adds
 to, argues with, corrects) the first three boxes. Don't overthink this — it's

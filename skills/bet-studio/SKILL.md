@@ -42,7 +42,7 @@ lifecycle question, reads the live portfolio, and hands off — the real work
 | Builder wants to… | Hand off to | Moves the bet |
 |---|---|---|
 | **Add an idea** | `bet-idea` (carry over any concept already stated) | → Idea |
-| **Research a bet** | *Phase 4 `bet-research` — not built.* Interim: log evidence by hand via `log_evidence` on the engine, guided by the Customer Forces material in `bet-idea`'s references. | Idea → Research |
+| **Research a bet** | *Phase 4 `bet-research` — not built.* Interim: bet-studio stays read-only: it drafts the call, you fire it — it prints the exact `log_evidence` call (tool name and fully filled-in arguments) for the human to run through `bet-idea` or directly. For the interview method itself, run `bet-idea`'s diagnostic and chain-interrogation steps against the existing bet — it owns the interview method references. | Idea → Research |
 | **Plan economics / proof plan** | *Phase 4 `bet-plan` — not built.* Interim: say plainly it's coming; there's no guided path yet. | Research → Planned |
 | **Portfolio review** | *Phase 5 `bet-review` — not built.* Interim: render the stack rank + each executing bet's latest status update yourself (see `references/portfolio-views.md`), and flag any bet whose load-bearing assumptions came back invalidated. | n/a (cross-cutting) |
 | **Run experiments** | *Phase 5 `bet-run` — not built.* Interim: say plainly it's coming. | Live → Running → Scaling |

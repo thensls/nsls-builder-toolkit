@@ -2,10 +2,6 @@
 
 > Copied from thensls/market-exploration docs/plans, 2026-07-18.
 
-**Saved by Kevin's request (2026-07-17) as follow-up context for Phase 2:**
-the `bet-idea` skill's canvas stress-test step (design doc: "canvas
-stress-test with a prioritized what-to-fix-first list (LEANSpark pattern)").
-
 Sources:
 - https://leanspark.ai/use-cases
 - https://leanspark.ai/guides/tutorial-stress-test
