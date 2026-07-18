@@ -108,8 +108,12 @@ anything else, send it back to bet-studio with one sentence why. **Skip
 `create_bet` entirely.** Inventory what's incomplete (empty canvas/thesis
 sections, missing assumptions, unscored rubric), announce the inventory
 (heartbeat), then continue the normal workflow from the earliest incomplete
-step, writing against the existing `bet_id`. Ask the origin question only if
-it can't be inferred from existing content.
+step, writing against the existing `bet_id`. Two steps leave no engine
+trace and can't be inventoried: the office-hours diagnostic (step 3) and
+the stress test (step 5). On resume, ALWAYS re-run the stress test (it's
+fast, reads current content, and its fix-first list is the resume agenda),
+and re-ask diagnostic questions only for boxes that are still weak. Ask the
+origin question only if it can't be inferred from existing content.
 
 **Starting a genuinely new bet:** before `create_bet`, check `list_bets` for a
 same-name/one-liner match and surface it as a resume candidate first.
@@ -166,10 +170,12 @@ Chapter advisor (b2b)). B2B vs. B2C follows directly from which buyer is
 picked — don't ask separately.
 
 If none of the seeded options genuinely fit, `upsert_taxonomy(kind, fields)`
-creates a new one — **shared-system tier: confirm the fields first.** A new
-segment's filter must be a whitelisted-column filter; validate it
-immediately by running `size_segment(filter)` and showing the computed size
-before treating the segment as real. Don't take an unvalidated segment
+creates a new one — **shared-system tier: confirm the fields first.** For a
+new SEGMENT, validate BEFORE writing: run `size_segment(filter)` on the
+proposed filter FIRST and show the computed size — only if the filter is
+valid and the size sane does `upsert_taxonomy` create the segment (the
+taxonomy is shared, leadership-visible reference data; never park an
+invalid or unvetted filter in it). Don't take an unvalidated segment
 forward.
 
 `create_bet(name, one_liner, audience, market_id, segment_id, buyer_id,
