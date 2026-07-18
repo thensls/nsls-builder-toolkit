@@ -102,11 +102,11 @@ hands one over with a `bet_id`. Call `get_bet` first.
 - **Stage `live`+** — `bet-run` territory (Phase 5 — say plainly it's not
   built); `bet-studio` for anything else that doesn't fit.
 - **On resume:** inventory which `exec.*`/`proof.*` fields are still empty,
-  and whether an adversarial review round is already on record — check
-  `exec.top_risks` content for an "Adversarial review round N" block (Step
-  P4 writes one after every completed round, even when no fixes were
-  accepted). The planned→live progress bar IS the resume agenda — don't
-  re-derive a different one.
+  and whether an adversarial review round is already on record — check the
+  `exec.top_risks` section's `data.review_log` array (Step P4 appends an
+  entry after every completed round, even when no fixes were accepted; the
+  section's prose stays exactly the top five risks). The planned→live
+  progress bar IS the resume agenda — don't re-derive a different one.
 
 ## Step P1 — Economics hardening
 
@@ -178,18 +178,24 @@ Per `references/adversarial-review.md`:
 5. **Record the round — every time, regardless of outcome.** A round where
    every fix is accepted and folded into the memo leaves no different trace
    than a round where nothing was accepted — both need a durable record, not
-   just the one with visible edits. `update_section(bet_id, "exec.top_risks",
-   ...)` appending to the existing content: "Adversarial review round N
-   (score X/10): <one-line verdict; unresolved dissents listed>", with
-   `summary: "adversarial review record"`. This is the only trace a clean
-   round leaves in `get_bet` — skip it and a resumed session has no way to
-   tell the review ran, and will re-run it needlessly.
+   just the one with visible edits. The record lives in the section's DATA,
+   never its prose (`exec.top_risks` content is contractually exactly the
+   top five risks — audit blocks must not pollute it):
+   `update_section(bet_id, "exec.top_risks", data: { review_log:
+   [...existing entries, { round: N, score: X, verdict: "<one line>",
+   unresolved: ["<dissent>", ...] }] }, summary: "adversarial review
+   record")` — read the section first and append to its existing
+   `data.review_log` array, leaving `content_md` untouched. This is the
+   only trace a clean round leaves in `get_bet` — skip it and a resumed
+   session has no way to tell the review ran, and will re-run it
+   needlessly.
 6. **Re-dispatch a NEW fresh-context reviewer** — never the same subagent
    context, it would be grading its own suggestions.
 7. **Max 2 fix rounds.** After round 2, remaining disagreements are
-   RECORDED, not resolved — unresolved reviewer challenges land in
-   `exec.top_risks` as named open risks, folded into the same round-record
-   block from step 5. Noted dissent, never silent consensus.
+   RECORDED, not resolved: a challenge that names a genuine RISK joins the
+   top-five prose in `exec.top_risks` (displacing a lesser risk if needed);
+   everything else lands in the round's `data.review_log` entry (`unresolved`
+   list) from step 5. Noted dissent, never silent consensus.
 
 ## Step P5 — The advance offer
 
