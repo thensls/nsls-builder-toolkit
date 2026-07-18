@@ -185,6 +185,26 @@ Org-owned automations → use the shared nsls-automations project.
 
 If no or skip: move on.
 
+### Google Docs editing (gws auth) — optional
+
+The `/gdoc-edit` (edit docs in place) and `/gdoc-build` (create branded docs) skills run on
+`gws`, the Google Workspace CLI. They need a one-time `gws auth login`. Check state:
+
+```bash
+gws auth status 2>/dev/null | grep -q '"storage": "none"' && echo "gws NOT authed" || echo "gws authed (or gws missing)"
+```
+
+- **Already authed**: "Google Docs skills are ready — /gdoc-edit and /gdoc-build will work."
+- **Not authed / gws missing**: point them at the setup doc — don't run the OAuth flow for
+  them (it opens a browser and mints *their* token):
+  ```
+  To edit/create Google Docs from Claude, do the one-time gws login:
+    ~/.claude/local-plugins/nsls-builder-toolkit/skills/gdoc-edit/references/setup.md
+  Short version: get the shared client_secret.json from the NSLS builders Drive
+  location (ask in #builders), drop it at ~/.config/gws/client_secret.json,
+  then:  gws auth login --services docs,drive
+  ```
+
 ## Step 6: Wrap Up + Pitch Personal Productivity
 
 ```
