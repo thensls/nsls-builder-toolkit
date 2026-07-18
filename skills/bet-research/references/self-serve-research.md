@@ -23,11 +23,27 @@ Log each substantive finding as its own evidence row:
 log_evidence(kind: "competitor", link: <source URL>, evidence_tag: "data"|"estimate")
 ```
 
-## 2. Market size, both directions
+## 2. Market size, both directions — both in dollars
 
-**Top-down:** `size_segment(filter)`, built from the bet's segment, returns
-`institutionCount`, `totalEnrollment`, `relationshipCounts`. This is the
-outside-in number.
+Both `top_down` and `bottom_up` MUST be obtainable-revenue dollar figures —
+never raw institution/enrollment counts. The two numbers only mean anything
+side by side if they share units; a count next to a revenue figure produces a
+divergence ratio that's pure noise.
+
+**Top-down:** `size_segment(filter)` returns `institutionCount`,
+`totalEnrollment`, `relationshipCounts` — the outside-in counts. Those raw
+counts are the evidence-row payload (see the `log_evidence` call below), NOT
+what goes into `data.top_down`. Convert to revenue before it lands in
+`market.obtainable`:
+
+```
+top_down = institutions_in_segment × annual_price × stated_capture_assumption
+```
+
+`stated_capture_assumption` is a NAMED assumption (e.g. "we could realistically
+land 15% of this segment within 3 years") — it's what turns the raw
+`size_segment` count into an obtainable-revenue read, and it's exactly the
+kind of number that belongs in `strategy_assumptions`, not buried in prose.
 
 **Bottom-up:** composed by this skill — **never by the engine.**
 
@@ -43,20 +59,22 @@ Write the result:
 ```
 update_section("market.obtainable",
   content_md: <narrative with named assumptions>,
-  data: { top_down: <number>, bottom_up: <number>, divergence_note: "<why they differ>" },
+  data: { top_down: <dollar number>, bottom_up: <dollar number>, divergence_note: "<why they differ>" },
   evidence_tag: "estimate")
 ```
 
 The gate checks `typeof data.top_down === "number" && typeof data.bottom_up
 === "number"` — both fields must literally be numbers, not strings, not
-ranges.
+ranges, and both denominated in dollars.
 
 **Divergence flag:** if the two directions differ by more than roughly 3×,
 say so out loud and name which single assumption is driving the gap (usually
-`expected_conversion` or the reachable-institutions count). A silent 5×
-divergence buried in prose is a red flag, not a nuance.
+`stated_capture_assumption`, `expected_conversion`, or the reachable-
+institutions count). A silent 5× divergence buried in prose is a red flag,
+not a nuance.
 
-Log the sizing pull itself:
+Log the sizing pull itself — raw counts and enrollment live here, in the
+evidence row's `data`, never inside `market.obtainable`'s `data.top_down`:
 ```
 log_evidence(kind: "market_query", data: { filter, result }, evidence_tag: "data")
 ```

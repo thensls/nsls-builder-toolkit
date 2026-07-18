@@ -102,10 +102,11 @@ hands one over with a `bet_id`. Call `get_bet` first.
 - **Stage `live`+** — `bet-run` territory (Phase 5 — say plainly it's not
   built); `bet-studio` for anything else that doesn't fit.
 - **On resume:** inventory which `exec.*`/`proof.*` fields are still empty,
-  and whether an adversarial review round is already on record (stage
-  events or revision summaries mentioning "adversarial review"). The
-  planned→live progress bar IS the resume agenda — don't re-derive a
-  different one.
+  and whether an adversarial review round is already on record — check
+  `exec.top_risks` content for an "Adversarial review round N" block (Step
+  P4 writes one after every completed round, even when no fixes were
+  accepted). The planned→live progress bar IS the resume agenda — don't
+  re-derive a different one.
 
 ## Step P1 — Economics hardening
 
@@ -174,21 +175,34 @@ Per `references/adversarial-review.md`:
    a wall of text; never resolve them yourself.
 4. **Apply accepted fixes** via the normal write tools, revision-logged,
    `via: "bet-plan"`.
-5. **Re-dispatch a NEW fresh-context reviewer** — never the same subagent
+5. **Record the round — every time, regardless of outcome.** A round where
+   every fix is accepted and folded into the memo leaves no different trace
+   than a round where nothing was accepted — both need a durable record, not
+   just the one with visible edits. `update_section(bet_id, "exec.top_risks",
+   ...)` appending to the existing content: "Adversarial review round N
+   (score X/10): <one-line verdict; unresolved dissents listed>", with
+   `summary: "adversarial review record"`. This is the only trace a clean
+   round leaves in `get_bet` — skip it and a resumed session has no way to
+   tell the review ran, and will re-run it needlessly.
+6. **Re-dispatch a NEW fresh-context reviewer** — never the same subagent
    context, it would be grading its own suggestions.
-6. **Max 2 fix rounds.** After round 2, remaining disagreements are
+7. **Max 2 fix rounds.** After round 2, remaining disagreements are
    RECORDED, not resolved — unresolved reviewer challenges land in
-   `exec.top_risks` as named open risks. Noted dissent, never silent
-   consensus.
+   `exec.top_risks` as named open risks, folded into the same round-record
+   block from step 5. Noted dissent, never silent consensus.
 
 ## Step P5 — The advance offer
 
 Render the planned→live checklist (client-side, per
-`references/gate-progress.md` — never a probe). Ask the owner: **take it
-live?**
+`references/gate-progress.md` — never a probe). Draft the exact `rationale`
+text — citing the review scores and any recorded dissent — and put it in
+front of the owner alongside the ask: **take it live with this rationale:
+"<drafted rationale>"?** This is a Tier 3 write — the confirm has to cover
+the whole call, not just the yes/no on the stage change; `rationale` is
+audit text that lands in the shared system same as `to_stage` does.
 
-- **Yes** → `advance_stage(bet_id, to_stage: "live", rationale — cite the
-  review scores and any recorded dissent, via: "bet-plan")`. Show the
+- **Yes** → `advance_stage(bet_id, to_stage: "live", rationale, via:
+  "bet-plan")` using the confirmed rationale text verbatim. Show the
   returned `{ moved, gate: { checks } }` either way.
 - **No** → the bet stays `planned`. Offer `set_status(bet_id, status:
   "parked", rationale)` (confirmed) if the owner wants it shelved instead of

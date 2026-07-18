@@ -28,7 +28,8 @@ where the rest of the bet's risk lives.
 ## Reuse the research — never invent a second market size
 
 The revenue funnel STARTS from `market.obtainable`'s `data.top_down` and
-`data.bottom_up` — the numbers `bet-research` already sized both ways.
+`data.bottom_up` — obtainable-revenue dollar figures `bet-research` already
+sized both ways (not raw institution/enrollment counts).
 `bet-plan` does not re-derive market size from scratch; it builds the
 revenue model on top of what's already there.
 

@@ -27,9 +27,13 @@ says go.
 1. **`market_complete`** — all 5 `market.*` sections have non-empty
    `content_md`.
 2. **`econ_complete`** — all 5 `econ.*` sections have non-empty `content_md`.
-3. **`top_assumptions_resolved`** — the 3 assumptions with the LOWEST
-   `priority` values are all `validated` or `invalidated`; fails when zero
-   assumptions exist ("nothing has been de-risked").
+3. **`top_assumptions_resolved`** — the engine takes `ranked.slice(0,3)`: the
+   up-to-3 riskiest (lowest `priority` value) assumptions present are all
+   `validated` or `invalidated`. The denominator is `min(3, assumption
+   count)`, not a fixed 3 — a bet with only 1 or 2 assumptions needs exactly
+   those resolved, no more. Fails only when zero assumptions exist ("nothing
+   has been de-risked"). The client-side bar must never read red when this
+   check would already pass.
 4. **`conversations`** — evidence rows of kind `interview` or `roadshow`:
    total ≥ 5 AND rows with `data.problem_confirmed === true` ≥ 4 AND distinct
    `entity_id` values ≥ 3 (five meetings with one friendly school can't
@@ -38,7 +42,9 @@ says go.
    commitment, payment} AND non-empty `link`. Interest never counts; unlinked
    grades never count.
 6. **`sizing_both_ways`** — `market.obtainable` section `data.top_down` AND
-   `data.bottom_up` are both numbers.
+   `data.bottom_up` are both numbers, and both are DOLLAR figures (obtainable
+   revenue) — see `references/self-serve-research.md` for how each is
+   composed. Raw counts never belong in either field.
 7. **`rubric_scored`** — latest score per criterion exists for all 5 AND none
    is still `low` confidence.
 
@@ -49,7 +55,7 @@ Show this after EVERY evidence write and at the end of every session:
 ```
 research → planned gate
   [✓] market page 5/5        [✗] econ page 3/5 (missing: unit_economics, cases)
-  [✗] top assumptions 1/3 resolved
+  [✗] top assumptions 1/3 resolved (denominator = min(3, assumption count))
   [✗] conversations 2/5 · problem-confirmed 2/4 · institutions 2/3
   [✓] demand signals 2/2 linked exploration+
   [✓] sized both ways (top-down 1.4M / bottom-up 900K)

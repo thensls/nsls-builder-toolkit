@@ -38,13 +38,17 @@ The seven checks, one line each (numbers match `bet-research`'s
 
 1. `market_complete` — all 5 `market.*` sections non-empty.
 2. `econ_complete` — all 5 `econ.*` sections non-empty.
-3. `top_assumptions_resolved` — the 3 lowest-`priority` assumptions are
-   `validated` or `invalidated`.
+3. `top_assumptions_resolved` — the up-to-3 riskiest (lowest `priority`
+   value) assumptions present are `validated` or `invalidated`; denominator
+   is `min(3, assumption count)` — a bet with only 1 or 2 assumptions needs
+   exactly those resolved, not a padded /3.
 4. `conversations` — ≥5 interview/roadshow evidence rows, ≥4
    problem-confirmed, ≥3 distinct institutions.
 5. `demand_signals` — ≥2 linked rows at `exploration`/`commitment`/`payment`.
 6. `sizing_both_ways` — `market.obtainable` has both `data.top_down` and
-   `data.bottom_up` as numbers.
+   `data.bottom_up` as numbers, both DOLLAR figures (obtainable revenue) —
+   see `bet-research`'s `references/self-serve-research.md` for how each is
+   composed.
 7. `rubric_scored` — all 5 criteria scored, none still `low` confidence.
 
 If the checklist reads green but the bet was never advanced (an owner sat on
@@ -81,4 +85,6 @@ Always close with the single next-cheapest unlock. If the adversarial
 review hasn't run yet, say so explicitly alongside the checklist — the
 review isn't one of the four engine-checked boxes, but Step P4 makes it a
 required step before the advance offer regardless of what the checklist
-reads.
+reads. Check for a completed round by looking for an "Adversarial review
+round N" block in `exec.top_risks` — Step P4 writes one after every
+completed round, even a clean one with no accepted fixes.

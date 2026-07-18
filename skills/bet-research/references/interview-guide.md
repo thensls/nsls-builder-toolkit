@@ -164,6 +164,8 @@ writing it down.
 Most markets have 3–5 recurring stories. When new interviews stop changing
 the stories — same trigger, same workaround, same forces — you've heard
 enough. The ≥5-conversation gate (`references/gate-progress.md`) is the
-floor; saturation is the ceiling. Say it plainly: "stop interviewing when the
-stories stop changing," not "keep going until the gate number is hit and one
-more for luck."
+floor; saturation is the ceiling. The floor always stands — saturation only
+governs when to stop once you're already at or above 5 conversations across
+3 institutions, never a reason to stop short of it. Say it plainly: "stop
+interviewing when the stories stop changing, but never before the floor,"
+not "keep going until the gate number is hit and one more for luck."

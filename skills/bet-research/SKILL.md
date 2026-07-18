@@ -183,12 +183,16 @@ upgrade. Show the new rank position and confidence alongside the score.
 ## Step R7 — The gate drive
 
 End every session with the full checklist (`references/gate-progress.md`)
-and the single next-cheapest unlock. When all 7 checks read green, ask the
-owner: **advance to planned?**
+and the single next-cheapest unlock. When all 7 checks read green, draft the
+exact `rationale` text the advance call would carry and put it in front of
+the owner alongside the ask: **advance to planned with this rationale:
+"<drafted rationale>"?** This is a Tier 3 write — the confirm has to cover
+the whole call, not just the yes/no on the stage change; `rationale` is
+audit text that lands in the shared system same as `to_stage` does.
 
 - **Yes** → `advance_stage(bet_id, to_stage: "planned", rationale, via:
-  "bet-research")`. Show the returned `{ moved, gate: { checks } }` either
-  way.
+  "bet-research")` using the confirmed rationale text verbatim. Show the
+  returned `{ moved, gate: { checks } }` either way.
 - On `moved: true` → hand off to `bet-plan`.
 
 **The owner decides** — a green checklist is necessary, never sufficient.
