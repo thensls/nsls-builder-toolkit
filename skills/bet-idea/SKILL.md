@@ -269,12 +269,11 @@ idea ──bet-idea──▶ Idea-stage bet: full canvas + thesis (assumption/op
                     low-confidence rubric score
                   ──▶ human says yes ──▶ Research stage (attest.worth_researching)
                   ──▶ human says no  ──▶ stays Idea, or parked with rationale
-       owner picks up research ──▶ bet-research (Phase 4, interim: log_evidence
-                                    by hand, guided by the Customer Forces
-                                    material referenced here)
+       owner picks up research ──▶ bet-research (works the chain riskiest-first
+                                    toward the planned gate)
 ```
 
-- Upstream of: `bet-research` (not yet built — interim path noted above).
+- Upstream of: `bet-research` (research stage — hand the bet over after the gate).
 - Called by: `bet-studio`'s "add an idea" hand-off (carries over any concept
   already stated).
 - Writes to: the `strategy-studio` MCP server (Strategy Studio engine behind

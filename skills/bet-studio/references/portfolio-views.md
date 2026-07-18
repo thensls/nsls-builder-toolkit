@@ -57,23 +57,19 @@ this skill doesn't need.
 live → running → scaling. Within each cohort, preserve the `rank_score`
 ordering `get_stack_rank` already returned — don't re-rank across cohorts.
 
-**Confidence beside rank — as a stage proxy, not a per-criterion lookup.**
-The literal per-criterion `confidence` (`low`/`medium`/`high`) lives on
-`strategy_scores`, which only `get_bet` exposes — calling it for every bet in
-a listing is the N+1 pattern recipe 4 warns against. The engine's own gates
-make the stage a reliable proxy instead, so use it:
+**Confidence beside rank — read it off the row.** Both `get_stack_rank` and
+`list_bets` rows carry `confidence`: the server-computed aggregate — the
+MINIMUM confidence across the latest score per rubric criterion — `low` /
+`medium` / `high`, or `null` until all 5 criteria are scored. Render it
+plainly next to the rank — e.g. `#2 · rank 74 · confidence: low` — and
+render `null` as `unscored`. Never infer confidence from stage; the field is
+authoritative (a rank is only as trustworthy as its least-confident
+variable — 4×high + 1×low reads "low" by design). For per-criterion
+confidence and notes on one bet, drill in with `get_bet` (recipe 4).
 
-| Stage | Confidence label to show | Why |
-|---|---|---|
-| Idea | `low` | `bet-idea`'s rubric step always scores at low confidence by design — nothing has been tested yet. |
-| Research | `low → medium` (rising) | Assumptions are being resolved; not gated until the next stage. |
-| Planned, Live, Running, Scaling | `medium/high` | The `research → planned` gate requires all 5 rubric criteria re-scored at medium+ confidence — bets can't reach this cohort otherwise. |
-
-Render this plainly next to the rank — e.g. `#2 · rank 74 · confidence: low
-(idea-stage)` — so a low-confidence idea-stage sketch is never presented as
-directly comparable to an evidence-backed research-or-later bet. If a builder
-wants the exact per-criterion confidence and notes for one specific bet, drill
-in with `get_bet` (recipe 4) rather than inferring further from the listing.
+**Fallback (pre-engine-PR-#5 deployments only):** if a row has no
+`confidence` field at all (not even `null`), the engine predates the
+aggregate — render `—` rather than guessing from stage.
 
 **Graveyard last, collapsed.** Parked and killed bets (recipe 2) render after
 every active cohort, under a single "Graveyard" heading, collapsed to
