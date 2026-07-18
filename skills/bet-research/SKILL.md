@@ -83,6 +83,8 @@ planned-ready bet (or an honest "not yet, here's the cheapest unlock").
 - **Consume `staleAssumptions`** from every `update_section` response —
   announce it and re-interrogate the listed assumptions, never skip
   silently.
+- **Heartbeat every step.** Say what you're about to do, do it, then report
+  what happened before moving on. Never batch silently through the workflow.
 
 ## Entry: resume vs. route elsewhere
 

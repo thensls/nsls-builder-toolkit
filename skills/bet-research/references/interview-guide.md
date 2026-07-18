@@ -109,7 +109,7 @@ carries a source link (Fathom timestamp / roadshow report page) — unlinked
 grades are self-attested by the party that wants the bet to advance and
 never satisfy a gate. Internal enthusiasm is interest, never market demand.
 A fifty-dollar pre-order is worth more than fifty people saying "I'd
-totally use this." bet-review spot-audits grades against linked recordings.
+totally use this." bet-review will spot-audit grades against linked recordings (Phase 5, not yet built).
 ```
 
 Grade from what was said and done in the conversation, never from how warm

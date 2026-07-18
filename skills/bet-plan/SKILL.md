@@ -83,6 +83,8 @@ here's what's failing").
 - **Consume `staleAssumptions`** from every `update_section` response —
   announce it and re-interrogate the listed assumptions, never skip
   silently.
+- **Heartbeat every step.** Say what you're about to do, do it, then report
+  what happened before moving on. Never batch silently through the workflow.
 
 ## Entry: resume vs. route elsewhere
 
@@ -193,8 +195,11 @@ live?**
   left active.
 
 Force is available only to `STRATEGY_FORCE_APPROVERS`, with a mandatory
-rationale — it exists for a real edge case, never suggest it as the easy
-path around a red checklist or an unresolved review.
+rationale. It is invoked via the `advance_stage` tool with `force: true` and a
+`rationale` argument — the caller's email must be in `STRATEGY_FORCE_APPROVERS`
+for the override to succeed. This skill never invokes it; an approver does so
+deliberately, outside this workflow. It exists for a real edge case, never
+suggest it as the easy path around a red checklist or an unresolved review.
 
 ## The pipeline (where this sits)
 
