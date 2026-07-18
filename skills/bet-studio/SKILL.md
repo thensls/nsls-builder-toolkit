@@ -42,8 +42,8 @@ lifecycle question, reads the live portfolio, and hands off — the real work
 | Builder wants to… | Hand off to | Moves the bet |
 |---|---|---|
 | **Add an idea** | `bet-idea` (carry over any concept already stated) | → Idea |
-| **Research a bet** | *Phase 4 `bet-research` — not built.* Interim: bet-studio stays read-only and self-contained — it drafts the exact `log_evidence` call (`bet_id`, `kind`, `title`, `signal_strength` where applicable, `link`, `via`, plus `data.problem_confirmed`, `entity_type`, `entity_id` for customer-interview evidence — the research gate counts problem-confirmed conversations across DISTINCT institutions, so omitting these logs evidence that contributes nothing to stage progression) fully filled in, and the human fires it themselves. `bet-idea` creates or RESUMES Idea-stage bets; it won't operate on bets already at Research+. For the interview method itself: the Customer Forces method lives in `bet-idea`'s reference material — consult it, but the call is drafted here. | Idea → Research |
-| **Plan economics / proof plan** | *Phase 4 `bet-plan` — not built.* Interim: say plainly it's coming; there's no guided path yet. | Research → Planned |
+| **Research a bet** | `bet-research` (works the assumption chain riskiest-first: self-serve market research, warm-channel interviews via Customer Forces, sizing both directions, roadshow sprints — drives the research→planned gate; hand off with `get_bet` context) | Research → Planned |
+| **Plan economics / proof plan** | `bet-plan` (2026–2028 model with downside/base/upside, execution & risk, sell-first channel-aware experiment with three thresholds, adversarial review loop — drives the planned→live gate; hand off with `get_bet` context) | Planned → Live |
 | **Portfolio review** | *Phase 5 `bet-review` — not built.* Interim: render the stack rank + portfolio overview yourself — `get_stack_rank` plus `list_bets` (see `references/portfolio-views.md`) — then drill into `get_bet` only for the 1–3 bets the human picks, to check that bet's status update and flag invalidated assumptions. Per-bet health across the whole board arrives with the Phase 3 UI / a future bulk endpoint — the engine has no bulk status tool today, so don't loop `get_bet` over the full portfolio. | n/a (cross-cutting) |
 | **Run experiments** | *Phase 5 `bet-run` — not built.* Interim: say plainly it's coming. | Live → Running → Scaling |
 
@@ -68,9 +68,11 @@ lifecycle question, reads the live portfolio, and hands off — the real work
    re-creating — if the canvas itself isn't done; if the canvas is done
    and the owner judges it worth a research slot, draft the
    `advance_stage(bet_id, to_stage: "research", attest: { worth_researching:
-   true })` call for the OWNER to fire (bet-studio stays read-only — same
-   draft-don't-fire rule as `log_evidence`), then show the returned gate
-   checklist. A bet already `planned`+ has nothing left for `bet-idea` to do. A request that duplicates an existing bet (same name/
+   true })` call for the OWNER to fire (bet-studio stays read-only — it
+   drafts the call, the owner fires it), then show the returned gate
+   checklist. A bet at Research goes to `bet-research`; at Planned, to
+   `bet-plan` — each loads `get_bet` context on hand-off. A bet already
+   `planned`+ has nothing left for `bet-idea` to do. A request that duplicates an existing bet (same name/
    one-liner in the listing) surfaces the existing one before anything new
    gets created. When intent and stage don't line up, say so and route to what
    actually fits.
@@ -104,5 +106,5 @@ Kevin, SLT authors only) and suggest running `/connect`.
 ## Reference index
 - `references/portfolio-views.md` — tool-call recipes and rendering rules for
   the stack rank, stage grouping, and graveyard.
-- Hand-off targets: `bet-idea` (built), `bet-research`, `bet-plan`,
-  `bet-review`, `bet-run` (Phase 4/5, not yet built).
+- Hand-off targets: `bet-idea`, `bet-research`, `bet-plan` (built);
+  `bet-review`, `bet-run` (Phase 5, not yet built).

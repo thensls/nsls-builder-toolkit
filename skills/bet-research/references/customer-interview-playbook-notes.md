@@ -2,13 +2,6 @@
 
 > Copied from thensls/market-exploration docs/plans, 2026-07-18.
 
-**Saved by Kevin's request (2026-07-17).** Source PDF: committed at
-`frontend/public/strategy/how-to-talk-to-customers.pdf` — the /strategy UI
-(Phase 3) must link this from the evidence/interview surfaces so anyone
-logging a buyer conversation has the method one click away. The Phase 2/4
-skills (`bet-idea` diagnostic, `bet-research` interview guides) implement
-this methodology.
-
 Playbook: "The AI-Native Playbooks № 3", LEANSTACK / Ash Maurya
 (leanspark.ai). 18 pages.
 
@@ -93,6 +86,3 @@ the workaround they didn't mention is still your job.
 - **Saturation rule (3–5 stories)** complements the ≥5-conversation gate:
   the gate is the floor, saturation is the ceiling — bet-research should
   say "stop interviewing when stories stop changing."
-- **UI requirement (Phase 3):** link the PDF at
-  `/strategy/how-to-talk-to-customers.pdf` from the bet detail evidence
-  panel and anywhere an interview is logged.

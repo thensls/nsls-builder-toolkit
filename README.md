@@ -77,6 +77,8 @@ The Strategy Studio skills let you capture, interrogate, and stress-test busines
 |-------|-------------|
 | **/bet-studio** | Portfolio front door and router — surface all open bets, filter by status/owner, navigate to detail |
 | **/bet-idea** | Capture, interrogate, stress-test a business bet and push it into the funnel |
+| **/bet-research** | Work a research-stage bet riskiest-assumption-first — self-serve market research, Customer Forces interviews, sizing both directions, roadshow sprints — to the research→planned gate |
+| **/bet-plan** | Harden economics (downside/base/upside), execution & risk, and a sell-first proof plan with thresholds — then an adversarial review — to the planned→live gate |
 
 **Setup:** Tokens are minted by Kevin — one per person, SLT authors only. To enable these skills, set your token in `~/.zshrc`:
 
