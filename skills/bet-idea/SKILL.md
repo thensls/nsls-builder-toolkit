@@ -9,7 +9,8 @@ description: >-
   "business model idea", "lean canvas this", "sketch a business", "should we
   sell X to Y", "capture this idea", "should we sell this thing we built",
   "we built this for ourselves — is it a product", "productize",
-  "commercialize an internal tool".
+  "commercialize an internal tool", "finish my bet", "continue my bet idea",
+  "resume a bet", "pick up where I left off on the bet".
 ---
 
 # bet-idea
@@ -98,6 +99,20 @@ low-confidence score.
   scaffolding unless they say to keep it.
 - Creating a new market/segment/buyer via `upsert_taxonomy` without saying so
   first. → Shared-system tier. Confirm, then write.
+
+## Entry: resume vs. new
+
+**Trigger:** the user names an existing bet, or bet-studio hands one over with
+a `bet_id`. Call `get_bet` first — stage must be `idea` and status `active`;
+anything else, send it back to bet-studio with one sentence why. **Skip
+`create_bet` entirely.** Inventory what's incomplete (empty canvas/thesis
+sections, missing assumptions, unscored rubric), announce the inventory
+(heartbeat), then continue the normal workflow from the earliest incomplete
+step, writing against the existing `bet_id`. Ask the origin question only if
+it can't be inferred from existing content.
+
+**Starting a genuinely new bet:** before `create_bet`, check `list_bets` for a
+same-name/one-liner match and surface it as a resume candidate first.
 
 ## Step 1 — Sketch capture
 
