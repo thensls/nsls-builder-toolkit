@@ -182,10 +182,13 @@ Per `references/adversarial-review.md`:
    never its prose (`exec.top_risks` content is contractually exactly the
    top five risks — audit blocks must not pollute it):
    `update_section(bet_id, "exec.top_risks", data: { review_log:
-   [...existing entries, { round: N, score: X, verdict: "<one line>",
+   [...existing entries, { round: N, scores: { completeness: X,
+   consistency: Y, evidence: Z }, verdict: "<one line>",
    unresolved: ["<dissent>", ...] }] }, summary: "adversarial review
-   record")` — read the section first and append to its existing
-   `data.review_log` array, leaving `content_md` untouched. This is the
+   record", via: "bet-plan")` — all three axis scores are stored (resume
+   sessions need each of them for the per-axis <5 board-readiness rule in
+   Step P5, not a blended number); read the section first and append to
+   its existing `data.review_log` array, leaving `content_md` untouched. This is the
    only trace a clean round leaves in `get_bet` — skip it and a resumed
    session has no way to tell the review ran, and will re-run it
    needlessly.
