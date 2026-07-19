@@ -15,8 +15,8 @@ description: >-
 
 ## SAFETY: THREE-TIER PERMISSION MODEL
 
-1. **Read-only** — `list_bets`, `get_stack_rank`, `get_bet`, `list_taxonomy`.
-   Everything this skill does. Free, no confirmation needed.
+1. **Read-only** — `list_bets`, `get_stack_rank`, `get_bet`, `list_taxonomy`,
+   `list_moves`. Everything this skill does. Free, no confirmation needed.
 2. **Configuration / new-content** — none. This skill is a **router**; it never
    drafts canvas content, sections, or scores itself. Any authoring happens in
    the sub-skill it hands off to, under that skill's own tier for it.
@@ -46,12 +46,13 @@ lifecycle question, reads the live portfolio, and hands off — the real work
 | **Plan economics / proof plan** | `bet-plan` (2026–2028 model with downside/base/upside, execution & risk, sell-first channel-aware experiment with three thresholds, adversarial review loop — drives the planned→live gate; hand off with `get_bet` context) | Planned → Live |
 | **Portfolio review** | *Phase 5 `bet-review` — not built.* Interim: render the stack rank + portfolio overview yourself — `get_stack_rank` plus `list_bets` (see `references/portfolio-views.md`) — then drill into `get_bet` only for the 1–3 bets the human picks, to check that bet's status update and flag invalidated assumptions. Per-bet health across the whole board arrives with the Phase 3 UI / a future bulk endpoint — the engine has no bulk status tool today, so don't loop `get_bet` over the full portfolio. | n/a (cross-cutting) |
 | **Run experiments** | *Phase 5 `bet-run` — not built.* Interim: say plainly it's coming. | Live → Running → Scaling |
+| **"What should I work on?"** | Cross-bet to-dos, not a single bet — call `list_moves` and render `/strategy/moves` (todo/active first). A **move** is one piece of work that advances more than one bet at once ("build once, deploy everywhere" — e.g. one lead scrape + campaign to career-services buyers that serves several bets' hypotheses through relationships we already have). Point the builder at the move's linked bets and owner before routing anywhere else. | n/a (cross-cutting) |
 
 ## Flow
 
 1. **Ask the lifecycle question:** *"What would you like to do — add an idea,
-   research a bet, plan its economics, review the portfolio, or track a live
-   bet's experiments?"*
+   research a bet, plan its economics, review the portfolio, track a live
+   bet's experiments, or see what cross-bet moves are ready to pick up?"*
 2. **Show the live portfolio** (skip only when adding a brand-new idea with
    nothing to compare against). Call `get_stack_rank` for active bets and
    `list_bets` for the graveyard, grouped by stage cohort with each bet's
