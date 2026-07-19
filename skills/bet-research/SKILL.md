@@ -21,9 +21,10 @@ description: >-
    Free, no confirmation needed.
 2. **Configuration / new-content** — `log_evidence`, `update_section`
    (`market.*`/`econ.*` on this bet), `upsert_assumption`,
-   `resolve_assumption`, `score_rubric`. Say out loud what's being written as
-   you go — which field or evidence kind, what tag or grade — no per-call
-   confirmation.
+   `resolve_assumption`, `score_rubric`, `upsert_move`, `link_move_bet`,
+   `log_move_evidence`. Say out loud what's being written as you go — which
+   field or evidence kind, what tag or grade, or which bets a move links —
+   no per-call confirmation.
 3. **Write to shared systems** — `save_targets` (names real schools onto a
    rep-visible call list), `advance_stage`, `set_status`, `upsert_taxonomy`.
    **Confirm the exact values with the human before writing.**
@@ -85,6 +86,16 @@ planned-ready bet (or an honest "not yet, here's the cheapest unlock").
   silently.
 - **Heartbeat every step.** Say what you're about to do, do it, then report
   what happened before moving on. Never batch silently through the workflow.
+- **Spot leverage moves.** When research turns up ≥2 bets sharing a buyer,
+  a segment, or an assumption — same career-services buyer, same "will they
+  reply to a cold campaign" question — that's a **move**, not two separate
+  research threads: propose `upsert_move` + `link_move_bet` on each bet,
+  and make the note name the specific hypothesis THAT bet is testing (not
+  just the shared taxonomy anchor). When one conversation, campaign, or
+  result de-risks several linked bets at once, log it **ONCE** via
+  `log_move_evidence` — it fans out to every linked bet's evidence
+  automatically. Never hand-log the same result against each bet
+  separately; that silently doubles (or triples) a single data point.
 
 ## Entry: resume vs. route elsewhere
 
