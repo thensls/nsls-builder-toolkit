@@ -93,6 +93,14 @@ async function streamFromProxy(body, onDelta, signal) {
 // Render + wire
 // ---------------------------------------------------------------------------
 function render() {
+  // Empty track (no substeps anywhere — e.g. a fresh /new-track starter draft):
+  // screens[0] is undefined and interpolate would render the literal string
+  // "undefined". Show an honest empty state instead.
+  if (subs.length === 0) {
+    root.innerHTML = `<p class="text-mocha" style="text-align:center">No screens in this version yet.</p>`;
+    bar.style.width = "0%";
+    return;
+  }
   root.innerHTML = interpolate(screens[state.i], state.answers); // fill {slug} live
   bar.style.width = progressPct(state.i, subs.length) + "%";
   populateInheritedOptions(); // narrowing pattern: build options from a prior answer

@@ -138,23 +138,33 @@ export function resolveAnswerIds(track, answers = {}) {
   if (!step) return [];
   const subs = step.substeps || step.subSteps || [];
 
-  // text -> answerId, scoped to this step's options
-  const textToId = new Map();
-  for (const sub of subs) {
-    for (const o of sub.options || []) {
-      if (o && typeof o === "object" && o.answerId != null && o.text != null) {
-        textToId.set(o.text, o.answerId);
-      }
-    }
-  }
-  // Known option texts, longest first, so greedy matching prefers the most
-  // specific text (avoids a shorter text shadowing a longer one it prefixes).
-  const knownTexts = [...textToId.keys()].sort((a, b) => b.length - a.length);
-
+  // Each answer is keyed by ITS substep's slug, so the text -> answerId map is
+  // scoped PER SUBSTEP (built from that substep's own options only). A single
+  // step-global map collided when two substeps share an option text (e.g. two
+  // Likert questions both offering "Agree") — the later substep's answerId
+  // overwrote the earlier's and silently mis-scored. The greedy multi-select
+  // branch consults the same map/knownTexts, so it's scoped identically.
+  //
+  // Keys are TRIMMED to match matchOptionTexts, which compares against a
+  // trimmed answer string — trimming BOTH sides is the semantics that can't
+  // drop answers: an option authored with stray leading/trailing whitespace
+  // still resolves, whereas an untrimmed key could never match the trimmed
+  // answer and would silently drop it from answerIds. (Two options in the SAME
+  // substep differing only by surrounding whitespace collapse to one key — an
+  // authoring error, not a case the player can produce.)
   const ids = [];
   for (const sub of subs) {
     const raw = answers[sub.slug];
     if (raw == null || raw === "") continue;
+    const textToId = new Map();
+    for (const o of sub.options || []) {
+      if (o && typeof o === "object" && o.answerId != null && o.text != null) {
+        textToId.set(String(o.text).trim(), o.answerId);
+      }
+    }
+    // Known option texts, longest first, so greedy matching prefers the most
+    // specific text (avoids a shorter text shadowing a longer one it prefixes).
+    const knownTexts = [...textToId.keys()].sort((a, b) => b.length - a.length);
     for (const id of matchOptionTexts(String(raw), textToId, knownTexts)) {
       ids.push(id);
     }

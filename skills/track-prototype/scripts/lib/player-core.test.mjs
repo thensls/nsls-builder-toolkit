@@ -30,3 +30,20 @@ test("progressPct is 0 at first and 100 at last", () => {
   assert.equal(progressPct(0, 3), 0);
   assert.equal(progressPct(2, 3), 100);
 });
+
+test("clampIndex: empty screen list clamps to 0, never -1 (screens[-1] → \"undefined\")", () => {
+  assert.equal(clampIndex(0, 0), 0);
+  assert.equal(clampIndex(5, 0), 0);
+  assert.equal(clampIndex(-3, 0), 0);
+});
+
+test("nextIndex: empty screen list yields 0, never -1 (advance() on an empty track)", () => {
+  // Regression: nextIndex(0, 0) was Math.min(1, -1) = -1 — advance() assigned
+  // it to state.i and render() painted screens[-1] as the string "undefined".
+  assert.equal(nextIndex(0, 0), 0);
+  assert.equal(nextIndex(3, 0), 0);
+});
+
+test("flattenSubsteps: /new-track starter shape (1 step, 0 substeps) flattens to []", () => {
+  assert.deepEqual(flattenSubsteps({ steps: [{ slug: "s1", substeps: [] }] }), []);
+});

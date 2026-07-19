@@ -172,6 +172,72 @@ test("resolveAnswerIds recovers a multi-select whose members themselves contain 
   assert.deepEqual(ids.sort(), ["a1", "a2"]);
 });
 
+test("resolveAnswerIds: option text with stray surrounding whitespace still resolves", () => {
+  // Regression: textToId used to key on the UNTRIMMED option text while the
+  // matcher compares a TRIMMED answer — the answer silently dropped.
+  const track = {
+    steps: [
+      {
+        slug: "discover-your-personality",
+        substeps: [
+          {
+            slug: "q1",
+            options: [
+              { text: "  Aim high  ", answerId: "a1" },
+              { text: "Stay grounded", answerId: "a2" },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  assert.deepEqual(resolveAnswerIds(track, { q1: "Aim high" }), ["a1"]);
+  assert.deepEqual(resolveAnswerIds(track, { q1: "  Aim high  " }), ["a1"]);
+  assert.deepEqual(resolveAnswerIds(track, { q1: "Stay grounded" }), ["a2"]);
+});
+
+test("resolveAnswerIds: multi-select join still recovers with trimmed keys", () => {
+  const track = {
+    steps: [
+      {
+        slug: "discover-your-personality",
+        substeps: [
+          {
+            slug: "q1",
+            options: [
+              { text: "Aim for more abstract, exciting possibilities", answerId: "a1" },
+              { text: " Keep it practical ", answerId: "a2" },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  assert.deepEqual(
+    resolveAnswerIds(track, { q1: "Aim for more abstract, exciting possibilities, Keep it practical" }),
+    ["a1", "a2"],
+  );
+});
+
+test("resolveAnswerIds: shared option text across substeps resolves to EACH substep's own answerId", () => {
+  // Regression (Macroscope 3609264805): one global text->id map meant a later
+  // substep's "Agree" overwrote an earlier substep's — silently mis-scoring.
+  const track = {
+    steps: [
+      {
+        slug: "discover-your-personality",
+        substeps: [
+          { slug: "q1", options: [{ text: "Agree", answerId: "q1-agree" }, { text: "Disagree", answerId: "q1-disagree" }] },
+          { slug: "q2", options: [{ text: "Agree", answerId: "q2-agree" }, { text: "Disagree", answerId: "q2-disagree" }] },
+        ],
+      },
+    ],
+  };
+  assert.deepEqual(resolveAnswerIds(track, { q1: "Agree", q2: "Agree" }), ["q1-agree", "q2-agree"]);
+  // Greedy multi-select branch must be scoped the same way.
+  assert.deepEqual(resolveAnswerIds(track, { q1: "Agree, Disagree" }), ["q1-agree", "q1-disagree"]);
+});
+
 test("buildCards mirrors AssessmentResults content (title/result/description per framework)", () => {
   const r = scoreAssessment({ answerIds: ["a1", "a2"], weights: WEIGHTS, types: TYPES });
   const cards = buildCards(r, TYPES);
