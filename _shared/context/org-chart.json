@@ -235,7 +235,7 @@
   {
     "name": "Lauren Prentiss",
     "title": "Senior Product Manager",
-    "manager": "Heather Darnell",
+    "manager": "Chelsea Byers",
     "email": "lprentiss@nsls.org",
     "slack": "U08RN7X685A",
     "department": "Product",
@@ -603,7 +603,6 @@
     "slack": "U03RR8TKEDA",
     "department": "Human Resources",
     "manages": [
-      "Heather Darnell",
       "Joanne Sandoval"
     ]
   },
@@ -619,14 +618,13 @@
   {
     "name": "Heather Darnell",
     "title": "Senior Director, Human Resources",
-    "manager": "Jenna Fontanez",
+    "manager": "Cory Capoccia",
     "email": "hdarnell@nsls.org",
     "slack": "U03D1HK963E",
     "department": "Human Resources",
     "manages": [
       "Danielle Mariani",
       "Jenna Fontanez",
-      "Lauren Prentiss",
       "Lillian Collazo"
     ]
   },
@@ -965,7 +963,7 @@
     "title": "Data Analyst",
     "manager": "Jordyn Tannenbaum",
     "email": "ahuang@nsls.org",
-    "slack": "",
+    "slack": "U0BHT5B0S5B",
     "department": "Business Intelligence",
     "manages": []
   },
@@ -1051,7 +1049,9 @@
     "email": "cbyers@nsls.org",
     "slack": "U0AT9R3DAT1",
     "department": "Operations",
-    "manages": []
+    "manages": [
+      "Lauren Prentiss"
+    ]
   },
   {
     "name": "Whitney Jett",
@@ -1069,7 +1069,9 @@
     "email": "ccapoccia@nsls.org",
     "slack": "U097DDH3371",
     "department": "Executive",
-    "manages": []
+    "manages": [
+      "Heather Darnell"
+    ]
   },
   {
     "name": "Gary Tuerack",

@@ -1,11 +1,11 @@
 # NSLS Org Chart
-_Last synced: 2026-07-13_
+_Last synced: 2026-07-20_
 
 ## Business Intelligence
 
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
-| Aner Huang | Data Analyst | Jordyn Tannenbaum | ahuang@nsls.org |  |
+| Aner Huang | Data Analyst | Jordyn Tannenbaum | ahuang@nsls.org | U0BHT5B0S5B |
 | Jordyn Tannenbaum | Head of Data | Adam Stone | jtannenbaum@nsls.org | U0A5FNH2A01 |
 | Rumzy Khalil | Data Engineer | Jordyn Tannenbaum | rkhalil@nsls.org | U0B1ZU3CC2C |
 
@@ -78,7 +78,7 @@ _Last synced: 2026-07-13_
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
 | Danielle Mariani | Senior Culture and Organizational Strategist | Heather Darnell | dmariani@nsls.org | UHXFN781L |
-| Heather Darnell | Senior Director, Human Resources | Jenna Fontanez | hdarnell@nsls.org | U03D1HK963E |
+| Heather Darnell | Senior Director, Human Resources | Cory Capoccia | hdarnell@nsls.org | U03D1HK963E |
 | Jenna Fontanez | Director, Talent Management | Heather Darnell | jfontanez@nsls.org | U03RR8TKEDA |
 | Joanne Sandoval | Early Talent Acquisition Specialist | Jenna Fontanez | jsandoval@nsls.org | U04UQR9SBFH |
 | Lillian Collazo | HR Generalist | Heather Darnell | lcollazo@nsls.org | U023CU7BTSM |
@@ -150,7 +150,7 @@ _Last synced: 2026-07-13_
 | Angelica Evans | Technical Product Manager | Kevin Prentiss | aevans@nsls.org | U02EQ4E2WDC |
 | Davo Wood | AI Support | Kevin Prentiss | davowood@nsls.org | U0B2B0L7858 |
 | Jana Amsellem | AI Product Architect | Kevin Prentiss | rakasha@nsls.org | U070WE56UU9 |
-| Lauren Prentiss | Senior Product Manager | Heather Darnell | lprentiss@nsls.org | U08RN7X685A |
+| Lauren Prentiss | Senior Product Manager | Chelsea Byers | lprentiss@nsls.org | U08RN7X685A |
 | Trina Limpert | Product Manager | Kevin Prentiss | tlimpert@nsls.org | U0AJ5H67WET |
 | Tyler Lagaly | Senior Product Designer | Kevin Prentiss | tlagaly@nsls.org | U09CYKGQZB2 |
 
