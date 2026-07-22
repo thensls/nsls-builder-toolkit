@@ -187,14 +187,12 @@ Do NOT check for compound-engineering — it's an optional power-up.
 
 ## Step 4: Register Windows Hooks (Windows only, ~10 sec)
 
-The canonical `hooks/hooks.json` uses `python3` (SessionStart) and `bash`
-(PreToolUse skill logging) — neither runs natively on Windows. `install.ps1` in
-the toolkit root registers the PowerShell equivalents (`session-start.ps1`,
-`skill-event.ps1`) in `~/.claude/settings.json`.
-
-> A fuller native PowerShell installer (clone + enable + MCP + pointers +
-> install-event, mirroring `install.sh`) is planned; until it ships, a Windows
-> builder installs via the bash command and then runs `install.ps1` for hooks.
+On Windows the whole install runs through `install.ps1` (a full native
+PowerShell installer mirroring `install.sh` — clone, enable, hooks, install-event,
+MCP, pointers), because the bundled `hooks/hooks.json` uses `python3`/`bash`
+which Windows lacks. A Windows builder installs with the PowerShell command
+(see the guide), not `curl … | bash`. If they already installed but the hooks
+seem missing, re-running `install.ps1` re-registers them idempotently.
 
 Detect platform:
 
