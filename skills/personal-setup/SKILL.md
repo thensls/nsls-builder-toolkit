@@ -40,7 +40,10 @@ non-empty dir would otherwise fail and silently no-op):
 
 ```bash
 PT="$HOME/.claude/local-plugins/nsls-personal-toolkit"
-REPO_URL="https://github.com/thensls/nsls-personal-toolkit.git"
+# Repo/branch overridable for fork testing (matches install.sh's
+# NSLS_PERSONAL_REPO). Defaults are production.
+REPO_URL="${NSLS_PERSONAL_REPO:-https://github.com/thensls/nsls-personal-toolkit.git}"
+PERSONAL_BRANCH="${NSLS_PERSONAL_BRANCH:-main}"
 
 if [ -d "$PT/.git" ]; then
   git -C "$PT" pull --ff-only 2>/dev/null || true
@@ -51,7 +54,7 @@ else
   if [ -f "$PT/.env" ]; then SAVED_ENV="$(mktemp)"; cp "$PT/.env" "$SAVED_ENV"; fi
   rm -rf "$PT"
   mkdir -p "$(dirname "$PT")"
-  if git clone "$REPO_URL" "$PT" --quiet; then
+  if git clone --branch "$PERSONAL_BRANCH" "$REPO_URL" "$PT" --quiet; then
     [ -n "$SAVED_ENV" ] && cp "$SAVED_ENV" "$PT/.env"
     echo "Personal toolkit installed."
   else
