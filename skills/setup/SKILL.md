@@ -102,7 +102,7 @@ if [ -n "$NEW_EMAIL" ] && [ "$PREV_EMAIL" != "$NEW_EMAIL" ]; then
   # the emails match or no provisional row exists, so this is safe to re-run.
   # Best-effort — a 404/timeout must never block setup.
   curl -s --max-time 40 -X POST \
-    https://web-production-6281e.up.railway.app/reconcile-builder \
+    ${NSLS_TRACKER_URL:-https://web-production-6281e.up.railway.app}/reconcile-builder \
     -H 'Content-Type: application/json' \
     -d "{\"previous_email\":\"$PREV_EMAIL\",\"new_email\":\"$NEW_EMAIL\"}" \
     >/dev/null 2>&1 || true

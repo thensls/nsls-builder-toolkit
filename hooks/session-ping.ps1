@@ -5,7 +5,7 @@
 # latency (15-27s) never delays session start. Fails silently; logs any
 # credit/stage messages to nsls-session-ping.log (not shown inline).
 $ErrorActionPreference = 'SilentlyContinue'
-$ProxyUrl = 'https://web-production-6281e.up.railway.app'
+$ProxyUrl = if ($env:NSLS_TRACKER_URL) { $env:NSLS_TRACKER_URL } else { 'https://web-production-6281e.up.railway.app' }
 $LogFile  = Join-Path $env:USERPROFILE '.claude\hooks\nsls-session-ping.log'
 
 function Read-EnvValue {

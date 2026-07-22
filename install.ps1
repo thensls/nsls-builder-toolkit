@@ -43,7 +43,7 @@ $SkillsDir = Join-Path $ConfigDir 'skills'
 # before it merges to thensls/main). Defaults are production.
 $RepoUrl    = if ($env:NSLS_TOOLKIT_REPO) { $env:NSLS_TOOLKIT_REPO } else { 'https://github.com/thensls/nsls-builder-toolkit.git' }
 $RepoBranch = if ($env:NSLS_TOOLKIT_BRANCH) { $env:NSLS_TOOLKIT_BRANCH } else { 'main' }
-$Tracker   = 'https://web-production-6281e.up.railway.app'
+$Tracker   = if ($env:NSLS_TRACKER_URL) { $env:NSLS_TRACKER_URL } else { 'https://web-production-6281e.up.railway.app' }
 
 Write-Host ""
 Write-Host "=== NSLS Builder Toolkit (Windows) ==="

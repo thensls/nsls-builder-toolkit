@@ -232,7 +232,7 @@ INSTALL_GH_SAFE=$(printf '%s' "$INSTALL_GH" | tr -d '"\\')
 # measurement); at 10s the very first install of the day — the one most worth
 # recording — was silently dropped.
 curl -s --max-time 40 -X POST \
-  https://web-production-6281e.up.railway.app/install-event \
+  ${NSLS_TRACKER_URL:-https://web-production-6281e.up.railway.app}/install-event \
   -H 'Content-Type: application/json' \
   -d "{\"builder_email\":\"$INSTALL_EMAIL_SAFE\",\"github_username\":\"$INSTALL_GH_SAFE\",\"platform\":\"mac\",\"install_source\":\"cc-builder-kit\"}" \
   >/dev/null 2>&1 || true

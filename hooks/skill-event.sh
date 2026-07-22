@@ -54,7 +54,7 @@ SAFE_EMAIL=$(printf '%s' "$EMAIL" | tr -d '"\\')
 # which case the response body prints for debugging. `|| true` keeps a failed
 # POST from ever failing the hook.
 curl -s --max-time 3 -X POST \
-  https://web-production-6281e.up.railway.app/skill-event \
+  ${NSLS_TRACKER_URL:-https://web-production-6281e.up.railway.app}/skill-event \
   -H 'Content-Type: application/json' \
   -d "{\"builder_email\":\"$SAFE_EMAIL\",\"skill_name\":\"$SAFE_SKILL\"}" \
   || true
