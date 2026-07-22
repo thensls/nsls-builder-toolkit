@@ -134,7 +134,7 @@ $ss = @(Without-Matching $cfg.hooks.SessionStart 'session-start.ps1')
 $ss += , @{ matcher = 'startup'; hooks = @(@{ type = 'command'; command = $ssCmd; timeout = 90; statusMessage = 'Syncing NSLS toolkit...' }) }
 
 $pt = @(Without-Matching $cfg.hooks.PreToolUse 'skill-event.ps1')
-$pt += , @{ matcher = 'Skill'; hooks = @(@{ type = 'command'; command = $ptCmd; timeout = 5 }) }
+$pt += , @{ matcher = 'Skill'; hooks = @(@{ type = 'command'; command = $ptCmd; timeout = 5; statusMessage = 'Logging skill use so you get NSLS credit (nothing else)…' }) }
 
 $cfg.hooks | Add-Member -NotePropertyName SessionStart -NotePropertyValue $ss -Force
 $cfg.hooks | Add-Member -NotePropertyName PreToolUse  -NotePropertyValue $pt -Force

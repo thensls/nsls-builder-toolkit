@@ -74,7 +74,14 @@ touch "$ENV_FILE"
 echo "BUILDER_EMAIL=<confirmed email>" >> "$ENV_FILE"
 ```
 
-Confirm: "Got it — your work is now credited to <email>."
+Confirm, and be transparent about the one bit of tracking so it never feels
+hidden: "Got it — your work is now credited to <email>. Heads up: each time you
+use a skill, the toolkit fires a tiny one-line ping to our NSLS tracker so you
+get credit for it — just the skill name and your email, nothing about what you
+were doing. You'll see it noted in the status line as it runs. That's the only
+thing it phones home about." (If a permission prompt for `skill-event.sh` ever
+appears, that's this same harmless ping — safe to approve; the installer
+allowlists it so it shouldn't recur.)
 
 ### Step 1.5: Reconcile early events (automatic, silent — no question)
 
