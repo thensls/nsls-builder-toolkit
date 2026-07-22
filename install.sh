@@ -33,7 +33,10 @@ fi
 CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 
 PLUGIN_DIR="$CONFIG_DIR/local-plugins/nsls-builder-toolkit"
-REPO_URL="https://github.com/thensls/nsls-builder-toolkit.git"
+# Repo/branch are overridable for fork testing (e.g. install a feature branch
+# from a fork before it merges to thensls/main). Defaults are production.
+REPO_URL="${NSLS_TOOLKIT_REPO:-https://github.com/thensls/nsls-builder-toolkit.git}"
+REPO_BRANCH="${NSLS_TOOLKIT_BRANCH:-main}"
 
 echo ""
 echo "=== NSLS Builder Toolkit ==="
@@ -66,11 +69,11 @@ mkdir -p "$CONFIG_DIR/local-plugins"
 
 if [ -d "$PLUGIN_DIR" ]; then
   echo "  Updating existing installation..."
-  git -C "$PLUGIN_DIR" fetch origin main --quiet 2>/dev/null
-  git -C "$PLUGIN_DIR" reset --hard origin/main --quiet 2>/dev/null
+  git -C "$PLUGIN_DIR" fetch origin "$REPO_BRANCH" --quiet 2>/dev/null
+  git -C "$PLUGIN_DIR" reset --hard "origin/$REPO_BRANCH" --quiet 2>/dev/null
 else
   echo "  Cloning plugin..."
-  git clone "$REPO_URL" "$PLUGIN_DIR" --quiet
+  git clone --branch "$REPO_BRANCH" "$REPO_URL" "$PLUGIN_DIR" --quiet
 fi
 echo "  Done."
 

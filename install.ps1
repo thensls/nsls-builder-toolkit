@@ -39,7 +39,10 @@ $PluginDir = Join-Path $LocalDir  'nsls-builder-toolkit'
 $HooksDir  = Join-Path $PluginDir 'hooks'
 $Settings  = Join-Path $ConfigDir 'settings.json'
 $SkillsDir = Join-Path $ConfigDir 'skills'
-$RepoUrl   = 'https://github.com/thensls/nsls-builder-toolkit.git'
+# Repo/branch overridable for fork testing (install a feature branch from a fork
+# before it merges to thensls/main). Defaults are production.
+$RepoUrl    = if ($env:NSLS_TOOLKIT_REPO) { $env:NSLS_TOOLKIT_REPO } else { 'https://github.com/thensls/nsls-builder-toolkit.git' }
+$RepoBranch = if ($env:NSLS_TOOLKIT_BRANCH) { $env:NSLS_TOOLKIT_BRANCH } else { 'main' }
 $Tracker   = 'https://web-production-6281e.up.railway.app'
 
 Write-Host ""
@@ -67,11 +70,11 @@ Write-Host "Step 1: Installing org skills..."
 New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null
 if (Test-Path (Join-Path $PluginDir '.git')) {
     Write-Host "  Updating existing installation..."
-    & git -C $PluginDir fetch origin main --quiet 2>$null
-    & git -C $PluginDir reset --hard origin/main --quiet 2>$null
+    & git -C $PluginDir fetch origin $RepoBranch --quiet 2>$null
+    & git -C $PluginDir reset --hard "origin/$RepoBranch" --quiet 2>$null
 } else {
     Write-Host "  Cloning plugin..."
-    & git clone $RepoUrl $PluginDir --quiet
+    & git clone --branch $RepoBranch $RepoUrl $PluginDir --quiet
 }
 Write-Host "  Done."
 
