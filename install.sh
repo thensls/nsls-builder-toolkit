@@ -203,7 +203,10 @@ INSTALL_GH=$(gh api user --jq .login 2>/dev/null || true)
 
 INSTALL_EMAIL_SAFE=$(printf '%s' "$INSTALL_EMAIL" | tr -d '"\\')
 INSTALL_GH_SAFE=$(printf '%s' "$INSTALL_GH" | tr -d '"\\')
-curl -s --max-time 10 -X POST \
+# --max-time must clear a Railway cold start (~35s, per session-start.py's own
+# measurement); at 10s the very first install of the day — the one most worth
+# recording — was silently dropped.
+curl -s --max-time 40 -X POST \
   https://web-production-6281e.up.railway.app/install-event \
   -H 'Content-Type: application/json' \
   -d "{\"builder_email\":\"$INSTALL_EMAIL_SAFE\",\"github_username\":\"$INSTALL_GH_SAFE\",\"platform\":\"mac\",\"install_source\":\"cc-builder-kit\"}" \
@@ -330,7 +333,7 @@ if [ -n "$CLAUDE_BIN" ] && [ -f "$PLUGIN_DIR/.mcp.json" ]; then
   # .mcp.json) must not abort the installer and skip Steps 4-5, which don't
   # depend on MCP registration. Matches the || pattern used in Step 2.
   CLAUDE_BIN="$CLAUDE_BIN" PLUGIN_DIR="$PLUGIN_DIR" python3 - << 'PYEOF' || echo "  Note: MCP registration step failed — run /signal-setup later to register the server"
-import json, os, subprocess, sys
+import json, os, re, subprocess, sys
 
 claude = os.environ["CLAUDE_BIN"]
 root = os.environ["PLUGIN_DIR"]
@@ -342,20 +345,53 @@ except Exception as e:
     print(f"  Could not read .mcp.json ({e}) — skipping MCP registration")
     sys.exit(0)
 
+_VAR = re.compile(r"\$\{([A-Z0-9_]+)\}")
+
 def sub(v):
     # The bundled config uses ${CLAUDE_PLUGIN_ROOT}; user-scope config doesn't
-    # expand it, so substitute the real absolute path here.
-    return v.replace("${CLAUDE_PLUGIN_ROOT}", root) if isinstance(v, str) else v
+    # expand it, so substitute the real absolute path here. Also expand any
+    # other ${ENV_VAR} that happens to be set in this shell (e.g. a pre-exported
+    # studio token) — anything unset is left as a literal ${VAR} and caught by
+    # unresolved() below.
+    if not isinstance(v, str):
+        return v
+    v = v.replace("${CLAUDE_PLUGIN_ROOT}", root)
+    return _VAR.sub(lambda m: os.environ.get(m.group(1), m.group(0)), v)
+
+def unresolved(v):
+    return isinstance(v, str) and bool(_VAR.search(v))
 
 new = 0
+skipped = []
 for name, cfg in servers.items():
-    command = sub(cfg.get("command", ""))
-    args = [sub(a) for a in cfg.get("args", [])]
-    cmd = [claude, "mcp", "add", name, "--scope", "user",
-           "--env", f"CLAUDE_PLUGIN_ROOT={root}"]
-    for k, val in cfg.get("env", {}).items():
-        cmd += ["--env", f"{k}={sub(val)}"]
-    cmd += ["--", command] + args
+    stype = cfg.get("type", "stdio")
+
+    if stype == "http":
+        # http servers (society-studio, strategy-studio) take a URL + auth
+        # header, NOT a command. The old code built `claude mcp add <name> --`
+        # with an empty command, which the CLI rejects ("Command is required").
+        # Correct form: `claude mcp add --transport http <name> <url> --header`.
+        url = sub(cfg.get("url", ""))
+        headers = {k: sub(val) for k, val in cfg.get("headers", {}).items()}
+        # The bearer tokens (${STUDIO_MCP_TOKEN}, ${STRATEGY_MCP_TOKEN}) don't
+        # exist on a fresh machine. Registering with an unexpanded token yields
+        # a server that 401s silently — worse than not registering. Defer to
+        # /signal-setup, which owns the studio token flow.
+        if unresolved(url) or any(unresolved(h) for h in headers.values()):
+            skipped.append(name)
+            continue
+        cmd = [claude, "mcp", "add", "--transport", "http", name, url,
+               "--scope", "user"]
+        for hk, hv in headers.items():
+            cmd += ["--header", f"{hk}: {hv}"]
+    else:
+        command = sub(cfg.get("command", ""))
+        args = [sub(a) for a in cfg.get("args", [])]
+        cmd = [claude, "mcp", "add", name, "--scope", "user",
+               "--env", f"CLAUDE_PLUGIN_ROOT={root}"]
+        for k, val in cfg.get("env", {}).items():
+            cmd += ["--env", f"{k}={sub(val)}"]
+        cmd += ["--", command] + args
 
     res = subprocess.run(cmd, capture_output=True, text=True)
     out = (res.stdout + res.stderr).strip()
@@ -368,12 +404,35 @@ for name, cfg in servers.items():
         print(f"  {name}: registration failed — {out or 'unknown error'}")
 
 print(f"  {new} MCP server(s) newly registered (restart Claude Code to load)")
+if skipped:
+    print(f"  Deferred (needs an access token): {', '.join(skipped)} — run /signal-setup to connect these.")
 PYEOF
 else
   if [ -z "$CLAUDE_BIN" ]; then
     echo "  Skipped — 'claude' CLI not found in PATH. Run /signal-setup later to register."
   else
     echo "  No .mcp.json found — nothing to register"
+  fi
+fi
+
+# --- Step 3.7: Install the gws CLI (Google Workspace) ---
+#
+# Two flagship skills — /gdoc-build and /gdoc-edit — shell out to `gws` and are
+# dead on arrival without it. (Per-user OAUTH stays manual: `gws auth login`,
+# run from those skills' setup.) Idempotent: skips if gws is already on PATH.
+# Best-effort — a failed install must never abort the toolkit install.
+
+echo ""
+echo "Installing gws (Google Workspace CLI)..."
+if command -v gws &>/dev/null; then
+  echo "  gws: already installed ($(gws --version 2>/dev/null | head -1))"
+else
+  if curl --proto '=https' --tlsv1.2 -LsSf \
+    https://github.com/googleworkspace/cli/releases/latest/download/google-workspace-cli-installer.sh \
+    2>/dev/null | sh >/dev/null 2>&1; then
+    echo "  gws installed. Authenticate later with: gws auth login"
+  else
+    echo "  Note: gws install failed — /gdoc-build and /gdoc-edit will prompt you to install it."
   fi
 fi
 
@@ -474,7 +533,8 @@ echo "==============================="
 echo ""
 echo "What you got:"
 echo ""
-echo "  ORG SKILLS (13 skills for building, tracking, deploying):"
+SKILL_COUNT=$(ls "$PLUGIN_DIR/skills/" 2>/dev/null | wc -l | tr -d ' ')
+echo "  ORG SKILLS ($SKILL_COUNT skills for building, tracking, deploying):"
 ls "$PLUGIN_DIR/skills/" | sed 's/^/    \//'
 echo ""
 echo "  PLUGINS:"
@@ -493,6 +553,10 @@ if [ "$TEST_MODE" = "1" ]; then
   echo "  Everything went into:  $CONFIG_DIR"
   echo "  Your real ~/.claude was NOT touched."
   echo ""
+  echo "  NOTE: --test is terminal-only. The desktop app always launches"
+  echo "  against your real ~/.claude and cannot open this isolated config,"
+  echo "  so a test install can only be exercised from the terminal as below."
+  echo ""
   echo "  1. Launch Claude Code against this test install:"
   echo ""
   echo "       CLAUDE_CONFIG_DIR=\"$CONFIG_DIR\" claude"
@@ -508,13 +572,14 @@ if [ "$TEST_MODE" = "1" ]; then
 else
   echo "=== NEXT STEP ==="
   echo ""
-  echo "  1. Open a new terminal window (so the 'cc' shortcut loads)"
+  echo "  1. Restart Claude Code"
+  echo "       Desktop app: quit and reopen it, then click Code (top left)."
+  echo "       Terminal:    open a new window and type  cc"
+  echo "     (A restart is required to load the MCP servers and hooks.)"
   echo ""
-  echo "  2. Type:  cc"
-  echo ""
-  echo "  3. Say:  /setup"
-  echo "     This connects your tools (Slack, Asana, etc.) and optionally"
-  echo "     installs personal productivity skills (daily planning, weekly"
-  echo "     reviews, project logging — yours to customize)."
+  echo "  2. Say:  /setup"
+  echo "     This connects your tools (Slack, Google Drive, Calendar, Gmail,"
+  echo "     Fathom — one at a time, with you) and optionally installs personal"
+  echo "     productivity skills (daily planning, weekly reviews, project logging)."
   echo ""
 fi

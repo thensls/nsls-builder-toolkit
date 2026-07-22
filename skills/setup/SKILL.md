@@ -1,128 +1,202 @@
 ---
 name: setup
 description: >-
-  Onboarding for the NSLS Builder Toolkit. Sets the builder email so the
-  tracker hooks can attribute work, registers the PowerShell hooks on
-  Windows, connects org tools (Slack, Asana, Google Calendar), verifies
-  plugins, checks GCP access, and offers personal productivity setup.
+  Onboarding for the NSLS Builder Toolkit. Confirms the builder email so the
+  tracker can credit work, connects org tools one at a time (Slack, Google
+  Drive, Google Calendar, Gmail, Fathom), verifies plugins, registers Windows
+  hooks, checks GCP/gws access, and offers personal productivity setup.
   Use when first setting up, or when a tool connection seems broken.
 ---
 
 # NSLS Builder Toolkit — Setup
 
-Walk the new builder through getting their tools connected. Detect what's already working and only ask about what's missing. Keep it friendly and fast.
+Walk the new builder through getting connected. **This is a guided, hand-held
+experience, not a checklist you hand them.** Golden rules for the whole skill:
+
+- **One thing at a time.** Ask one question, wait for the answer, then move on.
+  Never print a wall of steps for the builder to execute themselves.
+- **Open or link the exact page.** Never say "go to settings → MCP Servers."
+  Instead, tell them precisely what to click, or (better) send them to the exact
+  Connectors panel and wait.
+- **Plain words, no jargon.** "the long code on that page," not "the OAuth
+  bearer token." Describe what they'll see on screen.
+- **Detect first, ask second.** If something is already done, say so and skip it.
 
 Show the roadmap upfront so the builder knows the shape:
 
 ```
 Welcome to the NSLS Builder Toolkit! Let's get you set up.
 
-This takes about 5 minutes:
-  1. Set your builder email (so the tracker can credit your work)
-  2. Connect your tools (Slack, Asana, Google Calendar)
-  3. Verify plugins are working
-  4. Register Windows hooks (Windows only — auto-skipped on Mac/Linux)
-  5. Check GCP access (if you need it)
-  6. Done — here's what you can do now
+This takes about 5 minutes, and I'll do it with you one step at a time:
+  1. Confirm your builder email (so the tracker can credit your work)
+  2. Connect your tools — Slack, Google Drive, Calendar, Gmail, Fathom
+  3. Check your plugins are working
+  4. Register Windows hooks (Windows only — skipped on Mac/Linux)
+  5. Personal productivity skills (optional, your call)
 
 Ready?
 ```
 
-## Step 1: Set Your Builder Email (~30 sec)
+## Step 1: Confirm Your Builder Email (~15 sec)
 
-The session-start hook (daily session points + PR credit) and the PreToolUse skill hook (per-skill-use tracking) both read `BUILDER_EMAIL` from `~/.claude/local-plugins/nsls-personal-toolkit/.env`. Without it, your work shows up as "unknown" in the Automation Tracker and you don't get credit.
+The session-start hook (daily session points + PR credit) and the skill-use
+hook both read `BUILDER_EMAIL` from
+`~/.claude/local-plugins/nsls-personal-toolkit/.env`. Without it, your work
+shows up as "unknown" in the Automation Tracker and you don't get credit.
 
-`/personal-setup` also sets this — so if the builder has already run that, this step is a no-op. Check first:
+**Don't make the builder type their email.** You already know the email of the
+signed-in Claude account from this session's context — propose it and ask only
+to confirm:
+
+```
+I'll credit your work to <signed-in account email>. Sound right? (yes / or paste a different email)
+```
+
+Only fall back to free-text entry if they say the signed-in address is wrong
+(e.g. they use an alias). If `/personal-setup` already set BUILDER_EMAIL, this
+is a no-op — check first:
 
 ```bash
 ENV_FILE="$HOME/.claude/local-plugins/nsls-personal-toolkit/.env"
 if [ -f "$ENV_FILE" ] && grep -q "^BUILDER_EMAIL=" "$ENV_FILE"; then
-  echo "BUILDER_EMAIL already set — skipping."
+  echo "ALREADY_SET: $(grep '^BUILDER_EMAIL=' "$ENV_FILE" | cut -d= -f2-)"
 fi
 ```
 
-If not set, ask:
-
-```
-What's your NSLS email? (e.g., you@nsls.org)
-```
-
-Then write it (preserves any other env vars in the file, creates parent dir if needed):
+If not set (or they gave a different one), write it — preserving any other env
+vars in the file (JSONB-style merge; never clobber the file):
 
 ```bash
 ENV_FILE="$HOME/.claude/local-plugins/nsls-personal-toolkit/.env"
 mkdir -p "$(dirname "$ENV_FILE")"
 touch "$ENV_FILE"
-# Strip any existing BUILDER_EMAIL line, then append the new one.
 { grep -v "^BUILDER_EMAIL=" "$ENV_FILE" || true; } > "$ENV_FILE.tmp" && mv "$ENV_FILE.tmp" "$ENV_FILE"
-echo "BUILDER_EMAIL=<email>" >> "$ENV_FILE"
+echo "BUILDER_EMAIL=<confirmed email>" >> "$ENV_FILE"
 ```
 
-Confirm to the builder: "BUILDER_EMAIL set. Your skill use and session pings will now be attributed correctly."
+Confirm: "Got it — your work is now credited to <email>."
 
-## Step 2: Connect Your Tools (~2 min)
+### Step 1.5: Reconcile early events (automatic, silent — no question)
 
-Check which MCP integrations are available. Try each one — if it works, check it off. If it fails, note it as missing.
+The installer fires an install event (and skill events can fire) **before**
+`/setup` runs, attributed to a fallback identity (git email → `$USER@host`).
+Now that the real BUILDER_EMAIL is set, tell the tracker to merge those early
+events onto the right builder. Recompute the *previous* identity by re-running
+the same fallback chain the early events used, then POST the reconcile. Skip
+silently if they match, and never block setup on it:
 
-### Slack
-Try to detect the user's Slack identity from the Slack MCP tools. The tool descriptions usually include "Current logged in user's Slack user_id is U...".
-
-- **Connected**: "Slack is connected — you're [name/ID]"
-- **Not connected**: "Slack isn't connected. You can add it in Claude Code settings → MCP Servers → Slack. This is needed for /standup and channel searches."
-
-### Asana
-Try calling the Asana MCP to get the user's info:
-```
-mcp__claude_ai_Asana__get_me()
-```
-
-- **Connected**: "Asana is connected — you're [name] in [workspace]"
-- **Not connected**: "Asana isn't connected. Add it in Claude Code settings → MCP Servers → Asana. Needed for task tracking in /open-day and /close-day."
-
-### Google Calendar
-Try calling:
-```
-mcp__claude_ai_Google_Calendar__gcal_list_calendars()
-```
-
-- **Connected**: "Google Calendar is connected"
-- **Not connected**: "Google Calendar isn't connected. Add it in Claude Code settings → MCP Servers → Google Calendar. Used by /open-day for daily schedule."
-
-Show a quick summary after checking:
-
-```
-Tool Status:
-  [check or x] Slack
-  [check or x] Asana
-  [check or x] Google Calendar
-
-[If any missing]: You can add these anytime in Claude Code settings.
-The org skills that don't need these tools will work fine right now.
+```bash
+NEW_EMAIL="<confirmed email>"
+PREV_EMAIL=$(git config user.email 2>/dev/null || true)
+[ -z "$PREV_EMAIL" ] && PREV_EMAIL="${USER:-unknown}@$(hostname -s 2>/dev/null || echo unknown)"
+if [ -n "$NEW_EMAIL" ] && [ "$PREV_EMAIL" != "$NEW_EMAIL" ]; then
+  # Contract matches the tracker service's handler (POST /reconcile-builder,
+  # body {previous_email,new_email}). Server-side it's idempotent and no-ops when
+  # the emails match or no provisional row exists, so this is safe to re-run.
+  # Best-effort — a 404/timeout must never block setup.
+  curl -s --max-time 40 -X POST \
+    https://web-production-6281e.up.railway.app/reconcile-builder \
+    -H 'Content-Type: application/json' \
+    -d "{\"previous_email\":\"$PREV_EMAIL\",\"new_email\":\"$NEW_EMAIL\"}" \
+    >/dev/null 2>&1 || true
+fi
 ```
 
-Don't block on missing tools — most org skills work without them.
+Don't mention this to the builder unless they ask — it's plumbing.
 
-## Step 3: Verify Plugins (~1 min)
+## Step 2: Connect Your Tools (~2 min) — guided, one at a time
 
-Check that superpowers is installed by looking for its skills (e.g., `verification-before-completion`, `brainstorming`).
+This is the most important step and the one builders stall on. **Do NOT dump a
+list of settings paths.** Connect the recommended starter bundle **one connector
+at a time**, each a connect-now-or-defer choice. For each: say one line on *why*,
+send them to the exact Connectors panel, wait, then verify with a live read call
+and confirm before moving to the next.
 
-- **Installed**: "Superpowers plugin is working — you have /brainstorm, /debug, /verify, /plan"
-- **Not installed**:
+All five are **one-click "Authorize" connectors** in the desktop app — no API
+keys, no tokens to paste. The bundle, in order:
+
+1. **Slack** — team channels, standups, searches
+2. **Google Drive** — read/write docs and files
+3. **Google Calendar** — powers `/open-day`'s daily schedule
+4. **Gmail** — draft and triage email
+5. **Fathom** — meeting recordings and transcripts (`/close-day`, `person-intelligence`)
+
+> **Do not rely on a programmatic MCP-registry probe to decide what's
+> available** — a probe has missed Fathom even though its connector exists
+> (user-verified 2026-07-21). Always send the builder to the Connectors panel
+> and confirm by an actual read call, not by a registry lookup.
+
+For each connector, run this loop:
+
+1. **One line on why**, then ask: "Want to connect **<tool>** now? (yes / skip)"
+   - If skip: "No problem — you can add it anytime by running /setup again." Move on.
+2. **If yes, send them to the exact panel** (don't name a settings path — tell
+   them what to click):
+   ```
+   In the desktop app, open Settings → Connectors, find <tool>, and click
+   Authorize. A browser window opens for you to sign in — approve it, and you're done.
+   ```
+3. **⚠️ Home-tab gotcha — print this every time:**
+   ```
+   Heads up: after you authorize, the app often drops you back on the Home tab
+   and it looks like you lost this chat. You didn't — just click **Code** (top
+   left) to come back here, and tell me when you're back.
+   ```
+4. **Wait** for them to confirm they're back.
+5. **Verify with a live read call** (not a registry probe). Examples:
+   - Slack: read your own identity from the Slack MCP tool descriptions
+     ("Current logged in user's Slack user_id is U…").
+   - Google Drive: a minimal Drive search/list call.
+   - Google Calendar: `list_calendars`.
+   - Gmail: `list_labels` (or a minimal thread search).
+   - Fathom: `get_identity` / `list_meetings` (via the `api.fathom.ai` path).
+6. **Confirm result**, then next:
+   - Works: "✓ <tool> is connected — you're [name/detail]."
+   - Still not showing: "Not seeing <tool> yet — that usually means the
+     Authorize window didn't finish. Want to try once more, or skip for now?"
+
+After the loop, a short summary:
+
+```
+Connected: [the ones that verified]
+Skipped:   [the ones deferred] — run /setup anytime to add these.
+```
+
+Don't block on skipped tools — org skills that don't need them work right now.
+
+**API keys are the fallback only for vendors with no connector.** If you ever
+hit a key path for Fathom, note the old `fathom.video/settings/api` deep link
+404s — say "open fathom.video → Settings → API Access" instead, and validate the
+key with a live `api.fathom.ai` call.
+
+## Step 3: Verify Plugins (~30 sec)
+
+Check that superpowers is installed by looking for its skills (e.g.,
+`verification-before-completion`, `brainstorming`).
+
+- **Installed**: "Superpowers is working — you have /brainstorm, /debug, /verify, /plan."
+- **Not installed** — offer to do it, don't hand them a terminal command to run
+  blind:
   ```
-  Superpowers plugin isn't installed. Run this in your terminal:
-
-    claude plugins install superpowers
-
-  Then restart Claude Code and run /setup again.
+  Superpowers isn't installed yet. I can install it for you — want me to?
   ```
+  If yes, run `claude plugin install superpowers` for them, then tell them to
+  restart Claude Code and run /setup again.
 
-Do NOT check for compound-engineering — it's an optional power-up, not required.
+Do NOT check for compound-engineering — it's an optional power-up.
 
 ## Step 4: Register Windows Hooks (Windows only, ~10 sec)
 
-The canonical `hooks/hooks.json` uses `python3` (SessionStart) and `bash` (PreToolUse skill logging) — neither runs natively on Windows. There's an `install.ps1` script in the toolkit root that registers the PowerShell equivalents (`session-start.ps1` and `skill-event.ps1`) in `~/.claude/settings.json`.
+The canonical `hooks/hooks.json` uses `python3` (SessionStart) and `bash`
+(PreToolUse skill logging) — neither runs natively on Windows. `install.ps1` in
+the toolkit root registers the PowerShell equivalents (`session-start.ps1`,
+`skill-event.ps1`) in `~/.claude/settings.json`.
 
-Detect platform first. The simplest check:
+> A fuller native PowerShell installer (clone + enable + MCP + pointers +
+> install-event, mirroring `install.sh`) is planned; until it ships, a Windows
+> builder installs via the bash command and then runs `install.ps1` for hooks.
+
+Detect platform:
 
 ```bash
 case "$OSTYPE" in
@@ -131,173 +205,98 @@ case "$OSTYPE" in
 esac
 ```
 
-Or from inside Claude Code's tooling, use whichever platform detection is handy — the script's idempotent, so a false positive run on Mac/Linux is harmless (it'd just print "Registered..." and not affect anything because settings.json on those platforms doesn't use these hook entries).
+**If macOS or Linux**: skip silently — the bash hooks work natively.
 
-**If macOS or Linux**: Skip silently — the bash hooks in `hooks/hooks.json` work natively.
-
-**If Windows**: Run the installer:
+**If Windows**: run the installer for them:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\.claude\local-plugins\nsls-builder-toolkit\install.ps1"
 ```
 
-Tell the builder:
+Then tell the builder (one message, not a checklist):
 
 ```
-Windows hooks registered:
-  SessionStart → session-start.ps1 (pull + sync + ping)
-  PreToolUse(Skill) → skill-event.ps1 (per-skill-use tracking)
-
-These take effect after your next Claude Code restart. Until then, your
-skill use won't show up in the Automation Tracker.
+Windows hooks registered — your session pings and skill use will show up in the
+tracker after your next Claude Code restart.
 ```
 
-The script is **idempotent** — re-running replaces only the NSLS entries in settings.json, preserving everything else. Safe to run any time the hooks seem broken (e.g., `signal_*` MCP tools won't fire either if the SessionStart hook isn't pulling updates).
+Idempotent — re-running replaces only the NSLS entries, preserving everything
+else. Safe any time the hooks seem broken.
 
-## Step 5: Check GCP Access (~1 min)
+## Step 5: GCP + Google Docs access (optional)
 
-Ask the builder:
+Ask (one question):
+
 ```
-Do you need to create Google Cloud projects for your automations?
-
-This is needed if you're building anything that uses Google APIs — OAuth flows,
-Apps Script triggers, service accounts, etc. If you're just using Claude Code
-with Slack/Asana/Airtable, you can skip this.
+Do you need to create Google Cloud projects for your automations? (yes / no)
 ```
 
 If yes:
 ```
-To create GCP projects, you need to be in the gcp-builders@nsls.org group.
-Ask Kevin (or any group owner) to add you — it's one command:
-
-  gcloud identity groups memberships add \
-    --group-email="gcp-builders@nsls.org" \
-    --member-email="YOUR_EMAIL@nsls.org" \
-    --roles=MEMBER
-
-Once added, go to console.cloud.google.com/projectcreate and select
-the "Builder Projects" folder as your parent resource. That's where
-you have permission to create projects.
-
-Personal automations (email triage, personal workflows) → your own project.
-Org-owned automations → use the shared nsls-automations project.
+You'll need to be in the gcp-builders@nsls.org group. Ask Kevin (or any group
+owner) to add you. Once you're in, create projects under the "Builder Projects"
+folder at console.cloud.google.com/projectcreate.
 ```
 
-If no or skip: move on.
+If no: move on.
 
 ### Google Docs editing (gws auth) — optional
 
-The `/gdoc-edit` (edit docs in place) and `/gdoc-build` (create branded docs) skills run on
-`gws`, the Google Workspace CLI. They need a one-time `gws auth login`. Check state:
+`/gdoc-edit` and `/gdoc-build` run on `gws` (installed by the toolkit installer).
+They need a one-time `gws auth login`. Check state:
 
 ```bash
-gws auth status 2>/dev/null | grep -q '"storage": "none"' && echo "gws NOT authed" || echo "gws authed (or gws missing)"
+gws auth status 2>/dev/null | grep -q '"storage": "none"' && echo "gws NOT authed" || echo "gws authed (or missing)"
 ```
 
-- **Already authed**: "Google Docs skills are ready — /gdoc-edit and /gdoc-build will work."
-- **Not authed / gws missing**: point them at the setup doc — don't run the OAuth flow for
-  them (it opens a browser and mints *their* token):
+- **Already authed**: "Google Docs skills are ready."
+- **Not authed** — don't run the OAuth flow for them (it mints *their* token).
+  Point them at the setup doc and offer to walk them through it live:
   ```
-  To edit/create Google Docs from Claude, do the one-time gws login:
-    ~/.claude/local-plugins/nsls-builder-toolkit/skills/gdoc-edit/references/setup.md
-  Short version: get the shared client_secret.json from the NSLS builders Drive
-  location (ask in #builders), drop it at ~/.config/gws/client_secret.json,
-  then:  gws auth login --services docs,drive
+  To edit/create Google Docs from Claude, there's a one-time sign-in. I can walk
+  you through it now, or you can do it later — it's in the /gdoc-edit setup notes.
   ```
 
-## Step 6: Wrap Up + Pitch Personal Productivity
+## Step 6: Personal productivity (optional)
+
+Pitch it, then let them choose the depth. **Two tiers:**
 
 ```
-You're set up! Here's what you can do:
+Last thing — the builders who get the most out of this toolkit use the personal
+productivity skills: morning planning, end-of-day summaries, weekly reviews.
 
-ORG SKILLS:
-  /register-automation  — Track your builds in the Automation Tracker
-  /product-design       — UX guardrail with DESIGN.md and focus groups
-  /nsls-slides          — Branded NSLS/Society presentations
-  /gws                  — Google Workspace operations
-  /web-research         — Structured web research
-  ... type / to see all available skills
+There are two ways in:
+  • Light (~3 min) — works immediately, just a notes folder. Recommended to start.
+  • Advanced — full Obsidian vault + plugins + graph view. Great, but more setup;
+    you can add it anytime.
 
-WORKFLOW:
-  Superpowers gives you /brainstorm, /debug, /verify, /plan
-
-OPTIONAL POWER-UPS:
-  Compound Engineering adds advanced planning/review workflows
-  (/ce-brainstorm, /ce-plan, /ce-code-review, /ce-doc-review). Ask me how to install it.
-
-ORG CONTEXT:
-  Your toolkit includes current org chart, LOPs, and company strategy.
-  Skills can reference these automatically — no setup needed.
-  See: _shared/context/ in the toolkit repo.
+Want to set up the light version now? (yes / later)
 ```
 
-Then pitch personal productivity:
+`/personal-setup` exists the moment the toolkit is installed (it ships as a thin
+bootstrapper in this org kit), so **"say /personal-setup anytime later" is a
+real, working command** — no "unknown command" trap for anyone who defers.
 
+### If yes:
+Invoke `/personal-setup` — it installs+enables the personal kit if needed, syncs
+its pointer skills immediately, and runs the light config. If it needs the full
+personal kit and a restart, tell them plainly and hand off.
+
+### If later:
 ```
-One more thing — the builders who get the most out of this toolkit
-use the personal productivity skills. They turn Claude into a daily
-co-pilot: morning planning, end-of-day summaries, weekly reviews.
-
-Think of it as making work fun again — bringing ease to your day.
-
-It takes about 10 minutes to set up. Want to do it now?
-Say /personal-setup anytime if you'd rather do it later.
-```
-
-### If yes and personal toolkit is already installed:
-Invoke `/personal-setup` inline — don't make them restart.
-
-### If yes and personal toolkit is NOT installed:
-Install the personal toolkit:
-```bash
-bash -c 'PLUGIN_DIR="$HOME/.claude/local-plugins/nsls-personal-toolkit"; \
-  REPO_URL="https://github.com/thensls/nsls-personal-toolkit.git"; \
-  if [ -d "$PLUGIN_DIR" ]; then \
-    git -C "$PLUGIN_DIR" pull --ff-only 2>/dev/null || true; \
-    echo "Personal toolkit updated."; \
-  else \
-    mkdir -p "$(dirname "$PLUGIN_DIR")"; \
-    git clone "$REPO_URL" "$PLUGIN_DIR" --quiet; \
-    echo "Personal toolkit installed."; \
-  fi'
-```
-
-Then enable it in settings.json:
-```bash
-python3 -c "
-import json, os
-settings_path = os.path.expanduser('~/.claude/settings.json')
-with open(settings_path) as f: cfg = json.load(f)
-ep = cfg.setdefault('enabledPlugins', {})
-ep['nsls-personal-toolkit@local'] = True
-with open(settings_path, 'w') as f: json.dump(cfg, f, indent=2)
-print('Enabled nsls-personal-toolkit in settings.json')
-"
-```
-
-Then tell the builder:
-
-```
-Personal toolkit installed! You'll need to start a new Claude Code
-session for the skills to load. When you're back, say /personal-setup
-to finish configuration (~10 min).
-```
-
-There is currently no way to reload skills without restarting the session. If Claude Code adds a reload command in the future, use that instead.
-
-### If no:
-
-```
-No problem. The org toolkit is fully set up — you're ready to build.
-
-If you change your mind later, install the personal toolkit with:
-  curl -fsSL https://raw.githubusercontent.com/thensls/nsls-personal-toolkit/main/install.sh | bash
+No problem. Say /personal-setup anytime — it works right now, no install needed
+first.
 ```
 
 ## Edge Cases
 
-- **User runs /setup again after everything is configured**: Check state, confirm everything is good, offer to run /personal-setup if they want to reconfigure. Re-running Step 1 (email) and Step 4 (Windows hooks) is idempotent — both detect existing state and skip / no-op.
-- **Git clone fails (network/permissions)**: Show the error, suggest they clone manually and point to the GitHub repo URL.
-- **User isn't an NSLS employee**: The org toolkit still works — skip NSLS-specific references and note that some skills reference NSLS-specific resources. The Automation Tracker won't have a record for them, so Step 1's email is moot — set it anyway in case they get one later; the hooks degrade gracefully.
-- **Personal toolkit already installed**: Skip the clone, just offer /personal-setup.
-- **Windows builder skipped Step 4 by accident**: They'll have zero session pings and zero skill_used events in the tracker. Symptoms: their dashboard counters stay at 0, their stage never advances. Re-run /setup, or directly: `powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\.claude\local-plugins\nsls-builder-toolkit\install.ps1"`
+- **Re-running /setup after everything is configured**: detect state, confirm
+  it's all good, offer /personal-setup. Steps 1 and 4 are idempotent.
+- **Personal-toolkit clone into a dir that already holds `.env`**: `/personal-setup`
+  handles this by preserving the existing `.env` across the clone (Step 1 may
+  have written BUILDER_EMAIL there before the toolkit was cloned). Never `git
+  clone` into a non-empty dir and assume success.
+- **User isn't an NSLS employee**: org toolkit still works; set the email anyway,
+  hooks degrade gracefully.
+- **Windows builder skipped Step 4**: zero pings / zero skill events, counters
+  stuck at 0. Re-run /setup, or `install.ps1` directly.

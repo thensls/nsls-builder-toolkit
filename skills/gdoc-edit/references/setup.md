@@ -1,9 +1,10 @@
 # gdoc-edit — setup
 
 `gdoc-edit` talks to the Google Docs + Drive APIs through **`gws`** (the Google Workspace
-CLI, shipped with the toolkit). Every call runs as **you** — your Google identity, your
-document permissions. There is no shared secret and nothing per-person to deploy. Setup is
-a one-time `gws auth login`.
+CLI). The toolkit installer (`install.sh`) installs the `gws` binary for you; if you're on
+a machine where it isn't present, step 1 below installs it. Every call runs as **you** —
+your Google identity, your document permissions. There is no shared secret and nothing
+per-person to deploy. Setup is a one-time `gws auth login`.
 
 If `gws` is already authenticated on your machine (`gws auth status` shows a `storage`
 other than `none`), you're done — skip to the smoke test.
