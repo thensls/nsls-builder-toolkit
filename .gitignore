@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# Runtime hook markers written into the plugin dir (see hooks/session-ping.*)
+.last-ping-failed
+.pending-announcements

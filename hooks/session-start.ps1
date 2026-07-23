@@ -79,6 +79,25 @@ if (-not (Test-Path $SkillsDir)) { New-Item -ItemType Directory -Path $SkillsDir
 $null = Sync-Pointers -PluginDir $BuilderDir
 $null = Sync-Pointers -PluginDir $PersonalDir
 
+# --- 2b. surface announcements stashed by the previous detached ping ---
+# session-ping.ps1 runs detached, so it can't print to session context itself;
+# it dismisses announcements and writes their text here. We read + print it
+# synchronously (this hook's stdout IS session context on every surface),
+# wrapped in the same directive prefix session-start.py uses so it shows on the
+# desktop app too, then delete the file. One session's lag, but it surfaces.
+$AnnounceFile = if (Test-Path $BuilderDir) {
+    Join-Path $BuilderDir '.pending-announcements'
+} else {
+    Join-Path $ClaudeDir '.pending-announcements'
+}
+if (Test-Path $AnnounceFile) {
+    $block = (Get-Content $AnnounceFile -Raw -Encoding UTF8).Trim()
+    Remove-Item $AnnounceFile -Force -ErrorAction SilentlyContinue
+    if ($block) {
+        Write-Output "[NSLS Builder Toolkit - surface the following to the user verbatim at the start of your first reply, then proceed with their request:]`n`n$block"
+    }
+}
+
 # --- 3. session ping (detached, non-blocking) ---
 # The proxy is idempotent, so repeated pings never duplicate. Detached so its
 # cold-start latency never delays session start; output -> nsls-session-ping.log.

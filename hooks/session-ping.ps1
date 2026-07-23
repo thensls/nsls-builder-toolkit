@@ -37,6 +37,18 @@ $MarkerFile = if (Test-Path $builderDir) {
     Join-Path (Join-Path $env:USERPROFILE '.claude') '.last-ping-failed'
 }
 
+# Pending-announcements hand-off. This script runs DETACHED (launched by
+# session-start.ps1), so its stdout can never reach session context the way
+# session-start.py's synchronous print does on Mac. Instead we dismiss each
+# announcement here and stash its text in this file; the next (synchronous,
+# fast) session-start.ps1 reads it, surfaces it, and deletes it. Net effect:
+# announcements show one session late on Windows instead of never.
+$AnnounceFile = if (Test-Path $builderDir) {
+    Join-Path $builderDir '.pending-announcements'
+} else {
+    Join-Path (Join-Path $env:USERPROFILE '.claude') '.pending-announcements'
+}
+
 # Replay a previously failed ping BEFORE the live one. Delete the marker on
 # success; keep it if delivery still fails. We don't process the replayed
 # response — the live ping right after fetches fresh announcements.
@@ -71,5 +83,22 @@ foreach ($pr in @($resp.new_pr_credits)) { if ($pr) { $out += "PR $($pr.pr) to $
 if ($resp.stage_advanced) { $out += "Advanced to $($resp.stage_advanced.to)." }
 if ($out.Count -gt 0) {
     Add-Content -Path $LogFile -Value ("[" + (Get-Date).ToString('s') + "] " + ($out -join ' '))
+}
+
+# Announcements — parity with session-start.py. Dismiss each so the server
+# stops sending it, and append its text to the pending file for the next
+# session-start.ps1 to surface. Append (not overwrite) so a queued
+# announcement from an earlier ping isn't lost before it's shown; dismissal
+# guarantees the same announcement is never fetched — hence never appended —
+# twice, so appending can't duplicate.
+foreach ($ann in @($resp.announcements)) {
+    if (-not $ann) { continue }
+    Add-Content -Path $AnnounceFile -Value "$($ann.title): $($ann.body)" -Encoding UTF8
+    if ($ann.id) {
+        try {
+            $dismiss = @{ announcement_id = $ann.id; builder_email = $email } | ConvertTo-Json -Compress
+            Invoke-RestMethod -Uri "$ProxyUrl/dismiss-announcement" -Method Post -Body $dismiss -ContentType 'application/json' -TimeoutSec 5 -ErrorAction Stop | Out-Null
+        } catch { }  # best-effort; text is already stashed, it'll surface regardless
+    }
 }
 exit 0
