@@ -52,8 +52,18 @@ Write-Host ""
 
 # --- Prerequisites ---
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "Error: git is not installed."
-    Write-Host "  Install Git for Windows first: https://git-scm.com/download/win"
+    Write-Host "Git isn't installed yet — the toolkit needs it (a one-time setup)."
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "  Installing Git for you via winget..."
+        winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements
+        Write-Host ""
+        Write-Host "  ✓ Git installed. Now CLOSE this PowerShell, open a NEW one, and re-run this"
+        Write-Host "    installer — a fresh shell is needed so Git is on your PATH."
+    } else {
+        Write-Host "  Easiest path: if Claude Code offers to install Git, say YES."
+        Write-Host "  Otherwise install it from https://git-scm.com/download/win (default options),"
+        Write-Host "  then reopen PowerShell and re-run this installer."
+    }
     exit 1
 }
 
