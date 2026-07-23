@@ -57,7 +57,8 @@ one of our scarce research slots? Never assumed, always asked.
 
 ## Quick Start
 
-Idea → **1** Sketch capture → **2** Taxonomy + `create_bet` → **3**
+Idea → **1** Sketch capture → **1.5** Board-worthiness gate (materiality) →
+**2** Taxonomy + growth vector + `create_bet` → **3**
 Office-hours diagnostic → **4** Causal-chain interrogation → **5** Stress test
 → **6** Rubric → **7** The gate offer → a bet at Idea stage (or Research, if
 earned) with a full canvas, an honestly-tagged assumption chain, and a
@@ -169,16 +170,50 @@ to, argues with, corrects) the first three boxes. Don't overthink this — it's
 a light read of what they care about first — but keep it; the causal-chain
 step below reuses it as the natural order to walk the chain of beliefs.
 
-## Step 2 — Taxonomy
+## Step 1.5 — Board-worthiness gate (materiality)
 
-**Purpose:** place the bet in the seeded taxonomy and create it.
+**Purpose:** keep the board for bets, and keep improvement work with the
+LOPs/squads that own it — the test the SLT asked for (2026-07-23).
 
-Call `list_taxonomy` and help pick the market, segment, and buyer — seeded
-taxonomy already has markets (college, high-school), segments
-(community-college, 4-year-public, 4-year-private, public-high-school), and
-buyers (VP/Director of Career Services (b2b), Undergraduate student (b2c),
-Chapter advisor (b2b)). B2B vs. B2C follows directly from which buyer is
-picked — don't ask separately.
+A bet earns board space when **being wrong is expensive** — the size of the
+stakes, not the cost of finding out (finding out is deliberately cheap here).
+With the step-1 sketch in hand, ask the owner both legs:
+
+1. *"If this validates, does committing to it mean **≥ $500K of capital** —
+   the build/scale/hire decision waiting at the end of the research?"*
+2. *"Is there a **credible path to revenue material at NSLS scale** — rule of
+   thumb, ≥ $1M/yr net-new or protected?"*
+
+**Either yes → proceed to step 2.** Both no → this is real work but not a
+bet: name where it belongs (an LOP, a squad backlog, an ops channel), offer
+to write the sketch up for that home, and stop — no `create_bet`. Full
+definitions live in the Studio guide at `market.nsls.org/strategy/guide`
+("What belongs on the board").
+
+## Step 2 — Taxonomy + growth vector
+
+**Purpose:** place the bet in the taxonomy, classify which revenue vector it
+grows, and create it.
+
+Call `list_taxonomy` and help pick the market, segment, and buyer from what's
+live (don't assume a fixed list — the taxonomy grows; it also now carries
+jobs-to-be-done, which matter later in the pipeline, not at intake). B2B vs.
+B2C follows directly from which buyer is picked — don't ask separately.
+
+**Growth vector, asked in the owner's words:** *"Does this improve the
+performance of the current business, or add a new revenue vector?"* Then pin
+one of four values (they map onto the Ansoff matrix):
+
+| `growth_vector` | Meaning |
+|---|---|
+| `core-performance` | Same product, same buyers — more yield from the current business |
+| `segment-expansion` | New buyer/segment inside a current market |
+| `market-expansion` | Current product into a new market |
+| `new-product` | A net-new product line, wherever it lands |
+
+Propose the value from the sketch; the owner confirms it. It renders as a
+chip on the board and feeds the portfolio-mix line leadership reads — a
+wrong vector misfiles the bet in every portfolio review.
 
 If none of the seeded options genuinely fit, `upsert_taxonomy(kind, fields)`
 creates a new one — **shared-system tier: confirm the fields first.** For a
@@ -190,8 +225,11 @@ invalid or unvetted filter in it). Don't take an unvalidated segment
 forward.
 
 `create_bet(name, one_liner, audience, market_id, segment_id, buyer_id,
-motion)` happens here, once the taxonomy is settled — carry over the drafts
-from step 1 as the first `update_section` calls against the new `bet_id`.
+motion, growth_vector)` happens here, once the taxonomy and vector are
+settled — carry over the drafts from step 1 as the first `update_section`
+calls against the new `bet_id`. (Resuming a bet that predates the vector
+field? Ask the vector question and backfill it via
+`update_bet(bet_id, growth_vector)`.)
 
 ## Step 3 — Office-hours diagnostic
 
@@ -322,3 +360,5 @@ statements, scores) so the human can enter them by hand, and point at
 | "The alternative canvas is good, I'll just write it in too." | Conversation-only unless the human adopts it. Writing it unasked pollutes the real bet's history. |
 | "It's just a new segment, I'll create it and move on." | Shared-system tier — every other bet sees this taxonomy. Confirm first. |
 | "No token, I'll skip the write and keep going quietly." | Print what would have been written. Silent skips lose the human's own idea. |
+| "This is obviously a bet, skipping the materiality gate." | The gate exists because the SLT asked what qualifies. Ask both legs out loud — a great idea below both bars is LOP work, and saying so is the skill working. |
+| "The vector is obvious from the sketch, I'll just set it." | Propose it, but the owner confirms — the vector files the bet in every portfolio review. |
