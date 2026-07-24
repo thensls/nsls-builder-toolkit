@@ -171,6 +171,10 @@ A card that's slightly wrong and a card that's fundamentally wrong need complete
 ### Share it — at render, before you hand back the URL
 
 ```bash
+# set -o pipefail is REQUIRED, not decoration: without it the exit status is
+# `tail`'s (always 0), so a 403/400 from gws reads as a successful share — the
+# silent orphan this whole section exists to prevent.
+set -o pipefail
 # fileId = the Doc you just uploaded. Note the split:
 #   role/type/emailAddress -> --json (request body)
 #   sendNotificationEmail/emailMessage -> --params (query params)
@@ -179,6 +183,8 @@ gws drive permissions create \
   --json '{"role":"commenter","type":"user","emailAddress":"jfontanez@nsls.org"}' \
   | grep -v -i keyring | tail -5
 ```
+
+**Then confirm the share actually landed** — don't trust the exit code alone. `gws drive permissions list --params '{"fileId":"<DOC_ID>"}'` should show `jfontanez@nsls.org` as `commenter`. If it doesn't, treat it as a failed share and use the fallback below.
 
 **The share note must say**, in plain language: whose card it is, who the manager is, whether it is **DRAFT or FINAL**, and — in revise mode — the **change summary** plus the triage verdict and the prior card's URL. A draft note explicitly says *brackets are still open, please don't load yet.* Without that, Jenna can't tell a finished card from an in-progress one (see Gap E in `references/handoff-mapping.md` — **HR loads only confirmed values**).
 
@@ -197,12 +203,15 @@ Managers must not be surprised that HR has their draft, and must not think the s
 When the manager says the brackets are resolved:
 
 ```bash
+set -o pipefail   # same trap: without it a failed retitle looks like success
 # swap (DRAFT) -> (FINAL) so HR can see at a glance that it's loadable.
 # Keep the rest of the title byte-identical to what the renderer produced.
 gws drive files update --params '{"fileId":"<DOC_ID>"}' \
   --json '{"name":"ScoreCard — <Name> — <Role> — <FY> (FINAL)"}' \
   | grep -v -i keyring | tail -3
 ```
+
+**Confirm the retitle before telling HR anything** — `gws drive files get --params '{"fileId":"<DOC_ID>","fields":"name"}'` must come back `(FINAL)`. Telling Jenna a card is ready to load while it still reads `(DRAFT)` is worse than not telling her: she has no way to know which signal to trust.
 
 Then send Jenna a short "ready to load" note. **Show the manager the text and get their go-ahead before sending** — it goes out under their name. Jenna already has access, so this is a notification, not a new share.
 
@@ -231,6 +240,7 @@ The Doc's structure maps 1:1 to the fields HR loads. Keep the render structurall
 | Share returns `403 insufficientFilePermissions` | Doc isn't owned by the account `gws` is authed as | Confirm the upload succeeded under the manager's own account; re-check `gws drive files get` |
 | Share returns `400` / `sharingRateLimitExceeded` | Notification flags sent in `--json` instead of `--params`, or Workspace sharing policy | Flags are **query params**. If policy blocks it, use the manual fallback above — never skip |
 | Share "succeeds" but Jenna gets no email | `sendNotificationEmail` omitted or in the body | Must be `true` in `--params`; verify with `gws drive permissions list` |
+| Command exits 0 but nothing happened | `\| grep \| tail` swallows the failure — exit status is `tail`'s | `set -o pipefail` before any piped `gws` write, then verify by re-reading the resource |
 | Doc already shared (revise mode, same file) | Permission exists | Expected — you should be rendering a **new** Doc, not re-sharing the old one. Check you didn't overwrite |
 
 Full render mechanics: `/gdoc-build`.

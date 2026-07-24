@@ -138,7 +138,13 @@ t = doc.add_paragraph().add_run(f"ScoreCard — {NAME}")
 t.bold = True; t.font.size = Pt(20); t.font.color.rgb = RGBColor(*P["h1"])
 sr = doc.add_paragraph().add_run(f"{ROLE} · {FY}")
 sr.font.size = Pt(13); sr.font.color.rgb = RGBColor(*P["h2"])
-tg = doc.add_paragraph().add_run("DRAFT for manager↔employee alignment — not written to Airtable, not shared")
+# Assert only what stays true for the life of the Doc. DRAFT/FINAL status lives
+# in the TITLE (retitled on confirmed alignment), so don't restate it here — and
+# never claim a share state: the skill shares this with HR the moment it renders.
+tg = doc.add_paragraph().add_run(
+    "Alignment instrument for manager↔employee — current status is in the document title. "
+    "Shared with HR for tracking; never written to Airtable by this skill."
+)
 tg.italic = True; tg.font.size = Pt(10.5); tg.font.color.rgb = RGBColor(0x88, 0x88, 0x88)
 para("**[bracketed]** = draft placeholder — the employee confirms or changes each in the alignment conversation.", size=10)
 rule()
@@ -211,8 +217,11 @@ out = os.path.expanduser(f"~/{fname}")
 doc.save(out)
 print("saved", out)
 print("\nSTEP 1 — upload it with (run from ~):")
+# `set -o pipefail` on every printed command: these all end in `| grep | tail`,
+# so without it the pipeline's exit status is tail's (0) and a gws 4xx reads as
+# success. That turns a failed share into a silently orphaned ScoreCard.
 print(
-    f'cd ~ && gws drive files create '
+    f'set -o pipefail; cd ~ && gws drive files create '
     f'--json \'{{"name":"ScoreCard — {NAME} — {ROLE} — {FY} (DRAFT)",'
     f'"mimeType":"application/vnd.google-apps.document"}}\' '
     f'--upload {fname} '
@@ -228,12 +237,15 @@ print("\nSTEP 2 — REQUIRED: share it with HR (Jenna). Fill in <DOC_ID> from st
 print("and replace <NOTE> with: whose card, who the manager is, DRAFT vs FINAL,")
 print("plus (revise mode) the change summary + triage verdict + prior card URL.")
 print(
-    f'cd ~ && gws drive permissions create '
+    f'set -o pipefail; cd ~ && gws drive permissions create '
     f'--params \'{{"fileId":"<DOC_ID>","sendNotificationEmail":true,'
     f'"emailMessage":"<NOTE>"}}\' '
     f'--json \'{{"role":"commenter","type":"user",'
     f'"emailAddress":"jfontanez@nsls.org"}}\' '
     f'| grep -v -i keyring | tail -5'
 )
-print("\nIf STEP 2 fails, do NOT report the card as done — give the manager the")
-print("manual fallback (Share -> jfontanez@nsls.org -> Commenter). See SKILL.md.")
+print("\nSTEP 3 — confirm it landed (exit code alone is not proof):")
+print('gws drive permissions list --params \'{"fileId":"<DOC_ID>"}\''
+      ' | grep -v -i keyring | grep -i fontanez')
+print("\nIf STEP 2 or 3 fails, do NOT report the card as done — give the manager")
+print("the manual fallback (Share -> jfontanez@nsls.org -> Commenter). See SKILL.md.")
