@@ -423,6 +423,27 @@ test("renderSubstep: prompt heading renders as HTML, not raw ###, and keeps data
   assert.match(html, /data-tpl/);
 });
 
+// --- link URLs carrying a template token: post-interpolate scheme bypass -----
+
+test("renderMarkdown: a link whose URL is a {token} is dropped to plain text (post-interpolate scheme bypass)", () => {
+  // `{answer}` passes safeUrl as a relative path, but interpolate() could later
+  // swap it for `javascript:...`. Must NOT become an href.
+  const html = renderMarkdown("[continue]({answer})");
+  assert.ok(!html.includes("href"), "no href emitted for a token URL");
+  assert.ok(!/<a\b/.test(html), "no anchor emitted for a token URL");
+  assert.ok(html.includes("continue"), "link label is preserved as text");
+});
+
+test("renderMarkdown: a token anywhere in the URL is rejected (even with a safe-looking prefix)", () => {
+  const html = renderMarkdown("[x](https://evil.example/{answer})");
+  assert.ok(!/<a\b/.test(html) && !html.includes("href"), "token-bearing URL never becomes a link");
+});
+
+test("renderMarkdown: a normal (token-free) link still renders as an anchor", () => {
+  const html = renderMarkdown("[docs](https://nsls.org/guide)");
+  assert.match(html, /<a href="https:\/\/nsls\.org\/guide" target="_blank" rel="noopener noreferrer">docs<\/a>/);
+});
+
 test("renderSubstep: prompt is wrapped in the prose classes mirroring ignite-next AIPrompt", () => {
   const html = renderSubstep({ id: "x", type: "say", prompt: "Hello" }, {});
   assert.match(html, /class="prose max-w-none prose-inherit[^"]*"[^>]*data-tpl/);

@@ -176,7 +176,15 @@ function inlineMd(text) {
   //    stashed HTML), but the URL is captured as-is and never touched by the
   //    emphasize() pass in step 3.
   work = work.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
-    const href = safeUrl(url);
+    // Reject any URL carrying a `{token}` template placeholder. safeUrl runs
+    // HERE, at render time, but a bare token like `{answer}` passes as a
+    // relative path — then the later interpolate() pass swaps it for a user
+    // answer that could be `javascript:...`, producing a live scheme the
+    // render-time check never saw. Escaping the URL doesn't neutralize a
+    // scheme, so the only safe move is to drop the link to plain text when the
+    // destination is token-controlled. (Authored prompt links with a literal
+    // `{}` in the URL are effectively nonexistent; the label is preserved.)
+    const href = url.includes("{") ? "" : safeUrl(url);
     const labelHtml = emphasize(label);
     return stow(href ? `<a href="${href}" target="_blank" rel="noopener noreferrer">${labelHtml}</a>` : labelHtml);
   });
