@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 *.pyo
+# Runtime state written into an installed clone (never committed):
+.install-identity
+.last-ping-failed
