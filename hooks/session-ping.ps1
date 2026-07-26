@@ -1,4 +1,4 @@
-# session-ping.ps1 — Windows session ping (run DETACHED by session-start.ps1).
+# session-ping.ps1 - Windows session ping (run DETACHED by session-start.ps1).
 # Windows counterpart to the session_ping() in session-start.py. POSTs to the
 # tracker /session-ping so merged-PR credits, stage advancement, and the daily
 # session point are recorded. Launched detached so the proxy's cold-start
@@ -39,7 +39,7 @@ $MarkerFile = if (Test-Path $builderDir) {
 
 # Replay a previously failed ping BEFORE the live one. Delete the marker on
 # success; keep it if delivery still fails. We don't process the replayed
-# response — the live ping right after fetches fresh announcements.
+# response - the live ping right after fetches fresh announcements.
 if (Test-Path $MarkerFile) {
     try {
         $saved = Get-Content $MarkerFile -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -47,13 +47,13 @@ if (Test-Path $MarkerFile) {
             Invoke-RestMethod -Uri "$ProxyUrl/session-ping" -Method Post -Body $saved.payload_json -ContentType 'application/json' -TimeoutSec 30 -ErrorAction Stop | Out-Null
         }
         Remove-Item $MarkerFile -Force -ErrorAction SilentlyContinue
-    } catch { }  # still unreachable — keep the marker for the next attempt
+    } catch { }  # still unreachable - keep the marker for the next attempt
 }
 
 try {
     $resp = Invoke-RestMethod -Uri "$ProxyUrl/session-ping" -Method Post -Body $payload -ContentType 'application/json' -TimeoutSec 30 -ErrorAction Stop
 } catch {
-    # Delivery failed — stash for replay next session. Best-effort, never throw.
+    # Delivery failed - stash for replay next session. Best-effort, never throw.
     try {
         $dir = Split-Path $MarkerFile -Parent
         if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
@@ -65,7 +65,7 @@ try {
     exit 0
 }
 
-# Delivered — clear any stale failure marker from a prior session.
+# Delivered - clear any stale failure marker from a prior session.
 Remove-Item $MarkerFile -Force -ErrorAction SilentlyContinue
 
 $out = @()

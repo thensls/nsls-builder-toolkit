@@ -1,4 +1,4 @@
-# session-start.ps1 — Windows SessionStart hook for the NSLS toolkits.
+# session-start.ps1 - Windows SessionStart hook for the NSLS toolkits.
 # Windows counterpart to session-start.py (which needs python3 that Windows
 # lacks). Does the same three things:
 #   1. git pull both toolkits to get latest

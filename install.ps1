@@ -1,10 +1,10 @@
 <#
-install.ps1 — NSLS Builder Toolkit installer for Windows (full native).
+install.ps1 - NSLS Builder Toolkit installer for Windows (full native).
 
 Windows counterpart to install.sh. Bash isn't on a stock Windows box, so this
 does the whole install in PowerShell (the Windows hooks are native PowerShell).
-It also provisions the runtime prerequisites the toolkit's skills need — Python
-3.12 + python-docx, the gws CLI, and Node.js for the signal MCP server — and
+It also provisions the runtime prerequisites the toolkit's skills need - Python
+3.12 + python-docx, the gws CLI, and Node.js for the signal MCP server - and
 checks for (but never installs) the MS Visual C++ x64 runtime that gws depends
 on:
 
@@ -18,7 +18,7 @@ on:
   6. Sync slash-command pointer skills
   7. Print next steps (desktop-first)
 
-Self-bootstrapping — safe to run piped straight from the web:
+Self-bootstrapping - safe to run piped straight from the web:
   powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.ps1 | iex"
 It clones the repo itself (Step 1) before needing any file from it, so it never
 depends on $PSScriptRoot. Also runs from a local checkout.
@@ -28,6 +28,20 @@ Idempotent: re-running updates the clone and no-ops anything already in place.
 #>
 param([switch]$Test)
 $ErrorActionPreference = 'Stop'
+
+# TLS 1.2 for the web calls below (gws zip, VC_redist, tracker ping). Win11
+# defaults already negotiate it; this is insurance for older hosts. -bor so a
+# host that also speaks TLS 1.3 is never downgraded.
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
+
+# How were we launched? `-File` (the /setup re-provision path, or any wrapper)
+# sets $PSCommandPath; a bare `iwr | iex` paste does not. Under -File we hand
+# back real exit codes; under a bare paste we must NEVER `exit` -- that closes
+# the user's interactive PowerShell window and swallows the summary/error. Each
+# stop site therefore does: if ($RunningFromFile) { exit N } else { return }.
+# The `return` runs at top-level script scope, which halts the script under
+# `iex` without terminating the session (a function-scoped return would not).
+$RunningFromFile = [bool]$PSCommandPath
 
 # --- Config dir resolution (mirrors install.sh) ---
 if ($env:CLAUDE_CONFIG_DIR) {
@@ -73,7 +87,7 @@ function Add-ToUserPath {
 
 # Run a native command and return combined stdout+stderr as text WITHOUT letting
 # stderr trip $ErrorActionPreference='Stop' (native stderr merged via 2>&1 under
-# Stop otherwise raises a terminating NativeCommandError — e.g. gws prints a
+# Stop otherwise raises a terminating NativeCommandError - e.g. gws prints a
 # harmless "Using keyring backend" line to stderr). Used for --version probes.
 function Invoke-Native {
     param([string]$Exe, [string[]]$CmdArgs)
@@ -86,24 +100,24 @@ function Invoke-Native {
 
 Write-Host ""
 Write-Host "=== NSLS Builder Toolkit (Windows) ==="
-if ($Test) { Write-Host "  (TEST MODE — installing into $ConfigDir; your real .claude is untouched)" }
+if ($Test) { Write-Host "  (TEST MODE - installing into $ConfigDir; your real .claude is untouched)" }
 Write-Host ""
 
 # --- Prerequisites ---
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "Git isn't installed yet — the toolkit needs it (a one-time setup)."
+    Write-Host "Git isn't installed yet - the toolkit needs it (a one-time setup)."
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-Host "  Installing Git for you via winget..."
         winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements
         Write-Host ""
-        Write-Host "  ✓ Git installed. Now CLOSE this PowerShell, open a NEW one, and re-run this"
-        Write-Host "    installer — a fresh shell is needed so Git is on your PATH."
+        Write-Host "  [ok] Git installed. Now CLOSE this PowerShell, open a NEW one, and re-run this"
+        Write-Host "    installer - a fresh shell is needed so Git is on your PATH."
     } else {
         Write-Host "  Easiest path: if Claude Code offers to install Git, say YES."
         Write-Host "  Otherwise install it from https://git-scm.com/download/win (default options),"
         Write-Host "  then reopen PowerShell and re-run this installer."
     }
-    exit 1
+    if ($RunningFromFile) { exit 1 } else { return }
 }
 
 if ($Test) {
@@ -111,13 +125,13 @@ if ($Test) {
 } elseif (-not (Test-Path $ConfigDir)) {
     Write-Host "Error: Claude Code doesn't appear to be set up ($ConfigDir not found)."
     Write-Host "  Install Claude Code first, then re-run this script."
-    exit 1
+    if ($RunningFromFile) { exit 1 } else { return }
 }
 
 # --- Step 0: Provision runtime prerequisites (Python, gws, Node); VC++ check ---
 # The Google-Docs skills (/gdoc-build, /gdoc-edit) need Python 3.12 + python-docx
 # + gws; the signal MCP server needs Node. Provision what's missing, verify each
-# with a real invocation, and DEGRADE to a warning on failure — a failed
+# with a real invocation, and DEGRADE to a warning on failure - a failed
 # provision must never abort the toolkit install. Every step is idempotent: it
 # skips work already done, so re-running is safe.
 Write-Host ""
@@ -135,12 +149,12 @@ if (-not (Test-Path $PyExe)) {
         try { winget install --id Python.Python.3.12 -e --source winget --accept-source-agreements --accept-package-agreements 2>$null | Out-Null } catch {}
     }
 }
-# python-docx (pip is idempotent — a no-op when already satisfied).
+# python-docx (pip is idempotent - a no-op when already satisfied).
 if (Test-Path $PyExe) {
     try { & $PyExe -m pip install --user python-docx --quiet 2>$null | Out-Null } catch {}
 }
 
-# --- (b) gws CLI — download the Windows release zip, extract gws.exe, add to PATH ---
+# --- (b) gws CLI - download the Windows release zip, extract gws.exe, add to PATH ---
 # (Per-user OAuth stays manual: `gws auth login`, run from the gdoc skills.)
 if (-not (Test-Path $GwsExe) -and -not (Get-Command gws -ErrorAction SilentlyContinue)) {
     Write-Host "  Installing gws (Google Workspace CLI)..."
@@ -160,7 +174,7 @@ if (-not (Test-Path $GwsExe) -and -not (Get-Command gws -ErrorAction SilentlyCon
 }
 if (Test-Path $GwsExe) { Add-ToUserPath $GwsDir }
 
-# --- (c) Node.js LTS — the signal MCP server runs on it ---
+# --- (c) Node.js LTS - the signal MCP server runs on it ---
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     if ($HasWinget) {
         Write-Host "  Installing Node.js LTS..."
@@ -174,17 +188,17 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 }
 
 # --- Verify each provision with a real invocation, and report ---
-# Python + python-docx (probe the FULL path, never PATH `python` — on stock
+# Python + python-docx (probe the FULL path, never PATH `python` - on stock
 # Win11 `python`/`python3` are Microsoft Store stubs that print a message and
 # exit 0, so a naive check passes while nothing works).
 if (Test-Path $PyExe) {
     $pyVer  = Invoke-Native $PyExe @('--version')
     $docxOk = (Invoke-Native $PyExe @('-c', 'import docx; print("ok")')) -match 'ok'
     if     ($pyVer -and $docxOk) { $PrereqReport += "  [ok]   Python: $pyVer (python-docx installed)" }
-    elseif ($pyVer)              { $PrereqReport += "  [warn] Python: $pyVer but python-docx is missing — run: `"$PyExe`" -m pip install --user python-docx" }
-    else                         { $PrereqReport += "  [warn] Python 3.12 present but not runnable — reinstall from https://www.python.org/downloads/ (3.12)" }
+    elseif ($pyVer)              { $PrereqReport += "  [warn] Python: $pyVer but python-docx is missing - run: `"$PyExe`" -m pip install --user python-docx" }
+    else                         { $PrereqReport += "  [warn] Python 3.12 present but not runnable - reinstall from https://www.python.org/downloads/ (3.12)" }
 } else {
-    $PrereqReport += "  [warn] Python 3.12 not installed — /gdoc-build needs it. Install: winget install Python.Python.3.12"
+    $PrereqReport += "  [warn] Python 3.12 not installed - /gdoc-build needs it. Install: winget install Python.Python.3.12"
 }
 
 # Node
@@ -192,12 +206,12 @@ $NodeCmd = Get-Command node -ErrorAction SilentlyContinue
 if ($NodeCmd) {
     $nodeVer = Invoke-Native $NodeCmd.Source @('--version')
     if ($nodeVer -match 'v\d') { $PrereqReport += "  [ok]   Node: $nodeVer" }
-    else { $PrereqReport += "  [warn] Node present but 'node --version' failed — reopen PowerShell and retry." }
+    else { $PrereqReport += "  [warn] Node present but 'node --version' failed - reopen PowerShell and retry." }
 } else {
-    $PrereqReport += "  [warn] Node.js not installed — the signal MCP server needs it. Install: winget install OpenJS.NodeJS.LTS"
+    $PrereqReport += "  [warn] Node.js not installed - the signal MCP server needs it. Install: winget install OpenJS.NodeJS.LTS"
 }
 
-# (d) MS Visual C++ x64 runtime — gws.exe (a Rust/MSVC binary) needs it or it
+# (d) MS Visual C++ x64 runtime - gws.exe (a Rust/MSVC binary) needs it or it
 # exits 0xC0000135 with NO output. A silent install is impossible from a
 # non-interactive shell (winget returns 1602; the UAC prompt never reaches the
 # screen), so we only DETECT it and, if missing, stage the redist in Downloads
@@ -209,7 +223,7 @@ if (-not $VcOk) {
         try { Invoke-WebRequest -Uri 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $vcDl -UseBasicParsing } catch {}
     }
     if (Test-Path $vcDl) {
-        $PrereqReport += "  [ACTION NEEDED] Microsoft VC++ x64 runtime is missing — gws can't run without it."
+        $PrereqReport += "  [ACTION NEEDED] Microsoft VC++ x64 runtime is missing - gws can't run without it."
         $PrereqReport += "                  Open File Explorer -> Downloads -> double-click VC_redist.x64.exe -> click Yes -> Install."
     } else {
         $PrereqReport += "  [ACTION NEEDED] Microsoft VC++ x64 runtime is missing (and the download failed)."
@@ -223,10 +237,10 @@ if ($GwsResolved) {
     $gwsRaw  = Invoke-Native $GwsResolved @('--version')
     $gwsLine = ($gwsRaw -split '\r?\n' | Where-Object { $_ -match 'gws' } | Select-Object -First 1)
     if ($gwsLine) { $PrereqReport += "  [ok]   gws: $($gwsLine.Trim())" }
-    elseif (-not $VcOk) { $PrereqReport += "  [warn] gws installed but can't run yet — install the VC++ runtime (above), then it works." }
-    else { $PrereqReport += "  [warn] gws installed but not runnable — reopen PowerShell (PATH refresh) and retry: gws --version" }
+    elseif (-not $VcOk) { $PrereqReport += "  [warn] gws installed but can't run yet - install the VC++ runtime (above), then it works." }
+    else { $PrereqReport += "  [warn] gws installed but not runnable - reopen PowerShell (PATH refresh) and retry: gws --version" }
 } else {
-    $PrereqReport += "  [warn] gws not installed — /gdoc-build & /gdoc-edit need it (see skills/gws Windows install)."
+    $PrereqReport += "  [warn] gws not installed - /gdoc-build & /gdoc-edit need it (see skills/gws Windows install)."
 }
 
 # --- Step 1: Clone / update the org toolkit ---
@@ -311,7 +325,7 @@ $ss = @(Without-Matching $cfg.hooks.SessionStart 'session-start.ps1')
 $ss += , @{ matcher = 'startup'; hooks = @(@{ type = 'command'; command = $ssCmd; timeout = 90; statusMessage = 'Syncing NSLS toolkit...' }) }
 
 $pt = @(Without-Matching $cfg.hooks.PreToolUse 'skill-event.ps1')
-$pt += , @{ matcher = 'Skill'; hooks = @(@{ type = 'command'; command = $ptCmd; timeout = 5; statusMessage = 'Logging skill use so you get NSLS credit (nothing else)…' }) }
+$pt += , @{ matcher = 'Skill'; hooks = @(@{ type = 'command'; command = $ptCmd; timeout = 5; statusMessage = 'Logging skill use so you get NSLS credit (nothing else)...' }) }
 
 $cfg.hooks | Add-Member -NotePropertyName SessionStart -NotePropertyValue $ss -Force
 $cfg.hooks | Add-Member -NotePropertyName PreToolUse  -NotePropertyValue $pt -Force
@@ -382,7 +396,7 @@ if ($ClaudeBin) {
         & $ClaudeBin plugin uninstall compound-engineering 2>$null | Out-Null
         & $ClaudeBin plugin marketplace remove every-marketplace 2>$null | Out-Null
     }
-    # superpowers needs its marketplace registered first — a bare install spec
+    # superpowers needs its marketplace registered first - a bare install spec
     # with no marketplace can never resolve on a fresh machine.
     Install-Plugin 'superpowers' 'superpowers@superpowers-marketplace' `
         'https://github.com/obra/superpowers-marketplace.git'
@@ -415,7 +429,7 @@ if ($ClaudeBin -and (Test-Path $McpJson)) {
         $stype = if ($s.PSObject.Properties.Name -contains 'type') { $s.type } else { 'stdio' }
         if ($stype -eq 'http') {
             # http servers take a URL + auth header, NOT a command. The bearer
-            # tokens don't exist on a fresh machine — defer to /signal-setup
+            # tokens don't exist on a fresh machine - defer to /signal-setup
             # rather than register a server that 401s silently.
             $url = Expand-Vars $s.url
             $headerArgs = @(); $blocked = (Has-Unresolved $url)
@@ -442,18 +456,18 @@ if ($ClaudeBin -and (Test-Path $McpJson)) {
         $out = Invoke-Native $ClaudeBin $mcpArgs
         if ($out -match 'already exists') { Write-Host "  ${name}: already registered" }
         elseif ($out -match 'Added') { Write-Host "  ${name}: registered (user scope)"; $new++ }
-        else { Write-Host "  ${name}: registration failed — $out" }
+        else { Write-Host "  ${name}: registration failed - $out" }
     }
     Write-Host "  $new MCP server(s) newly registered (restart Claude Code to load)"
-    if ($skipped.Count) { Write-Host "  Deferred (needs an access token): $($skipped -join ', ') — run /signal-setup to connect these." }
+    if ($skipped.Count) { Write-Host "  Deferred (needs an access token): $($skipped -join ', ') - run /signal-setup to connect these." }
     # signal is a stdio server that runs on Node. Registration succeeds either
-    # way, but without Node the server reports "Failed to connect" on restart —
+    # way, but without Node the server reports "Failed to connect" on restart -
     # so say what to do rather than leave a bare failed server.
     if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-        Write-Host "  Note: 'signal' needs Node.js, which isn't installed — install Node, then run /signal-setup."
+        Write-Host "  Note: 'signal' needs Node.js, which isn't installed - install Node, then run /signal-setup."
     }
 } else {
-    Write-Host "  Skipped — 'claude' CLI or .mcp.json not found."
+    Write-Host "  Skipped - 'claude' CLI or .mcp.json not found."
 }
 
 # --- Step 4: Sync slash-command pointer skills ---
@@ -505,13 +519,13 @@ Write-Host ""
 if ($ClaudeBin) {
     Write-Host "  ORG SKILLS ($skillTotal skills), plus superpowers + compound-engineering."
 } else {
-    # Honest banner: without the CLI, Steps 3 and 3.5 were skipped — don't imply
+    # Honest banner: without the CLI, Steps 3 and 3.5 were skipped - don't imply
     # a clean install. Name exactly what didn't happen and how to finish it.
     Write-Host "  ORG SKILLS ($skillTotal skills) installed and enabled."
     Write-Host ""
     Write-Host "  NOTE: the 'claude' CLI wasn't found, so these steps were SKIPPED:"
-    Write-Host "    - Step 3:   plugins (superpowers, compound-engineering) — NOT installed"
-    Write-Host "    - Step 3.5: bundled MCP servers (e.g. signal) — NOT registered"
+    Write-Host "    - Step 3:   plugins (superpowers, compound-engineering) - NOT installed"
+    Write-Host "    - Step 3.5: bundled MCP servers (e.g. signal) - NOT registered"
     Write-Host "  Finish them after your first Claude Code session by running:  /setup"
     Write-Host "  (or re-run this installer from a shell where 'claude' is on PATH)."
 }
@@ -524,14 +538,16 @@ if ($Test) {
     Write-Host "  Reset with:  Remove-Item -Recurse -Force `"$ConfigDir`""
 } else {
     Write-Host "=== NEXT STEP ==="
-    Write-Host "  1. Restart Claude Code (quit and reopen — a restart loads the MCP servers"
+    Write-Host "  1. Restart Claude Code (quit and reopen - a restart loads the MCP servers"
     Write-Host "     and hooks). In the desktop app, click Code (top left) when it reopens."
     Write-Host "  2. Say:  /setup"
-    Write-Host "     It connects your tools (Slack, Google Drive, Calendar, Gmail, Fathom —"
+    Write-Host "     It connects your tools (Slack, Google Drive, Calendar, Gmail, Fathom -"
     Write-Host "     one at a time, with you) and offers the personal productivity skills."
 }
 Write-Host ""
-# Explicit success exit: native calls above leak their exit code into
+# Explicit success exit under -File: native calls above leak their code into
 # $LASTEXITCODE, so a good install would otherwise return non-zero and any
-# wrapper checking the code would treat it as a failure.
-exit 0
+# wrapper checking the code (or /setup's re-provision) would treat it as failed.
+# Under a bare `iwr | iex` paste there's no wrapper to see a code and `exit`
+# would close the user's window, so just return.
+if ($RunningFromFile) { exit 0 } else { return }

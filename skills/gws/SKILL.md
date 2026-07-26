@@ -53,7 +53,9 @@ Invoke-WebRequest -UseBasicParsing `
 Expand-Archive -Force $zip "$env:TEMP\gws-extract"
 $exe = (Get-ChildItem "$env:TEMP\gws-extract" -Recurse -Filter gws.exe | Select-Object -First 1).FullName
 Copy-Item $exe "$dir\gws.exe" -Force
-[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path','User') + ";$dir", 'User')
+# Add to user PATH once (idempotent: no duplicate on re-run, no leading ';' when empty).
+$u = [Environment]::GetEnvironmentVariable('Path','User')
+if (($u -split ';') -notcontains $dir) { [Environment]::SetEnvironmentVariable('Path', (@($u, $dir) | Where-Object { $_ }) -join ';', 'User') }
 ```
 
 This installs the latest release from https://github.com/googleworkspace/cli.
