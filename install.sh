@@ -119,7 +119,9 @@ HOOK_ENTRY = {
 }
 MARKER = 'nsls-builder-toolkit/hooks/session-start.py'
 
-with open(SETTINGS_PATH, encoding='utf-8') as f: cfg = json.load(f)
+# utf-8-sig tolerates a BOM: existing machines may have a BOM'd settings.json
+# written by an older PowerShell installer, and plain utf-8 would choke on it.
+with open(SETTINGS_PATH, encoding='utf-8-sig') as f: cfg = json.load(f)
 
 # Enable plugin
 ep = cfg.setdefault('enabledPlugins', {})
@@ -224,6 +226,13 @@ if [ -f "$INSTALL_ENV_FILE" ]; then
 fi
 [ -z "$INSTALL_EMAIL" ] && INSTALL_EMAIL=$(git config user.email 2>/dev/null || true)
 [ -z "$INSTALL_EMAIL" ] && INSTALL_EMAIL="${USER:-unknown}@$(hostname -s 2>/dev/null || echo unknown)"
+
+# Persist the EXACT provisional identity used for these early events so /setup
+# Step 1.5 can reconcile them WITHOUT recomputing (parity with install.ps1).
+# Written beside the toolkit, not in .env (which doesn't exist yet); gitignored.
+# Idempotent — overwritten with the current value on every run.
+printf '%s' "$INSTALL_EMAIL" > "$PLUGIN_DIR/.install-identity" 2>/dev/null || true
+
 INSTALL_GH=$(gh api user --jq .login 2>/dev/null || true)
 
 INSTALL_EMAIL_SAFE=$(printf '%s' "$INSTALL_EMAIL" | tr -d '"\\')
@@ -263,6 +272,26 @@ if [ -z "$CLAUDE_BIN" ]; then
   eval "$(cat ~/.zshrc 2>/dev/null | grep -E 'export PATH|path=')" 2>/dev/null || true
   eval "$(cat ~/.bashrc 2>/dev/null | grep -E 'export PATH|path=')" 2>/dev/null || true
   CLAUDE_BIN="$(command -v claude 2>/dev/null)"
+fi
+
+# Desktop-app bundled CLI (no separate CLI install). macOS ships it under
+# ~/Library/Application Support/Claude/claude-code[-vm]/<version>/claude.
+# NOTE: on Apple Silicon that binary is a Linux build that runs inside the app's
+# VM and is NOT executable from the host shell (verified: `exec format error`),
+# so accept it ONLY if it actually runs. Otherwise fall through to the honest
+# "no claude" path rather than selecting a binary that exec-fails on every call.
+if [ -z "$CLAUDE_BIN" ]; then
+  for base in \
+    "$HOME/Library/Application Support/Claude/claude-code" \
+    "$HOME/Library/Application Support/Claude/claude-code-vm"; do
+    [ -d "$base" ] || continue
+    # sort -V => highest version last (falls back gracefully if -V is unsupported).
+    cand=$(ls -1d "$base"/*/claude 2>/dev/null | sort -V | tail -1) || true
+    if [ -n "$cand" ] && [ -x "$cand" ] && "$cand" --version >/dev/null 2>&1; then
+      CLAUDE_BIN="$cand"
+      break
+    fi
+  done
 fi
 
 install_plugin() {
@@ -317,7 +346,10 @@ migrate_compound_marketplace() {
 }
 
 if [ -n "$CLAUDE_BIN" ]; then
-  install_plugin "superpowers" "superpowers" ""
+  # superpowers needs its marketplace registered first — a bare install spec
+  # with no marketplace can never resolve on a fresh machine.
+  install_plugin "superpowers" "superpowers@superpowers-marketplace" \
+    "https://github.com/obra/superpowers-marketplace.git"
   migrate_compound_marketplace
   # Grep key is the bare plugin id (what `plugin list` prints); migrate_* above
   # has already cleared the stale every-marketplace install, so a bare-name
@@ -461,6 +493,20 @@ else
   fi
 fi
 
+# --- Step 3.8: Node.js check (the signal MCP server needs it) ---
+# Instruct + degrade (matches this script's style); don't auto-install Node.
+echo ""
+if command -v node &>/dev/null; then
+  echo "Node.js: $(node --version 2>/dev/null) — the signal MCP server can run."
+else
+  echo "Node.js not found — the 'signal' MCP server needs it to connect."
+  if command -v brew &>/dev/null; then
+    echo "  Install it:  brew install node   (then restart Claude Code and run /signal-setup)"
+  else
+    echo "  Install Node LTS from https://nodejs.org, then restart Claude Code and run /signal-setup."
+  fi
+fi
+
 # --- Step 4: Create slash-command pointer skills ---
 
 echo ""
@@ -562,10 +608,20 @@ SKILL_COUNT=$(ls "$PLUGIN_DIR/skills/" 2>/dev/null | wc -l | tr -d ' ')
 echo "  ORG SKILLS ($SKILL_COUNT skills for building, tracking, deploying):"
 ls "$PLUGIN_DIR/skills/" | sed 's/^/    \//'
 echo ""
-echo "  PLUGINS:"
-echo "    superpowers              — planning, debugging, verification workflows"
-echo "    compound-engineering     — brainstorm, plan, build, review pipeline"
-echo ""
+if [ -n "$CLAUDE_BIN" ]; then
+  echo "  PLUGINS:"
+  echo "    superpowers              — planning, debugging, verification workflows"
+  echo "    compound-engineering     — brainstorm, plan, build, review pipeline"
+  echo ""
+else
+  # Honest banner: without the CLI, plugins + MCP registration were skipped —
+  # don't imply they landed. Name what's missing and how to finish.
+  echo "  NOTE: the 'claude' CLI wasn't found, so these were SKIPPED:"
+  echo "    - plugins (superpowers, compound-engineering) — NOT installed"
+  echo "    - bundled MCP servers (e.g. signal) — NOT registered"
+  echo "  Finish them after your first Claude Code session by running:  /setup"
+  echo ""
+fi
 if [ "$TEST_MODE" != "1" ]; then
   echo "  SHORTCUT:"
   echo "    cc                       — type 'cc' in any terminal to launch Claude Code"
