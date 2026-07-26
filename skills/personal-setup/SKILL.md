@@ -89,7 +89,9 @@ p = os.path.expanduser('~/.claude/settings.json')
 cfg = json.load(open(p, encoding='utf-8-sig')) if os.path.exists(p) else {}
 cfg.setdefault('enabledPlugins', {})['nsls-personal-toolkit@local'] = True
 with open(p, 'w', encoding='utf-8') as f: json.dump(cfg, f, indent=2)
-print('Enabled nsls-personal-toolkit')
+# VERIFY by re-reading — never trust the exit code alone.
+chk = json.load(open(p, encoding='utf-8-sig'))
+print('ENABLED_OK' if chk.get('enabledPlugins', {}).get('nsls-personal-toolkit@local') else 'ENABLE_FAILED')
 "
 ```
 
@@ -104,8 +106,15 @@ if (-not ($cfg.PSObject.Properties.Name -contains 'enabledPlugins') -or $null -e
 }
 $cfg.enabledPlugins | Add-Member -NotePropertyName 'nsls-personal-toolkit@local' -NotePropertyValue $true -Force
 [System.IO.File]::WriteAllText($p, ($cfg | ConvertTo-Json -Depth 12), (New-Object System.Text.UTF8Encoding $false))
-Write-Host 'Enabled nsls-personal-toolkit'
+# VERIFY by re-reading — don't trust exit codes.
+$chk = Get-Content $p -Raw | ConvertFrom-Json
+if ($chk.enabledPlugins.'nsls-personal-toolkit@local') { Write-Host 'ENABLED_OK' } else { Write-Host 'ENABLE_FAILED' }
 ```
+
+**Confirm the output is `ENABLED_OK`.** If it prints `ENABLE_FAILED` (or nothing
+at all — the Windows `python3` stub does exactly that), the merge did NOT take:
+tell the builder plainly and retry, and do **not** proceed as if the plugin is
+enabled (pointer skills still sync either way, which otherwise hides the miss).
 
 Sync the personal kit's pointer skills into `~/.claude/skills/` so they appear
 **without a restart** (pointer skills load live; only MCP servers/hooks need a
