@@ -36,6 +36,28 @@ The fastest path for a builder asking for a Google Doc:
 6. **Return the URL.** `https://docs.google.com/document/d/<id>/edit` — give the user that link.
 7. **Clean up local artifacts.** `rm ~/build_<short-name>.py ~/<short-name>.docx`
 
+> **On Windows** — the Quick Start commands above are macOS/Linux-shaped. Translations:
+> - **Python:** use the full path `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`,
+>   never `python`/`python3.12`. Stock Win11 `python`/`python3` are Microsoft Store stubs
+>   that print "Python was not found" and **exit 0** — a naive check passes while nothing
+>   runs. `install.ps1` installs Python 3.12 to that path *and* `python-docx` into it, so
+>   on a toolkit machine you usually don't need the `--target /tmp/pptx_deps` install at all.
+> - **Temp deps dir:** if you do need a target install, replace `/tmp/pptx_deps` with a
+>   writable dir such as `%TEMP%\pptx_deps` (`$env:TEMP\pptx_deps`), and set `PYTHONPATH`
+>   to it.
+> - **`gws --upload` cwd restriction still applies:** build the `.docx` in your home dir
+>   (`%USERPROFILE%`) and run `gws` from there — `--upload` rejects paths outside the cwd.
+> - Home paths: `~/build_<name>.py` → `%USERPROFILE%\build_<name>.py`.
+>
+> On a toolkit Windows machine the whole flow is:
+> ```powershell
+> $py = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
+> Copy-Item templates\build_doc.py "$env:USERPROFILE\build_mydoc.py"
+> cd $env:USERPROFILE
+> & $py build_mydoc.py           # produces mydoc.docx in the home dir
+> gws drive files create --json '{"name":"My Doc","mimeType":"application/vnd.google-apps.document"}' --upload mydoc.docx --upload-content-type "application/vnd.openxmlformats-officedocument.wordprocessingml.document" --format json | Select-Object -Last 10
+> ```
+
 ## NSLS Brand Constants
 
 Don't invent colors. Use these.

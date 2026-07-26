@@ -2,6 +2,11 @@
 
 Copy-paste shell snippets for the upload flow. Tested 2026-05-01 on the builder-toolkit onboarding doc rebuild.
 
+> **On Windows** the snippets below are macOS/Linux-shaped. Translate: `cd ~` →
+> `cd $env:USERPROFILE`; `~/foo.docx` → `%USERPROFILE%\foo.docx`; `tail -10` →
+> `Select-Object -Last 10`. The `gws --upload` cwd restriction is the same on
+> every platform — build the `.docx` in your home dir and run `gws` from there.
+
 ## Upload `.docx` as a new Google Doc
 
 The `.docx` MUST be in `~` (or the cwd you're running `gws` from). `gws` rejects paths outside cwd.
