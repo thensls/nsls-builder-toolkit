@@ -88,19 +88,30 @@ allowlists it so it shouldn't recur.)
 The installer fires an install event (and skill events can fire) **before**
 `/setup` runs, attributed to a fallback identity (git email → `$USER@host`).
 Now that the real BUILDER_EMAIL is set, tell the tracker to merge those early
-events onto the right builder. Recompute the *previous* identity by re-running
-the same fallback chain the early events used, then POST the reconcile. Skip
-silently if they match, and never block setup on it:
+events onto the right builder. Read the *previous* identity the installer
+recorded (`.install-identity`), then POST the reconcile. Skip silently if they
+match, and never block setup on it:
 
 ```bash
 NEW_EMAIL="<confirmed email>"
-PREV_EMAIL=$(git config user.email 2>/dev/null || true)
-[ -z "$PREV_EMAIL" ] && PREV_EMAIL="${USER:-unknown}@$(hostname -s 2>/dev/null || echo unknown)"
+# Prefer the EXACT provisional identity the installer wrote to
+# <toolkit>/.install-identity. Recomputing it here is unreliable on Windows Git
+# Bash — $USER is empty and `hostname -s` has no -s flag, yielding
+# `unknown@unknown`, which could NEVER match the identity install.ps1 actually
+# used (`$USERNAME@$COMPUTERNAME`). Fall back to the old recompute only when the
+# file is absent (a pre-.install-identity install).
+ID_FILE="$HOME/.claude/local-plugins/nsls-builder-toolkit/.install-identity"
+if [ -f "$ID_FILE" ]; then
+  PREV_EMAIL=$(head -n1 "$ID_FILE" | tr -d '"\r')
+else
+  PREV_EMAIL=$(git config user.email 2>/dev/null || true)
+  [ -z "$PREV_EMAIL" ] && PREV_EMAIL="${USER:-unknown}@$(hostname -s 2>/dev/null || echo unknown)"
+fi
 if [ -n "$NEW_EMAIL" ] && [ "$PREV_EMAIL" != "$NEW_EMAIL" ]; then
   # Contract matches the tracker service's handler (POST /reconcile-builder,
-  # body {previous_email,new_email}). Server-side it's idempotent and no-ops when
-  # the emails match or no provisional row exists, so this is safe to re-run.
-  # Best-effort — a 404/timeout must never block setup.
+  # body {previous_email,new_email}) — do NOT change the shape. Server-side it's
+  # idempotent and no-ops when the emails match or no provisional row exists, so
+  # this is safe to re-run. Best-effort — a 404/timeout must never block setup.
   curl -s --max-time 40 -X POST \
     ${NSLS_TRACKER_URL:-https://web-production-6281e.up.railway.app}/reconcile-builder \
     -H 'Content-Type: application/json' \
@@ -115,9 +126,10 @@ Don't mention this to the builder unless they ask — it's plumbing.
 
 This is the most important step and the one builders stall on. **Do NOT dump a
 list of settings paths.** Connect the recommended starter bundle **one connector
-at a time**, each a connect-now-or-defer choice. For each: say one line on *why*,
-send them to the exact Connectors panel, wait, then verify with a live read call
-and confirm before moving to the next.
+at a time**, each a connect-now-or-defer choice: one line on *why*, send them to
+the exact Connectors panel, wait for them to come back. **Collect them all
+first — do not verify yet.** Verification happens after a single restart at the
+end of this step.
 
 All five are **one-click "Authorize" connectors** in the desktop app — no API
 keys, no tokens to paste. The bundle, in order:
@@ -130,44 +142,62 @@ keys, no tokens to paste. The bundle, in order:
 
 > **Do not rely on a programmatic MCP-registry probe to decide what's
 > available** — a probe has missed Fathom even though its connector exists
-> (user-verified 2026-07-21). Always send the builder to the Connectors panel
-> and confirm by an actual read call, not by a registry lookup.
+> (user-verified 2026-07-21). Always send the builder to the Connectors panel.
 
-For each connector, run this loop:
+> ⚠️ **Never verify a just-authorized connector in THIS session.** A connector
+> authorized *during* a running session does not hot-add its MCP tools — they
+> load only on the **next restart** (disconnecting drops tools live; connecting
+> does not add them). A live read call right after Authorize gives a **false
+> negative** and sends a builder who connected *correctly* into a pointless
+> re-authorize loop. So: collect all connections, restart once, then verify.
+
+### The connect loop (one at a time)
 
 1. **One line on why**, then ask: "Want to connect **<tool>** now? (yes / skip)"
-   - If skip: "No problem — you can add it anytime by running /setup again." Move on.
-2. **If yes, send them to the exact panel** (don't name a settings path — tell
-   them what to click):
+   - If skip: "No problem — run /setup again anytime to add it." Move on.
+2. **If yes, send them to the panel.** Give the **full explanation for connector
+   #1 (Slack) only**:
    ```
-   In the desktop app, open Settings → Connectors, find <tool>, and click
-   Authorize. A browser window opens for you to sign in — approve it, and you're done.
+   Open Settings → Connectors, find Slack, and click Authorize. A browser window
+   opens — sign in and approve, then come back. Heads up: the app often drops you
+   on the Home tab afterward and it looks like you lost this chat — you didn't.
+   Click **Code** (top left) to return, and tell me when you're back.
    ```
-3. **⚠️ Home-tab gotcha — print this every time:**
+   For **connectors #2–#5**, collapse to a one-line breadcrumb (the Home-tab
+   note folds into it — don't repeat the whole paragraph):
    ```
-   Heads up: after you authorize, the app often drops you back on the Home tab
-   and it looks like you lost this chat. You didn't — just click **Code** (top
-   left) to come back here, and tell me when you're back.
+   Next: Google Drive → Settings › Connectors › Google Drive › Authorize, approve
+   in the browser, click **Code** to come back. Tell me when you're done.
    ```
-4. **Wait** for them to confirm they're back.
-5. **Verify with a live read call** (not a registry probe). Examples:
-   - Slack: read your own identity from the Slack MCP tool descriptions
-     ("Current logged in user's Slack user_id is U…").
-   - Google Drive: a minimal Drive search/list call.
-   - Google Calendar: `list_calendars`.
-   - Gmail: `list_labels` (or a minimal thread search).
-   - Fathom: `get_identity` / `list_meetings` (via the `api.fathom.ai` path).
-6. **Confirm result**, then next:
-   - Works: "✓ <tool> is connected — you're [name/detail]."
-   - Still not showing: "Not seeing <tool> yet — that usually means the
-     Authorize window didn't finish. Want to try once more, or skip for now?"
+3. **Wait** for "done." Note it as connected (pending restart) and go to the
+   next. **Do not run a live read call yet.**
 
-After the loop, a short summary:
+### End of Step 2: one restart, then verify
+
+Once they've connected (or skipped) all five:
 
 ```
-Connected: [the ones that verified]
-Skipped:   [the ones deferred] — run /setup anytime to add these.
+That's the bundle. One thing makes them actually load: fully restart Claude Code
+now (quit and reopen — on Windows, closing the window doesn't quit it, so
+right-click the tray icon → Exit). When it reopens, click **Code**, then run
+/setup again — I'll confirm each connection.
 ```
+
+When `/setup` runs again (**after** the restart), verify each connector the
+builder connected, with a **live read call** (not a registry probe):
+- Slack: read your own identity from the Slack MCP tool ("…user_id is U…").
+- Google Drive: a minimal Drive search/list call.
+- Google Calendar: `list_calendars`.
+- Gmail: `list_labels` (or a minimal thread search).
+- Fathom: `get_identity` / `list_meetings` (via the `api.fathom.ai` path).
+
+Then summarize:
+```
+Connected: [verified] · Skipped: [deferred] — run /setup anytime to add these.
+```
+Only if a connector still isn't live **after a restart** is it worth
+re-authorizing ("Slack didn't come through — let's redo just that one"). Never
+offer a re-authorize as the first response in the same session it was connected.
 
 Don't block on skipped tools — org skills that don't need them work right now.
 
@@ -245,22 +275,67 @@ folder at console.cloud.google.com/projectcreate.
 
 If no: move on.
 
-### Google Docs editing (gws auth) — optional
+### Google Docs editing (gws auth) — turnkey
 
-`/gdoc-edit` and `/gdoc-build` run on `gws` (installed by the toolkit installer).
-They need a one-time `gws auth login`. Check state:
+`/gdoc-edit` and `/gdoc-build` run on `gws` (installed by the toolkit installer,
+per platform). They need a one-time, per-user `gws auth login`. Make this close
+to turnkey: detect state, place the shared OAuth client file for them, then hand
+off the browser consent — only they can complete it (that's the security model,
+not a gap).
+
+**1. Detect auth + the config path — never hardcode `~/.config/gws`.**
 
 ```bash
-gws auth status 2>/dev/null | grep -q '"storage": "none"' && echo "gws NOT authed" || echo "gws authed (or missing)"
+gws auth status 2>&1 || true
 ```
+- If it shows a `storage` other than `none`, gws is already authed → "Google
+  Docs skills are ready." Done.
+- Otherwise read the **`client_config` path from that output** — it differs by
+  platform (on Windows gws reports `C:\Users\<user>\.config\gws\...`). That
+  directory is where `client_secret.json` must live. Do **not** assume
+  `~/.config/gws`.
 
-- **Already authed**: "Google Docs skills are ready."
-- **Not authed** — don't run the OAuth flow for them (it mints *their* token).
-  Point them at the setup doc and offer to walk them through it live:
-  ```
-  To edit/create Google Docs from Claude, there's a one-time sign-in. I can walk
-  you through it now, or you can do it later — it's in the /gdoc-edit setup notes.
-  ```
+**2. If `client_secret.json` is missing at that path, place it for them.** It's
+one shared OAuth *client* file — a Desktop client behind an **Internal** consent
+screen — that only lets a sign-in *start*; the real token is minted per-user in
+step 3. Two paths — try the connector, then a browser download that always
+works:
+
+- **Primary — the Google Drive connector** the builder connected in Step 2:
+  fetch Drive file ID `1fOu-0M35vgGO6mzbd0BInEt_sgkmgCn7` and write its bytes to
+  the client_config path from step 1. This works when the connector is the
+  builder's own @nsls.org identity; if it returns not-found or the connector
+  isn't live, go straight to the fallback (don't loop on the connector).
+- **Guaranteed fallback — browser download:**
+  1. Give them the link and tell them to open it **signed in as their @nsls.org
+     account** and click **Download**:
+     `https://drive.google.com/file/d/1fOu-0M35vgGO6mzbd0BInEt_sgkmgCn7/view`
+  2. Find the downloaded file — glob the Downloads dir loosely (the Drive
+     filename is long and quoted, so match `*client_secret*.json`):
+     - macOS/Linux: `ls -t "$HOME/Downloads/"*client_secret*.json 2>/dev/null | head -1`
+     - Windows: `Get-ChildItem "$env:USERPROFILE\Downloads\*client_secret*.json" | Sort-Object LastWriteTime | Select-Object -Last 1`
+  3. Move+rename it to the EXACT client_config path from step 1 (create the dir
+     if needed). On macOS/Linux `chmod 600` it; on Windows skip chmod (profile
+     ACLs suffice).
+  4. Re-run `gws auth status` and confirm the `client_config` file now exists
+     before continuing — don't proceed to login until it's in place.
+- **Last resort** — if the link is dead or access is denied, ask in **#builders**
+  for the current link, then place the file and re-check as above.
+
+**3. Kick off the per-user sign-in** (you may start it for them; they complete
+the Google consent themselves):
+
+```bash
+gws auth login --services docs,drive
+```
+Exactly `docs,drive` — never broader. A browser opens for Google consent.
+
+> ⚠️ **Real @nsls.org Workspace accounts only.** The consent screen is
+> **Internal** to the nsls.org Workspace org, so an **alias** address, or a
+> personal/consumer Google account that merely uses an nsls.org address, is
+> **refused** with an unhelpful error. Use the actual org account.
+
+Never commit `client_secret.json` to any repo — it stays Drive-distributed.
 
 ## Step 6: Personal productivity (optional)
 
