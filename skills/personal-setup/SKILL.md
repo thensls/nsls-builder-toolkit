@@ -68,17 +68,43 @@ fi
 If it prints `CLONE_FAILED`, tell the builder network/permission blocked the
 clone and offer to retry — don't proceed.
 
-Enable it in settings.json (merge, don't clobber other keys):
+Enable it in settings.json (merge, don't clobber other keys). **Use the block
+for the builder's platform.**
+
+> ⚠️ **On Windows, do NOT use `python3` for this.** Stock Win11 `python`/`python3`
+> is a Microsoft Store stub that prints "Python was not found" and **exits 0** —
+> the merge silently no-ops and the plugin is never enabled (the pointer skills
+> still sync, so it *looks* like it worked). Use the PowerShell block. The bash
+> blocks elsewhere in this step are Mac/Linux-shaped; on Windows mirror
+> `install.ps1` (a `git clone`/`git pull` works either way; use PowerShell for
+> the settings merge and pointer sync).
+
+**macOS / Linux** — read with `utf-8-sig` so a BOM left by an older Windows
+installer doesn't break `json.load`:
 
 ```bash
 python3 -c "
 import json, os
 p = os.path.expanduser('~/.claude/settings.json')
-cfg = json.load(open(p)) if os.path.exists(p) else {}
+cfg = json.load(open(p, encoding='utf-8-sig')) if os.path.exists(p) else {}
 cfg.setdefault('enabledPlugins', {})['nsls-personal-toolkit@local'] = True
-json.dump(cfg, open(p, 'w'), indent=2)
+with open(p, 'w', encoding='utf-8') as f: json.dump(cfg, f, indent=2)
 print('Enabled nsls-personal-toolkit')
 "
+```
+
+**Windows** — native PowerShell (mirrors `install.ps1`), BOM-less write so
+downstream `json.load` doesn't choke:
+
+```powershell
+$p = Join-Path $env:USERPROFILE '.claude\settings.json'
+$cfg = if (Test-Path $p) { Get-Content $p -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
+if (-not ($cfg.PSObject.Properties.Name -contains 'enabledPlugins') -or $null -eq $cfg.enabledPlugins) {
+  $cfg | Add-Member -NotePropertyName enabledPlugins -NotePropertyValue ([pscustomobject]@{}) -Force
+}
+$cfg.enabledPlugins | Add-Member -NotePropertyName 'nsls-personal-toolkit@local' -NotePropertyValue $true -Force
+[System.IO.File]::WriteAllText($p, ($cfg | ConvertTo-Json -Depth 12), (New-Object System.Text.UTF8Encoding $false))
+Write-Host 'Enabled nsls-personal-toolkit'
 ```
 
 Sync the personal kit's pointer skills into `~/.claude/skills/` so they appear
