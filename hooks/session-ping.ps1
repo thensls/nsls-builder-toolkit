@@ -58,7 +58,9 @@ try {
         $dir = Split-Path $MarkerFile -Parent
         if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
         $marker = @{ payload_json = $payload; attempted_at = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json -Compress
-        Set-Content -Path $MarkerFile -Value $marker -Encoding UTF8
+        # BOM-less write: PS 5.1 `Set-Content -Encoding utf8` emits a BOM, which
+        # breaks the ConvertFrom-Json replay path (and any other JSON consumer).
+        [System.IO.File]::WriteAllText($MarkerFile, $marker, (New-Object System.Text.UTF8Encoding $false))
     } catch { }
     exit 0
 }

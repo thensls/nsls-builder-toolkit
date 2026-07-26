@@ -15,14 +15,15 @@ set -uo pipefail
 
 INPUT=$(cat)
 
-SKILL_NAME=$(printf '%s' "$INPUT" | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print(d.get('tool_input', {}).get('skill', ''))
-except Exception:
-    pass
-" 2>/dev/null)
+# Extract tool_input.skill WITHOUT python3 — a python3-less Mac otherwise loses
+# skill credit silently (the Windows .ps1 uses ConvertFrom-Json and is fine).
+# The PreToolUse(Skill) payload has exactly one "skill" key (tool_input.skill);
+# a decoy like "skill_name" or "skillx" can't match because the pattern requires
+# "skill" immediately closed by a quote and followed by a colon. Handles compact
+# and pretty-printed JSON and skill names with hyphens/colons (e.g.
+# compound-engineering:ce-commit). Same semantics as the old json.load: absent
+# or unparseable -> empty -> exit 0.
+SKILL_NAME=$(printf '%s' "$INPUT" | sed -n 's/.*"skill"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
 
 [ -z "$SKILL_NAME" ] && exit 0
 
