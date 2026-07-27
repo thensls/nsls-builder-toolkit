@@ -73,9 +73,11 @@ function Parse-Frontmatter {
             }
         }
     }
-    # Collapse whitespace: the caller embeds this as one indented line under
-    # description: >-, so a decoded newline would break the generated file.
+    # Map decoded control chars (NUL, BEL, ESC) to spaces - they would make the
+    # generated pointer unparseable - then collapse whitespace, because the
+    # caller embeds this as one indented line under description: >-.
     # Blank means "no description" so the caller's default stands.
+    $d = [regex]::Replace($d, '[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', ' ')
     $d = ($d -split '\s+' | Where-Object { $_ }) -join ' '
     $desc = if ([string]::IsNullOrWhiteSpace($d)) { $null } else { $d }
     return @{ name = $name; desc = $desc }

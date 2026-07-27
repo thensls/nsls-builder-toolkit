@@ -64,8 +64,10 @@ else:
             else:
                 inner = inner.replace(chr(39) * 2, chr(39))
             d = inner
-    # Collapse whitespace: the caller embeds this as one indented line under
-    # description: >-, so a decoded newline would break the generated file.
+    # Map decoded control chars (NUL, BEL, ESC) to spaces -- they would make the
+    # generated pointer unparseable -- then collapse whitespace, because the
+    # caller embeds this as one indented line under description: >-.
+    d = re.sub('[' + chr(92) + 'x00-' + chr(92) + 'x08' + chr(92) + 'x0b' + chr(92) + 'x0c' + chr(92) + 'x0e-' + chr(92) + 'x1f' + chr(92) + 'x7f-' + chr(92) + 'x9f]', ' ', d)
     d = ' '.join(d.split())
 if d: print(d)
 " 2>/dev/null)
