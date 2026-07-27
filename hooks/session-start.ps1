@@ -28,31 +28,56 @@ function Parse-Frontmatter {
     $block = $m.Groups[1].Value
     $nameMatch = [regex]::Match($block, '^name:\s*(.+)$', 'Multiline')
     $name = if ($nameMatch.Success) { $nameMatch.Groups[1].Value.Trim() } else { $null }
-    $folded = [regex]::Match($block, 'description:\s*>-?\s*\r?\n((?:[ \t]+.+\r?\n?)+)')
+    # '*' not '+': an empty folded block still belongs to the folded branch.
+    # With '+' it fell through to the plain branch, which then captured the
+    # literal '>-' and used it as the description.
+    $folded = [regex]::Match($block, 'description:\s*>-?\s*\r?\n((?:[ \t]+.+\r?\n?)*)')
     if ($folded.Success) {
         $lines = $folded.Groups[1].Value -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
-        $desc = ($lines -join ' ')
+        $d = ($lines -join ' ')
     } else {
-        # Strip the YAML quotes off a single-line scalar (parity with the .py /
-        # .sh extractors): a description written as description: "Brain dump..."
-        # arrives here with its delimiters attached and they would land verbatim
-        # in the generated pointer.
+        # Single-line scalar: reject a bare block indicator, then strip YAML
+        # quotes and decode double-quoted escapes in ONE left-to-right pass.
+        # Parity with the .py / .sh extractors.
         $plain = [regex]::Match($block, '^description:[ \t]*(.+)$', 'Multiline')
-        if ($plain.Success) {
-            $d = $plain.Groups[1].Value.Trim()
-            $q = if ($d.Length -gt 1) { $d[0] } else { [char]0 }
-            if ($d.Length -gt 1 -and $d[$d.Length - 1] -eq $q -and ($q -eq '"' -or $q -eq "'")) {
-                $d = $d.Substring(1, $d.Length - 2)
-                if ($q -eq '"') { $d = $d.Replace('\"', '"').Replace('\\', '\') }
-                else { $d = $d.Replace("''", "'") }
+        $d = if ($plain.Success) { $plain.Groups[1].Value.Trim() } else { '' }
+        if (@('>', '>-', '>+', '|', '|-', '|+') -contains $d) {
+            $d = ''
+        } elseif ($d.Length -gt 1) {
+            $q = $d[0]
+            if ($d[$d.Length - 1] -eq $q -and ($q -eq '"' -or $q -eq "'")) {
+                $inner = $d.Substring(1, $d.Length - 2)
+                if ($q -eq '"') {
+                    # [char] codes, not backtick escapes: `e and `v don't exist
+                    # in Windows PowerShell 5.1, which is what runs this file.
+                    $simple = @{ '0' = [char]0;  'a' = [char]7;  'b' = [char]8
+                                 't' = [char]9;  'n' = [char]10; 'v' = [char]11
+                                 'f' = [char]12; 'r' = [char]13; 'e' = [char]27 }
+                    $inner = [regex]::Replace($inner,
+                        '\\x([0-9a-fA-F]{2})|\\u([0-9a-fA-F]{4})|\\U([0-9a-fA-F]{8})|\\(.)',
+                        {
+                            param($mm)
+                            foreach ($g in 1, 2, 3) {
+                                if ($mm.Groups[$g].Success) {
+                                    return [char][Convert]::ToInt32($mm.Groups[$g].Value, 16)
+                                }
+                            }
+                            $c = $mm.Groups[4].Value
+                            if ($simple.ContainsKey($c)) { return $simple[$c] }
+                            return $c
+                        })
+                } else {
+                    $inner = $inner.Replace("''", "'")
+                }
+                $d = $inner
             }
-            # Require content: a blank description: leaves the caller's default
-            # in place rather than overwriting it with an empty string.
-            $desc = if ([string]::IsNullOrWhiteSpace($d)) { $null } else { $d }
-        } else {
-            $desc = $null
         }
     }
+    # Collapse whitespace: the caller embeds this as one indented line under
+    # description: >-, so a decoded newline would break the generated file.
+    # Blank means "no description" so the caller's default stands.
+    $d = ($d -split '\s+' | Where-Object { $_ }) -join ' '
+    $desc = if ([string]::IsNullOrWhiteSpace($d)) { $null } else { $d }
     return @{ name = $name; desc = $desc }
 }
 
