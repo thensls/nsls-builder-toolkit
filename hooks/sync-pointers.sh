@@ -50,9 +50,12 @@ else:
         if len(d) > 1 and d[-1:] == q and q in (chr(34), chr(39)):
             inner = d[1:-1]
             if q == chr(34):
+                # Includes YAML's four named Unicode escapes (N _ L P);
+                # the whitespace collapse folds all four to spaces.
                 simple = {'0': chr(0), 'a': chr(7), 'b': chr(8), 't': chr(9),
                           'n': chr(10), 'v': chr(11), 'f': chr(12), 'r': chr(13),
-                          'e': chr(27)}
+                          'e': chr(27), 'N': chr(133), '_': chr(160),
+                          'L': chr(8232), 'P': chr(8233)}
                 esc = re.compile(chr(92) * 2 + 'x([0-9a-fA-F]{2})|' + chr(92) * 2
                                  + 'u([0-9a-fA-F]{4})|' + chr(92) * 2
                                  + 'U([0-9a-fA-F]{8})|' + chr(92) * 2 + '(.)')

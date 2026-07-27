@@ -48,22 +48,44 @@ function Parse-Frontmatter {
             if ($d[$d.Length - 1] -eq $q -and ($q -eq '"' -or $q -eq "'")) {
                 $inner = $d.Substring(1, $d.Length - 2)
                 if ($q -eq '"') {
-                    # [char] codes, not backtick escapes: `e and `v don't exist
-                    # in Windows PowerShell 5.1, which is what runs this file.
-                    $simple = @{ '0' = [char]0;  'a' = [char]7;  'b' = [char]8
-                                 't' = [char]9;  'n' = [char]10; 'v' = [char]11
-                                 'f' = [char]12; 'r' = [char]13; 'e' = [char]27 }
                     $inner = [regex]::Replace($inner,
                         '\\x([0-9a-fA-F]{2})|\\u([0-9a-fA-F]{4})|\\U([0-9a-fA-F]{8})|\\(.)',
                         {
                             param($mm)
                             foreach ($g in 1, 2, 3) {
                                 if ($mm.Groups[$g].Success) {
-                                    return [char][Convert]::ToInt32($mm.Groups[$g].Value, 16)
+                                    # ConvertFromUtf32, not [char]: a valid \U
+                                    # escape above U+FFFF (e.g. \U0001F600)
+                                    # overflows System.Char and would throw,
+                                    # killing the whole pointer sync. This
+                                    # returns the surrogate pair instead.
+                                    return [char]::ConvertFromUtf32([Convert]::ToInt32($mm.Groups[$g].Value, 16))
                                 }
                             }
+                            # switch -CaseSensitive, NOT a hashtable: PowerShell
+                            # hashtable keys are case-INsensitive, so 'n' and 'N'
+                            # collide and @{...} fails to parse outright. YAML
+                            # needs both (\n = newline, \N = next-line), and the
+                            # same applies to the \L / \P pair.
+                            # [char] codes, not backtick escapes: `e and `v don't
+                            # exist in Windows PowerShell 5.1, which runs this.
                             $c = $mm.Groups[4].Value
-                            if ($simple.ContainsKey($c)) { return $simple[$c] }
+                            switch -CaseSensitive ($c) {
+                                '0' { return [char]0 }
+                                'a' { return [char]7 }
+                                'b' { return [char]8 }
+                                't' { return [char]9 }
+                                'n' { return [char]10 }
+                                'v' { return [char]11 }
+                                'f' { return [char]12 }
+                                'r' { return [char]13 }
+                                'e' { return [char]27 }
+                                'N' { return [char]133 }
+                                '_' { return [char]160 }
+                                'L' { return [char]8232 }
+                                'P' { return [char]8233 }
+                            }
+                            # Anything else (\" \\ \/ \space) stands for itself.
                             return $c
                         })
                 } else {
