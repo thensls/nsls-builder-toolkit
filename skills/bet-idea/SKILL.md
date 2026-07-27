@@ -10,7 +10,8 @@ description: >-
   sell X to Y", "capture this idea", "should we sell this thing we built",
   "we built this for ourselves — is it a product", "productize",
   "commercialize an internal tool", "finish my bet", "continue my bet idea",
-  "resume a bet", "pick up where I left off on the bet".
+  "resume a bet", "pick up where I left off on the bet", "capture Gary's
+  idea", "drive a bet session for", "facilitated bet intake".
 ---
 
 # bet-idea
@@ -56,7 +57,8 @@ one of our scarce research slots? Never assumed, always asked.
 
 ## Quick Start
 
-Idea → **1** Sketch capture → **2** Taxonomy + `create_bet` → **3**
+Idea → **1** Sketch capture → **1.5** Board-worthiness gate (materiality) →
+**2** Taxonomy + growth vector + `create_bet` → **3**
 Office-hours diagnostic → **4** Causal-chain interrogation → **5** Stress test
 → **6** Rubric → **7** The gate offer → a bet at Idea stage (or Research, if
 earned) with a full canvas, an honestly-tagged assumption chain, and a
@@ -118,6 +120,28 @@ origin question only if it can't be inferred from existing content.
 **Starting a genuinely new bet:** before `create_bet`, check `list_bets` for a
 same-name/one-liner match and surface it as a resume candidate first.
 
+## Entry: facilitated intake
+
+Also supported: a session where the IDEA OWNER (often an SLT member with no
+Studio token) talks and a builder with Studio access drives. Confirm the
+owner's email out loud before `create_bet` — `owner` is the idea owner's
+email, never the driver's. Revisions still attribute the driver's token +
+`via` automatically (correct — they typed it). Every attestation
+(`worth_researching`, step 7) is the OWNER's spoken call in session; the
+driver never attests on their behalf.
+
+## Entry: autonomous mode (unattended agents only)
+
+Triggered ONLY when the invoker explicitly states it is running unattended —
+e.g. the weekly roadshow-intel clustering agent handing over an orphan-theme
+cluster. A human present, however brief, gets the normal flow above. Read
+`references/autonomous-mode.md` BEFORE any write. In brief: every drafted
+section is tagged `assumption`, the materiality gate is cite-or-abort from
+the cluster's own claims (no citable path → no bet, theme stays `brewing`),
+the interactive checkpoints are skipped and recorded as skipped in the
+first status update, and `advance_stage` / evidence attestation /
+`upsert_taxonomy` are off-limits entirely.
+
 ## Step 1 — Sketch capture
 
 **Purpose:** get the whole canvas + thesis on the page in minutes, not hours.
@@ -158,16 +182,50 @@ to, argues with, corrects) the first three boxes. Don't overthink this — it's
 a light read of what they care about first — but keep it; the causal-chain
 step below reuses it as the natural order to walk the chain of beliefs.
 
-## Step 2 — Taxonomy
+## Step 1.5 — Board-worthiness gate (materiality)
 
-**Purpose:** place the bet in the seeded taxonomy and create it.
+**Purpose:** keep the board for bets, and keep improvement work with the
+LOPs/squads that own it — the test the SLT asked for (2026-07-23).
 
-Call `list_taxonomy` and help pick the market, segment, and buyer — seeded
-taxonomy already has markets (college, high-school), segments
-(community-college, 4-year-public, 4-year-private, public-high-school), and
-buyers (VP/Director of Career Services (b2b), Undergraduate student (b2c),
-Chapter advisor (b2b)). B2B vs. B2C follows directly from which buyer is
-picked — don't ask separately.
+A bet earns board space when **being wrong is expensive** — the size of the
+stakes, not the cost of finding out (finding out is deliberately cheap here).
+With the step-1 sketch in hand, ask the owner both legs:
+
+1. *"If this validates, does committing to it mean **≥ $500K of capital** —
+   the build/scale/hire decision waiting at the end of the research?"*
+2. *"Is there a **credible path to revenue material at NSLS scale** — rule of
+   thumb, ≥ $1M/yr net-new or protected?"*
+
+**Either yes → proceed to step 2.** Both no → this is real work but not a
+bet: name where it belongs (an LOP, a squad backlog, an ops channel), offer
+to write the sketch up for that home, and stop — no `create_bet`. Full
+definitions live in the Studio guide at `market.nsls.org/strategy/guide`
+("What belongs on the board").
+
+## Step 2 — Taxonomy + growth vector
+
+**Purpose:** place the bet in the taxonomy, classify which revenue vector it
+grows, and create it.
+
+Call `list_taxonomy` and help pick the market, segment, and buyer from what's
+live (don't assume a fixed list — the taxonomy grows; it also now carries
+jobs-to-be-done, which matter later in the pipeline, not at intake). B2B vs.
+B2C follows directly from which buyer is picked — don't ask separately.
+
+**Growth vector, asked in the owner's words:** *"Does this improve the
+performance of the current business, or add a new revenue vector?"* Then pin
+one of four values (they map onto the Ansoff matrix):
+
+| `growth_vector` | Meaning |
+|---|---|
+| `core-performance` | Same product, same buyers — more yield from the current business |
+| `segment-expansion` | New buyer/segment inside a current market |
+| `market-expansion` | Current product into a new market |
+| `new-product` | A net-new product line, wherever it lands |
+
+Propose the value from the sketch; the owner confirms it. It renders as a
+chip on the board and feeds the portfolio-mix line leadership reads — a
+wrong vector misfiles the bet in every portfolio review.
 
 If none of the seeded options genuinely fit, `upsert_taxonomy(kind, fields)`
 creates a new one — **shared-system tier: confirm the fields first.** For a
@@ -179,8 +237,11 @@ invalid or unvetted filter in it). Don't take an unvalidated segment
 forward.
 
 `create_bet(name, one_liner, audience, market_id, segment_id, buyer_id,
-motion)` happens here, once the taxonomy is settled — carry over the drafts
-from step 1 as the first `update_section` calls against the new `bet_id`.
+motion, growth_vector)` happens here, once the taxonomy and vector are
+settled — carry over the drafts from step 1 as the first `update_section`
+calls against the new `bet_id`. (Resuming a bet that predates the vector
+field? Ask the vector question and backfill it via
+`update_bet(bet_id, growth_vector)`.)
 
 ## Step 3 — Office-hours diagnostic
 
@@ -287,6 +348,9 @@ idea ──bet-idea──▶ Idea-stage bet: full canvas + thesis (assumption/op
   operationalized against `upsert_assumption`.
 - `references/stress-test-rubric.md` — our 7-dimension rubric, anchored to
   the engine's evidence tags and experiment kinds.
+- `references/autonomous-mode.md` — the headless entry contract for
+  unattended agents (weekly roadshow clustering): cite-or-abort
+  materiality, skipped-and-recorded checkpoints, hard limits.
 - `references/leanspark-stress-test-notes.md`,
   `references/customer-interview-playbook-notes.md` — the Phase 1 source
   notes these three references are built from.
@@ -311,3 +375,6 @@ statements, scores) so the human can enter them by hand, and point at
 | "The alternative canvas is good, I'll just write it in too." | Conversation-only unless the human adopts it. Writing it unasked pollutes the real bet's history. |
 | "It's just a new segment, I'll create it and move on." | Shared-system tier — every other bet sees this taxonomy. Confirm first. |
 | "No token, I'll skip the write and keep going quietly." | Print what would have been written. Silent skips lose the human's own idea. |
+| "This is obviously a bet, skipping the materiality gate." | The gate exists because the SLT asked what qualifies. Ask both legs out loud — a great idea below both bars is LOP work, and saying so is the skill working. |
+| "The vector is obvious from the sketch, I'll just set it." | Propose it, but the owner confirms — the vector files the bet in every portfolio review. |
+| "Running unattended, and the cluster is clearly material — I'll estimate the $ path." | Cite-or-abort. No citable path in the claims → no bet, theme stays `brewing`. A junk bet costs more than an abort. |

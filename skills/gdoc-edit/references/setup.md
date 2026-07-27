@@ -60,8 +60,9 @@ per-user token, minted in the next step.
 1. Download `client_secret.json` from the NSLS builders shared Drive location,
    signed in as your **@nsls.org** account:
    **https://drive.google.com/file/d/1fOu-0M35vgGO6mzbd0BInEt_sgkmgCn7/view**
-   (file ID `1fOu-0M35vgGO6mzbd0BInEt_sgkmgCn7`). If the link is dead or access is
-   denied, ask in **#builders** for the current link.
+   (file ID `1fOu-0M35vgGO6mzbd0BInEt_sgkmgCn7` — view-only, restricted to
+   @nsls.org accounts, unlisted and not discoverable by search). If the link is
+   dead or access is denied, ask in **#builders** for the current link.
 2. Save it where `gws` expects it — confirm the path with `gws auth status`
    (it prints the `client_config` location; don't assume `~/.config/gws` blindly):
 

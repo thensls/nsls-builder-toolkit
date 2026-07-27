@@ -2,6 +2,9 @@
 __pycache__/
 *.pyc
 *.pyo
-# Runtime state written into an installed clone (never committed):
-.install-identity
+
+# Runtime state written into an installed clone (never committed).
+# Hook markers: see hooks/session-ping.*
 .last-ping-failed
+.pending-announcements
+.install-identity
