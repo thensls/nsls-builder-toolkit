@@ -35,8 +35,23 @@ if not fm: sys.exit(0)
 m = re.search(r'description:\s*>-?\s*\n((?:[ \t]+.+\n?)+)', fm.group(1))
 if m: print(' '.join(l.strip() for l in m.group(1).strip().split('\n')))
 else:
-    m = re.search(r'description:\s*(.+)', fm.group(1), re.MULTILINE)
-    if m: print(m.group(1).strip())
+    m = re.search(r'description:[ \t]*(.+)', fm.group(1), re.MULTILINE)
+    if m:
+        d = m.group(1).strip()
+        # Strip the YAML quotes off a single-line scalar. A description written
+        # as description: 'Brain dump...' reaches this fallback with its
+        # delimiters attached, and they land verbatim in the pointer.
+        # chr(34)/chr(39)/chr(92) are a double-quote, a single-quote and a
+        # backslash: this script is embedded in a double-quoted shell string,
+        # where a literal double-quote would end it early.
+        q = d[:1]
+        if len(d) > 1 and d[-1:] == q and q in (chr(34), chr(39)):
+            d = d[1:-1]
+            if q == chr(34):
+                d = d.replace(chr(92) + chr(34), chr(34)).replace(chr(92) * 2, chr(92))
+            else:
+                d = d.replace(chr(39) * 2, chr(39))
+        if d: print(d)
 " 2>/dev/null)
   [ -z "$desc" ] && desc="NSLS Builder Toolkit skill: $skill"
 

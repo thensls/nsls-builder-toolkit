@@ -33,8 +33,25 @@ function Parse-Frontmatter {
         $lines = $folded.Groups[1].Value -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
         $desc = ($lines -join ' ')
     } else {
-        $plain = [regex]::Match($block, '^description:\s*(.+)$', 'Multiline')
-        $desc = if ($plain.Success) { $plain.Groups[1].Value.Trim() } else { $null }
+        # Strip the YAML quotes off a single-line scalar (parity with the .py /
+        # .sh extractors): a description written as description: "Brain dump..."
+        # arrives here with its delimiters attached and they would land verbatim
+        # in the generated pointer.
+        $plain = [regex]::Match($block, '^description:[ \t]*(.+)$', 'Multiline')
+        if ($plain.Success) {
+            $d = $plain.Groups[1].Value.Trim()
+            $q = if ($d.Length -gt 1) { $d[0] } else { [char]0 }
+            if ($d.Length -gt 1 -and $d[$d.Length - 1] -eq $q -and ($q -eq '"' -or $q -eq "'")) {
+                $d = $d.Substring(1, $d.Length - 2)
+                if ($q -eq '"') { $d = $d.Replace('\"', '"').Replace('\\', '\') }
+                else { $d = $d.Replace("''", "'") }
+            }
+            # Require content: a blank description: leaves the caller's default
+            # in place rather than overwriting it with an empty string.
+            $desc = if ([string]::IsNullOrWhiteSpace($d)) { $null } else { $d }
+        } else {
+            $desc = $null
+        }
     }
     return @{ name = $name; desc = $desc }
 }
