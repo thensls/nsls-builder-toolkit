@@ -3,8 +3,10 @@
 Copy-paste shell snippets for the upload flow. Tested 2026-05-01 on the builder-toolkit onboarding doc rebuild.
 
 > **On Windows** the snippets below are macOS/Linux-shaped. Translate: `cd ~` →
-> `cd $env:USERPROFILE`; `~/foo.docx` → `%USERPROFILE%\foo.docx`; `tail -10` →
-> `Select-Object -Last 10`. The `gws --upload` cwd restriction is the same on
+> `cd $env:USERPROFILE`; `~/foo.docx` → `$env:USERPROFILE\foo.docx`; `tail -10` →
+> `Select-Object -Last 10`. Use `$env:VAR`, **not** `%VAR%` — CMD-style `%VAR%` is
+> passed through literally by PowerShell, so `gws --upload` gets a path containing
+> the text `%USERPROFILE%` and can't find your file. The `gws --upload` cwd restriction is the same on
 > every platform — build the `.docx` in your home dir and run `gws` from there.
 >
 > ⚠️ **Don't pipe `gws` straight into `Select-Object`.** PowerShell throws away a

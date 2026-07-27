@@ -37,7 +37,11 @@ The fastest path for a builder asking for a Google Doc:
 7. **Clean up local artifacts.** `rm ~/build_<short-name>.py ~/<short-name>.docx`
 
 > **On Windows** — the Quick Start commands above are macOS/Linux-shaped. Translations:
-> - **Python:** use the full path `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`,
+> - **Write env vars as `$env:VAR`, never `%VAR%`.** PowerShell passes CMD-style
+>   `%VAR%` through literally, so a path built that way arrives at `gws`/`Copy-Item`
+>   containing the text `%USERPROFILE%` and resolves to nothing. `%VAR%` appears below
+>   only when naming a location in prose; every command uses `$env:VAR`.
+> - **Python:** use the full path `$env:LOCALAPPDATA\Programs\Python\Python312\python.exe`,
 >   never `python`/`python3.12`. Stock Win11 `python`/`python3` are Microsoft Store stubs
 >   that print "Python was not found" and **exit 0** — a naive check passes while nothing
 >   runs. `install.ps1` installs Python 3.12 to that path *and* `python-docx` into it, so
@@ -47,7 +51,7 @@ The fastest path for a builder asking for a Google Doc:
 >   to it.
 > - **`gws --upload` cwd restriction still applies:** build the `.docx` in your home dir
 >   (`%USERPROFILE%`) and run `gws` from there — `--upload` rejects paths outside the cwd.
-> - Home paths: `~/build_<name>.py` → `%USERPROFILE%\build_<name>.py`.
+> - Home paths: `~/build_<name>.py` → `$env:USERPROFILE\build_<name>.py`.
 >
 > On a toolkit Windows machine the whole flow is:
 > ```powershell
