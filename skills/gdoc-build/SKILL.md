@@ -54,9 +54,18 @@ The fastest path for a builder asking for a Google Doc:
 > $py = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
 > Copy-Item templates\build_doc.py "$env:USERPROFILE\build_mydoc.py"
 > cd $env:USERPROFILE
+> # EDIT build_mydoc.py FIRST: the template ships output_path = '/Users/k/your_doc_name.docx'
+> # (a macOS path). Set it to "$env:USERPROFILE\mydoc.docx" and customize the content
+> # sections. Run it unedited and it dies with FileNotFoundError on the missing /Users/k.
 > & $py build_mydoc.py           # produces mydoc.docx in the home dir
-> gws drive files create --json '{"name":"My Doc","mimeType":"application/vnd.google-apps.document"}' --upload mydoc.docx --upload-content-type "application/vnd.openxmlformats-officedocument.wordprocessingml.document" --format json | Select-Object -Last 10
+> $gwsOut = gws drive files create --json '{"name":"My Doc","mimeType":"application/vnd.google-apps.document"}' --upload mydoc.docx --upload-content-type "application/vnd.openxmlformats-officedocument.wordprocessingml.document" --format json
+> if ($LASTEXITCODE -ne 0) { throw "gws upload failed (exit $LASTEXITCODE)" }
+> $gwsOut | Select-Object -Last 10
 > ```
+>
+> The `$LASTEXITCODE` check is the PowerShell equivalent of the `set -o pipefail` rule
+> above: piping `gws` straight into `Select-Object` swallows the exit code, so a 403 on
+> upload produces a clean-looking pipeline and you proceed as if the doc exists.
 
 ## NSLS Brand Constants
 
