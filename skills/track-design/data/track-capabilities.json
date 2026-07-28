@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-07-28T13:49:43.797Z",
-  "commit": "4c98e3e1",
+  "generatedAt": "2026-07-28T14:40:07.082Z",
+  "commit": "7a1f7047",
   "fieldTypes": {
     "declared": [
       "assessment-results",
@@ -23,6 +23,7 @@
       "number",
       "profile-avatar",
       "radio",
+      "resume-upload",
       "select",
       "select-with-custom-time",
       "text",
@@ -49,6 +50,7 @@
       "multi-select-list",
       "profile-avatar",
       "radio",
+      "resume-upload",
       "select",
       "select-with-custom-time",
       "text",
