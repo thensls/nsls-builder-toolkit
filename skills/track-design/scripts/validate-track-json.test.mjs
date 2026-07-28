@@ -107,3 +107,57 @@ test("parseArgs: file only", () => {
   const result = parseArgs(["tracks.json"]);
   assert.deepEqual(result, { file: "tracks.json", assume: [], assumeClarity: false });
 });
+
+// ---- capability-manifest-aware fieldType checks ----
+// See track-studio#51: the hardcoded KNOWN_FIELD_TYPES list silently omitted
+// wheel/multi-select-list/resume-upload while all three ran in production —
+// this is why "declared but not rendered" must be an ERROR, not a warning.
+
+const caps = {
+  generatedAt: new Date().toISOString(),
+  commit: "abc1234",
+  fieldTypes: { declared: ["text", "wheel", "textarea"], rendered: ["text", "wheel"], aiContext: [] },
+  runtimeCapabilities: {},
+  substepFields: ["prompt"],
+  responseModel: ["answer"],
+};
+
+const track = (fieldType) => [{
+  id: "t", title: "T",
+  steps: [{ id: "s", title: "S", substeps: [
+    { id: "b", slug: "b", title: "B", type: "collect", prompt: "p", fieldType },
+  ] }],
+}];
+
+test("a rendered field type passes", () => {
+  const r = validateTracks(track("wheel"), { capabilities: caps });
+  assert.deepEqual(r.errors.filter((e) => /fieldType/.test(e)), []);
+});
+
+test("declared but NOT rendered is an ERROR — it becomes a fallback text box for a member", () => {
+  const r = validateTracks(track("textarea"), { capabilities: caps });
+  assert.equal(r.errors.filter((e) => /textarea/.test(e)).length, 1);
+  assert.match(r.errors.find((e) => /textarea/.test(e)), /declared but has no render path/);
+});
+
+test("a type in neither list is an ERROR", () => {
+  const r = validateTracks(track("hologram"), { capabilities: caps });
+  assert.match(r.errors.find((e) => /hologram/.test(e)), /unknown fieldType/);
+});
+
+test("with NO manifest, an unknown type stays a WARNING (today's behaviour)", () => {
+  const r = validateTracks(track("hologram"), {});
+  assert.deepEqual(r.errors.filter((e) => /hologram/.test(e)), []);
+  assert.equal(r.warnings.filter((w) => /hologram/.test(w)).length, 1);
+});
+
+test("with a manifest, the three live types Julia hit no longer warn", () => {
+  // wheel/multi-select-list/resume-upload are live in production yet the old
+  // hardcoded KNOWN_FIELD_TYPES called them unknown (track-studio#51).
+  const real = { ...caps, fieldTypes: { declared: ["wheel", "multi-select-list", "resume-upload"],
+    rendered: ["wheel", "multi-select-list", "resume-upload"], aiContext: [] } };
+  for (const ft of ["wheel", "multi-select-list", "resume-upload"]) {
+    const r = validateTracks(track(ft), { capabilities: real });
+    assert.deepEqual(r.warnings.filter((w) => /unknown fieldType/.test(w)), [], ft);
+  }
+});

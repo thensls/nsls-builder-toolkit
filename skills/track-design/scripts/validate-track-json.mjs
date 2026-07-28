@@ -3,11 +3,15 @@
 // Usage (CLI): node validate-track-json.mjs <path-to-tracks.json> [--assume slugA,slugB] [--assume-clarity]
 
 const VALID_TYPES = new Set(["say", "collect", "generate", "chat", "ai-process"]);
-const KNOWN_FIELD_TYPES = new Set([
+// Fallback ONLY for when no capability manifest is available. The manifest
+// (generated from ignite-next) is the source of truth; this list is known to go
+// stale — it once omitted wheel/multi-select-list/resume-upload while all three
+// were live in production.
+const FALLBACK_FIELD_TYPES = new Set([
   "text", "textarea", "select", "multi-select", "image-multiselect",
   "dropdown-with-checkboxes", "currency", "education", "work", "banner",
   "banner-multiple", "celebration", "assessment-results", "dream-job-select",
-  "dream-job-requirements", ""
+  "dream-job-requirements", "",
 ]);
 // Fields the seed manages positionally / automatically — must NOT appear in import JSON.
 const AUTO_FIELDS = new Set([
@@ -102,7 +106,25 @@ export function validateTracks(tracks, opts = {}) {
         if (sub.prompt === undefined || sub.prompt === null) errors.push(`${blabel} missing required "prompt".`);
         if (sub.id) seen(sub.id, blabel);
         if (sub.type && !VALID_TYPES.has(sub.type)) errors.push(`${blabel} invalid type "${sub.type}" (allowed: ${[...VALID_TYPES].join(", ")}).`);
-        if (sub.fieldType !== undefined && sub.fieldType !== null && !KNOWN_FIELD_TYPES.has(sub.fieldType)) warnings.push(`${blabel} unknown fieldType "${sub.fieldType}".`);
+        const ft = sub.fieldType;
+        if (ft !== undefined && ft !== null && ft !== "") {
+          const caps = opts.capabilities;
+          if (caps) {
+            const { declared, rendered } = caps.fieldTypes;
+            if (rendered.includes(ft)) {
+              /* supported */
+            } else if (declared.includes(ft)) {
+              errors.push(
+                `${blabel} fieldType "${ft}" is declared but has no render path in ignite-next — ` +
+                  `it will fall back to a plain text box for the member.`,
+              );
+            } else {
+              errors.push(`${blabel} unknown fieldType "${ft}".`);
+            }
+          } else if (!FALLBACK_FIELD_TYPES.has(ft)) {
+            warnings.push(`${blabel} unknown fieldType "${ft}".`);
+          }
+        }
         for (const f of Object.keys(sub)) if (AUTO_FIELDS.has(f)) errors.push(`${blabel} has auto-managed field "${f}" — remove it.`);
         const bSlug = sub.slug || slugify(sub.title || "");
         if (bSlug) { if (subSlugs.has(bSlug)) errors.push(`${blabel} duplicate slug "${bSlug}" within step.`); else subSlugs.add(bSlug); }
