@@ -458,7 +458,16 @@ function wheelSvg(activeIndex, activeSecondary) {
 // it). Passing false is stronger than just omitting checkboxOptions: a wheel
 // substep is never supposed to show reason checkboxes, so this forces that
 // even if the data happens to carry a stray checkboxOptions array.
-function wheelWithCheckboxesField(sub, slug, { showCheckboxes = true } = {}) {
+// `multi` controls the wrapper's data-multi, which player.js reads as
+// `dataset.multi === "true"` to decide whether a click toggles an option or
+// replaces the current selection. `dropdown-with-checkboxes` is genuinely
+// multi-select; a standalone `wheel` is a single 0-10 rating and must be false,
+// or a member can select 3 AND 7 and both persist.
+//
+// It stays PRESENT-but-false rather than omitted: captureCurrent() locates the
+// grid with `[data-slug][data-multi]`, which matches on attribute presence, so
+// removing it would stop the answer being captured at all.
+function wheelWithCheckboxesField(sub, slug, { showCheckboxes = true, multi = true } = {}) {
   const isClarity = String(sub.title || "").toLowerCase().includes("clarity");
   const isConfidence = String(sub.title || "").toLowerCase().includes("confidence");
   const activeIndex = isClarity ? 2 : isConfidence ? 3 : 2;
@@ -481,7 +490,7 @@ function wheelWithCheckboxesField(sub, slug, { showCheckboxes = true } = {}) {
   const checksBlock = checks
     ? `<div class="space-y-2 grid grid-cols-1 gap-0.5 max-w-md mx-auto mb-8">${checks}</div>`
     : "";
-  return `<div class="space-y-4 tp-options" data-slug="${slug}" data-multi="true">${wheelSvg(activeIndex, secondary)}${scaleBlock}${label}${checksBlock}</div>`;
+  return `<div class="space-y-4 tp-options" data-slug="${slug}" data-multi="${multi}">${wheelSvg(activeIndex, secondary)}${scaleBlock}${label}${checksBlock}</div>`;
 }
 
 // MultiSelectListInput.tsx — checkbox rows sourced from checkboxOptions (the
@@ -606,7 +615,7 @@ function renderCollect(sub) {
     case "radio": input = radioField(sub, slug); break;
     case "image-multiselect": input = imageMultiselectField(sub, slug); break;
     case "dropdown-with-checkboxes": input = wheelWithCheckboxesField(sub, slug); break;
-    case "wheel": input = wheelWithCheckboxesField(sub, slug, { showCheckboxes: false }); break;
+    case "wheel": input = wheelWithCheckboxesField(sub, slug, { showCheckboxes: false, multi: false }); break;
     case "multi-select-list": input = multiSelectListField(sub, slug); break;
     case "resume-upload": input = resumeUploadField(sub); break;
     case "education": input = entryFormField(sub, slug, "education"); break;
