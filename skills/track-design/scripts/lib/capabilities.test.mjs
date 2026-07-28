@@ -152,3 +152,39 @@ test("aiContextOf: normalises both shapes", () => {
   assert.deepEqual(aiContextOf(["education"]),
     { customFormatting: ["education"], genericFallbackForUnlistedTypes: false });
 });
+
+// --- element types, not just container types (Macroscope on track-studio#66) ---
+// Every array check was Array.isArray() only, so `declared: [42]` was returned as a
+// valid manifest. Consumers compare these against field-type NAMES, so a number
+// matches nothing and the type silently reads as unsupported — the same false
+// negative this manifest exists to prevent, arriving via the validator itself.
+// Macroscope flagged only customFormatting (it reviews the diff); the hole was
+// everywhere, so it is fixed as a class.
+
+test("loadCapabilities: rejects non-string elements in every string-array field", () => {
+  const cases = [
+    ["fieldTypes.declared", shaped({ fieldTypes: { declared: [42], rendered: ["t"], aiContext: [] } })],
+    ["fieldTypes.rendered", shaped({ fieldTypes: { declared: ["t"], rendered: [null], aiContext: [] } })],
+    ["fieldTypes.aiContext", shaped({ fieldTypes: { declared: ["t"], rendered: ["t"], aiContext: [42] } })],
+    ["fieldTypes.aiContext", shaped({ fieldTypes: { declared: ["t"], rendered: ["t"],
+      aiContext: { customFormatting: [42], genericFallbackForUnlistedTypes: true } } })],
+    ["substepFields", shaped({ substepFields: [{}] })],
+    ["responseModel", shaped({ responseModel: [7] })],
+  ];
+  for (const [field, obj] of cases) {
+    const r = loadCapabilities({ path: write(obj) });
+    assert.equal(r.manifest, null, `${field} with a non-string element must be rejected`);
+    assert.match(r.warnings[0], new RegExp(field.replace(".", "\\.")));
+  }
+});
+
+test("loadCapabilities: rejects non-boolean runtimeCapabilities values", () => {
+  const r = loadCapabilities({ path: write(shaped({ runtimeCapabilities: { grounding: "yes" } })) });
+  assert.equal(r.manifest, null, "a string where a boolean is promised must be rejected");
+  assert.match(r.warnings[0], /runtimeCapabilities/);
+});
+
+test("loadCapabilities: an empty array is still valid — emptiness is not malformed", () => {
+  const r = loadCapabilities({ path: write(shaped({ fieldTypes: { declared: [], rendered: [], aiContext: [] } })) });
+  assert.ok(r.manifest, "an empty list is a legitimate manifest, not a broken one");
+});
