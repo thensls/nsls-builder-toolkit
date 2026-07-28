@@ -161,3 +161,38 @@ test("with a manifest, the three live types Julia hit no longer warn", () => {
     assert.deepEqual(r.warnings.filter((w) => /unknown fieldType/.test(w)), [], ft);
   }
 });
+
+// --- an empty prompt on a `generate` substep (track-studio#49) ----------------
+// "" is legitimate on say/celebration substeps — their copy lives in other fields.
+// It is NOT legitimate on `generate`: the AI has nothing to work from and the member
+// sees the literal "New sub step — edit me in the editor panel" placeholder. That is
+// the exact symptom reported in #49, and the null-only check missed it.
+
+const oneSubstep = (type, prompt) => [{
+  id: "t", title: "T",
+  steps: [{ id: "s", title: "S", substeps: [{ id: "sub-1", slug: "x", title: "X", type, prompt }] }],
+}];
+
+test("an empty prompt on a generate substep is an error", () => {
+  const r = validateTracks(oneSubstep("generate", ""), { assumeClarity: true });
+  const hits = r.errors.filter((e) => /prompt/.test(e));
+  assert.equal(hits.length, 1, `expected one prompt error, got ${JSON.stringify(r.errors)}`);
+  assert.match(hits[0], /sub-1/);
+});
+
+test("a whitespace-only prompt on a generate substep is an error", () => {
+  const r = validateTracks(oneSubstep("generate", "   \n "), { assumeClarity: true });
+  assert.equal(r.errors.filter((e) => /prompt/.test(e)).length, 1);
+});
+
+test("an empty prompt is still allowed on say and celebration substeps", () => {
+  for (const type of ["say", "celebration"]) {
+    const r = validateTracks(oneSubstep(type, ""), { assumeClarity: true });
+    assert.deepEqual(r.errors.filter((e) => /prompt/.test(e)), [], type);
+  }
+});
+
+test("a null prompt is still an error on any substep type", () => {
+  const r = validateTracks(oneSubstep("say", null), { assumeClarity: true });
+  assert.equal(r.errors.filter((e) => /missing required "prompt"/.test(e)).length, 1);
+});

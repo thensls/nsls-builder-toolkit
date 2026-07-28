@@ -102,8 +102,15 @@ export function validateTracks(tracks, opts = {}) {
         for (const req of ["id", "title", "type"]) {
           if (sub[req] === undefined || sub[req] === null || sub[req] === "") errors.push(`${blabel} missing required "${req}".`);
         }
-        // prompt is a non-nullable DB String but may legitimately be "" on say/celebration substeps.
+        // prompt is a non-nullable DB String, and "" is legitimate on say/celebration
+        // substeps — their copy lives in other fields. It is NOT legitimate on a
+        // `generate` substep: an empty prompt gives the AI nothing to work from and the
+        // member sees the literal "New sub step — edit me in the editor panel"
+        // placeholder. A null-only check let that through, which is the symptom reported
+        // in track-studio#49.
         if (sub.prompt === undefined || sub.prompt === null) errors.push(`${blabel} missing required "prompt".`);
+        else if (sub.type === "generate" && String(sub.prompt).trim() === "")
+          errors.push(`${blabel} has an empty "prompt" — a generate substep needs one, or the member sees the editor placeholder.`);
         if (sub.id) seen(sub.id, blabel);
         if (sub.type && !VALID_TYPES.has(sub.type)) errors.push(`${blabel} invalid type "${sub.type}" (allowed: ${[...VALID_TYPES].join(", ")}).`);
         const ft = sub.fieldType;
