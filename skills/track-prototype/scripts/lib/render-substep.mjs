@@ -497,11 +497,22 @@ function wheelWithCheckboxesField(sub, slug, { showCheckboxes = true } = {}) {
 function multiSelectListField(sub, slug) {
   const opts = sub.checkboxOptions || [];
   const rows = opts.map((o, i) => checkboxRow(String(o), i)).join("");
+  // The "Other" checkbox toggle is captured via data-option like any other row
+  // (its value is just the literal label string), but the typed text in the
+  // input below it was never captured at all — no data-input/data-slug, so a
+  // participant's written-in answer silently vanished. Reuse the entry-form
+  // contract (data-entry-form="<slug>" on the container + data-subfield on the
+  // field, see entryFormField/#48) rather than inventing a new capture shape:
+  // captureCurrent() already scans for exactly this and stores it as
+  // "<slug>.other", alongside the checkbox selections under the bare "<slug>"
+  // key. Only added when the row itself exists — no entry-form container
+  // when there's no subfield to capture.
   const otherRow = sub.freeResponseEnabled
     ? checkboxRow(sub.freeResponseLabel || "Other (please specify)", opts.length) +
-      `<div class="px-2.5 pt-1"><input type="text" class="step-input w-full" placeholder="Type your response..." aria-label="${esc(sub.freeResponseLabel || "Other response")}"></div>`
+      `<div class="px-2.5 pt-1"><input type="text" class="step-input w-full" placeholder="Type your response..." data-subfield="other" aria-label="${esc(sub.freeResponseLabel || "Other response")}"></div>`
     : "";
-  return `<div class="tp-options space-y-3" data-slug="${slug}" data-multi="true">${rows}${otherRow}</div>`;
+  const entryForm = sub.freeResponseEnabled ? ` data-entry-form="${slug}"` : "";
+  return `<div class="tp-options space-y-3" data-slug="${slug}" data-multi="true"${entryForm}>${rows}${otherRow}</div>`;
 }
 
 // resume-upload — no ignite-next component exists for this fieldType yet;
