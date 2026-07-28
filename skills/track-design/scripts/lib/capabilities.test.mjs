@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadCapabilities } from "./capabilities.mjs";
+import { loadCapabilities, aiContextOf } from "./capabilities.mjs";
 
 const write = (obj) => {
   const dir = mkdtempSync(join(tmpdir(), "caps-"));
@@ -103,4 +103,52 @@ test("loadCapabilities: a non-object runtimeCapabilities is rejected", () => {
 test("loadCapabilities: the rejection warning names the offending field", () => {
   const r = loadCapabilities({ path: write(shaped({ substepFields: {} })) });
   assert.match(r.warnings[0], /substepFields/);
+});
+
+// --- forward compatibility with the aiContext shape change --------------------
+// ignite-next is replacing `fieldTypes.aiContext: string[]` with
+//   { customFormatting: string[], genericFallbackForUnlistedTypes: boolean }
+// because the flat list read as "the field types the AI sees" while
+// aiContextBuilder's switch has a `default` branch — so every other included
+// answer also reaches the prompt, just with generic formatting.
+//
+// This loader validated Array.isArray(aiContext), so the new shape would have been
+// rejected as malformed, the manifest degraded to null, and validate-track-json
+// would have silently fallen back to its stale hardcoded field-type list. A
+// warning, not a crash: it would have looked like it was working.
+
+test("loadCapabilities: accepts the object-shaped aiContext", () => {
+  const r = loadCapabilities({
+    path: write({ ...valid, fieldTypes: { declared: ["text"], rendered: ["text"],
+      aiContext: { customFormatting: ["education"], genericFallbackForUnlistedTypes: true } } }),
+  });
+  assert.ok(r.manifest, "the new shape must not be rejected");
+  assert.deepEqual(r.warnings, []);
+});
+
+test("loadCapabilities: still accepts the legacy array-shaped aiContext", () => {
+  const r = loadCapabilities({
+    path: write({ ...valid, fieldTypes: { declared: ["text"], rendered: ["text"], aiContext: ["education"] } }),
+  });
+  assert.ok(r.manifest);
+});
+
+test("loadCapabilities: a genuinely malformed aiContext is still rejected", () => {
+  for (const bad of [42, "education", { customFormatting: "nope" }]) {
+    const r = loadCapabilities({
+      path: write({ ...valid, fieldTypes: { declared: ["t"], rendered: ["t"], aiContext: bad } }),
+    });
+    assert.equal(r.manifest, null, `aiContext=${JSON.stringify(bad)} must be rejected`);
+    assert.match(r.warnings[0], /aiContext/);
+  }
+});
+
+test("aiContextOf: normalises both shapes", () => {
+  assert.deepEqual(
+    aiContextOf({ customFormatting: ["education"], genericFallbackForUnlistedTypes: true }),
+    { customFormatting: ["education"], genericFallbackForUnlistedTypes: true },
+  );
+  // A legacy list asserts nothing about the fallback, so it reports false.
+  assert.deepEqual(aiContextOf(["education"]),
+    { customFormatting: ["education"], genericFallbackForUnlistedTypes: false });
 });
