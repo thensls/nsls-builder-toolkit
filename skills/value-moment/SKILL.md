@@ -193,8 +193,12 @@ Free-text major names resolve via the matcher, but **not every term resolves**, 
 that is deliberate. A loose match produces a confidently wrong figure with a BLS
 citation attached, which is worse than no figure at all.
 
-- **An exact catalogue title always grounds.** All 2,143 titles resolve exactly, so
-  a value moment fed by a picklist is fully reliable.
+- **An exact catalogue title always MATCHES — which is not the same as grounding.**
+  All 2,143 titles resolve exactly, so a picklist removes the *matching* risk
+  entirely. It does not remove the *coverage* risk: a title whose CIP has no
+  crosswalked occupation still returns an empty payload (see the ~194 below). So a
+  picklist-fed moment is reliable in the sense that it never grounds against the
+  WRONG major — but you still have to check the specific major returns figures.
 - **A dominant common name grounds** — "Business Administration" → *Business
   Administration and Management, General.*, "Economics" → *Economics, General.*
 - **An ambiguous name grounds to nothing.** "Communications" matches five unrelated
