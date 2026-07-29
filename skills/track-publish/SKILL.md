@@ -40,14 +40,20 @@ block going live, because that is when members see them.
 Call the Studio MCP tool (`society-studio` server):
 
 ```
-publish_check(slug: "<slug>", version_record_id: "<rec…>")   # id optional: defaults to newest approved
+publish_check(slug: "<slug>", version_record_id: "<rec…>")   # id optional: defaults to the newest approved, unpublished version
 ```
 
-Read-only, safe to repeat. Show the author, in this order:
+Read-only, safe to repeat. Returns `{ report, issue }` — the issue is the exact text that would
+be filed, so the author can approve it **before anything is written**. Show, in this order:
 
 1. **Blocking findings**, if any — each with its fix.
 2. **The build estimate** — the cost summary and tier, then every advisory item.
 3. **Anything not evaluated** (`notes`) — a check that did not run is not a check that passed.
+4. **The issue title and body, in full** — then ask for explicit confirmation.
+
+**Get that confirmation here, at step 1 — not after `publish_handoff`.** `publish_handoff`
+writes: it sets the version's status to `publish-requested`. Asking afterwards would mean a
+declined confirmation leaves a version marked as requested with no issue filed.
 
 **If it is blocked, stop and explain.** Do not offer to work around a blocking finding.
 Each maps to one action:
@@ -60,17 +66,23 @@ Each maps to one action:
 | `validation-unavailable` | The validator could not run. Unknown is not valid — find out why. |
 | `synthetic-gate` | No score run with every check MET on **this exact content hash**. Run the focus group against this exact build (`track-prototype`). |
 
-### Step 2: Record intent and get the issue
+### Step 2: Record intent (only after the author has confirmed)
 
 ```
 publish_handoff(slug: "<slug>", version_record_id: "<rec…>")
 ```
 
-Re-runs the gate itself, then sets the version's status to `publish-requested` and returns
-`{ report, issue }`. It does **not** file anything.
+Re-runs the gate itself — it does not trust that `publish_check` was called — then sets the
+version's status to `publish-requested` and returns `{ report, issue }`. It does **not** file
+anything.
 
-**Show the author the issue title and body in full and ask for explicit confirmation before
-filing.** Show, then file — never the other way round.
+Use the `issue` it returns, not the one from step 1: the gate re-ran, so this is the current
+text. If it now refuses, something changed between the two calls — show the findings rather
+than re-using the earlier body.
+
+If the `gh` filing in step 3 fails after this call, say plainly that the version is already
+marked `publish-requested` while no issue exists yet, and that re-running the handoff is how to
+retry (the marker makes it idempotent).
 
 ### Step 3: File it (once)
 
