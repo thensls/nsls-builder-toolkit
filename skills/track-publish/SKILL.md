@@ -79,12 +79,21 @@ re-running the handoff on unchanged content updates the existing issue instead o
 second one. A gate that filed fresh every attempt would just convert a silent problem into a
 noisy one.
 
+**Write the body to a file and use `--body-file`. Never interpolate it into a quoted shell
+argument.** The body contains authored track text, so an apostrophe is close to certain — and a
+single quote inside `--body '…'` terminates the argument, after which the rest is read as shell
+syntax. Titles too: they carry the cost summary.
+
 ```bash
+BODY=$(mktemp)   # write the returned body to this file verbatim, then:
+
 gh issue list --repo thensls/ignite-next --state open --search '<marker>' --json number,state,body
 ```
 
-- **A match** → `gh issue comment <number> --repo thensls/ignite-next --body '<what changed>'`
-- **No match** → `gh issue create --repo thensls/ignite-next --title '<title>' --body '<body>' --label track-publish`
+- **A match** → `gh issue comment <number> --repo thensls/ignite-next --body-file "$BODY"`
+- **No match** → `gh issue create --repo thensls/ignite-next --title "$TITLE" --body-file "$BODY" --label track-publish`
+
+(`--search` is safe single-quoted: the marker is `track-publish:<slug>:<hash>` — no quotes.)
 
 A **closed** marked issue is not reused — a close means Red finished that round, so asking
 again deserves a new issue. Link the closed one for context.
