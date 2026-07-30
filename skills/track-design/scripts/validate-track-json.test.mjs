@@ -324,3 +324,54 @@ test("a missing manifest degrades with a note rather than throwing", async () =>
   assert.equal(caps, null);
   assert.match(note ?? "", /not read|no fieldTypes/i);
 });
+
+test("a malformed manifest degrades instead of crashing the CLI", async () => {
+  // `rendered: {}` is truthy, so a truthiness guard let it through and
+  // `rendered.includes(ft)` then threw TypeError — crashing the validator instead of
+  // degrading, which is the opposite of what the loader promises. Same class as the
+  // element-validation gap in track-studio's lib/capabilities.ts.
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { pathToFileURL } = await import("node:url");
+
+  const shapes = [
+    { fieldTypes: { rendered: {}, declared: [] } },
+    { fieldTypes: { rendered: ["text"], declared: "text" } },
+    { fieldTypes: { rendered: [42], declared: ["text"] } },
+    { fieldTypes: {} },
+    { nope: true },
+    "not an object",
+  ];
+
+  for (const shape of shapes) {
+    const root = mkdtempSync(join(tmpdir(), "caps-"));
+    mkdirSync(join(root, "scripts"));
+    mkdirSync(join(root, "data"));
+    writeFileSync(join(root, "data", "track-capabilities.json"), JSON.stringify(shape));
+    const url = pathToFileURL(join(root, "scripts", "validate.mjs")).href;
+
+    const { caps, note } = await loadVendoredCapabilities(url);
+    assert.equal(caps, null, `${JSON.stringify(shape)} should not be accepted`);
+    assert.ok(note, "a rejected manifest must announce itself");
+
+    // And the reduced path must still run without throwing.
+    assert.doesNotThrow(() =>
+      validateTracks(withFields({ fieldType: "text" }), { capabilities: caps ?? undefined, assumeClarity: true }),
+    );
+  }
+});
+
+test("a well-formed manifest is still accepted", async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { pathToFileURL } = await import("node:url");
+  const root = mkdtempSync(join(tmpdir(), "caps-ok-"));
+  mkdirSync(join(root, "scripts")); mkdirSync(join(root, "data"));
+  writeFileSync(join(root, "data", "track-capabilities.json"),
+    JSON.stringify({ fieldTypes: { rendered: ["text"], declared: ["text"], aiContext: [] } }));
+  const { caps, note } = await loadVendoredCapabilities(pathToFileURL(join(root, "scripts", "v.mjs")).href);
+  assert.equal(note, null);
+  assert.deepEqual(caps.fieldTypes.rendered, ["text"]);
+});

@@ -236,7 +236,19 @@ export async function loadVendoredCapabilities(scriptUrl) {
   const path = join(here, "..", "data", "track-capabilities.json");
   try {
     const caps = JSON.parse(readFileSync(path, "utf8"));
-    if (!caps?.fieldTypes?.rendered) return { caps: null, note: `${path} has no fieldTypes.rendered — ignoring it.` };
+    // Validate the SHAPE, not just presence. `rendered: {}` is truthy, and the consumer calls
+    // `rendered.includes(ft)` — which throws TypeError on a non-array and crashes the CLI,
+    // the exact opposite of the degradation this function promises. Elements are checked too:
+    // `rendered: [42]` would not throw, but no real fieldType could ever match it, turning
+    // every field type into a spurious error.
+    const isStringArray = (v) => Array.isArray(v) && v.every((e) => typeof e === "string");
+    if (!caps || typeof caps !== "object" || !caps.fieldTypes ||
+        !isStringArray(caps.fieldTypes.rendered) || !isStringArray(caps.fieldTypes.declared)) {
+      return {
+        caps: null,
+        note: `${path} is not a usable manifest (fieldTypes.declared/rendered must be arrays of strings) — field-type checks are reduced.`,
+      };
+    }
     return { caps, note: null };
   } catch (e) {
     return { caps: null, note: `capability manifest not read (${e.message}) — field-type checks are reduced.` };
