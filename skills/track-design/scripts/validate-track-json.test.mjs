@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateTracks, parseArgs } from "./validate-track-json.mjs";
+import { loadVendoredCapabilities, validateTracks, parseArgs } from "./validate-track-json.mjs";
 
 const goodTracks = [
   {
@@ -288,4 +288,39 @@ test("with a manifest accessor map, the CORRECT array produces no warning", () =
 test("without an accessor map the specific rule stays silent — no guessing", () => {
   const r = validateTracks(withFields({ fieldType: "multi-select-list", options: ["Psychology"] }), { assumeClarity: true });
   assert.deepEqual(r.warnings.filter((w) => /never read|does not read/i.test(w)), []);
+});
+
+// ---------------------------------------------------------------------------
+// The CLI must actually pass the manifest (macroscope, track-studio#60 PR).
+//
+// The CLI called validateTracks WITHOUT capabilities, so every manifest-driven
+// check was unreachable from the documented entry point — including the #51
+// protection against a fieldType that is declared but has no render path. The
+// manifest was sitting in data/ unread the whole time.
+// ---------------------------------------------------------------------------
+
+test("the vendored capability manifest loads and carries a rendered field-type list", async () => {
+  const { caps, note } = await loadVendoredCapabilities(import.meta.url);
+  assert.equal(note, null, `expected a clean load, got: ${note}`);
+  assert.ok(Array.isArray(caps.fieldTypes.rendered) && caps.fieldTypes.rendered.length > 0);
+});
+
+test("WITH the manifest an unknown fieldType is an ERROR, not a warning", () => {
+  // This is the observable difference between caps being passed and not. Before the CLI fix
+  // it produced only a warning, so a genuinely unsupported field type did not fail the gate.
+  const tracks = withFields({ fieldType: "holographic-input-that-cannot-exist" });
+  const caps = { fieldTypes: { declared: ["text"], rendered: ["text"], aiContext: [] }, runtimeCapabilities: {}, substepFields: [], responseModel: [] };
+  const withCaps = validateTracks(tracks, { capabilities: caps, assumeClarity: true });
+  assert.equal(withCaps.errors.filter((e) => /unknown fieldType/.test(e)).length, 1);
+
+  const without = validateTracks(tracks, { assumeClarity: true });
+  assert.deepEqual(without.errors.filter((e) => /unknown fieldType/.test(e)), []);
+  assert.equal(without.warnings.filter((w) => /unknown fieldType/.test(w)).length, 1);
+});
+
+test("a missing manifest degrades with a note rather than throwing", async () => {
+  // A validator that refuses to run because a capability file is absent is one people route around.
+  const { caps, note } = await loadVendoredCapabilities("file:///nonexistent/deeply/fake.mjs");
+  assert.equal(caps, null);
+  assert.match(note ?? "", /not read|no fieldTypes/i);
 });

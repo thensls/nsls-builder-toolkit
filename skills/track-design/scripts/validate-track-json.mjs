@@ -215,6 +215,34 @@ export function parseArgs(args) {
   return { file, assume, assumeClarity };
 }
 
+/**
+ * Load the vendored capability manifest that sits beside this script.
+ *
+ * The CLI used to call validateTracks WITHOUT capabilities, which quietly disabled every
+ * manifest-driven check for anyone running the validator the documented way — including the
+ * #51 protection (a fieldType that is declared but has no render path in ignite-next, i.e.
+ * one that silently degrades to a text box for the member). The manifest was sitting in
+ * data/ the whole time, unread.
+ *
+ * Degrades rather than throws: a missing or malformed manifest returns null and the caller
+ * proceeds with the reduced checks, announcing it. A validator that refuses to run because a
+ * capability file is absent is a validator people route around.
+ */
+export async function loadVendoredCapabilities(scriptUrl) {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const { dirname, join } = await import("node:path");
+  const here = dirname(fileURLToPath(scriptUrl));
+  const path = join(here, "..", "data", "track-capabilities.json");
+  try {
+    const caps = JSON.parse(readFileSync(path, "utf8"));
+    if (!caps?.fieldTypes?.rendered) return { caps: null, note: `${path} has no fieldTypes.rendered — ignoring it.` };
+    return { caps, note: null };
+  } catch (e) {
+    return { caps: null, note: `capability manifest not read (${e.message}) — field-type checks are reduced.` };
+  }
+}
+
 // ---- CLI ----
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { file, assume, assumeClarity } = parseArgs(process.argv.slice(2));
@@ -223,7 +251,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   let data;
   try { data = JSON.parse(readFileSync(file, "utf8")); }
   catch (e) { console.error(`Could not read/parse ${file}: ${e.message}`); process.exit(2); }
-  const { errors, warnings } = validateTracks(data, { assume, assumeClarity });
+  const { caps, note } = await loadVendoredCapabilities(import.meta.url);
+  if (note) console.warn(`WARN  ${note}`);
+  const { errors, warnings } = validateTracks(data, { assume, assumeClarity, capabilities: caps ?? undefined });
   for (const w of warnings) console.warn(`WARN  ${w}`);
   for (const e of errors) console.error(`ERROR ${e}`);
   if (errors.length) { console.error(`\n${errors.length} error(s), ${warnings.length} warning(s).`); process.exit(1); }
