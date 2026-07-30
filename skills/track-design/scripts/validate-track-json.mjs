@@ -2,6 +2,10 @@
 // contract and the ontology token-ordering rule.
 // Usage (CLI): node validate-track-json.mjs <path-to-tracks.json> [--assume slugA,slugB] [--assume-clarity]
 
+/** The three arrays an author can put an option list in. Each fieldType reads at most
+ *  one of them; the others are silently discarded (track-studio#60). */
+const OPTION_ARRAYS = ["options", "checkboxOptions", "dropdownOptions"];
+
 const VALID_TYPES = new Set(["say", "collect", "generate", "chat", "ai-process"]);
 // Fallback ONLY for when no capability manifest is available. The manifest
 // (generated from ignite-next) is the source of truth; this list is known to go
@@ -130,6 +134,43 @@ export function validateTracks(tracks, opts = {}) {
             }
           } else if (!FALLBACK_FIELD_TYPES.has(ft)) {
             warnings.push(`${blabel} unknown fieldType "${ft}".`);
+          }
+        }
+        // Option-array ambiguity (track-studio#60). A substep has THREE places to put a
+        // list — options / checkboxOptions / dropdownOptions — and each fieldType reads
+        // exactly one of them (or none). Nothing at author time said which, so 18 CIP
+        // majors went into `options` on a `multi-select-list`, which reads
+        // `checkboxOptions`: the member was shown a career-needs list instead of majors,
+        // and the draft still scored 16/16 because a synthetic panel reads design intent
+        // rather than the rendered widget.
+        const populatedOptionArrays = OPTION_ARRAYS.filter(
+          (k) => Array.isArray(sub[k]) && sub[k].length > 0,
+        );
+        // Rule 1 — needs no knowledge of the app: whichever array is read, the others are
+        // discarded. Measured against live content, no substep populates two, so this does
+        // not fire on any existing authoring pattern.
+        if (populatedOptionArrays.length > 1) {
+          warnings.push(
+            `${blabel} populates more than one option array (${populatedOptionArrays.join(", ")}) — ` +
+              `a fieldType reads only one, so the rest are silently discarded. Keep the list in a single array.`,
+          );
+        }
+        // Rule 2 — precise, and only when the capability manifest says which array this
+        // fieldType reads. That is an ignite-next fact (SubStepRenderer.tsx); hard-coding it
+        // here would recreate the duplicated truth the manifest exists to remove, so absent
+        // the map this says nothing rather than guessing (ignite-next#985).
+        const optionSource = opts.capabilities?.fieldTypes?.optionSource;
+        if (optionSource && ft) {
+          const reads = optionSource[ft];
+          for (const k of populatedOptionArrays) {
+            if (reads === undefined) continue; // manifest has no opinion on this fieldType
+            if (k !== reads) {
+              warnings.push(
+                reads === null
+                  ? `${blabel} populates "${k}", but fieldType "${ft}" reads no option array at all — it will be discarded.`
+                  : `${blabel} populates "${k}", but fieldType "${ft}" reads "${reads}" — "${k}" is never read. Move the list.`,
+              );
+            }
           }
         }
         for (const f of Object.keys(sub)) if (AUTO_FIELDS.has(f)) errors.push(`${blabel} has auto-managed field "${f}" — remove it.`);

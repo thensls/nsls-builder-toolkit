@@ -196,3 +196,96 @@ test("a null prompt is still an error on any substep type", () => {
   const r = validateTracks(oneSubstep("say", null), { assumeClarity: true });
   assert.equal(r.errors.filter((e) => /missing required "prompt"/.test(e)).length, 1);
 });
+
+// ---------------------------------------------------------------------------
+// Option-array ambiguity (track-studio#60).
+//
+// There are THREE option arrays on a substep — options, checkboxOptions,
+// dropdownOptions — and nothing at author time says which one a given fieldType
+// actually reads. Welcome v7-draft.5 put 18 CIP majors in `options` on a
+// `multi-select-list`, which reads `checkboxOptions`; the member was shown a
+// career-needs list instead of majors, and the version still scored 16/16
+// because a synthetic panel reads design intent, not the rendered widget.
+//
+// Two rules. The first needs no knowledge of the app: populating more than one
+// option array means at least one is silently discarded, whichever is read.
+// Measured against live content — 0 of 69 substeps with any option array
+// populate two — so this has no false positives today.
+// ---------------------------------------------------------------------------
+
+const withFields = (fields) => [{
+  id: "t", title: "T",
+  steps: [{ id: "s", title: "S", substeps: [{ id: "sub-1", slug: "x", title: "X", type: "collect", prompt: "p", ...fields }] }],
+}];
+
+test("populating two option arrays warns that one will be discarded", () => {
+  // Julia's repro shape: the intended list in `options`, a leftover list in `checkboxOptions`.
+  const r = validateTracks(withFields({
+    fieldType: "multi-select-list",
+    options: ["Business Administration", "Registered Nursing", "Psychology"],
+    checkboxOptions: ["Clearer goals", "Stronger professional network"],
+  }), { assumeClarity: true });
+  const hits = r.warnings.filter((w) => /option/i.test(w));
+  assert.equal(hits.length, 1, `expected one option warning, got ${JSON.stringify(r.warnings)}`);
+  assert.match(hits[0], /sub-1/);
+  assert.match(hits[0], /options/);
+  assert.match(hits[0], /checkboxOptions/);
+});
+
+test("one populated option array is fine, whichever it is", () => {
+  for (const key of ["options", "checkboxOptions", "dropdownOptions"]) {
+    const r = validateTracks(withFields({ fieldType: "multi-select-list", [key]: ["a", "b"] }), { assumeClarity: true });
+    assert.deepEqual(r.warnings.filter((w) => /more than one/i.test(w)), [], key);
+  }
+});
+
+test("empty option arrays are not 'populated' — no warning for the leftover []", () => {
+  // Clearing a list in the editor leaves [], which must not read as a second list.
+  const r = validateTracks(withFields({ fieldType: "multi-select-list", options: [], checkboxOptions: ["a"] }), { assumeClarity: true });
+  assert.deepEqual(r.warnings.filter((w) => /more than one/i.test(w)), []);
+});
+
+test("the option warning names every populated array, not just two", () => {
+  const r = validateTracks(withFields({
+    fieldType: "select", options: ["a"], checkboxOptions: ["b"], dropdownOptions: ["c"],
+  }), { assumeClarity: true });
+  const hit = r.warnings.find((w) => /more than one/i.test(w));
+  assert.ok(hit, "expected a warning");
+  for (const k of ["options", "checkboxOptions", "dropdownOptions"]) assert.match(hit, new RegExp(k));
+});
+
+// The precise rule — "this fieldType reads checkboxOptions, so your `options` is
+// dead" — needs to know each fieldType's accessor. That is an ignite-next fact
+// (SubStepRenderer.tsx), and hard-coding it here would recreate the duplicated
+// truth the capability manifest exists to remove. So it activates only when the
+// manifest supplies it (ignite-next#985), and stays silent otherwise.
+test("with a manifest accessor map, the wrong array is named specifically", () => {
+  const caps = {
+    fieldTypes: {
+      declared: ["multi-select-list"], rendered: ["multi-select-list"], aiContext: [],
+      optionSource: { "multi-select-list": "checkboxOptions" },
+    },
+    runtimeCapabilities: {}, substepFields: [], responseModel: [],
+  };
+  const r = validateTracks(withFields({ fieldType: "multi-select-list", options: ["Psychology"] }), { capabilities: caps, assumeClarity: true });
+  const hit = r.warnings.find((w) => /never read|does not read|reads/i.test(w));
+  assert.ok(hit, `expected an accessor warning, got ${JSON.stringify(r.warnings)}`);
+  assert.match(hit, /checkboxOptions/);
+});
+
+test("with a manifest accessor map, the CORRECT array produces no warning", () => {
+  const caps = {
+    fieldTypes: {
+      declared: ["multi-select-list"], rendered: ["multi-select-list"], aiContext: [],
+      optionSource: { "multi-select-list": "checkboxOptions" },
+    },
+    runtimeCapabilities: {}, substepFields: [], responseModel: [],
+  };
+  const r = validateTracks(withFields({ fieldType: "multi-select-list", checkboxOptions: ["Psychology"] }), { capabilities: caps, assumeClarity: true });
+  assert.deepEqual(r.warnings.filter((w) => /option/i.test(w)), []);
+});
+
+test("without an accessor map the specific rule stays silent — no guessing", () => {
+  const r = validateTracks(withFields({ fieldType: "multi-select-list", options: ["Psychology"] }), { assumeClarity: true });
+  assert.deepEqual(r.warnings.filter((w) => /never read|does not read/i.test(w)), []);
+});
