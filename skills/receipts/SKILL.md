@@ -115,7 +115,7 @@ runs.
 
 ### 3. Anthropic source (optional)
 
-Two things, both required for this source specifically:
+Three things, all required for this source specifically:
 
 ```bash
 export ANTHROPIC_ORG_UUID=<your-claude.ai-org-uuid>   # Settings > Organization
@@ -137,7 +137,17 @@ verified working on this toolkit's reference machine (2026-08-01). It installs
 into your own user site-packages, not Homebrew's tree. A virtualenv works too,
 but then every `python3.12` invocation in this skill has to run inside it.
 
-Then log in once (opens a real browser window):
+**Google Chrome must also be installed** (a normal, regular install of the
+browser — not anything from Playwright). The login and every listing call
+drive your real, installed Chrome (`channel="chrome"`) rather than
+Playwright's bundled Chromium, because Cloudflare fingerprints bundled
+Chromium and serves an endless "verify you are human" loop that never
+resolves. If Chrome isn't found, this source falls back to bundled Chromium
+automatically and prints a loud warning — it does not fail the whole source —
+but the Cloudflare loop below is the likely result until Chrome is installed.
+Get it at https://www.google.com/chrome/ if you don't have it.
+
+Then log in once (opens a real Chrome window):
 
 ```bash
 python3.12 skills/receipts/scripts/run.py --login
@@ -215,6 +225,19 @@ for the rest.
   admin access, or unset `ANTHROPIC_ORG_UUID` to run without this source. A
   401 or a redirect is the session-expiry case above and *does* want
   `--login`.
+- **Cloudflare verification loop — ticking the confirm box never gets you
+  through, or `SOURCE ANTHROPIC: SKIPPED (… Cloudflare challenged the
+  automated browser …)`** — a third, distinct failure, and neither of the two
+  above. This is Cloudflare's bot detection fingerprinting the automated
+  browser itself (not your login, not your permissions) and serving an
+  endless "verify you are human" page instead of the real claude.ai response.
+  Re-running `--login` *can* fix this one, but only if it runs in your real,
+  installed Google Chrome — this skill drives Chrome by default
+  (`channel="chrome"`), and this loop is what happens when Chrome isn't
+  installed and the source falls back to Playwright's bundled Chromium,
+  which Cloudflare reliably challenges. **Install Google Chrome**
+  (https://www.google.com/chrome/) and re-run
+  `python3.12 skills/receipts/scripts/run.py --login`.
 - **`SOURCE <NAME>: TRUNCATED (...)`** — the source ran and returned
   **partial** results. This is not a skip and not a failure; it is an
   incomplete search, and any `UNFOUND` below it may be an artifact of what

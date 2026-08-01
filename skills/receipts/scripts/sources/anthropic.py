@@ -12,12 +12,22 @@ Playwright is an optional runtime prerequisite (not a declared dependency of
 this toolkit); when it's missing, this source degrades to SourceUnavailable
 instead of raising ModuleNotFoundError, so a missing Playwright install only
 takes out the Anthropic source, not the whole /receipts run.
+
+Both `_login()` and `_listing()` drive real, installed Google Chrome
+(`channel="chrome"`) instead of Playwright's bundled Chromium — Cloudflare
+fingerprints bundled Chromium (navigator.webdriver, CDP artifacts) and serves
+an endless verification loop for it. Google Chrome should be installed on
+this machine. If it isn't, `_launch_context()` falls back to bundled
+Chromium and prints a loud warning explaining why the Cloudflare loop may
+still happen and that installing Chrome is the fix — never silently, since a
+silent fallback lands the user right back in the loop with no idea why.
 """
 
 import datetime as dt
 import hashlib
 import json
 import os
+import sys
 import urllib.request
 
 try:
@@ -45,6 +55,84 @@ except ImportError:
 LISTING = "https://claude.ai/api/stripe/{org}/invoices?limit=100&page={page}"
 PROFILE = os.path.expanduser("~/.claude-receipts-profile")
 PAGE_GUARD = 20  # pages (100 invoices/page = 2,000 invoices) — see fetch()
+
+# Cloudflare fingerprints Playwright's bundled Chromium (navigator.webdriver,
+# CDP artifacts) and serves an endless verification loop for it. Real, fully
+# installed Chrome does not trip the same fingerprint. This flag is the most
+# obvious remaining automation signal once channel="chrome" is in play.
+_ANTI_AUTOMATION_ARGS = ["--disable-blink-features=AutomationControlled"]
+
+# Cloudflare challenge pages (the "Just a moment…" interstitial and its
+# variants) reliably contain one of these markers in the body, or set one of
+# these response headers on the mitigated request. Neither is guaranteed to
+# be exhaustive — Cloudflare changes challenge markup over time — but this
+# covers the documented, currently-observed forms.
+_CF_BODY_MARKERS = ("cf-chl", "just a moment", "attention required! | cloudflare",
+                    "challenge-platform")
+_CF_HEADER_MARKERS = ("cf-mitigated", "cf-chl-bypass")
+
+
+def _launch_context(p, *, headless: bool):
+    """Launch the persistent Playwright context, preferring the user's real,
+    installed Google Chrome over Playwright's bundled Chromium.
+
+    `channel="chrome"` tells Playwright to drive the actual Chrome install on
+    this machine instead of its own bundled build; Playwright resolves the
+    executable itself, so this never hardcodes an install path — this
+    toolkit ships org-wide, and the path differs by OS and user.
+
+    Not every machine has Chrome installed, though, and this ships to
+    colleagues who may not have it. If the chrome-channel launch fails for
+    any reason, fall back to bundled Chromium — but never silently: a silent
+    fallback launches Chromium, Cloudflare challenges it the same way it
+    always has, and the user lands right back in the infinite-verification
+    loop with zero idea why. So the fallback prints a loud, specific warning
+    naming the cause and the remedy every time it fires.
+    """
+    try:
+        return p.chromium.launch_persistent_context(
+            PROFILE, headless=headless, channel="chrome", args=_ANTI_AUTOMATION_ARGS,
+        )
+    except Exception as exc:
+        print(
+            f"WARNING: could not launch Google Chrome ({type(exc).__name__}: {exc}). "
+            "Falling back to Playwright's bundled Chromium for the Anthropic "
+            "billing source. Cloudflare fingerprints bundled Chromium and may "
+            "serve an endless verification loop instead of letting the login "
+            "through. Install Google Chrome (https://www.google.com/chrome/) "
+            "to fix this.",
+            file=sys.stderr,
+        )
+        return p.chromium.launch_persistent_context(
+            PROFILE, headless=headless, args=_ANTI_AUTOMATION_ARGS,
+        )
+
+
+def _is_cloudflare_challenge(resp) -> bool:
+    """True when `resp` looks like a Cloudflare bot-detection challenge
+    rather than a genuine response from claude.ai — a 403 whose body is the
+    Cloudflare interstitial page, or a response carrying one of Cloudflare's
+    own mitigation headers. Distinguishing this from a real 401 (expired
+    session) or a real 403 (not an org admin) matters: telling someone stuck
+    in a Cloudflare loop to "log in again" sends them right back into the
+    same loop, and telling an org-admin user their session merely expired
+    hides the one fact — a fingerprinted automated browser — they can
+    actually act on.
+    """
+    if resp is None:
+        return False
+    headers = getattr(resp, "headers", None) or {}
+    header_blob = " ".join(f"{k}:{v}" for k, v in headers.items()).lower()
+    if any(marker in header_blob for marker in _CF_HEADER_MARKERS):
+        return True
+    if resp.status == 403:
+        try:
+            body = (resp.text() or "").lower()
+        except Exception:
+            body = ""
+        if any(marker in body for marker in _CF_BODY_MARKERS):
+            return True
+    return False
 
 
 class AnthropicSource:
@@ -100,10 +188,33 @@ class AnthropicSource:
 
         url = LISTING.format(org=org, page=page)
         with sync_playwright() as p:
-            ctx = p.chromium.launch_persistent_context(PROFILE, headless=True)
+            # _listing() runs on every invocation, not just --login — it must
+            # never pop a visible browser window, so this stays headless=True
+            # regardless of which browser _launch_context ends up using.
+            ctx = _launch_context(p, headless=True)
             try:
                 pg = ctx.new_page()
                 resp = pg.goto(url)
+                # Cloudflare's bot-detection challenge, not a real response
+                # from claude.ai. This must be checked before the 403 branch
+                # below — Cloudflare mitigations most often ride on a 403 —
+                # and reported as its own distinct failure: it is neither an
+                # authorization refusal (the 403-not-admin case) nor an
+                # expired session (the 401 case), and re-running --login with
+                # bundled Chromium would only repeat the same loop.
+                if _is_cloudflare_challenge(resp):
+                    raise SourceUnavailable(
+                        f"claude.ai could not verify this session for organization {org}: "
+                        f"Cloudflare challenged the automated browser itself, fingerprinting "
+                        f"it as a bot, instead of letting the request through to a normal "
+                        f"claude.ai response. This is neither a stale login nor an "
+                        f"authorization refusal — re-run python3.12 "
+                        f"skills/receipts/scripts/run.py --login using real Chrome, which is "
+                        f"what this toolkit drives by default (this loop shows up when real "
+                        f"Chrome isn't installed and it falls back to bundled Chromium) — "
+                        f"install Google Chrome (https://www.google.com/chrome/) if that's "
+                        f"the case."
+                    )
                 # 403 is authorization, not authentication: the session is
                 # fine, the account just isn't an org admin. Telling that user
                 # to log in again sends them around a loop that can never
@@ -223,13 +334,15 @@ def _login():
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        ctx = p.chromium.launch_persistent_context(PROFILE, headless=False)
+        # Interactive: the user needs to actually see the browser to sign in,
+        # so this stays headless=False regardless of which browser
+        # _launch_context ends up using.
+        ctx = _launch_context(p, headless=False)
         ctx.new_page().goto("https://claude.ai/login")
         input("Sign in, then press Enter here to save the session… ")
         ctx.close()
 
 
 if __name__ == "__main__":
-    import sys
     if "--login" in sys.argv:
         _login()
