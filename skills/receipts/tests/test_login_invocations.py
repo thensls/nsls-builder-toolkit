@@ -1,5 +1,11 @@
 #!/usr/bin/env python3.12
-"""Executes every documented `--login` invocation as a real subprocess.
+"""Executes every documented auth invocation as a real subprocess.
+
+`--login` became `--set-session` when the browser was removed from the
+Anthropic source. Both names are exercised here: the new one because it is
+what the docs now say, the old one because it is in shipped docs, in old
+error strings, and in muscle memory, and must still land somewhere useful
+instead of dying on "unrecognized arguments".
 
 The bug this file exists to catch: `sources/anthropic.py` used a bare
 relative import (`from .base import ...`), so running it directly —
@@ -18,9 +24,10 @@ launches each documented form as a subprocess and checks the process comes
 up alive: import succeeds, argument dispatch reaches _login(), and it exits
 0 — not that a real browser opens.
 
-Hermetic: RECEIPTS_LOGIN_TEST_NOOP=1 makes `_login()` a no-op before any
-Playwright or browser code runs. No network, no auth, no browser, no writes
-outside a throwaway temp cwd used only as a working directory.
+Hermetic: RECEIPTS_LOGIN_TEST_NOOP=1 makes `_set_session()` a no-op before it
+prompts for a credential or touches the network. No network, no auth, no
+credential prompt, no writes outside a throwaway temp cwd used only as a
+working directory.
 """
 
 import os
@@ -72,10 +79,41 @@ def _assert_clean_dispatch(proc: subprocess.CompletedProcess, label: str):
     )
 
 
-def test_run_py_login_works_from_the_repo_root():
-    # The documented form: `python3.12 skills/receipts/scripts/run.py --login`
+def test_run_py_set_session_works_from_the_repo_root():
+    # The documented form: `python3.12 skills/receipts/scripts/run.py --set-session`
+    proc = _run(["skills/receipts/scripts/run.py", "--set-session"], cwd=REPO_ROOT)
+    _assert_clean_dispatch(proc, "run.py --set-session (repo root)")
+
+
+def test_run_py_set_session_works_from_anywhere():
+    proc = _run([str(RUN_PY), "--set-session"], cwd=tempfile.mkdtemp())
+    _assert_clean_dispatch(proc, "run.py --set-session (arbitrary cwd)")
+
+
+def test_anthropic_py_direct_script_set_session_works():
+    proc = _run([str(ANTHROPIC_PY), "--set-session"], cwd=tempfile.mkdtemp())
+    _assert_clean_dispatch(proc, "sources/anthropic.py --set-session (direct script)")
+
+
+def test_dash_m_set_session_works_from_the_scripts_dir():
+    proc = _run(["-m", "sources.anthropic", "--set-session"], cwd=SCRIPTS)
+    _assert_clean_dispatch(proc, "-m sources.anthropic --set-session")
+
+
+def test_run_py_login_alias_still_dispatches_and_explains_itself():
+    # The old name must not become a dead end for anyone following an older
+    # doc or an older error message.
     proc = _run(["skills/receipts/scripts/run.py", "--login"], cwd=REPO_ROOT)
     _assert_clean_dispatch(proc, "run.py --login (repo root)")
+    combined = proc.stdout + proc.stderr
+    assert "--set-session" in combined, (
+        "the alias must tell the user what it is now called: " + combined
+    )
+
+
+def test_anthropic_py_login_alias_still_dispatches():
+    proc = _run([str(ANTHROPIC_PY), "--login"], cwd=tempfile.mkdtemp())
+    _assert_clean_dispatch(proc, "sources/anthropic.py --login (direct script)")
 
 
 def test_run_py_login_works_from_anywhere():

@@ -31,9 +31,11 @@ changes nothing in Ramp. Nothing is ever uploaded without `--send`.
 - `/receipts --send` — execute (upload the confident + balanced matches)
 - `/receipts --since 2026-01-01` — widen the window (default: `2026-01-01`)
 - `/receipts --until 2026-06-30` — narrow the window (default: today)
-- `/receipts --login` — log in to the Anthropic billing source (opens a
-  browser) and exit; does not build the queue, fetch, or upload anything.
-  Not combinable with `--send`.
+- `/receipts --set-session` — store the claude.ai session cookie the
+  Anthropic billing source needs, then exit; does not build the queue, fetch,
+  or upload anything. Not combinable with `--send`. (`--login` is the old
+  name for this and still works — it now stores a cookie instead of opening a
+  browser, and says so.)
 
 ## Execution
 
@@ -115,47 +117,45 @@ runs.
 
 ### 3. Anthropic source (optional)
 
-Three things, all required for this source specifically:
+**No browser, and nothing to install.** This source is plain HTTP against
+claude.ai's billing API using the standard library — there is no Playwright
+prerequisite, no Chromium download, and no `pip install` step for this skill
+at all. Two things are required:
 
 ```bash
 export ANTHROPIC_ORG_UUID=<your-claude.ai-org-uuid>   # Settings > Organization
-python3.12 -m pip install --user --break-system-packages playwright
-python3.12 -m playwright install chromium
+python3.12 skills/receipts/scripts/run.py --set-session
 ```
 
-The two pip flags are not optional on a Mac. Homebrew's python3.12 is a PEP 668
-"externally managed" interpreter, so the plain `pip install` form aborts before
-installing anything:
+`--set-session` asks for your claude.ai session cookie. To find it:
 
-```
-error: externally-managed-environment
-× This environment is externally managed
-```
+1. Open https://claude.ai in Chrome, signed in to the right account.
+2. Open DevTools (**⌥⌘I** on macOS, F12 elsewhere).
+3. **Application** tab → **Storage** → **Cookies** → `https://claude.ai`
+4. Find the row named **`sessionKey`** and copy its **Value** (it's long).
+5. Paste it at the prompt.
 
-`--user --break-system-packages` is the documented escape and is what was
-verified working on this toolkit's reference machine (2026-08-01). It installs
-into your own user site-packages, not Homebrew's tree. A virtualenv works too,
-but then every `python3.12` invocation in this skill has to run inside it.
+The paste is hidden — it isn't echoed to the terminal and never enters your
+shell history. The value is validated against claude.ai *before* it is stored,
+so you find out immediately whether it works instead of on some later run.
 
-**Google Chrome must also be installed** (a normal, regular install of the
-browser — not anything from Playwright). The login and every listing call
-drive your real, installed Chrome (`channel="chrome"`) rather than
-Playwright's bundled Chromium, because Cloudflare fingerprints bundled
-Chromium and serves an endless "verify you are human" loop that never
-resolves. If Chrome isn't found, this source falls back to bundled Chromium
-automatically and prints a loud warning — it does not fail the whole source —
-but the Cloudflare loop below is the likely result until Chrome is installed.
-Get it at https://www.google.com/chrome/ if you don't have it.
+**Treat that cookie like a password.** Anyone holding it can act as you on
+claude.ai. It is written to `~/.claude-receipts-session` with mode `0600`
+(only your account can read it), outside this repository so it cannot be
+committed. Don't paste it into Slack, a ticket, or a commit. If the file's
+permissions are ever loosened so that other accounts can read it, this skill
+**refuses to use it** and tells you to fix or re-store it. `CLAUDE_SESSION_KEY`
+in the environment takes precedence over the file if you'd rather supply it
+that way (from a password manager, say).
 
-Then log in once (opens a real Chrome window):
-
-```bash
-python3.12 skills/receipts/scripts/run.py --login
-```
+**Sessions expire periodically.** That is normal, not a breakage. When it
+happens the report says so in plain words — `the stored claude.ai session has
+expired` — and the fix is to re-run `--set-session` with a freshly copied
+cookie.
 
 This source is how usage-credit auto-recharge charges get a receipt at
 all — Anthropic does **not** email those (see the coverage note below). If
-`ANTHROPIC_ORG_UUID` isn't set or Playwright isn't installed, this source is
+`ANTHROPIC_ORG_UUID` isn't set or no session is stored, this source is
 skipped and announced; the rest of the run proceeds normally.
 
 ## The four match outcomes
@@ -214,30 +214,33 @@ for the rest.
 ## Troubleshooting
 
 - **`RampAuthError`** — Ramp auth is dead. Run `ramp auth login`.
-- **`SOURCE ANTHROPIC: SKIPPED (...)`** — the reason is in the message: set
-  `ANTHROPIC_ORG_UUID`, install Playwright, or re-run
-  `python3.12 skills/receipts/scripts/run.py --login` if the
-  claude.ai session expired.
+- **`SOURCE ANTHROPIC: SKIPPED (No claude.ai session is stored …)`** — nothing
+  has been stored yet and `CLAUDE_SESSION_KEY` isn't set either. Run
+  `python3.12 skills/receipts/scripts/run.py --set-session`.
+- **`SOURCE ANTHROPIC: SKIPPED (The stored claude.ai session has expired …)`**
+  — normal and expected; cookies don't last forever. Copy a fresh `sessionKey`
+  value out of Chrome's DevTools and re-run
+  `python3.12 skills/receipts/scripts/run.py --set-session`.
+- **`SOURCE ANTHROPIC: SKIPPED (Refusing to use the stored claude.ai session …
+  its mode is …)`** — the credential file became readable by other accounts on
+  the machine. The skill will not read a secret in that state. `chmod 600
+  ~/.claude-receipts-session`, or just re-run `--set-session`, which always
+  writes it back at `0600`.
 - **`SOURCE ANTHROPIC: SKIPPED (… HTTP 403 … not an org admin …)`** — a
   different failure that looks similar and is not fixable the same way. The
   claude.ai session is fine; the account just can't read that organization's
-  billing invoices. Logging in again cannot change it. Ask an org owner for
-  admin access, or unset `ANTHROPIC_ORG_UUID` to run without this source. A
-  401 or a redirect is the session-expiry case above and *does* want
-  `--login`.
-- **Cloudflare verification loop — ticking the confirm box never gets you
-  through, or `SOURCE ANTHROPIC: SKIPPED (… Cloudflare challenged the
-  automated browser …)`** — a third, distinct failure, and neither of the two
-  above. This is Cloudflare's bot detection fingerprinting the automated
-  browser itself (not your login, not your permissions) and serving an
-  endless "verify you are human" page instead of the real claude.ai response.
-  Re-running `--login` *can* fix this one, but only if it runs in your real,
-  installed Google Chrome — this skill drives Chrome by default
-  (`channel="chrome"`), and this loop is what happens when Chrome isn't
-  installed and the source falls back to Playwright's bundled Chromium,
-  which Cloudflare reliably challenges. **Install Google Chrome**
-  (https://www.google.com/chrome/) and re-run
-  `python3.12 skills/receipts/scripts/run.py --login`.
+  billing invoices. Storing a new session cannot change it. Ask an org owner
+  for admin access, or unset `ANTHROPIC_ORG_UUID` to run without this source.
+  A 401 or a redirect to the logout page is the session-expiry case above and
+  *does* want `--set-session`.
+- **`SOURCE ANTHROPIC: SKIPPED (Cloudflare challenged the request …)`** — a
+  third, distinct failure, and neither of the two above. Cloudflare answered
+  instead of claude.ai, so the request never arrived: this is not your
+  permissions and not (necessarily) a dead cookie. A freshly copied
+  `sessionKey` usually clears it — re-run
+  `python3.12 skills/receipts/scripts/run.py --set-session`. There is no
+  browser in this path any more, so there is nothing to install and no
+  "verify you are human" box to tick.
 - **`SOURCE <NAME>: TRUNCATED (...)`** — the source ran and returned
   **partial** results. This is not a skip and not a failure; it is an
   incomplete search, and any `UNFOUND` below it may be an artifact of what
