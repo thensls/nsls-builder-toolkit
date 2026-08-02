@@ -7,6 +7,37 @@ const VALID_TYPES = new Set(["say", "collect", "generate", "chat", "ai-process"]
 /** The three arrays an author can put an option list in. Each fieldType reads at most
  *  one of them; the others are silently discarded (track-studio#60). */
 const OPTION_ARRAYS = ["options", "checkboxOptions", "dropdownOptions"];
+
+/** Celebration fields that a SIBLING field silently switches off (track-studio#41).
+ *
+ *  CelebrationContent.tsx renders two mutually exclusive layouts, chosen by
+ *  `isSectionCompletion = !!completedSection`. Setting `celebrationCompletedSection`
+ *  selects the section-completion layout, which gates out the entire next-steps card —
+ *  and that card is the ONLY renderer for nextStepsTitle, nextStepsDescription and
+ *  celebrationTasks. Separately, the button reads
+ *  `effectiveNextSection ? "Up Next: <section>" : buttonText`, so once
+ *  `celebrationNextSection` is set, `celebrationButtonText` is never consulted.
+ *
+ *  So the reported symptom ("copy renders that no JSON supplies, so it must be a
+ *  hardcoded default") had a different cause: the fields ARE wired, and one authoring
+ *  choice makes five others unreachable. Read off the component, not assumed. */
+const CELEBRATION_SUPPRESSIONS = [
+  {
+    when: "celebrationCompletedSection",
+    suppresses: [
+      "celebrationNextStepsTitle",
+      "celebrationNextStepsDescription",
+      "celebrationTasks",
+    ],
+    because:
+      "selects the section-completion layout, which does not render the next-steps card",
+  },
+  {
+    when: "celebrationNextSection",
+    suppresses: ["celebrationButtonText"],
+    because: 'makes the button read "Up Next: <celebrationNextSection>"',
+  },
+];
 // Fallback ONLY for when no capability manifest is available. The manifest
 // (generated from ignite-next) is the source of truth; this list is known to go
 // stale — it once omitted wheel/multi-select-list/resume-upload while all three
@@ -171,6 +202,29 @@ export function validateTracks(tracks, opts = {}) {
                   : `${blabel} populates "${k}", but fieldType "${ft}" reads "${reads}" — "${k}" is never read. Move the list.`,
               );
             }
+          }
+        }
+        // Celebration fields suppressed by a sibling field (track-studio#41). Same class
+        // as the option-array rules above — an author populates a field and the member
+        // never sees it — but the cause is a layout branch rather than a fieldType
+        // accessor, so it needs no capability manifest: both suppressions are visible in
+        // CelebrationContent.tsx and hold for every fieldType that renders it.
+        if (ft === "celebration") {
+          const populated = (k) => {
+            const v = sub[k];
+            if (v === undefined || v === null) return false;
+            if (Array.isArray(v)) return v.length > 0;
+            return String(v).trim() !== "";
+          };
+          for (const rule of CELEBRATION_SUPPRESSIONS) {
+            if (!populated(rule.when)) continue;
+            const dead = rule.suppresses.filter(populated);
+            if (dead.length === 0) continue;
+            warnings.push(
+              `${blabel} sets ${dead.join(", ")}, but "${rule.when}" ${rule.because} — ` +
+                `${dead.length > 1 ? "those fields are" : "that field is"} never shown to the member. ` +
+                `Either clear "${rule.when}" or drop ${dead.length > 1 ? "them" : "it"}.`,
+            );
           }
         }
         for (const f of Object.keys(sub)) if (AUTO_FIELDS.has(f)) errors.push(`${blabel} has auto-managed field "${f}" — remove it.`);
