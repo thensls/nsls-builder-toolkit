@@ -115,7 +115,23 @@ _CF_HEADER_MARKERS = ("cf-mitigated", "cf-chl-bypass")
 # A 200 that has quietly landed here is a dead session, not an empty account.
 _LOGGED_OUT_PATHS = ("/login", "/logout", "/sign-in", "/signin")
 
-SET_SESSION_CMD = "python3.12 skills/receipts/scripts/run.py --set-session"
+# Third instance of the same bug class in this module's history (see the
+# ImportError note on the relative import above, and the run.py-from-anywhere
+# fix that followed it): a recovery command told a user to run something that
+# only worked from one directory. This one hardcoded a repo-relative path —
+# "skills/receipts/scripts/run.py" — and every missing/expired-session
+# message below tells the user to run exactly this string. That works only
+# when the shell's cwd happens to be the repo root, which is not where
+# /receipts runs from in the common case.
+#
+# Fix: resolve run.py's absolute path at runtime from this file's own
+# location rather than assuming anything about cwd. This module lives at
+# <skill>/scripts/sources/anthropic.py; run.py lives at
+# <skill>/scripts/run.py — one directory up from this file's parent. The
+# result is author- and machine-independent: it is derived fresh on whatever
+# machine and checkout this happens to run on, never hardcoded.
+_RUN_PY = Path(__file__).resolve().parent.parent / "run.py"
+SET_SESSION_CMD = f"python3.12 {_RUN_PY} --set-session"
 
 COOKIE_INSTRUCTIONS = f"""\
 Storing a claude.ai session for the Anthropic billing source.

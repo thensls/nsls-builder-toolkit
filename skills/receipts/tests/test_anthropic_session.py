@@ -23,7 +23,9 @@ import email.message
 import io
 import json
 import os
+import re
 import stat
+import subprocess
 import sys
 import tempfile
 import urllib.error
@@ -588,6 +590,150 @@ def test_download_still_needs_no_auth_and_sends_no_cookie():
     assert data.startswith(b"%PDF")
     assert isinstance(captured["url"], str), (
         "_download must keep passing a bare URL — no Request, no headers, no cookie"
+    )
+
+
+# ---------------------------------------------------------------------------
+# SET_SESSION_CMD — the recovery command must actually run, not just read
+# correctly. This is the third instance of the same bug class in this
+# module's history: --login's ImportError, then a run.py command documented
+# to work only from certain directories, then SET_SESSION_CMD hardcoding a
+# repo-relative path ("skills/receipts/scripts/run.py"). Every test above
+# this section only ever asserted the *string* '--set-session' appeared in a
+# message — which is exactly what let a command that fails with "No such
+# file or directory" from any cwd but the repo root ship three times.
+# ---------------------------------------------------------------------------
+
+_SET_SESSION_RE = re.compile(r"python3\.12 (\S+) --set-session")
+
+
+def _extract_set_session_path(message: str) -> str:
+    m = _SET_SESSION_RE.search(message)
+    assert m, f"no 'python3.12 <path> --set-session' command found in: {message}"
+    return m.group(1)
+
+
+def test_set_session_cmd_embeds_an_absolute_path_not_a_repo_relative_one():
+    # The regression itself: SET_SESSION_CMD used to be the literal string
+    # "python3.12 skills/receipts/scripts/run.py --set-session" — relative to
+    # the repo root. Every SourceUnavailable message below quotes this
+    # constant verbatim as the fix for a missing or dead session, so a
+    # relative path here means the recovery instruction itself is broken
+    # unless the user's shell happens to be sitting at the repo root.
+    with _sandbox():
+        try:
+            anth._stored_session()
+        except SourceUnavailable as exc:
+            path = _extract_set_session_path(str(exc))
+            assert os.path.isabs(path), (
+                f"SET_SESSION_CMD must embed an absolute path, got: {path!r}"
+            )
+            return
+    raise AssertionError("a missing session must raise SourceUnavailable")
+
+
+def test_set_session_cmd_path_is_derived_never_hardcoded():
+    # Constraint from the fix: no author-specific literal (no "/Users/...").
+    # The path must be *derived* from this module's own location on disk at
+    # runtime, so it points at wherever this checkout actually lives on
+    # whatever machine runs it — not baked in at authoring time. Checked
+    # against the module's own source text, not just its runtime value: a
+    # hardcoded literal that happened to match this machine would still pass
+    # a value-only check.
+    source = Path(anth.__file__).read_text()
+    assert "/Users/" not in source, (
+        "sources/anthropic.py must never contain an author-specific literal "
+        "path"
+    )
+    expected = Path(anth.__file__).resolve().parent.parent / "run.py"
+    assert anth._RUN_PY == expected, (
+        f"run.py must resolve from anthropic.py's own __file__, not a fixed "
+        f"string: {anth._RUN_PY} != {expected}"
+    )
+
+
+def test_every_session_recovery_message_names_an_absolute_run_py():
+    # All four SourceUnavailable failure modes (never-stored, expired,
+    # unsafe file mode, empty file) quote SET_SESSION_CMD — prove each one
+    # actually carries the absolute form, not just the one checked above.
+    cases = []
+
+    with _sandbox():
+        try:
+            anth._stored_session()
+        except SourceUnavailable as exc:
+            cases.append(("never stored", str(exc)))
+
+    with _sandbox(stored="   "):
+        try:
+            anth._stored_session()
+        except SourceUnavailable as exc:
+            cases.append(("empty file", str(exc)))
+
+    with _sandbox(stored=SENTINEL, mode=0o644):
+        try:
+            anth._stored_session()
+        except SourceUnavailable as exc:
+            cases.append(("unsafe mode", str(exc)))
+
+    assert len(cases) == 3, f"expected all three paths to raise: {cases}"
+    for label, msg in cases:
+        path = _extract_set_session_path(msg)
+        assert os.path.isabs(path), f"{label}: recovery path not absolute: {path!r}"
+
+
+def test_the_emitted_recovery_command_actually_runs_from_an_unrelated_cwd():
+    # The point of this whole fix: not that the string looks right, but that
+    # running it works. Extract the exact command the error message hands the
+    # user, and execute it for real — as a subprocess, from a temp directory
+    # that has nothing to do with this repo — the way a user actually
+    # encounters it (some unrelated cwd, following the printed instruction).
+    with _sandbox():
+        try:
+            anth._stored_session()
+        except SourceUnavailable as exc:
+            path = _extract_set_session_path(str(exc))
+        else:
+            raise AssertionError("expected SourceUnavailable")
+
+    assert os.path.isfile(path), f"the emitted path does not exist on disk: {path}"
+
+    with tempfile.TemporaryDirectory() as unrelated_cwd:
+        proc = subprocess.run(
+            [sys.executable, path, "--set-session"],
+            cwd=unrelated_cwd,
+            # A minimal, hermetic environment: PATH for the interpreter to
+            # resolve, and deliberately no ANTHROPIC_ORG_UUID, no
+            # CLAUDE_SESSION_KEY, no HOME override needed — the org-uuid
+            # check inside _set_session() fires before anything touches the
+            # session file, the network, or a credential prompt.
+            env={"PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin")},
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+    combined = proc.stdout + proc.stderr
+    # These are the failure signatures of the actual bug: the file could not
+    # be found or imported at all, because the path only resolved from the
+    # repo root.
+    assert "No such file or directory" not in combined, combined
+    assert "can't open file" not in combined.lower(), combined
+    assert "ImportError" not in combined, combined
+    assert "Traceback" not in combined, combined
+    # It is fine — expected — for the command to then fail for a DIFFERENT,
+    # later reason: no ANTHROPIC_ORG_UUID is set in the stripped-down
+    # environment above, and _set_session() refuses to even prompt for a
+    # credential without one (nothing to validate it against). Getting this
+    # far — a clean, explained, exit-2 error naming the real missing
+    # prerequisite — proves the file was found and the script actually
+    # started running. A missing-file failure would never reach this message.
+    assert proc.returncode == 2, (
+        f"expected a clean exit 2 (missing ANTHROPIC_ORG_UUID), not a path "
+        f"failure: returncode={proc.returncode}\n{combined}"
+    )
+    assert "ANTHROPIC_ORG_UUID" in combined, (
+        f"expected the run to get far enough to hit the org-uuid guard: {combined}"
     )
 
 

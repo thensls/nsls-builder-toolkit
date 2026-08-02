@@ -127,6 +127,16 @@ export ANTHROPIC_ORG_UUID=<your-claude.ai-org-uuid>   # Settings > Organization
 python3.12 skills/receipts/scripts/run.py --set-session
 ```
 
+Run this from the root of your `nsls-builder-toolkit` checkout, same as
+[Execution](#execution) — the relative path only resolves there. This is the
+one place that relative form is handed to you directly, before any run has
+happened yet to print something better: every session-recovery message
+`/receipts` prints after this first run (expired session, unsafe file mode,
+Cloudflare challenge, etc. — see [Troubleshooting](#troubleshooting)) quotes
+the exact command as an **absolute path** instead, resolved at runtime from
+where this skill is actually installed, so it works from whatever directory
+you're in when you see it.
+
 `--set-session` asks for your claude.ai session cookie. To find it:
 
 1. Open https://claude.ai in Chrome, signed in to the right account.
@@ -212,6 +222,12 @@ close what has a source, and leave a short, correctly-labeled manual list
 for the rest.
 
 ## Troubleshooting
+
+**The commands below are shown in their short, relative form for
+readability.** The actual message `/receipts` prints for any of these
+quotes the real, absolute path to `run.py` on your machine — resolved at
+runtime, not this doc's relative shorthand — so copying it works from
+whatever directory you're in, not just the repository root.
 
 - **`RampAuthError`** — Ramp auth is dead. Run `ramp auth login`.
 - **`SOURCE ANTHROPIC: SKIPPED (No claude.ai session is stored …)`** — nothing
