@@ -1,11 +1,12 @@
 ---
 name: setup
 description: >-
-  Onboarding for the NSLS Builder Toolkit. Confirms the builder email so the
-  tracker can credit work, connects org tools one at a time (Slack, Google
-  Drive, Google Calendar, Gmail, Fathom), verifies plugins, registers Windows
-  hooks, checks GCP/gws access, and offers personal productivity setup.
-  Use when first setting up, or when a tool connection seems broken.
+  Onboarding for the NSLS Builder Toolkit. Confirms the builder email and
+  GitHub username so the tracker can credit work (including merged PRs),
+  connects org tools one at a time (Slack, Google Drive, Google Calendar,
+  Gmail, Fathom), verifies plugins, registers Windows hooks, checks GCP/gws
+  access, and offers personal productivity setup. Use when first setting up,
+  or when a tool connection seems broken.
 ---
 
 # NSLS Builder Toolkit — Setup
@@ -28,7 +29,7 @@ Show the roadmap upfront so the builder knows the shape:
 Welcome to the NSLS Builder Toolkit! Let's get you set up.
 
 This takes about 5 minutes, and I'll do it with you one step at a time:
-  1. Confirm your builder email (so the tracker can credit your work)
+  1. Confirm your builder email + GitHub username (so the tracker credits your work and your merged PRs)
   2. Connect your tools — Slack, Google Drive, Calendar, Gmail, Fathom
   3. Check your plugins are working
   4. Register Windows hooks (Windows only — skipped on Mac/Linux)
@@ -121,6 +122,58 @@ fi
 ```
 
 Don't mention this to the builder unless they ask — it's plumbing.
+
+### Step 1.7: GitHub username (~20 sec)
+
+The tracker credits **merged PRs** by GitHub author login, read as
+`GITHUB_USERNAME` from the same `.env`. A wrong or empty value means merged
+PRs silently earn no credit — this cost one builder six weeks of PR points.
+**Never guess it from the email**: the email prefix has been wrong for every
+known builder (grandmamischief, jfontanez-nsls, david-adams). Don't propose a
+default — ask open-ended.
+
+Check first; if a value exists, confirm it instead of re-asking:
+
+```bash
+ENV_FILE="$HOME/.claude/local-plugins/nsls-personal-toolkit/.env"
+grep "^GITHUB_USERNAME=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-
+```
+
+Ask (plain words): "Which GitHub account do you open pull requests as? (your
+GitHub username, not your email)". If they don't use GitHub yet, skip cleanly —
+leave the key unset and note they can re-run /setup after their first PR.
+
+Validate before writing — never store an unverified guess:
+
+1. **Does the account exist?**
+   ```bash
+   GH_USER="<their answer>"
+   curl -s -o /dev/null -w '%{http_code}' "https://api.github.com/users/$GH_USER"
+   ```
+   (When `gh` is installed and authed, `gh api "users/$GH_USER" --jq .login`
+   works too.) `200` → real account. `404` → typo or not a username — show
+   them what you checked and re-ask. Anything else (rate limit, offline) →
+   accept their answer but say you couldn't verify it right now.
+2. **Sanity-check it's the right account** — any thensls PRs?
+   ```bash
+   curl -s "https://api.github.com/search/issues?q=type:pr+org:thensls+author:$GH_USER&per_page=1"
+   ```
+   Read `total_count`. Zero is expected for a brand-new builder — but if
+   they've shipped NSLS work before, zero usually means the wrong account (an
+   alt, a rename): say so and double-check with them. Treat this as a hint,
+   not proof (private-repo PRs may not show unauthenticated).
+
+Write it with the same merge pattern as BUILDER_EMAIL (preserve other keys):
+
+```bash
+ENV_FILE="$HOME/.claude/local-plugins/nsls-personal-toolkit/.env"
+mkdir -p "$(dirname "$ENV_FILE")"
+touch "$ENV_FILE"
+{ grep -v "^GITHUB_USERNAME=" "$ENV_FILE" || true; } > "$ENV_FILE.tmp" && mv "$ENV_FILE.tmp" "$ENV_FILE"
+echo "GITHUB_USERNAME=<validated username>" >> "$ENV_FILE"
+```
+
+Confirm: "PR credit goes to github.com/<username>."
 
 ## Step 2: Connect Your Tools (~2 min) — guided, one at a time
 
@@ -328,7 +381,14 @@ the Google consent themselves):
 ```bash
 gws auth login --services docs,drive
 ```
-Exactly `docs,drive` — never broader. A browser opens for Google consent.
+Exactly `docs,drive` — never broader. The command **prints a consent URL and
+starts a local listener**; a browser *usually* opens on its own, but never
+rely on that — run it in the background, read the consent URL from its
+output, and give the builder that URL **as a clickable link**, phrased as a
+fallback ("a sign-in page should have opened — if it didn't, click here").
+The URL is single-use and dies with the process: if nothing opened or it
+shows "can't reach localhost", start the login again and hand over the
+**fresh** link, never the old one.
 
 > ⚠️ **Real @nsls.org Workspace accounts only.** The consent screen is
 > **Internal** to the nsls.org Workspace org, so an **alias** address, or a
