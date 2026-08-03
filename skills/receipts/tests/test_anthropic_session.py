@@ -392,26 +392,38 @@ def test_fetch_never_leaks_the_session_through_the_truncated_report_line():
 def _tty():
     """Stand in for an interactive terminal that can hide what is typed.
 
-    The prompt refuses to run without one — see the non-TTY tests below — so
-    every test that gets as far as the prompt has to say it has a terminal.
+    The prompt refuses to run without one — see the no-terminal tests below —
+    so every test that gets as far as the prompt has to say it has a terminal.
     Patching the whole object rather than one attribute: under pytest's
     capture, sys.stdin is a stub that may not accept attribute assignment.
+
+    `base.controlling_terminal_available` is stubbed too, not just stdin: it
+    is the thing the prompt actually asks, and stubbing it is what keeps
+    these hermetic. Left to itself it would open the REAL /dev/tty, so the
+    suite would behave one way in CI and another way in a developer's
+    terminal — see tests/test_secret_prompt.py for that check done properly.
     """
     class _Stdin:
         def isatty(self):
             return True
 
-    with patch.object(sys, "stdin", _Stdin()):
+    with patch.object(sys, "stdin", _Stdin()), \
+         patch.object(base, "controlling_terminal_available", lambda: True):
         yield
 
 
 @contextlib.contextmanager
-def _not_a_tty():
+def _no_terminal():
+    """A process with no controlling terminal at all: a CI runner, an agent
+    shell, `docker exec` without -t. Note this is NOT "stdin is redirected" —
+    getpass opens /dev/tty itself, so `--set-session </dev/null` from a real
+    terminal is safe and must still be allowed through."""
     class _Stdin:
         def isatty(self):
             return False
 
-    with patch.object(sys, "stdin", _Stdin()):
+    with patch.object(sys, "stdin", _Stdin()), \
+         patch.object(base, "controlling_terminal_available", lambda: False):
         yield
 
 
@@ -438,7 +450,7 @@ def test_set_session_refuses_to_read_a_session_with_no_interactive_terminal():
 
     out, err = io.StringIO(), io.StringIO()
     with _sandbox() as path:
-        with patch.object(anth, "_open", _serve(200)), _not_a_tty(), \
+        with patch.object(anth, "_open", _serve(200)), _no_terminal(), \
              patch("getpass.getpass", prompted), \
              contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = anth._set_session()
@@ -474,11 +486,39 @@ def test_set_session_refuses_when_getpass_says_it_would_echo():
         assert anth.SESSION_ENV in combined, combined
 
 
+def test_a_getpass_that_would_echo_leaves_a_previously_stored_session_untouched():
+    # Same guarantee as the Neon twin: the GetPassWarning conversion stands on
+    # its own, with stdin a terminal so the precheck is not what stops it, and
+    # a session already on disk survives byte for byte.
+    previous = "sk-ant-sid01-PREVIOUSLY-STORED-DO-NOT-REPLACE"
+
+    def echoing(prompt=""):
+        import warnings as _w
+        _w.warn("Can not control echo on the terminal.", getpass.GetPassWarning)
+        return SENTINEL
+
+    out, err = io.StringIO(), io.StringIO()
+    with _sandbox(stored=previous) as path:
+        before = path.read_bytes()
+        with patch.object(anth, "_open", _serve(200)), _no_echo(), \
+             patch("getpass.getpass", echoing), \
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = anth._set_session()
+
+        combined = out.getvalue() + err.getvalue()
+        assert code != 0, combined
+        assert path.read_bytes() == before, (
+            "the stored session was modified by a prompt that refused to read one"
+        )
+        assert SENTINEL not in combined, combined
+        assert previous not in combined, combined
+
+
 def test_the_refusal_to_prompt_never_leaks_a_previously_stored_session():
     previous = "sk-ant-sid01-PREVIOUSLY-STORED-DO-NOT-PRINT"
     out, err = io.StringIO(), io.StringIO()
     with _sandbox(stored=previous) as path:
-        with _not_a_tty(), contextlib.redirect_stdout(out), \
+        with _no_terminal(), contextlib.redirect_stdout(out), \
              contextlib.redirect_stderr(err):
             code = anth._set_session()
 

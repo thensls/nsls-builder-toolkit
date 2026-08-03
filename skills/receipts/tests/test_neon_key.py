@@ -48,6 +48,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import sources.base as base
 import sources.neon as neon
 from sources.base import SourceUnavailable
 from sources.neon import SOURCE
@@ -471,16 +472,23 @@ def test_fetch_never_leaks_the_key_through_the_truncated_report_line():
 def _tty():
     """Stand in for an interactive terminal that can hide what is typed.
 
-    The prompt refuses to run without one — see the non-TTY tests below — so
-    every test that gets as far as the prompt has to say it has a terminal.
+    The prompt refuses to run without one — see the no-terminal tests below —
+    so every test that gets as far as the prompt has to say it has a terminal.
     Patching the whole object rather than one attribute: under pytest's
     capture, sys.stdin is a stub that may not accept attribute assignment.
+
+    `base.controlling_terminal_available` is stubbed too, not just stdin: it
+    is the thing the prompt actually asks, and stubbing it is what keeps
+    these hermetic. Left to itself it would open the REAL /dev/tty, so the
+    suite would behave one way in CI and another way in a developer's
+    terminal — see tests/test_secret_prompt.py for that check done properly.
     """
     class _Stdin:
         def isatty(self):
             return True
 
-    with patch.object(sys, "stdin", _Stdin()):
+    with patch.object(sys, "stdin", _Stdin()), \
+         patch.object(base, "controlling_terminal_available", lambda: True):
         yield
 
 
@@ -813,15 +821,23 @@ def test_a_non_mapping_response_leaves_a_previously_stored_key_untouched():
 # find an echo-free TTY, warning with GetPassWarning first. In that state the
 # key is printed to the terminal and captured in any transcript or job log —
 # the exact opposite of what this command promises.
+#
+# Note what "no terminal" means here: no CONTROLLING terminal, not "stdin is
+# redirected". getpass opens /dev/tty itself, so `--set-neon-key </dev/null`
+# from a real terminal is safe and must still be allowed through.
 # ---------------------------------------------------------------------------
 
 @contextlib.contextmanager
-def _not_a_tty():
+def _no_terminal():
+    """A process with no controlling terminal at all: a CI runner, an agent
+    shell, `docker exec` without -t. Stubbed rather than detected, so this
+    test means the same thing wherever it runs."""
     class _Stdin:
         def isatty(self):
             return False
 
-    with patch.object(sys, "stdin", _Stdin()):
+    with patch.object(sys, "stdin", _Stdin()), \
+         patch.object(base, "controlling_terminal_available", lambda: False):
         yield
 
 
@@ -834,7 +850,7 @@ def test_set_neon_key_refuses_to_read_a_key_with_no_interactive_terminal():
     out, err = io.StringIO(), io.StringIO()
     with _sandbox() as path:
         with patch.object(neon, "_open", _serve(200, json.dumps(PAYLOAD).encode())), \
-             _not_a_tty(), patch("getpass.getpass", prompted), \
+             _no_terminal(), patch("getpass.getpass", prompted), \
              contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = neon._set_neon_key()
 
@@ -875,11 +891,42 @@ def test_set_neon_key_refuses_when_getpass_says_it_would_echo():
         assert neon.KEY_ENV in combined, combined
 
 
+def test_a_getpass_that_would_echo_leaves_a_previously_stored_key_untouched():
+    # The GetPassWarning conversion is the guarantee — the terminal check in
+    # front of it is only a clearer message, and this proves the guarantee
+    # stands alone. Stdin IS a terminal here, so the precheck lets the call
+    # through and the warning is the only thing stopping it. A key already on
+    # disk must come out byte for byte identical: a refusal that quietly
+    # truncated or replaced it would be a worse outcome than the echo.
+    previous = "napi_PREVIOUSLY_STORED_KEY_DO_NOT_REPLACE"
+
+    def echoing(prompt=""):
+        import warnings as _w
+        _w.warn("Can not control echo on the terminal.", getpass.GetPassWarning)
+        return SENTINEL
+
+    out, err = io.StringIO(), io.StringIO()
+    with _sandbox(stored=previous) as path:
+        before = path.read_bytes()
+        with patch.object(neon, "_open", _serve(200, json.dumps(PAYLOAD).encode())), \
+             _no_echo(), patch("getpass.getpass", echoing), \
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = neon._set_neon_key()
+
+        combined = out.getvalue() + err.getvalue()
+        assert code != 0, combined
+        assert path.read_bytes() == before, (
+            "the stored key was modified by a prompt that refused to read one"
+        )
+        assert SENTINEL not in combined, combined
+        assert previous not in combined, combined
+
+
 def test_the_refusal_to_prompt_never_leaks_a_previously_stored_key():
     previous = "napi_PREVIOUSLY_STORED_KEY_DO_NOT_PRINT"
     out, err = io.StringIO(), io.StringIO()
     with _sandbox(stored=previous) as path:
-        with _not_a_tty(), contextlib.redirect_stdout(out), \
+        with _no_terminal(), contextlib.redirect_stdout(out), \
              contextlib.redirect_stderr(err):
             code = neon._set_neon_key()
 

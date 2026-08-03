@@ -396,15 +396,33 @@ whatever directory you're in, not just the repository root.
   endpoint has never redirected, so seeing this means something changed: the
   message names the target. If Neon really did move the endpoint,
   `sources/neon.py` needs the new URL.
-- **`ERROR: Refusing to prompt for the … no interactive terminal`** (from
+- **`ERROR: Refusing to prompt for the … no controlling terminal`** (from
   `--set-neon-key` or `--set-session`) — you're running in something with no
-  echo-free terminal: a CI job, a pipe, an agent shell, `docker exec` without
-  `-t`. Python's hidden-input prompt silently falls back to reading with
-  **echo on** in that state, which would print your credential to the screen
-  and into that job's log, so these commands refuse instead. Nothing was read
-  and nothing was stored. Either re-run from a real terminal, or supply the
-  value through the environment (`NEON_API_KEY` / `CLAUDE_SESSION_KEY`), which
-  both sources check ahead of the stored file.
+  terminal at all: a CI job, an agent shell, `docker exec` without `-t`.
+  Python's hidden-input prompt silently falls back to reading with **echo on**
+  in that state, which would print your credential to the screen and into that
+  job's log, so these commands refuse instead. Nothing was read and nothing
+  was stored; any previously stored value is untouched.
+
+  Note what this is *not*: a redirected stdin is fine. `--set-neon-key
+  < /dev/null` run from a real terminal still gets a properly hidden prompt,
+  because Python opens `/dev/tty` for it — only the absence of a terminal
+  triggers this refusal.
+
+  Either re-run from a terminal, or supply the value through the environment
+  (`NEON_API_KEY` / `CLAUDE_SESSION_KEY`), which both sources check ahead of
+  the stored file. Set it **without putting it in the command**, so it doesn't
+  land in your shell history (works in zsh and bash):
+
+  ```bash
+  printf 'Neon API key: '; read -rs NEON_API_KEY; echo; export NEON_API_KEY
+  ```
+
+  Exporting it with the value written inline in the command would work too,
+  and would also write the credential verbatim into `~/.zsh_history` and any
+  shell audit log — a longer-lived leak than the echoed prompt this refusal
+  exists to prevent. Use the form above. (Non-secrets like `NEON_ORG_ID` and
+  `ANTHROPIC_ORG_UUID` are fine to `export` inline — there's nothing to leak.)
 - **`SOURCE <NAME>: TRUNCATED (...)`** — the source ran and returned
   **partial** results. This is not a skip and not a failure; it is an
   incomplete search, and any `UNFOUND` below it may be an artifact of what

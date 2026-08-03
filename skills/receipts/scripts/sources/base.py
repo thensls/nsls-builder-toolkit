@@ -60,44 +60,115 @@ def scrub_secret(text, secret: str | None) -> str:
     return out
 
 
+def env_var_hint(env_var: str, label: str) -> str:
+    """A history-safe way to put a credential in the environment.
+
+    NOT `export NAME=value`. That is a shell command with the secret inline,
+    so the credential is written verbatim into ~/.zsh_history (or
+    ~/.bash_history), into any shell audit log, and into the process table
+    while it runs — defeating the exact guarantee `prompt_for_secret` exists
+    to provide. Telling someone to do that as the "safe alternative" to an
+    echoed prompt trades one leak for a more durable one.
+
+    The form below never puts the value on a command line: `read` takes it
+    from the terminal, `-s` keeps it off the screen, `-r` stops a backslash
+    being eaten, and `export` then exports the ALREADY-SET name. Correct on
+    both shells builders here use — zsh's `read -s` and bash's `read -s` both
+    mean "do not echo", and neither `-r` nor a bare `export NAME` differs.
+    Deliberately not `read -p`: that is bash's prompt flag, and in zsh `-p`
+    reads from a coprocess instead, so the prompt would silently vanish and
+    the read would fail. `printf` writes the prompt in both.
+    """
+    # Single-quote the prompt the POSIX way, so a label containing an
+    # apostrophe cannot end the quoted string and turn the rest of the line
+    # into something else. Neither current label has one; a future one might.
+    quoted = label.replace("'", "'\\''")
+    return f"  printf '{quoted}: '; read -rs {env_var}; echo; export {env_var}"
+
+
+def controlling_terminal_available() -> bool:
+    """True when there is a terminal a hidden prompt can be read from.
+
+    Deliberately NOT `sys.stdin.isatty()`. `getpass.unix_getpass` opens
+    /dev/tty itself and prompts there; it only falls back to an ECHOING read
+    of sys.stdin — after a GetPassWarning — when that open fails. So a
+    redirected stdin is not by itself unsafe: `run.py --set-neon-key
+    </dev/null` from a real terminal still gets a properly hidden prompt.
+    Checking stdin conflated "stdin is redirected" with "no echo-free
+    terminal exists" and refused invocations that were never at risk.
+
+    Fails closed in the direction that matters: this only ever returns True
+    when a terminal was actually proven to exist (stdin is one, or /dev/tty
+    opened). Anything else is False and nothing is read. It is not the real
+    safety net either — the GetPassWarning conversion below is, and it stands
+    alone — this exists to give a clearer message in the common case and to
+    guarantee `getpass` is not even reached when there is demonstrably no
+    terminal.
+    """
+    try:
+        if sys.stdin.isatty():
+            return True
+    except (AttributeError, OSError, ValueError):
+        # A closed, detached, or stubbed stdin. Says nothing about /dev/tty.
+        pass
+
+    if os.name != "posix":
+        # There is no /dev/tty to test. Windows' getpass reads through msvcrt
+        # without echo and never emits GetPassWarning, so refusing here would
+        # reject every Windows run. Let it prompt.
+        return True
+
+    try:
+        fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
+    except OSError:
+        return False
+    os.close(fd)
+    return True
+
+
 def prompt_for_secret(prompt: str, *, label: str, env_var: str, command: str) -> str:
     """Read a credential from the terminal — or refuse to read one at all.
 
     `getpass.getpass` is not unconditionally hidden. When it cannot find an
-    echo-free terminal (stdin redirected, no controlling TTY, a CI runner, an
-    agent shell, a `docker exec` without -t) it warns with GetPassWarning,
-    prints "Warning: Password input may be echoed.", and then reads the value
-    from sys.stdin WITH ECHO. The credential is printed to the screen, kept in
-    scrollback, and captured in whatever log or transcript is recording that
-    session — which is precisely the guarantee both callers make in their
-    instructions ("the paste is hidden").
+    echo-free terminal (no controlling TTY, a CI runner, an agent shell, a
+    `docker exec` without -t) it warns with GetPassWarning, prints "Warning:
+    Password input may be echoed.", and then reads the value from sys.stdin
+    WITH ECHO. The credential is printed to the screen, kept in scrollback,
+    and captured in whatever log or transcript is recording that session —
+    which is precisely the guarantee both callers make in their instructions
+    ("the paste is hidden").
 
     So this fails closed, on both halves of that failure:
 
-      * no interactive stdin           -> refuse before prompting at all
+      * no controlling terminal at all -> refuse before prompting
       * getpass says it cannot hide it -> refuse, and never return the value
 
     The GetPassWarning is raised BEFORE the read (CPython's fallback_getpass
     warns first, then reads), so turning it into an error means the secret is
-    never typed rather than typed and then discarded.
+    never typed rather than typed and then discarded. That conversion is the
+    guarantee; the terminal check in front of it is a clearer message, not a
+    second line of defence, and it is deliberately narrow — see
+    `controlling_terminal_available` for why testing stdin was wrong.
 
     Refusing is not a dead end: the environment variable is checked ahead of
     the stored file by every source here, so a non-interactive context has a
-    first-class way to supply the value. The message says so.
+    first-class way to supply the value. The message says so — and says it in
+    a form that does not put the credential into shell history.
     """
     fix = (f"Set it in the environment instead — {env_var} is checked before "
            f"the stored file, so a non-interactive run can supply it without "
-           f"a prompt:\n"
-           f"  export {env_var}=…\n"
-           f"Or run `{command}` again from an interactive terminal.")
+           f"a prompt. Type the value rather than passing it as an argument, "
+           f"so it never lands in your shell history (zsh and bash both):\n"
+           f"{env_var_hint(env_var, label)}\n"
+           f"Or run `{command}` again from a terminal.")
 
-    if not sys.stdin.isatty():
+    if not controlling_terminal_available():
         raise SecretPromptUnavailable(
-            f"Refusing to prompt for the {label}: this session has no "
-            f"interactive terminal on stdin, so what you typed would be "
-            f"echoed to the screen and captured in any log or transcript of "
-            f"this run. Nothing was read and nothing was stored; any "
-            f"previously stored value is untouched.\n{fix}"
+            f"Refusing to prompt for the {label}: this process has no "
+            f"controlling terminal, so what you typed would be echoed to the "
+            f"screen and captured in any log or transcript of this run. "
+            f"Nothing was read and nothing was stored; any previously stored "
+            f"value is untouched.\n{fix}"
         )
 
     with warnings.catch_warnings():
