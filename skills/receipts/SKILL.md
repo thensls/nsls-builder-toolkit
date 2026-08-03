@@ -1,6 +1,6 @@
 ---
 name: receipts
-description: Find Ramp transactions missing receipts, fetch each receipt from Anthropic's billing API or Gmail, and upload it to Ramp against the exact transaction. Use when the user says "receipts", "/receipts", "missing receipts", "Ramp needs a receipt", "receipt cleanup", or forwards a Ramp "transaction needs a receipt" nag. Dry run by default.
+description: Find Ramp transactions missing receipts, fetch each receipt from Anthropic's billing API, Neon's billing API, or Gmail, and upload it to Ramp against the exact transaction. Use when the user says "receipts", "/receipts", "missing receipts", "Ramp needs a receipt", "receipt cleanup", or forwards a Ramp "transaction needs a receipt" nag. Dry run by default.
 ---
 
 # Receipts → Ramp
@@ -14,7 +14,7 @@ Clears Ramp's missing-receipt queue automatically instead of the manual
    a missing receipt (this is a per-transaction API call — see
    [Troubleshooting](#troubleshooting) for why).
 2. Fetches candidate receipts from every configured source (Anthropic
-   billing, Gmail) — each source degrades independently, see
+   billing, Neon billing, Gmail) — each source degrades independently, see
    [Setup](#setup).
 3. Matches receipts to transactions on merchant + amount + date
    (see [Match outcomes](#the-four-match-outcomes)).
@@ -36,6 +36,11 @@ changes nothing in Ramp. Nothing is ever uploaded without `--send`.
   or upload anything. Not combinable with `--send`. (`--login` is the old
   name for this and still works — it now stores a cookie instead of opening a
   browser, and says so.)
+- `/receipts --set-neon-key` — store the Neon API key the Neon billing source
+  needs, then exit; does not build the queue, fetch, or upload anything. Not
+  combinable with `--send`, and not combinable with `--set-session` (they are
+  two different credentials for two different sources — run one, then the
+  other).
 
 ## Execution
 
@@ -83,9 +88,9 @@ explicitly and tell the user that `--send` is what executes it.
 
 ## Setup
 
-Three independent prerequisites. **None of them are required for the other
-two to work** — a missing prerequisite skips only that piece and says so in
-the report; it never fails the whole run.
+Four independent prerequisites. **None of them are required for the others
+to work** — a missing prerequisite skips only that piece and says so in the
+report; it never fails the whole run.
 
 ### 1. Ramp (required — this is the queue itself)
 
@@ -168,6 +173,49 @@ all — Anthropic does **not** email those (see the coverage note below). If
 `ANTHROPIC_ORG_UUID` isn't set or no session is stored, this source is
 skipped and announced; the rest of the run proceeds normally.
 
+### 4. Neon source (optional)
+
+**No browser, nothing to install, and no cookie.** Neon's billing API takes
+a plain long-lived API key, so unlike the Anthropic source there is no
+session here to expire. Two things are required:
+
+```bash
+export NEON_ORG_ID=org-your-organization-id
+python3.12 skills/receipts/scripts/run.py --set-neon-key
+```
+
+`NEON_ORG_ID` is the `org-…` segment in the Neon Console URL
+(`console.neon.tech/app/projects?org_id=org-…`). Run the second command from
+the root of your checkout, same as [Execution](#execution) — every
+Neon-recovery message `/receipts` prints later quotes the command as an
+**absolute path** resolved at runtime, so it works from wherever you are.
+
+`--set-neon-key` asks for a Neon API key. To create one:
+
+1. Open the **Neon Console** (https://console.neon.tech) and sign in.
+2. **Organization settings** → **API keys**.
+3. Create an **organization** API key. A personal key cannot read the
+   organization's billing invoices — this is the single most likely setup
+   mistake, and it shows up as an HTTP 401/403 in the report.
+4. Copy it (Neon shows it once) and paste it at the prompt.
+
+The paste is hidden — it isn't echoed to the terminal and never enters your
+shell history. The key is validated against Neon *before* it is stored, so
+you find out immediately whether it works instead of on some later run.
+
+**Treat that key like a password.** It is written to
+`~/.claude-receipts-neon-key` with mode `0600` (only your account can read
+it), outside this repository so it cannot be committed. If the file's
+permissions are ever loosened, this skill **refuses to use it** and tells you
+to fix or re-store it. `NEON_API_KEY` in the environment takes precedence over
+the file if you'd rather supply it that way (from a password manager, say).
+
+This source is the only way Neon charges get a receipt: Neon sends **no
+invoice email at all** — the mailbox was searched unrestricted on 2026-08-01
+and Neon sends product updates and usage recaps only. If `NEON_ORG_ID` isn't
+set or no key is stored, this source is skipped and announced; the rest of
+the run proceeds normally.
+
 ## The four match outcomes
 
 Every outstanding transaction gets exactly one outcome. **Only the first two
@@ -209,17 +257,22 @@ transactions,
 - **~15** are Anthropic usage-credit auto-recharge charges — Anthropic sends
   no receipt email for these; they're only reachable through the Anthropic
   billing source.
+- **3** are Neon Tech charges ($1,293.73 total, billed monthly and growing:
+  $317.61 → $425.36 → $550.76). Neon sends no receipt email either, but it
+  *does* expose a billing API, so these are covered by the Neon source.
 - **1** (Asana) binds through the Gmail source.
-- **~6** (Neon Tech, Supabase, Zoom, and similar) send **no receipt email at
-  all** — no portal API, no email, nothing this skill can fetch
-  automatically. These need manual handling: download from the vendor's own
-  billing portal and attach in Ramp directly.
+- **~3** (Supabase, Zoom, and similar) have **neither an email nor a
+  reachable billing API** — nothing this skill can fetch automatically. These
+  need manual handling: download from the vendor's own billing portal and
+  attach in Ramp directly.
 
-That last group is the honest ceiling of what `/receipts` can do today, not
-a bug to chase — there's no automated source for them because the vendor
-doesn't produce one. Don't expect the skill to close 22/22; expect it to
-close what has a source, and leave a short, correctly-labeled manual list
-for the rest.
+"Sends no receipt email" and "has no automated source" are two different
+statements, and only the second one is a ceiling. Neon is the worked example:
+no email, but a portal API that takes a plain API key, so it's automated.
+Supabase and Zoom are the honest remainder — not a bug to chase, because
+there's no source to build against. Don't expect the skill to close 22/22;
+expect it to close what has a source, and leave a short, correctly-labeled
+manual list for the rest.
 
 ## Troubleshooting
 
@@ -257,14 +310,41 @@ whatever directory you're in, not just the repository root.
   `python3.12 skills/receipts/scripts/run.py --set-session`. There is no
   browser in this path any more, so there is nothing to install and no
   "verify you are human" box to tick.
+- **`SOURCE NEON: SKIPPED (No Neon API key is stored …)`** — nothing has been
+  stored yet and `NEON_API_KEY` isn't set either. Run
+  `python3.12 skills/receipts/scripts/run.py --set-neon-key`.
+- **`SOURCE NEON: SKIPPED (NEON_ORG_ID is not set …)`** — a different, cheaper
+  fix: the key may be perfectly fine, the source just doesn't know which
+  organization to read. `export NEON_ORG_ID=org-…`, taken from the `org_id`
+  segment of the Neon Console URL.
+- **`SOURCE NEON: SKIPPED (Neon refused … HTTP 401/403 …)`** — the stored key
+  is invalid or is a **personal** key. Organization billing invoices need an
+  **organization** API key (Neon Console → Organization settings → API keys).
+  Re-issue it as one and store the new key with `--set-neon-key`. Setting
+  `NEON_ORG_ID` will not fix this.
+- **`SOURCE NEON: SKIPPED (Neon answered HTTP 400 'method is deprecated' …)`**
+  — **not your credentials.** This means the skill called the retired
+  `/api/v2/billing/invoices?org_id=…` form instead of the org-scoped
+  `/api/v2/organizations/<org>/billing/invoices`. It is a bug in
+  `sources/neon.py` and needs a code change; re-issuing an API key will do
+  nothing.
+- **`SOURCE NEON: SKIPPED (Refusing to use the stored Neon API key … its mode
+  is …)`** — the credential file became readable by other accounts. `chmod 600
+  ~/.claude-receipts-neon-key`, or re-run `--set-neon-key`, which always
+  writes it back at `0600`.
 - **`SOURCE <NAME>: TRUNCATED (...)`** — the source ran and returned
   **partial** results. This is not a skip and not a failure; it is an
   incomplete search, and any `UNFOUND` below it may be an artifact of what
-  wasn't searched. Both sources report it the same way:
+  wasn't searched. All three sources report it the same way:
   - Gmail — the 50-page pagination cap was hit with more results pending.
   - Anthropic — the 20-page cap was hit, or the invoice listing claimed more
     pages while returning no cursor, or one or more invoice PDFs failed to
     download (those are named, with date and amount, in the message).
+  - Neon — an invoice PDF failed to download, a paid invoice couldn't be read
+    from the listing, or the response grew a pagination-shaped field. Neon's
+    listing is **not** paginated today (all invoices come back in one call),
+    so that last one means the API changed shape and `sources/neon.py` needs
+    updating — the skill notices rather than returning a quietly short list.
 
   Narrow the date window (`--since`/`--until`) and re-run to get a query small
   enough to finish. Download failures are usually transient — re-running is

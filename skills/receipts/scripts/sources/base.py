@@ -3,14 +3,84 @@
 
 import hashlib
 import importlib
+import os
 import pkgutil
 import re
+import stat
+import tempfile
 import unicodedata
 from dataclasses import dataclass
+from pathlib import Path
 
 
 class SourceUnavailable(Exception):
     """Source could not run — auth, network, config. Never a match failure."""
+
+
+# ---------------------------------------------------------------------------
+# Stored credentials
+#
+# Two sources now hold a long-lived secret on disk (a claude.ai session, a
+# Neon API key) and both have exactly the same obligations: refuse a file
+# other accounts can read, write atomically at 0600, and never let the value
+# reach a message. Those three things live here so the two sources cannot
+# drift apart on them — the messages stay per-source, because "the stored
+# claude.ai session expired" and "re-issue this as an organization API key"
+# are different instructions and must not be homogenised.
+# ---------------------------------------------------------------------------
+
+SECRET_MODE = 0o600
+# Any group or other permission bit at all. Read is the dangerous one, but a
+# credential file nobody else should touch has no business being group-
+# writable or executable either.
+UNSAFE_MODE_BITS = stat.S_IRWXG | stat.S_IRWXO
+
+
+def scrub_secret(text, secret: str | None) -> str:
+    """Defensive redaction. No source deliberately interpolates a credential
+    into a message — but text that arrives from elsewhere (an OSError, a
+    urllib exception, a server's own error body) can carry anything, and it
+    is about to be shown to a user or written to a log. Assume any string
+    being interpolated may reach a log and take the secret out of it first.
+    """
+    out = str(text)
+    if secret:
+        out = out.replace(secret, "<redacted credential>")
+    return out
+
+
+def secret_file_mode(path: Path) -> int:
+    """The file's permission bits. Raises OSError like stat() does."""
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+def secret_file_is_unsafe(mode: int) -> bool:
+    return bool(mode & UNSAFE_MODE_BITS)
+
+
+def write_secret_file(value: str, path: Path, prefix: str) -> None:
+    """Write a credential atomically at mode 0600.
+
+    Same shape as the ledger's write: a temp file in the *destination
+    directory* (os.replace is only atomic within one filesystem), permissions
+    set on the file descriptor before a single byte of the secret is written,
+    then an atomic rename. A half-written credential file would fail
+    confusingly on the next run; a briefly world-readable one would be a leak.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=prefix)
+    try:
+        os.fchmod(fd, SECRET_MODE)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(value + "\n")
+        os.chmod(tmp, SECRET_MODE)
+        os.replace(tmp, str(path))
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 @dataclass(frozen=True)

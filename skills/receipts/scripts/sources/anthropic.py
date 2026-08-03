@@ -49,15 +49,14 @@ import getpass
 import hashlib
 import json
 import os
-import stat
 import sys
-import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 try:
-    from .base import Receipt, SourceUnavailable
+    from .base import (Receipt, SourceUnavailable, UNSAFE_MODE_BITS, scrub_secret,
+                       secret_file_is_unsafe, secret_file_mode, write_secret_file)
 except ImportError:
     # Running this file directly (`python3.12 sources/anthropic.py
     # --set-session`) gives it no parent package, so the relative import above
@@ -76,7 +75,9 @@ except ImportError:
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from sources.base import Receipt, SourceUnavailable
+    from sources.base import (Receipt, SourceUnavailable, UNSAFE_MODE_BITS,
+                              scrub_secret, secret_file_is_unsafe,
+                              secret_file_mode, write_secret_file)
 
 LISTING = "https://claude.ai/api/stripe/{org}/invoices?limit={limit}&page={page}"
 PAGE_GUARD = 20  # pages (100 invoices/page = 2,000 invoices) — see fetch()
@@ -89,10 +90,8 @@ SESSION_ENV = "CLAUDE_SESSION_KEY"
 # where it could be committed.
 SESSION_FILE = "~/.claude-receipts-session"
 SESSION_MODE = 0o600
-# Any group or other permission bit at all. Read is the dangerous one, but a
-# credential file nobody else should touch has no business being group-
-# writable or executable either.
-_UNSAFE_MODE_BITS = stat.S_IRWXG | stat.S_IRWXO
+# Shared with every other credential-holding source — see sources/base.py.
+_UNSAFE_MODE_BITS = UNSAFE_MODE_BITS
 
 # claude.ai's edge refuses (or challenges) a default `Python-urllib/3.12`
 # User-Agent. This is a plain, current desktop-Chrome UA string: it is not an
@@ -161,16 +160,10 @@ def _session_path() -> Path:
 
 
 def _scrub(text: str, secret: str | None) -> str:
-    """Defensive redaction. Nothing in this module deliberately interpolates
-    the session into a message — but text that arrives from elsewhere (an
-    OSError, a urllib exception, a header dump) can carry anything, and it is
-    about to be shown to a user or written to a log. Assume any string being
-    interpolated may reach a log and take the secret out of it first.
+    """Defensive redaction — see base.scrub_secret. Kept as a module-local
+    name because every call site below reads better as `_scrub(..., session)`.
     """
-    out = str(text)
-    if secret:
-        out = out.replace(secret, "<redacted session>")
-    return out
+    return scrub_secret(text, secret)
 
 
 def _stored_session() -> str:
@@ -192,14 +185,14 @@ def _stored_session() -> str:
         )
 
     try:
-        mode = stat.S_IMODE(path.stat().st_mode)
+        mode = secret_file_mode(path)
     except OSError as exc:
         raise SourceUnavailable(
             f"Could not read the stored claude.ai session at {path}: "
             f"{type(exc).__name__}: {exc}"
         ) from None
 
-    if mode & _UNSAFE_MODE_BITS:
+    if secret_file_is_unsafe(mode):
         raise SourceUnavailable(
             f"Refusing to use the stored claude.ai session at {path}: its mode "
             f"is {mode:04o}, which lets other accounts on this machine read it. "
@@ -513,28 +506,8 @@ SOURCE = AnthropicSource()
 
 
 def _write_session(value: str, path: Path) -> None:
-    """Write the credential atomically at mode 0600.
-
-    Same shape as the ledger's write: a temp file in the *destination
-    directory* (os.replace is only atomic within one filesystem), permissions
-    set on the file descriptor before a single byte of the secret is written,
-    then an atomic rename. A half-written credential file would fail
-    confusingly on the next run; a briefly world-readable one would be a leak.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".claude-receipts-session.")
-    try:
-        os.fchmod(fd, SESSION_MODE)
-        with os.fdopen(fd, "w") as fh:
-            fh.write(value + "\n")
-        os.chmod(tmp, SESSION_MODE)
-        os.replace(tmp, str(path))
-    except Exception:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+    """Write the credential atomically at mode 0600— see base.write_secret_file."""
+    write_secret_file(value, path, prefix=".claude-receipts-session.")
 
 
 def _set_session() -> int:
