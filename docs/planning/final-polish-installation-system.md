@@ -1,0 +1,82 @@
+# Final Polish of the Installation System — master consolidation
+
+Working file for the 2026-08-03 polish round. Owner: Davo (davowood@nsls.org).
+Coordinator session: `objective-chaum-2bdc69` worktree. **Nothing here pushes,
+PRs, or ships without Davo's explicit per-action approval.**
+
+## Inputs
+
+| Source | File | Status |
+|---|---|---|
+| Mac round 2 (2026-07-28 fresh-account run + Davo's review notes) | `~/Downloads/onboarding-handoff.md` | ✅ received — primary work queue |
+| PC round 2 | — | ❌ **missing.** The file supplied (`nsls-test-findings (1).md`) is byte-identical to round 1's `PC-RUN1-DELIVERABLES.md` (Jul 26). Davo to locate/export the real round-2 PC deliverable; fold in when it arrives. |
+| PC round 1 (reference only) | `.../BK and Training Buff/PC-RUN1-DELIVERABLES.md` | Merged & live (builder-kit #109, personal-toolkit #36, tracker #7 + Railway redeploy). Used for regression checks only. |
+| Backlog buffs (this chat, from the 2026-08-02 tracker session) | items 1–3 below | Fold into PR A regardless of test feedback |
+| Round-2 orchestrator brief | `.../BK and Training Buff/HANDOFF-ROUND2-ORCHESTRATOR.md` | Mechanics adopted (master-prompt in-place update, guide = draft/suggestions only) |
+
+## Delivery shape (Davo, 2026-08-03)
+
+1. **PR A — builder kit** (`thensls/nsls-builder-toolkit`, this repo). One PR. Kevin merges (Davo has no write access; fork → upstream PR).
+2. **PR B — personal toolkit** (`thensls/nsls-personal-toolkit`). One PR. Davo can self-merge.
+3. **Master prompts** — edit **in place** on the two hosted Google Docs (same file IDs, bump version footer): Mac `1QCNbSv_OjCBTzeEFN5leLHbI3d3OHCCxBmVW9c-RKT4`, Windows `1X1ylhOPkGonx-Y1kMHgQR0bwRwwxON9jozSI9QBsPI8`. Explicitly authorized by Davo 2026-08-03.
+4. **Installation guide** — suggestions only, nothing applied. Live guide doc (`1o3V2n2oyrdDI4SSp0YDdEOx7mqRzvhhh_zc7nfT8NdM`) stays untouched.
+5. Codex review of both repo diffs before push. Pushes/PRs only on Davo's per-action word.
+
+## PR A — builder kit worklist
+
+| # | Item | Files | Status |
+|---|---|---|---|
+| A-1 | **Buff 3: session-ping transport** — curl-first POST w/ urllib fallback (python.org builds ship no CA certs → every urllib ping fails silently; cost Davo ~6 wks of session points). Same for dismiss-announcement. Failure counter on `.last-ping-failed` + one-time visible warning at 3 consecutive failures. | `hooks/session-start.py` | to do |
+| A-2 | **Buff 2: /register-automation nudge** on merged-PR pings — judge-then-nudge directive (registerable = new skill/tool/service; pure bugfix = skip; unsure = include). Windows: PR-credit + stage lines currently go to a log file only — route them through the `.pending-announcements` handoff so PC builders actually see them, nudge included. Checklist item in skill-creation. | `hooks/session-start.py`, `hooks/session-ping.sh`, `hooks/session-ping.ps1`, `skills/skill-creation/SKILL.md` | to do |
+| A-3 | **Buff 1: GitHub username at setup** — new Step 1.7: ask "which GitHub account do you open PRs as?" (never guess from email — wrong for every known builder), validate account exists (gh api / unauthenticated GET), sanity-check thensls PRs (zero = fine for new builders, suspicious for veterans), write `GITHUB_USERNAME` with the same .env merge pattern as BUILDER_EMAIL. Update roadmap + frontmatter. | `skills/setup/SKILL.md` | to do |
+| A-4 | **C1: install.sh dies on Mac Desktop** — `CLAUDE_BIN="$(command -v claude 2>/dev/null)"` at line 274 is a bare assignment under `set -e`; kills the script before the desktop-app probe below it runs. Fix: `|| true`. | `install.sh` | to do |
+| A-5 | **C2: gws installer-script URL 404s** — upstream ships only tarballs now (v0.22.5 assets confirmed: `google-workspace-cli-{aarch64,x86_64}-apple-darwin.tar.gz` + `.sha256`). Replace the `google-workspace-cli-installer.sh` one-liner with arch-detected tarball download + SHA-256 verify in all three places. | `install.sh:487`, `skills/gws/SKILL.md:41`, `skills/gdoc-edit/references/setup.md:21` | to do |
+| A-6 | **C3: borderless tables** — `add_table()` never calls the `set_cell_borders()` defined 12 lines above it; comment falsely claims the table style "gives borders on import"; SKILL.md:121/:212 prescribe the broken fix. Also fix the template's hardcoded `/Users/k/` save path. | `skills/gdoc-build/templates/build_doc.py`, `skills/gdoc-build/SKILL.md` | to do |
+| A-7 | **C4: gdoc-edit insert styling** — `_insert_block` styles only the title range; body inherits insertion-point style (HEADING_1 giants). Set body to NORMAL_TEXT explicitly; add `--level` flag (insert-top/after currently hardcode H2/H3); document that `replaceAllText` reports ok on zero matches + extend verification guidance beyond text-presence. | `skills/gdoc-edit/scripts/gdoc.py`, `skills/gdoc-edit/SKILL.md` | to do |
+| A-8 | **C5: gdoc-edit intake** — bare invocation must ask which doc + what change; never invent an edit; offer this session's built doc as likely target. | `skills/gdoc-edit/SKILL.md` | to do |
+| A-9 | **C6: fragile deps guard** — `[ -d /tmp/pptx_deps/docx ]` passes on a gutted install (macOS /tmp cleanup deletes files, keeps dirs). Guard on a real import; move target to durable `~/.local/lib/nsls-pydeps` (keep /tmp/pptx_deps on sys.path as legacy fallback). 12 occurrences across gdoc-build, scorecard-builder, academic-outcomes. | `skills/gdoc-build/{SKILL.md,templates/build_doc.py}`, `skills/scorecard-builder/{SKILL.md,references/build_doc_template.py}`, `skills/academic-outcomes/{SKILL.md,scripts/render_academic_outcomes.py,references/outcomes-json-schema.md}` | to do |
+| A-10 | **C7: consent-URL wording** — setup Step 5: "A browser opens for Google consent" → prints a consent URL + local listener; surface the URL to the builder as a clickable link (belt-and-braces with master-prompt B2). | `skills/setup/SKILL.md:331` | to do |
+| A-11 | **Harvest: gdoc-build Drive-connector fallback** — Davo's uncommitted live-install work: "If gws auth is unavailable" section (Drive MCP `create_file` with `text/html` → native Doc), literal-quote SyntaxError gotcha row, gws-401 gotcha row. Diff saved to scratchpad (`harvest-live-install-gdoc-build.diff`); includes local branch `pp-gdoc-build-quote-gotcha` (926a5db). | `skills/gdoc-build/SKILL.md` | to do |
+| A-12 | Planning doc (this file). | `docs/planning/` | this commit |
+
+### Verified already fixed on main (regression check 2026-08-03 — no action)
+
+PC-RUN1 2.1 (gh guard, install.ps1:359) · 2.2 (superpowers marketplace, .ps1:401 + .sh:351) · 2.3 (desktop CLI glob, .ps1:270 + .sh:283 — but see C1 for the .sh crash *before* the probe) · 2.4 (Python/Node/gws/VC++ provisioning, .ps1) · 2.5/2.7 (setup connector-restart discipline + breadcrumbs) · 2.8 (exit 0, .ps1:553) · 4.2 (`.install-identity` both installers + setup 1.5) · 4.3 (skill-event.sh sed extraction, no python3) · 5.1–5.6 + 5.8 (gws/gdoc docs: Windows branch, client-secret link per #99, @nsls.org note, contradiction reworded, Windows annotations, VC++ manual step) · 5.7 for `/interrogate` (OBSIDIAN_VAULT_PATH + loud skip message).
+
+## PR B — personal toolkit worklist (verify each against current main before building)
+
+| # | Item | Source |
+|---|---|---|
+| B-1 | P1: open-day step-3 handoff message leads with the command-center line, panel warning stays gated behind the symptom (~line 1057). | Mac R2 |
+| B-2 | P2: `companion/cli.py` `status` kills a healthy server inside the startup grace window — retry/poll before reaping (~246–248). | Mac R2 |
+| B-3 | P3: open-day step 1 launches companion with bare `&` — reword to the harness's run-in-background facility. | Mac R2 |
+| B-4 | P4 (verify first): write today's note before opening the browser, or confirm self-refresh; drop the "refresh once" instruction. | Mac R2 |
+| B-5 | 3.5: `?closing=1` ignored outside Command Center mode — honor `closing` in all `day.html` branches; force command mode when set; re-read note from disk. **Check against merged #36/#34/#37 first.** | PC R1 (may already be fixed) |
+| B-6 | 3.6: Bonus-item Enter refocus + suggestion-row Bonus checkbox. **Check current code first.** | PC R1 (may already be fixed) |
+| B-7 | 3.7: wait-done heartbeat — server flips spinner to "Claude isn't listening — say 'done' in the chat" when no listener seen. **Check current code first.** | PC R1 (may already be fixed) |
+| B-8 | Buff 2 (cross-repo): same /register-automation nudge at the end of the announce-update flow. | backlog |
+| B-9 | Buff 1 (cross-repo): full personal-setup writes GITHUB_USERNAME unvalidated (~line 242) — mirror the validation from builder-kit setup Step 1.7. | backlog |
+| B-10 | 5.7 for `/log`: Obsidian detection via `$OBSIDIAN_VAULT_PATH`, loud message when absent. **Check — #36 claims "log vault message" fixed.** | PC R1 (likely fixed) |
+
+## Master prompts — B1–B6, both docs, in place
+
+B1 narration discipline + hidden "verbose" toggle · B2 sign-in handoff always prints the consent link (fresh link on retry; never claim the browser opened) · B3 commands are goals — natural phrases count, never force a retype · B4 new Finish (achievement bullets incl. tracker credit, ENDS — no "more skills?" offer; point at the guide's next-steps section) · B5 command-center line replaces the panel-limitation explanation · B6 edit demo asks, never invents.
+
+Platform idiom per doc (`open` vs `start <url>`, tray-exit, VC++ UAC step, Python-stub warning stay Windows-only). Mechanics: read each doc first, integrate with its voice, dedupe if partially present; update via `gws drive files update` docx replace (file ID stable) or in-place gdoc-edit; bump version footer. Verify B4's tracker-credit wording against what the hooks actually do.
+
+## Installation guide — suggestions only (not applied)
+
+A1 troubleshooting entry ("Claude said a sign-in page opened, but nothing happened" — fresh-link recovery) + PC-R1 §1 items that survive the master-prompt era: PowerShell one-liner first-class + pinned branch (1.1), Git at Step 2 with say-YES framing (1.2), restart step after connectors (1.3), real prerequisite table (1.4), connector troubleshooting FAQ (1.5), step ordering — /gdoc-build then /gdoc-edit as first build, /interrogate out, personal toolkit as Step 7 with 1.7's pitch (1.6/1.7), /setup before any skill (1.8), links to both master prompts (1.9), connectors-are-per-account note (R1 T3), token-budget note (T4). Deliverable: a suggestions section Davo takes to the guide chat.
+
+## Parked / deferred / watch
+
+- **Proxy (tracker) items** — parked per Davo: poller 30-PR window (backlog #4, do NOT re-credit #43/#86), 4.4 install-event dedupe. Action only if a proxy PR happens anyway; Kevin deploys.
+- **C8** — setup Step 5 GCP question: gate/move to /deployment-guide, but the 2026-04-13 spec records it as deliberate — confirm with its author first. Not in PR A.
+- **Instructional-design skill** — PR #125 open, not merged. Register via /register-automation **when it ships** (gdoc visual companion + gdoc-edit were registered 2026-08-02).
+- **PC round 2 deliverable** — missing (see Inputs). Fold into this framework when supplied.
+- **gdoc-edit comment extension** (INBOX spec, Jul 31) — status unclear; not in scope unless Davo says so.
+- Noticed in passing: session-start hook worst case (git pull 10s + replay 35s + live ping 35s) sits at the 90s budget edge — fine today, revisit if timeouts reappear.
+
+## Verification before "done"
+
+Mac handoff's 16-point dual-platform simulation checklist runs after edits land (both master prompts + repos). Companion test suite (~301 at last count) stays green for PR B. `bash -n` / `py_compile` / pwsh parse for every touched script.
