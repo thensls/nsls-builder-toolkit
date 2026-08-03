@@ -42,6 +42,11 @@ Anyone holding it can act as the user on claude.ai. Therefore, in this module:
   "the stored session"; `_scrub()` is a defensive second line for text that
   came from somewhere else (an OS error, a urllib exception) before it is
   handed to a user.
+* It is never sent to any host but claude.ai. urllib forwards a Cookie header
+  across a cross-origin redirect (CPython #77842); this module's opener strips
+  it on any hop to a different scheme/host/port, while still following the
+  redirect so the same-origin 302 to /login that signals an expired session
+  keeps working. See `_opener` and sources/base.py.
 """
 
 import datetime as dt
@@ -55,8 +60,9 @@ from pathlib import Path
 
 try:
     from .base import (Receipt, SecretPromptUnavailable, SourceUnavailable,
-                       UNSAFE_MODE_BITS, prompt_for_secret, scrub_secret,
-                       secret_file_is_unsafe, secret_file_mode, write_secret_file)
+                       StripCredentialsOnCrossOriginRedirect, UNSAFE_MODE_BITS,
+                       prompt_for_secret, scrub_secret, secret_file_is_unsafe,
+                       secret_file_mode, write_secret_file)
 except ImportError:
     # Running this file directly (`python3.12 sources/anthropic.py
     # --set-session`) gives it no parent package, so the relative import above
@@ -76,10 +82,11 @@ except ImportError:
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from sources.base import (Receipt, SecretPromptUnavailable,
-                              SourceUnavailable, UNSAFE_MODE_BITS,
-                              prompt_for_secret, scrub_secret,
-                              secret_file_is_unsafe, secret_file_mode,
-                              write_secret_file)
+                              SourceUnavailable,
+                              StripCredentialsOnCrossOriginRedirect,
+                              UNSAFE_MODE_BITS, prompt_for_secret,
+                              scrub_secret, secret_file_is_unsafe,
+                              secret_file_mode, write_secret_file)
 
 LISTING = "https://claude.ai/api/stripe/{org}/invoices?limit={limit}&page={page}"
 PAGE_GUARD = 20  # pages (100 invoices/page = 2,000 invoices) — see fetch()
@@ -219,14 +226,40 @@ def _stored_session() -> str:
     return value
 
 
+def _opener() -> urllib.request.OpenerDirector:
+    """The opener used for the AUTHENTICATED request.
+
+    Identical to the one `urllib.request.urlopen` builds, with one handler
+    swapped: redirects are followed, but the `Cookie` header is stripped on
+    any hop to a different scheme/host/port. urllib's stock handler copies it
+    across origins (CPython #77842), which would hand the builder's live
+    claude.ai session to whatever host a `Location:` header names.
+
+    Stripping rather than refusing — which is what sources/neon.py does with
+    its API key — because this source DEPENDS on following a redirect: a dead
+    session is answered with a 302 to /login, and `_looks_logged_out` reading
+    that final URL is the only way an expired session is detected. Refusing
+    would trade a credential leak for a silently-wrong "no invoices found".
+    A same-origin hop keeps the cookie and behaves exactly as it always has.
+
+    Built per call rather than cached: a handful of small objects, and a
+    module-level singleton is one more piece of state to reason about in a
+    module whose whole job is not leaking a credential.
+    """
+    return urllib.request.build_opener(StripCredentialsOnCrossOriginRedirect)
+
+
 def _open(req, timeout: int = 60):
     """The single seam where this module touches the network.
 
     Isolated in one two-line function so the tests can replace it and still
     exercise the real Request construction — the headers, the URL, the cookie
     — rather than a mock of the code under test.
+
+    Not `urllib.request.urlopen`: that uses the default opener, whose redirect
+    handler forwards the Cookie header across origins. See `_opener`.
     """
-    return urllib.request.urlopen(req, timeout=timeout)
+    return _opener().open(req, timeout=timeout)
 
 
 class _HttpResponse:

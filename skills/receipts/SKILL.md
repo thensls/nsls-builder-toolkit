@@ -216,6 +216,29 @@ and Neon sends product updates and usage recaps only. If `NEON_ORG_ID` isn't
 set or no key is stored, this source is skipped and announced; the rest of
 the run proceeds normally.
 
+## What happens to your credentials
+
+Two of these sources need a long-lived secret of yours (a claude.ai session, a
+Neon API key). Three guarantees, all of them checkable in `skills/receipts/`:
+
+- **They stay in your `$HOME`.** Each is read from an environment variable if
+  you set one, otherwise from a file in your home directory at mode `0600` —
+  never inside this repository, so neither can be committed. A file any other
+  account can read is refused, not used.
+- **They never reach a report, log, or the ledger.** No error message, report
+  line, or ledger entry ever contains a credential; the value is stripped from
+  any text that came from elsewhere (an OS error, an HTTP error body) before
+  you see it.
+- **They are never forwarded to a third-party host.** Python's `urllib`
+  re-sends `Authorization` and `Cookie` headers when it follows a redirect to
+  another origin ([CPython #77842](https://github.com/python/cpython/issues/77842)),
+  so one redirect off `console.neon.tech` or `claude.ai` would hand your
+  credential to whatever host the `Location` header names. Neon refuses
+  redirects on the authenticated request outright. claude.ai has to follow
+  same-origin redirects — its 302 to `/login` is how an expired session is
+  detected — so it follows them with the cookie intact and strips the cookie on
+  any hop to a different scheme, host, or port.
+
 ## The four match outcomes
 
 Every outstanding transaction gets exactly one outcome. **Only the first two

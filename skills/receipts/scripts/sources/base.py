@@ -11,6 +11,8 @@ import stat
 import sys
 import tempfile
 import unicodedata
+import urllib.parse
+import urllib.request
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
@@ -145,6 +147,122 @@ def write_secret_file(value: str, path: Path, prefix: str) -> None:
         except OSError:
             pass
         raise
+
+
+# ---------------------------------------------------------------------------
+# Redirect policy — where a credential goes when a server says "go elsewhere"
+#
+# urllib does NOT strip credential headers when it follows a redirect to a
+# different origin (CPython #77842). `HTTPRedirectHandler.redirect_request`
+# rebuilds the request from `req.headers` minus only the two CONTENT_HEADERS,
+# so an `Authorization:` or `Cookie:` header we set by hand is re-sent verbatim
+# to whatever host the `Location:` header names. (Cookies managed by a
+# `CookieJar` escape this because the jar uses `add_unredirected_header`; ours
+# are set explicitly, so they do not.) One redirect — a DNS takeover, a
+# misconfiguration, a vendor's own change — and a builder's long-lived
+# credential is handed to a third party.
+#
+# Two sources here send a credential header, and they need DIFFERENT answers,
+# so this module holds the shared machinery and each source picks its policy:
+#
+#   * sources/neon.py      refuses redirects outright (`_RefuseRedirect`).
+#     That endpoint has never redirected, so there is no working behaviour to
+#     preserve and a redirect means something changed — stop and say so.
+#   * sources/anthropic.py must FOLLOW a same-origin redirect: claude.ai
+#     answers a dead session with a 302 to /login, and reading that final URL
+#     is how an expired session is detected at all. So it follows, and strips
+#     the credential headers on any cross-origin hop
+#     (`StripCredentialsOnCrossOriginRedirect`).
+#
+# Both live on the same fact — `same_origin` is the single definition of
+# "somewhere else" — so neither source can drift into a laxer rule alone.
+# ---------------------------------------------------------------------------
+
+# Lower-cased. Any header on this list carries authority and must not cross an
+# origin boundary. `Cookie2` is long obsolete but costs nothing to cover, and
+# `Proxy-Authorization` is a credential by any other name.
+CREDENTIAL_HEADERS = frozenset({
+    "authorization", "cookie", "cookie2", "proxy-authorization",
+})
+
+_DEFAULT_PORTS = {"http": 80, "https": 443, "ftp": 21}
+
+
+def same_origin(a: str, b: str) -> bool:
+    """True when two URLs share a scheme, host, and port.
+
+    Deliberately an EXACT host comparison, not a suffix one: a redirect from
+    `claude.ai` to `evil.claude.ai.example` is a different host, and so is a
+    redirect to a genuinely-owned sibling like `api.claude.ai`. Volunteering a
+    session to a different subdomain is a decision someone should make on
+    purpose, not something a `Location:` header gets to make for them.
+
+    Fails closed. Anything unparseable, schemeless, hostless, or carrying a
+    malformed port is reported as NOT the same origin, because the only thing
+    that answer gates is whether a credential is re-sent.
+    """
+    pa = urllib.parse.urlsplit(a or "")
+    pb = urllib.parse.urlsplit(b or "")
+
+    scheme = pa.scheme.lower()
+    if not scheme or scheme != pb.scheme.lower():
+        return False
+
+    try:
+        host_a, host_b = pa.hostname, pb.hostname
+        port_a = pa.port or _DEFAULT_PORTS.get(scheme)
+        port_b = pb.port or _DEFAULT_PORTS.get(pb.scheme.lower())
+    except ValueError:
+        # urlsplit defers port parsing to attribute access; a garbage port
+        # ("https://claude.ai:notaport/") raises here.
+        return False
+
+    if not host_a or host_a.lower() != (host_b or "").lower():
+        return False
+    return port_a == port_b
+
+
+def strip_credential_headers(req) -> list[str]:
+    """Remove every credential-bearing header from a urllib Request, in place.
+
+    Returns the names removed, so a caller can say what it did. Both header
+    dicts are swept: `Request.headers` is what a redirect carries forward, and
+    `unredirected_hdrs` is swept too so this cannot become subtly incomplete
+    if a caller ever sets a credential there.
+    """
+    removed = []
+    for store in (req.headers, req.unredirected_hdrs):
+        for name in list(store):
+            if name.lower() in CREDENTIAL_HEADERS:
+                del store[name]
+                removed.append(name)
+    return removed
+
+
+class StripCredentialsOnCrossOriginRedirect(urllib.request.HTTPRedirectHandler):
+    """Follow redirects, but never carry a credential to another origin.
+
+    Same-origin hops are passed through untouched, so behaviour that depends
+    on following a redirect (claude.ai's 302 to /login on a dead session) is
+    exactly what it was. On a cross-origin hop the request is still followed —
+    an unauthenticated GET to a stranger is harmless, and refusing would break
+    that expiry detection — but every credential header is removed first.
+
+    `redirect_request` is the right seam: urllib routes 301/302/303/307/308
+    through it, it runs BEFORE any new request is built, and it is the exact
+    method whose stock implementation copies the headers forward. The scrub
+    happens on the object urllib is about to send, so there is no path where
+    the header survives.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            # urllib's own answer for "this redirect should not be followed".
+            return None
+        if not same_origin(req.full_url, new.full_url):
+            strip_credential_headers(new)
+        return new
 
 
 @dataclass(frozen=True)

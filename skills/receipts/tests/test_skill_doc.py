@@ -172,6 +172,27 @@ def test_skill_md_no_longer_claims_neon_has_no_automated_source():
     assert uncovered, "Supabase and Zoom must still be named as uncovered: " + coverage
 
 
+def test_skill_md_states_the_credential_handling_guarantees_plainly():
+    # This ships org-wide and every builder runs it with their own live
+    # claude.ai session and Neon key. "Where does my credential go" is a
+    # question they are entitled to a plain answer to, in the one file the
+    # skill actually shows them — and it is a claim they can check, so it has
+    # to keep matching what sources/ does.
+    section = _section("What happens to your credentials").lower()
+    assert section, "SKILL.md must state where credentials live and where they go"
+
+    assert "0600" in section, "say the file mode"
+    assert "$home" in section or "home directory" in section, "say where it lives"
+    assert "commit" in section, "say it cannot be committed"
+
+    assert "redirect" in section, (
+        "the redirect guarantee is the one a reader cannot infer: " + section
+    )
+    assert "third-party" in section or "third party" in section, section
+    for claim in ("report", "log", "ledger"):
+        assert claim in section, f"say it never reaches the {claim}: {section}"
+
+
 def _section(title: str) -> str:
     """Text of the `## <title>` section, up to the next same-or-higher heading."""
     m = re.search(rf"^##+\s+{re.escape(title)}\b(.*?)(?=^##\s|\Z)", TEXT,

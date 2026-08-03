@@ -268,6 +268,12 @@ class _RefuseRedirect(urllib.request.HTTPRedirectHandler):
     judgement call that loses a credential. A redirect here means something
     changed, and the right response to that is to stop and say so.
 
+    sources/anthropic.py answers the same hazard differently — it strips the
+    Cookie header and follows — because claude.ai's 302 to /login is how an
+    expired session is detected there, so refusing would break a working
+    behaviour. Both policies and the shared origin rule are documented
+    together under "Redirect policy" in sources/base.py.
+
     Overriding `redirect_request` covers 301/302/303/307/308 in one place —
     urllib routes all of them through http_error_302 — and it runs BEFORE any
     new request is built, so nothing is ever sent to the target.
