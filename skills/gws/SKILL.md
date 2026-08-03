@@ -70,6 +70,18 @@ if (($u -split ';') -notcontains $dir) { [Environment]::SetEnvironmentVariable('
 
 This installs the latest release from https://github.com/googleworkspace/cli.
 
+> ⚠️ **Windows PowerShell 5.1 and `--json`:** every `--json '{...}'` example in
+> this skill is bash-shaped. PS 5.1 strips the embedded double quotes at the
+> native-command boundary, so gws receives `{key:value}` and fails with
+> `key must be a string at line 1 column 2`; hand-escaping splits the argument
+> on spaces instead. The working form is escape-at-the-boundary:
+> ```powershell
+> $body = '{"properties": {"title": "My Sheet"}}'   # or ConvertTo-Json -Compress
+> gws sheets spreadsheets create --json ($body -replace '"','\"')
+> ```
+> (Git Bash passes single-quoted JSON fine, which is why the bug hides there.
+> `--params` takes JSON too — same rule.)
+
 > ⚠️ **Windows needs the MS Visual C++ x64 runtime.** Without it `gws.exe` exits with
 > `0xC0000135` and **prints nothing at all** — near-impossible to debug blind. Install it
 > from https://aka.ms/vs/17/release/vc_redist.x64.exe (double-click → Yes → Install).

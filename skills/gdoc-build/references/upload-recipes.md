@@ -14,7 +14,11 @@ Copy-paste shell snippets for the upload flow. Tested 2026-05-01 on the builder-
 > no Windows equivalent — a failed upload (403, bad scope) yields a clean-looking
 > pipeline. Assign, check, then trim:
 > ```powershell
-> $out = gws drive files create ... --format json
+> # PS 5.1 strips the embedded quotes out of --json '{...}' at the native-command
+> # boundary (gws sees {name:...} → `key must be a string at line 1 column 2`).
+> # Build the JSON and escape inner quotes at the call site:
+> $body = @{ name = 'YOUR DOC TITLE'; mimeType = 'application/vnd.google-apps.document' } | ConvertTo-Json -Compress
+> $out = gws drive files create --json ($body -replace '"','\"') --upload your_doc_name.docx --upload-content-type "application/vnd.openxmlformats-officedocument.wordprocessingml.document" --format json
 > if ($LASTEXITCODE -ne 0) { throw "gws failed (exit $LASTEXITCODE)" }
 > $out | Select-Object -Last 10
 > ```
