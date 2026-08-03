@@ -1,20 +1,29 @@
 #!/usr/bin/env python3.12
 """Contract every receipt source implements."""
 
+import getpass
 import hashlib
 import importlib
 import os
 import pkgutil
 import re
 import stat
+import sys
 import tempfile
 import unicodedata
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
 
 class SourceUnavailable(Exception):
     """Source could not run — auth, network, config. Never a match failure."""
+
+
+class SecretPromptUnavailable(Exception):
+    """There was no way to read a secret without it being echoed, so none was
+    read. Never raised after a value has been obtained — the whole point is
+    that nothing was typed."""
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +56,61 @@ def scrub_secret(text, secret: str | None) -> str:
     if secret:
         out = out.replace(secret, "<redacted credential>")
     return out
+
+
+def prompt_for_secret(prompt: str, *, label: str, env_var: str, command: str) -> str:
+    """Read a credential from the terminal — or refuse to read one at all.
+
+    `getpass.getpass` is not unconditionally hidden. When it cannot find an
+    echo-free terminal (stdin redirected, no controlling TTY, a CI runner, an
+    agent shell, a `docker exec` without -t) it warns with GetPassWarning,
+    prints "Warning: Password input may be echoed.", and then reads the value
+    from sys.stdin WITH ECHO. The credential is printed to the screen, kept in
+    scrollback, and captured in whatever log or transcript is recording that
+    session — which is precisely the guarantee both callers make in their
+    instructions ("the paste is hidden").
+
+    So this fails closed, on both halves of that failure:
+
+      * no interactive stdin           -> refuse before prompting at all
+      * getpass says it cannot hide it -> refuse, and never return the value
+
+    The GetPassWarning is raised BEFORE the read (CPython's fallback_getpass
+    warns first, then reads), so turning it into an error means the secret is
+    never typed rather than typed and then discarded.
+
+    Refusing is not a dead end: the environment variable is checked ahead of
+    the stored file by every source here, so a non-interactive context has a
+    first-class way to supply the value. The message says so.
+    """
+    fix = (f"Set it in the environment instead — {env_var} is checked before "
+           f"the stored file, so a non-interactive run can supply it without "
+           f"a prompt:\n"
+           f"  export {env_var}=…\n"
+           f"Or run `{command}` again from an interactive terminal.")
+
+    if not sys.stdin.isatty():
+        raise SecretPromptUnavailable(
+            f"Refusing to prompt for the {label}: this session has no "
+            f"interactive terminal on stdin, so what you typed would be "
+            f"echoed to the screen and captured in any log or transcript of "
+            f"this run. Nothing was read and nothing was stored; any "
+            f"previously stored value is untouched.\n{fix}"
+        )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", getpass.GetPassWarning)
+        try:
+            value = getpass.getpass(prompt)
+        except getpass.GetPassWarning:
+            raise SecretPromptUnavailable(
+                f"Refusing to read the {label}: this terminal cannot turn off "
+                f"echo, so the value would be printed as you typed it and "
+                f"captured in any log or transcript of this run. Nothing was "
+                f"stored; any previously stored value is untouched.\n{fix}"
+            ) from None
+
+    return (value or "").strip()
 
 
 def secret_file_mode(path: Path) -> int:

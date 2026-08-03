@@ -240,8 +240,129 @@ def test_an_invoice_with_no_invoice_number_is_not_given_a_shared_provenance():
     )
 
 
+def test_the_fallback_provenance_is_derived_from_the_invoice_not_its_position():
+    # A row-position fallback ("row-0") is not a property of the invoice: insert
+    # or reorder anything earlier in the listing and the same invoice gets a new
+    # provenance next run. The upload idempotency key derives from provenance,
+    # so a moved invoice is uploaded again instead of collapsing as a duplicate.
+    a = {"issued_at": "2026-05-05T01:00:00Z", "paid_at": "2026-05-05T01:00:00Z",
+         "status": "paid", "total": "1.00", "currency": "USD",
+         "pdf_url": "https://assets.withorb.com/invoice/aaa?token=PLACEHOLDER"}
+    b = {"issued_at": "2026-05-05T02:00:00Z", "paid_at": "2026-05-05T02:00:00Z",
+         "status": "paid", "total": "2.00", "currency": "USD",
+         "pdf_url": "https://assets.withorb.com/invoice/bbb?token=PLACEHOLDER"}
+    newcomer = {"invoice_number": "NLPHVL-90099",
+                "issued_at": "2026-05-04T00:00:00Z",
+                "paid_at": "2026-05-04T00:00:00Z", "status": "paid",
+                "total": "3.00", "currency": "USD",
+                "pdf_url": "https://assets.withorb.com/invoice/ccc?token=PLACEHOLDER"}
+
+    def prov(payload, pdf):
+        for r in SOURCE.parse_invoices(payload):
+            if r["pdf_url"] == pdf:
+                return r["provenance"]
+        raise AssertionError(f"{pdf} did not survive parsing")
+
+    before = prov({"invoices": [a, b]}, a["pdf_url"])
+    after_insert = prov({"invoices": [newcomer, a, b]}, a["pdf_url"])
+    after_reorder = prov({"invoices": [b, a]}, a["pdf_url"])
+
+    assert before == after_insert == after_reorder, (
+        f"the fallback provenance moved with list position: {before!r} -> "
+        f"{after_insert!r} / {after_reorder!r}"
+    )
+    assert "row-" not in before, (
+        f"provenance must not be derived from the row index: {before!r}"
+    )
+
+
 def test_merchants_declared():
     assert SOURCE.MERCHANTS == ("neontech",), SOURCE.MERCHANTS
+
+
+# ---------------------------------------------------------------------------
+# Currency. Matching compares merchant, cents and date — never currency — so a
+# non-USD invoice with the same numeric total would attach the wrong document
+# to a real USD charge on a financial record.
+# ---------------------------------------------------------------------------
+
+def _foreign(code="EUR", number="NLPHVL-90020"):
+    return {"invoice_number": number, "issued_at": "2026-05-01T00:00:00Z",
+            "paid_at": "2026-05-01T00:00:00Z", "status": "paid",
+            "pdf_url": f"https://assets.withorb.com/invoice/{number}?token=PLACEHOLDER",
+            "total": "550.76", "currency": code}
+
+
+def test_a_non_usd_invoice_is_never_turned_into_a_receipt():
+    for code in ("EUR", "GBP", "CAD", "JPY"):
+        rows = SOURCE.parse_invoices({"invoices": [_foreign(code)]})
+        assert rows == [], (
+            f"a {code} invoice must not become a USD-comparable receipt: {rows}"
+        )
+    # And the other half of the rule, so the guard can't be satisfied by
+    # refusing everything: USD is USD however it is spelled.
+    for code in ("USD", "usd", " Usd "):
+        rows = SOURCE.parse_invoices({"invoices": [
+            {**_foreign(code), "invoice_number": "NLPHVL-90021"},
+        ]})
+        assert len(rows) == 1, f"{code!r} is USD and must be kept: {rows}"
+
+
+def test_an_invoice_with_no_currency_at_all_is_refused_rather_than_assumed():
+    # Every invoice observed live carried `currency`. If the field ever
+    # disappears, guessing "it was probably dollars" is a guess about a
+    # financial record; refusing (and announcing it) is not.
+    inv = _foreign()
+    inv.pop("currency")
+    assert SOURCE.parse_invoices({"invoices": [inv]}) == []
+
+
+def test_a_dropped_non_usd_invoice_is_announced_not_silently_excluded():
+    SOURCE.truncated = None
+    out = _fetch({"invoices": [_foreign("EUR"), PAYLOAD["invoices"][0]]})
+    assert [r.amount_cents for r in out] == [55076], out
+    note = getattr(SOURCE, "truncated", None)
+    assert note, "an excluded invoice must reach the report, not vanish quietly"
+    assert "usd" in note.lower(), note
+    assert "EUR" in note, f"name the currency that was received: {note}"
+    # Two different exclusions with two different meanings. Reporting a EUR
+    # invoice as "could not be read (missing pdf_url, or an unparseable
+    # total…)" sends someone looking for a parsing bug that isn't there.
+    assert "could not be read" not in note.lower(), note
+
+
+# ---------------------------------------------------------------------------
+# A malformed listing must not read as a clean empty search
+# ---------------------------------------------------------------------------
+
+def test_a_malformed_invoices_field_is_announced_rather_than_read_as_no_results():
+    # `invoices` truthy but not a list: every item is skipped, nothing is
+    # "lost" by the paid-row arithmetic, no pagination hint fires — and the
+    # source returns [] with truncated unset. Real Neon charges then read as
+    # genuinely receipt-less. That is this codebase's recurring failure mode.
+    for bad in ({"NLPHVL-00016": {"status": "paid"}}, "NLPHVL-00016", 17, True):
+        SOURCE.truncated = None
+        out = _fetch({"invoices": bad})
+        assert out == [], out
+        note = getattr(SOURCE, "truncated", None)
+        assert note, f"invoices={bad!r} must set truncated, not return a clean []"
+        assert type(bad).__name__ in note, (
+            f"name what was received ({type(bad).__name__}): {note}"
+        )
+
+
+def test_a_missing_invoices_field_is_announced_but_an_empty_one_is_not():
+    SOURCE.truncated = None
+    assert _fetch({}) == []
+    note = getattr(SOURCE, "truncated", None)
+    assert note, "a 200 with no `invoices` key at all is a shape change, not zero results"
+
+    # The other half of the rule: an account with no invoices yet is a
+    # complete, correct, empty answer. Crying truncation on it would train
+    # every reader to ignore the signal.
+    SOURCE.truncated = None
+    assert _fetch({"invoices": []}) == []
+    assert getattr(SOURCE, "truncated", None) is None
 
 
 # ---------------------------------------------------------------------------

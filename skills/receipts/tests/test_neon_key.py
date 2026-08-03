@@ -32,6 +32,7 @@ key and no real Orb token appears anywhere in this file.
 
 import contextlib
 import email.message
+import getpass
 import io
 import json
 import os
@@ -41,6 +42,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
+import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
@@ -399,6 +401,17 @@ def test_a_200_that_is_not_json_is_reported_rather_than_read_as_no_invoices():
 # The credential never comes back out
 # ---------------------------------------------------------------------------
 
+def _redirect_error():
+    opener, _ = _redirecting_opener("https://neon-billing.example.invalid/x")
+    with _sandbox(stored=SENTINEL):
+        with patch.object(neon, "_opener", lambda: opener):
+            try:
+                SOURCE._invoices()
+            except SourceUnavailable as exc:
+                return str(exc)
+    raise AssertionError("expected SourceUnavailable")
+
+
 def test_the_api_key_never_appears_in_any_message_this_module_raises():
     # Every error path, one sentinel, one rule: it is never in the text.
     paths = [
@@ -411,6 +424,12 @@ def test_the_api_key_never_appears_in_any_message_this_module_raises():
         lambda: _listing_error(status=200, body=b"<html>not json</html>"),
         lambda: _listing_error(sandbox_kwargs={"stored": SENTINEL, "mode": 0o644},
                                status=200, body=b"{}"),
+        # The paths added with the redirect refusal and the mapping check —
+        # both build a message out of something the server chose (a Location
+        # header, a response type), which is exactly where a leak would hide.
+        _redirect_error,
+        lambda: _listing_error(status=200, body=b"[]"),
+        lambda: _listing_error(status=200, body=b"null"),
     ]
     for i, run_path in enumerate(paths):
         msg = run_path()
@@ -427,18 +446,43 @@ def test_an_error_body_that_echoes_the_key_back_is_scrubbed():
 
 
 def test_fetch_never_leaks_the_key_through_the_truncated_report_line():
-    with _sandbox(stored=SENTINEL):
-        with patch.object(neon, "_open",
-                          _serve(200, json.dumps({**PAYLOAD, "has_more": True}).encode())):
-            with patch.object(SOURCE, "_download", return_value=b"%PDF-1.4"):
-                SOURCE.fetch("2026-01-01", "2026-12-31")
-    note = getattr(SOURCE, "truncated", "") or ""
-    assert SENTINEL not in note, note
+    degraded = [
+        {**PAYLOAD, "has_more": True},
+        # The notes added with this round of fixes: a malformed listing and a
+        # non-USD exclusion. Both quote what the server sent.
+        {"invoices": {"NLPHVL-00016": {"status": "paid"}}},
+        {"invoices": [{**PAYLOAD["invoices"][0], "currency": "EUR"}]},
+    ]
+    for payload in degraded:
+        with _sandbox(stored=SENTINEL):
+            with patch.object(neon, "_open", _serve(200, json.dumps(payload).encode())):
+                with patch.object(SOURCE, "_download", return_value=b"%PDF-1.4"):
+                    SOURCE.fetch("2026-01-01", "2026-12-31")
+        note = getattr(SOURCE, "truncated", "") or ""
+        assert note, f"{payload} must announce its degradation"
+        assert SENTINEL not in note, note
 
 
 # ---------------------------------------------------------------------------
 # --set-neon-key: store the credential safely, and only if it works
 # ---------------------------------------------------------------------------
+
+@contextlib.contextmanager
+def _tty():
+    """Stand in for an interactive terminal that can hide what is typed.
+
+    The prompt refuses to run without one — see the non-TTY tests below — so
+    every test that gets as far as the prompt has to say it has a terminal.
+    Patching the whole object rather than one attribute: under pytest's
+    capture, sys.stdin is a stub that may not accept attribute assignment.
+    """
+    class _Stdin:
+        def isatty(self):
+            return True
+
+    with patch.object(sys, "stdin", _Stdin()):
+        yield
+
 
 @contextlib.contextmanager
 def _no_echo():
@@ -447,7 +491,7 @@ def _no_echo():
     def forbidden(*a, **k):
         raise AssertionError("the key must be read with getpass, never input()")
 
-    with patch("builtins.input", forbidden):
+    with patch("builtins.input", forbidden), _tty():
         yield
 
 
@@ -572,6 +616,277 @@ def test_set_neon_key_stores_nothing_when_the_prompt_comes_back_empty():
 
         assert code != 0
         assert not path.exists()
+
+
+# ---------------------------------------------------------------------------
+# A redirect must never carry the key to another host
+#
+# urllib does not strip the Authorization header when it follows a redirect to
+# a different origin (CPython #77842). One redirect — a DNS takeover, a
+# misconfiguration, a vendor change — and the builder's long-lived Neon key is
+# handed to whatever host it points at. This module promises the key never
+# reaches a third party; these tests are what enforces it.
+# ---------------------------------------------------------------------------
+
+class _FakeResp:
+    """Enough of an http.client response for urllib's own handler chain."""
+
+    def __init__(self, code, body=b"", headers=None, url=""):
+        self.code = self.status = code
+        self.msg = self.reason = "OK" if code == 200 else "Found"
+        self.headers = _headers(headers)
+        self._body = body
+        self.url = url
+
+    def info(self):
+        return self.headers
+
+    def read(self, *a):
+        return self._body
+
+    def geturl(self):
+        return self.url
+
+    def close(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _redirecting_opener(target):
+    """A real urllib opener wired to this module's redirect policy, with the
+    socket layer replaced. console.neon.tech answers 302 -> `target`; anything
+    else answers 200. Records every request the transport was asked to send,
+    so a leak is visible as a second request carrying the header."""
+    seen = []
+
+    class _FakeTransport(urllib.request.BaseHandler):
+        handler_order = 100  # ahead of the real HTTPSHandler
+
+        def https_open(self, req):
+            seen.append(req)
+            if req.host == "console.neon.tech":
+                return _FakeResp(302, b"", {"Location": target}, req.full_url)
+            return _FakeResp(200, json.dumps(PAYLOAD).encode(), {}, req.full_url)
+
+    opener = urllib.request.build_opener(neon._RefuseRedirect, _FakeTransport())
+    return opener, seen
+
+
+def test_a_cross_host_redirect_never_forwards_the_api_key():
+    evil = "https://neon-billing.example.invalid/api/v2/invoices"
+    opener, seen = _redirecting_opener(evil)
+
+    with _sandbox(stored=SENTINEL):
+        with patch.object(neon, "_opener", lambda: opener):
+            try:
+                SOURCE._invoices()
+            except SourceUnavailable as exc:
+                msg = str(exc)
+            else:
+                raise AssertionError(
+                    "a redirect off console.neon.tech must not be followed"
+                )
+
+    assert len(seen) == 1, (
+        "the redirect was followed — a second request was sent: "
+        + str([r.full_url for r in seen])
+    )
+    for req in seen:
+        assert req.host == "console.neon.tech", req.full_url
+    for req in seen[1:]:
+        assert req.get_header("Authorization") is None, (
+            "the API key was forwarded to a redirect target: " + req.full_url
+        )
+    assert "neon-billing.example.invalid" in msg, (
+        "name the redirect target, or a real vendor change is a mystery: " + msg
+    )
+    assert SENTINEL not in msg and "Bearer " not in msg, msg
+
+
+def test_a_same_host_redirect_is_refused_too_rather_than_guessed_about():
+    # console.neon.tech has never redirected this endpoint. Deciding at
+    # runtime which redirects are "safe enough" is exactly the guess that
+    # loses a credential; there is one rule, and it is no.
+    opener, seen = _redirecting_opener(
+        "https://console.neon.tech/api/v3/organizations/x/billing/invoices")
+    with _sandbox(stored=SENTINEL):
+        with patch.object(neon, "_opener", lambda: opener):
+            try:
+                SOURCE._invoices()
+            except SourceUnavailable as exc:
+                assert SENTINEL not in str(exc), str(exc)
+            else:
+                raise AssertionError("a redirect must be refused, not followed")
+    assert len(seen) == 1, [r.full_url for r in seen]
+
+
+def test_the_authenticated_opener_does_not_carry_a_redirect_following_handler():
+    handlers = neon._opener().handlers
+    redirectors = [h for h in handlers
+                   if isinstance(h, urllib.request.HTTPRedirectHandler)]
+    assert redirectors, "urllib installs a redirect handler; ours must replace it"
+    assert all(isinstance(h, neon._RefuseRedirect) for h in redirectors), (
+        "the default redirect handler is still installed and will forward the "
+        f"Authorization header: {redirectors}"
+    )
+
+
+def test_open_goes_through_that_opener_and_not_bare_urlopen():
+    marker = object()
+    calls = []
+
+    class _Opener:
+        def open(self, req, timeout=None):
+            calls.append((req, timeout))
+            return marker
+
+    def forbidden(*a, **k):
+        raise AssertionError(
+            "urllib.request.urlopen follows redirects with the default handler "
+            "and would forward the Authorization header"
+        )
+
+    req = urllib.request.Request("https://console.neon.tech/x",
+                                 headers={"Authorization": "Bearer x"})
+    with patch.object(neon, "_opener", lambda: _Opener()), \
+         patch("urllib.request.urlopen", forbidden):
+        assert neon._open(req) is marker
+    assert calls and calls[0][0] is req
+
+
+# ---------------------------------------------------------------------------
+# A response that is not a mapping is a controlled failure, not an AttributeError
+# ---------------------------------------------------------------------------
+
+def test_a_200_that_is_json_but_not_an_object_is_refused():
+    for body in (b"[]", b"null", b'"nope"', b"42", b'[{"invoice_number":"x"}]'):
+        msg = _listing_error(status=200, body=body)
+        assert "json" in msg.lower() or "object" in msg.lower(), (body, msg)
+        assert SENTINEL not in msg, msg
+
+
+def test_a_non_mapping_response_does_not_crash_the_source_with_an_attributeerror():
+    fake = _serve(200, b"[]")
+    with _sandbox(stored=SENTINEL):
+        with patch.object(neon, "_open", fake):
+            try:
+                SOURCE.fetch("2026-01-01", "2026-12-31")
+            except SourceUnavailable:
+                return
+            except Exception as exc:  # pragma: no cover - the bug being fixed
+                raise AssertionError(
+                    f"a non-mapping response must degrade to SourceUnavailable, "
+                    f"not {type(exc).__name__}: {exc}"
+                )
+    raise AssertionError("a non-mapping response must raise SourceUnavailable")
+
+
+def test_a_non_mapping_response_leaves_a_previously_stored_key_untouched():
+    # The bad ordering this guards: _write_key() ran first and payload.get()
+    # crashed after it, so a validation that never completed still replaced a
+    # working credential with an unvalidated one.
+    previous = "napi_PREVIOUSLY_STORED_KEY_DO_NOT_REPLACE"
+    out, err = io.StringIO(), io.StringIO()
+    with _sandbox(stored=previous) as path:
+        with patch.object(neon, "_open", _serve(200, b"[]")), _no_echo(), \
+             patch("getpass.getpass", return_value=SENTINEL), \
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = neon._set_neon_key()
+
+        combined = out.getvalue() + err.getvalue()
+        assert code != 0, combined
+        assert path.read_text().strip() == previous, (
+            "an unvalidated key replaced the stored one: " + path.read_text()
+        )
+        assert SENTINEL not in combined, combined
+
+
+# ---------------------------------------------------------------------------
+# The prompt fails closed when the terminal cannot hide what is typed
+#
+# getpass.getpass falls back to an ECHOING read from sys.stdin when it cannot
+# find an echo-free TTY, warning with GetPassWarning first. In that state the
+# key is printed to the terminal and captured in any transcript or job log —
+# the exact opposite of what this command promises.
+# ---------------------------------------------------------------------------
+
+@contextlib.contextmanager
+def _not_a_tty():
+    class _Stdin:
+        def isatty(self):
+            return False
+
+    with patch.object(sys, "stdin", _Stdin()):
+        yield
+
+
+def test_set_neon_key_refuses_to_read_a_key_with_no_interactive_terminal():
+    def prompted(*a, **k):
+        raise AssertionError(
+            "getpass must not even be reached without an echo-free terminal"
+        )
+
+    out, err = io.StringIO(), io.StringIO()
+    with _sandbox() as path:
+        with patch.object(neon, "_open", _serve(200, json.dumps(PAYLOAD).encode())), \
+             _not_a_tty(), patch("getpass.getpass", prompted), \
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = neon._set_neon_key()
+
+        combined = out.getvalue() + err.getvalue()
+        assert code != 0, combined
+        assert not path.exists(), "nothing may be stored when nothing was read"
+        assert neon.KEY_ENV in combined, (
+            "point at the non-interactive alternative: " + combined
+        )
+        assert "echo" in combined.lower() or "terminal" in combined.lower(), (
+            "say why it refused: " + combined
+        )
+
+
+def test_set_neon_key_refuses_when_getpass_says_it_would_echo():
+    # The other half of the same failure: stdin IS a tty, but getpass cannot
+    # turn echo off (no controlling terminal, termios refused) and falls back
+    # to an echoing read. It warns first — that warning is the last moment
+    # before the credential is printed.
+    def echoing(prompt=""):
+        import warnings as _w
+        _w.warn("Can not control echo on the terminal.", getpass.GetPassWarning)
+        return SENTINEL
+
+    out, err = io.StringIO(), io.StringIO()
+    with _sandbox() as path:
+        with patch.object(neon, "_open", _serve(200, json.dumps(PAYLOAD).encode())), \
+             _no_echo(), patch("getpass.getpass", echoing), \
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = neon._set_neon_key()
+
+        combined = out.getvalue() + err.getvalue()
+        assert code != 0, combined
+        assert not path.exists(), (
+            "a key read with echo on must not be stored as if it were safe"
+        )
+        assert SENTINEL not in combined, combined
+        assert neon.KEY_ENV in combined, combined
+
+
+def test_the_refusal_to_prompt_never_leaks_a_previously_stored_key():
+    previous = "napi_PREVIOUSLY_STORED_KEY_DO_NOT_PRINT"
+    out, err = io.StringIO(), io.StringIO()
+    with _sandbox(stored=previous) as path:
+        with _not_a_tty(), contextlib.redirect_stdout(out), \
+             contextlib.redirect_stderr(err):
+            code = neon._set_neon_key()
+
+        combined = out.getvalue() + err.getvalue()
+        assert code != 0, combined
+        assert previous not in combined, combined
+        assert path.read_text().strip() == previous
 
 
 # ---------------------------------------------------------------------------

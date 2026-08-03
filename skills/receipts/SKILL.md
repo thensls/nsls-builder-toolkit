@@ -332,6 +332,23 @@ whatever directory you're in, not just the repository root.
   is …)`** — the credential file became readable by other accounts. `chmod 600
   ~/.claude-receipts-neon-key`, or re-run `--set-neon-key`, which always
   writes it back at `0600`.
+- **`SOURCE NEON: SKIPPED (console.neon.tech … tried to redirect … was NOT
+  followed)`** — also **not your credentials**, and nothing was leaked. The
+  authenticated Neon request does not follow redirects, because `urllib`
+  forwards the `Authorization` header to the new host when it does — one
+  redirect would hand your long-lived API key to whatever that host is. This
+  endpoint has never redirected, so seeing this means something changed: the
+  message names the target. If Neon really did move the endpoint,
+  `sources/neon.py` needs the new URL.
+- **`ERROR: Refusing to prompt for the … no interactive terminal`** (from
+  `--set-neon-key` or `--set-session`) — you're running in something with no
+  echo-free terminal: a CI job, a pipe, an agent shell, `docker exec` without
+  `-t`. Python's hidden-input prompt silently falls back to reading with
+  **echo on** in that state, which would print your credential to the screen
+  and into that job's log, so these commands refuse instead. Nothing was read
+  and nothing was stored. Either re-run from a real terminal, or supply the
+  value through the environment (`NEON_API_KEY` / `CLAUDE_SESSION_KEY`), which
+  both sources check ahead of the stored file.
 - **`SOURCE <NAME>: TRUNCATED (...)`** — the source ran and returned
   **partial** results. This is not a skip and not a failure; it is an
   incomplete search, and any `UNFOUND` below it may be an artifact of what
@@ -341,10 +358,19 @@ whatever directory you're in, not just the repository root.
     pages while returning no cursor, or one or more invoice PDFs failed to
     download (those are named, with date and amount, in the message).
   - Neon — an invoice PDF failed to download, a paid invoice couldn't be read
-    from the listing, or the response grew a pagination-shaped field. Neon's
-    listing is **not** paginated today (all invoices come back in one call),
-    so that last one means the API changed shape and `sources/neon.py` needs
-    updating — the skill notices rather than returning a quietly short list.
+    from the listing, a paid invoice was **not in USD**, the listing came back
+    without a usable `invoices` array, or the response grew a
+    pagination-shaped field. Neon's listing is **not** paginated today (all
+    invoices come back in one call), so that last one means the API changed
+    shape and `sources/neon.py` needs updating — the skill notices rather than
+    returning a quietly short list.
+
+    Two of those want a word. A **non-USD** invoice is excluded on purpose:
+    matching compares amounts as plain cents and never looks at currency, so a
+    paid €550.76 invoice would happily attach itself to an unrelated $550.76
+    Ramp charge. Attach those manually. And **no usable `invoices` array**
+    means nothing was searched at all — every `UNFOUND` under it is
+    meaningless, not evidence that a receipt is missing.
 
   Narrow the date window (`--since`/`--until`) and re-run to get a query small
   enough to finish. Download failures are usually transient — re-running is
@@ -396,6 +422,15 @@ whatever directory you're in, not just the repository root.
 - **`ESCALATED`** — this transaction hit the retry cap (2 attempts) without
   uploading. The skill will not retry it again. Attach the receipt manually
   in Ramp.
+- **A `~/.claude-receipts-profile/` directory exists.** Left over from an
+  older version of this skill, which drove a real Chrome through Playwright to
+  collect the Anthropic invoices. That path is gone — nothing in this skill
+  reads or writes it any more — and the directory is a dead Chrome profile
+  taking up roughly 40 MB. **It is safe to delete** (`rm -rf
+  ~/.claude-receipts-profile`). It holds no credential this skill uses: the
+  ones it does use are `~/.claude-receipts-session` and
+  `~/.claude-receipts-neon-key`, which you should *not* delete unless you
+  intend to re-store them.
 - **The queue comes back empty, but the Ramp UI shows outstanding
   items.** This was a real bug during development and is the single most
   likely regression to reintroduce by accident: `transactions list`'s

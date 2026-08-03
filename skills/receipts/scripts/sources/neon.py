@@ -34,6 +34,13 @@ THREE SHAPE FACTS THAT DIFFER FROM ANTHROPIC'S SOURCE
   reflects. (Both were same-day in every observed invoice, so this only
   matters at a midnight boundary — which is exactly where a one-day error
   would push a receipt out of the match window.)
+* `currency` is carried per invoice and is honoured: only USD invoices become
+  receipts. Matching compares merchant, integer cents and date and never sees
+  currency, so a paid non-USD invoice with the same number on it would attach
+  to an unrelated USD Ramp charge — a wrong document on a financial record.
+  Exclusions are counted into `truncated`, never dropped quietly. (Carrying
+  currency through Receipt and match.py is the larger correct fix; this is
+  the narrow one.)
 * `pdf_url` needs no authentication: it is an assets.withorb.com link
   carrying its own token (Neon bills through Orb, not Stripe). Verified by
   opening it with no Neon cookie present. The API key must never be sent
@@ -58,13 +65,25 @@ strictly worse. Therefore, in this module:
   message, report line, ledger entry, or exception text. `_scrub` is a
   defensive second line for text that came from somewhere else (an OS error,
   a urllib exception, a server error body that echoed the token back).
+* The authenticated request does not follow REDIRECTS. urllib re-sends the
+  Authorization header to the redirect target, including across origins
+  (CPython #77842), so one redirect off console.neon.tech would hand this key
+  to another host. See `_RefuseRedirect`.
+* The `--set-neon-key` prompt refuses to read anything at all when the
+  terminal cannot hide it — getpass falls back to an ECHOING read when it
+  finds no echo-free TTY, which would print the key into the session's
+  scrollback and into any log capturing it. See `base.prompt_for_secret`.
+
+This skill ships org-wide: every builder runs it with their own key against
+their own Neon organization, so each of those is a promise made to someone
+who never read this file.
 
 NEON_ORG_ID must be set in the environment — this module ships in an
 org-wide toolkit and must never default to one organisation's billing data.
 """
 
 import datetime as dt
-import getpass
+import hashlib
 import json
 import os
 import sys
@@ -74,7 +93,8 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 
 try:
-    from .base import (Receipt, SourceUnavailable, scrub_secret,
+    from .base import (Receipt, SecretPromptUnavailable, SourceUnavailable,
+                       prompt_for_secret, scrub_secret,
                        secret_file_is_unsafe, secret_file_mode, write_secret_file)
 except ImportError:
     # Running this file directly (`python3.12 sources/neon.py --set-neon-key`)
@@ -87,9 +107,10 @@ except ImportError:
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from sources.base import (Receipt, SourceUnavailable, scrub_secret,
-                              secret_file_is_unsafe, secret_file_mode,
-                              write_secret_file)
+    from sources.base import (Receipt, SecretPromptUnavailable,
+                              SourceUnavailable, prompt_for_secret,
+                              scrub_secret, secret_file_is_unsafe,
+                              secret_file_mode, write_secret_file)
 
 LISTING = "https://console.neon.tech/api/v2/organizations/{org}/billing/invoices"
 
@@ -216,14 +237,68 @@ def _stored_org() -> str:
     return org
 
 
+class RedirectRefused(Exception):
+    """A redirect was answered on the authenticated request and not followed.
+
+    Carries the target so the caller can name it: a real vendor change should
+    be diagnosable in one line, not a mystery.
+    """
+
+    def __init__(self, code: int, target: str):
+        self.code = code
+        self.target = target
+        super().__init__(f"HTTP {code} redirect to {target}")
+
+
+class _RefuseRedirect(urllib.request.HTTPRedirectHandler):
+    """Do not follow redirects on the authenticated request. Ever.
+
+    urllib does NOT strip the Authorization header when it follows a redirect
+    to a different scheme/host (CPython #77842) — it rebuilds the request with
+    the original headers and sends them to the new origin. So one redirect off
+    console.neon.tech, from any cause (a DNS takeover, a misconfiguration, a
+    vendor's own change), hands the builder's long-lived Neon API key to
+    whatever host the Location header names. This module's docstring promises
+    that key never reaches a third party; this class is what makes that true
+    rather than merely intended.
+
+    Refusing outright, rather than stripping the header on cross-origin hops:
+    this endpoint has never redirected, so there is no working behaviour to
+    preserve, and "which redirects are safe enough to follow" is exactly the
+    judgement call that loses a credential. A redirect here means something
+    changed, and the right response to that is to stop and say so.
+
+    Overriding `redirect_request` covers 301/302/303/307/308 in one place —
+    urllib routes all of them through http_error_302 — and it runs BEFORE any
+    new request is built, so nothing is ever sent to the target.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise RedirectRefused(code, newurl)
+
+
+def _opener() -> urllib.request.OpenerDirector:
+    """The opener used for the AUTHENTICATED request — no redirect following.
+
+    Built per call rather than cached: it is a handful of small objects, and a
+    module-level singleton is one more piece of state to reason about in a
+    module whose whole job is not leaking a credential.
+    """
+    return urllib.request.build_opener(_RefuseRedirect)
+
+
 def _open(req, timeout: int = 60):
     """The single seam where this module touches the network.
 
-    Isolated in one two-line function so the tests can replace it and still
+    Isolated in one small function so the tests can replace it and still
     exercise the real Request construction — the URL, the headers, the bearer
     token — rather than a mock of the code under test.
+
+    Not `urllib.request.urlopen`: that uses the default opener, which follows
+    redirects and forwards the Authorization header when it does. See
+    _RefuseRedirect.
     """
-    return urllib.request.urlopen(req, timeout=timeout)
+    return _opener().open(req, timeout=timeout)
 
 
 class _HttpResponse:
@@ -268,6 +343,22 @@ def _fetch_invoices(org: str, key: str) -> dict:
         with _open(req) as raw:
             resp = _HttpResponse(getattr(raw, "status", 200), raw.read(),
                                  raw.geturl() if hasattr(raw, "geturl") else url)
+    except RedirectRefused as exc:
+        # Deliberately first: this is the one failure here that is a
+        # credential-safety stop rather than a transport or auth problem, and
+        # the generic handlers below would report it as "network failure",
+        # which is both wrong and unactionable.
+        raise SourceUnavailable(_scrub(
+            f"console.neon.tech answered HTTP {exc.code} and tried to redirect "
+            f"the authenticated billing request to {exc.target}. The request "
+            f"was NOT followed and the API key was not sent there: urllib "
+            f"forwards the Authorization header across a redirect, so "
+            f"following one would hand a long-lived Neon credential to "
+            f"whatever host that is. This endpoint has never redirected. If "
+            f"Neon has genuinely moved it, sources/neon.py needs updating to "
+            f"the new URL — your API key and {ORG_ENV} are not at fault.",
+            key,
+        )) from None
     except urllib.error.HTTPError as exc:
         try:
             body = exc.read()
@@ -323,7 +414,7 @@ def _fetch_invoices(org: str, key: str) -> dict:
         ))
 
     try:
-        return json.loads(body_text or "{}")
+        payload = json.loads(body_text or "{}")
     except json.JSONDecodeError:
         raise SourceUnavailable(_scrub(
             f"Neon returned a 200 that is not JSON for the billing invoice "
@@ -331,6 +422,21 @@ def _fetch_invoices(org: str, key: str) -> dict:
             f"place of the API response. If it persists, the endpoint has "
             f"changed shape.", key,
         )) from None
+
+    # Valid JSON is not the same thing as the shape every caller assumes.
+    # `[]`, `null` and `"…"` all parse, and every caller then does
+    # payload.get(...) and gets an AttributeError instead of this module's one
+    # controlled failure type — which run.py reports as a crash rather than a
+    # skipped source. The declared return type is dict; enforce it here, at
+    # the boundary, so no caller has to.
+    if not isinstance(payload, dict):
+        raise SourceUnavailable(_scrub(
+            f"Neon returned a 200 whose JSON is a {type(payload).__name__}, not "
+            f"an object, for the billing invoice listing of organization {org}. "
+            f"The response has changed shape — this source expects "
+            f'{{"invoices": [...]}}. Nothing was read from it.', key,
+        ))
+    return payload
 
 
 def _to_cents(total) -> int:
@@ -347,6 +453,36 @@ def _to_cents(total) -> int:
         raise InvalidOperation("empty total")
     cents = (Decimal(text) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
     return int(cents)
+
+
+BILLING_CURRENCY = "USD"
+
+
+def _is_billing_currency(inv: dict) -> bool:
+    """Is this invoice denominated in the currency Ramp charges in?
+
+    Matching compares merchant, integer cents and date — never currency (that
+    would mean carrying it through Receipt and match.py). So a paid €550.76
+    invoice and a $550.76 Ramp charge are indistinguishable to the matcher,
+    and the wrong document gets attached to a real financial record. Cheapest
+    correct guard: only USD invoices become receipts at all.
+
+    A missing or blank `currency` is refused too. Every invoice observed live
+    carried it, so its absence is a shape change — and "it was probably
+    dollars" is a guess about a financial record. fetch() counts every refusal
+    into `truncated`, so this is loud, not silent.
+    """
+    return str(inv.get("currency") or "").strip().upper() == BILLING_CURRENCY
+
+
+def _invoice_rows(payload: dict) -> list:
+    """The `invoices` array, or [] if it is missing or the wrong type.
+
+    fetch() checks the same thing and announces it; this keeps parse_invoices
+    pure and crash-free on any shape.
+    """
+    rows = payload.get("invoices")
+    return rows if isinstance(rows, list) else []
 
 
 def _to_date(stamp: str) -> str:
@@ -381,10 +517,15 @@ class NeonSource:
         exactly the failure mode this codebase keeps having to design against.
         """
         rows: list[dict] = []
-        for i, inv in enumerate(payload.get("invoices") or []):
+        for inv in _invoice_rows(payload):
             if not isinstance(inv, dict):
                 continue
             if inv.get("status") != "paid":
+                continue
+            # Before anything else about the money: an invoice in another
+            # currency cannot be compared to a USD charge, and the matcher
+            # never sees currency. fetch() counts these and announces them.
+            if not _is_billing_currency(inv):
                 continue
             pdf_url = inv.get("pdf_url")
             if not pdf_url:
@@ -408,12 +549,20 @@ class NeonSource:
             # from it, and a changing key would defeat Ramp's duplicate
             # collapsing) and unique per invoice (match.py dedupes on it). If
             # a row ever arrives without one, fall back to the equally stable
-            # invoice_id, then to the row's position — anything but a shared
+            # invoice_id, then to a hash of pdf_url — anything but a shared
             # blank, which would make two different invoices compare equal and
             # silently drop one.
+            #
+            # The last fallback is a property of the INVOICE, never its
+            # position in the list. A row index is stable only until something
+            # earlier is inserted or reordered, and then the same invoice gets
+            # a new provenance, a new idempotency key, and is uploaded again
+            # instead of collapsing as a duplicate. pdf_url is unique per
+            # invoice and carries its own token — same reasoning, and the same
+            # sha1-prefix construction, as sources/anthropic.py.
             key = (str(inv.get("invoice_number") or "").strip()
                    or str(inv.get("invoice_id") or "").strip()
-                   or f"row-{i}")
+                   or "pdf-" + hashlib.sha1(str(pdf_url).encode()).hexdigest()[:8])
             rows.append({
                 "amount_cents": amount_cents,
                 "date": date,
@@ -448,12 +597,46 @@ class NeonSource:
         payload = self._invoices()
         rows = self.parse_invoices(payload)
 
-        raw = payload.get("invoices") or []
+        # `invoices` missing, or present and not a list. Every item is then
+        # skipped, `lost` stays zero, no pagination hint fires, and the source
+        # returns [] with truncated unset — a degraded run that reads as a
+        # clean one, and real Neon charges reported as genuinely receipt-less.
+        # That is this codebase's recurring failure mode, so it is named here
+        # rather than inferred from an empty result.
+        listing = payload.get("invoices")
+        if isinstance(listing, list):
+            raw = listing
+        else:
+            raw = []
+            notes.append(
+                f"the invoice listing had no usable `invoices` array — the "
+                f"response carried {type(listing).__name__} where a list was "
+                f"expected, so NOTHING was searched and no absence below can "
+                f"be trusted; the endpoint has changed shape and "
+                f"sources/neon.py needs updating"
+            )
+
         # A paid invoice that did not survive parsing is a receipt we should
         # have had and don't. Draft/unpaid rows are correctly dropped and are
         # not counted here.
         paid = [i for i in raw if isinstance(i, dict) and i.get("status") == "paid"]
-        lost = len(paid) - len(rows)
+
+        # Excluded on purpose, and for a different reason than "unreadable" —
+        # so counted and reported separately. Rolling these into the count
+        # below would send someone looking for a parsing bug that isn't there.
+        foreign = [i for i in paid if not _is_billing_currency(i)]
+        if foreign:
+            seen = sorted({str(i.get("currency") or "none stated").strip()
+                           for i in foreign})
+            notes.append(
+                f"{len(foreign)} paid invoice(s) are not in {BILLING_CURRENCY} "
+                f"({', '.join(seen)}) and were excluded — matching compares "
+                f"amounts as plain cents, so a non-{BILLING_CURRENCY} invoice "
+                f"could be attached to an unrelated {BILLING_CURRENCY} charge. "
+                f"Attach those manually in Ramp"
+            )
+
+        lost = len(paid) - len(foreign) - len(rows)
         if lost > 0:
             notes.append(
                 f"{lost} paid invoice(s) could not be read from the listing "
@@ -554,7 +737,17 @@ def _set_neon_key() -> int:
 
     # getpass, never input(): the value is not echoed to the terminal, does
     # not survive in a scrollback buffer, and never lands in shell history.
-    value = (getpass.getpass("Paste the Neon API key (hidden): ") or "").strip()
+    # And getpass only if it can actually hide the value — see
+    # base.prompt_for_secret, which refuses rather than accepting an echoed
+    # paste in a session with no echo-free terminal.
+    try:
+        value = prompt_for_secret("Paste the Neon API key (hidden): ",
+                                  label="Neon API key", env_var=KEY_ENV,
+                                  command=SET_KEY_CMD)
+    except SecretPromptUnavailable as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
     if not value:
         print("ERROR: nothing was entered — no key was stored, and any "
               "previously stored key is untouched.", file=sys.stderr)
@@ -575,6 +768,15 @@ def _set_neon_key() -> int:
               f"{_scrub(f'{type(exc).__name__}: {exc}', value)}", file=sys.stderr)
         return 2
 
+    # Everything that can still reject this key happens BEFORE the write. The
+    # ordering is the point: _write_key replaces whatever is already stored,
+    # so any read of the response that could fail has to fail first, or a
+    # validation that never finished leaves a working credential overwritten
+    # by an unverified one. (_fetch_invoices guarantees a mapping, which is
+    # what makes this line safe — this is the second lock on the same door.)
+    invoices = payload.get("invoices")
+    count = len(invoices) if isinstance(invoices, list) else 0
+
     try:
         _write_key(value, path)
     except OSError as exc:
@@ -582,7 +784,6 @@ def _set_neon_key() -> int:
               f"{_scrub(f'{type(exc).__name__}: {exc}', value)}", file=sys.stderr)
         return 2
 
-    count = len(payload.get("invoices") or [])
     print(f"Stored a validated Neon API key at {path} (mode 0600, readable only "
           f"by you).\nNeon accepted it: the billing listing for organization "
           f"{org} responded with {count} invoice(s).\n"

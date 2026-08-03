@@ -20,6 +20,7 @@ directory — no test reads or writes the real ~/.claude-receipts-session.
 
 import contextlib
 import email.message
+import getpass
 import io
 import json
 import os
@@ -386,14 +387,103 @@ def test_fetch_never_leaks_the_session_through_the_truncated_report_line():
 # ---------------------------------------------------------------------------
 
 @contextlib.contextmanager
+def _tty():
+    """Stand in for an interactive terminal that can hide what is typed.
+
+    The prompt refuses to run without one — see the non-TTY tests below — so
+    every test that gets as far as the prompt has to say it has a terminal.
+    Patching the whole object rather than one attribute: under pytest's
+    capture, sys.stdin is a stub that may not accept attribute assignment.
+    """
+    class _Stdin:
+        def isatty(self):
+            return True
+
+    with patch.object(sys, "stdin", _Stdin()):
+        yield
+
+
+@contextlib.contextmanager
+def _not_a_tty():
+    class _Stdin:
+        def isatty(self):
+            return False
+
+    with patch.object(sys, "stdin", _Stdin()):
+        yield
+
+
+@contextlib.contextmanager
 def _no_echo():
     """getpass must be what reads the value — never input(), which echoes to
     the terminal and (in a shell one-liner) lands in history."""
     def forbidden(*a, **k):
         raise AssertionError("the session must be read with getpass, never input()")
 
-    with patch("builtins.input", forbidden):
+    with patch("builtins.input", forbidden), _tty():
         yield
+
+
+def test_set_session_refuses_to_read_a_session_with_no_interactive_terminal():
+    # getpass.getpass falls back to an ECHOING read from sys.stdin when no
+    # echo-free TTY is available — printing the credential to the terminal and
+    # into any transcript or job log. The same weakness as --set-neon-key, and
+    # it fails closed the same way.
+    def prompted(*a, **k):
+        raise AssertionError(
+            "getpass must not even be reached without an echo-free terminal"
+        )
+
+    out, err = io.StringIO(), io.StringIO()
+    with _sandbox() as path:
+        with patch.object(anth, "_open", _serve(200)), _not_a_tty(), \
+             patch("getpass.getpass", prompted), \
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = anth._set_session()
+
+        combined = out.getvalue() + err.getvalue()
+        assert code != 0, combined
+        assert not path.exists(), "nothing may be stored when nothing was read"
+        assert anth.SESSION_ENV in combined, (
+            "point at the non-interactive alternative: " + combined
+        )
+        assert "echo" in combined.lower() or "terminal" in combined.lower(), combined
+
+
+def test_set_session_refuses_when_getpass_says_it_would_echo():
+    def echoing(prompt=""):
+        import warnings as _w
+        _w.warn("Can not control echo on the terminal.", getpass.GetPassWarning)
+        return SENTINEL
+
+    out, err = io.StringIO(), io.StringIO()
+    with _sandbox() as path:
+        with patch.object(anth, "_open", _serve(200)), _no_echo(), \
+             patch("getpass.getpass", echoing), \
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = anth._set_session()
+
+        combined = out.getvalue() + err.getvalue()
+        assert code != 0, combined
+        assert not path.exists(), (
+            "a session read with echo on must not be stored as if it were safe"
+        )
+        assert SENTINEL not in combined, combined
+        assert anth.SESSION_ENV in combined, combined
+
+
+def test_the_refusal_to_prompt_never_leaks_a_previously_stored_session():
+    previous = "sk-ant-sid01-PREVIOUSLY-STORED-DO-NOT-PRINT"
+    out, err = io.StringIO(), io.StringIO()
+    with _sandbox(stored=previous) as path:
+        with _not_a_tty(), contextlib.redirect_stdout(out), \
+             contextlib.redirect_stderr(err):
+            code = anth._set_session()
+
+        combined = out.getvalue() + err.getvalue()
+        assert code != 0, combined
+        assert previous not in combined, combined
+        assert path.read_text().strip() == previous
 
 
 def test_set_session_stores_a_validated_value_with_mode_0600():

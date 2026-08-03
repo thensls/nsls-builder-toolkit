@@ -45,7 +45,6 @@ Anyone holding it can act as the user on claude.ai. Therefore, in this module:
 """
 
 import datetime as dt
-import getpass
 import hashlib
 import json
 import os
@@ -55,7 +54,8 @@ import urllib.request
 from pathlib import Path
 
 try:
-    from .base import (Receipt, SourceUnavailable, UNSAFE_MODE_BITS, scrub_secret,
+    from .base import (Receipt, SecretPromptUnavailable, SourceUnavailable,
+                       UNSAFE_MODE_BITS, prompt_for_secret, scrub_secret,
                        secret_file_is_unsafe, secret_file_mode, write_secret_file)
 except ImportError:
     # Running this file directly (`python3.12 sources/anthropic.py
@@ -75,9 +75,11 @@ except ImportError:
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from sources.base import (Receipt, SourceUnavailable, UNSAFE_MODE_BITS,
-                              scrub_secret, secret_file_is_unsafe,
-                              secret_file_mode, write_secret_file)
+    from sources.base import (Receipt, SecretPromptUnavailable,
+                              SourceUnavailable, UNSAFE_MODE_BITS,
+                              prompt_for_secret, scrub_secret,
+                              secret_file_is_unsafe, secret_file_mode,
+                              write_secret_file)
 
 LISTING = "https://claude.ai/api/stripe/{org}/invoices?limit={limit}&page={page}"
 PAGE_GUARD = 20  # pages (100 invoices/page = 2,000 invoices) — see fetch()
@@ -547,7 +549,17 @@ def _set_session() -> int:
 
     # getpass, never input(): the value is not echoed to the terminal, does
     # not survive in a scrollback buffer, and never lands in shell history.
-    value = (getpass.getpass("Paste the sessionKey value (hidden): ") or "").strip()
+    # And getpass only if it can actually hide the value — see
+    # base.prompt_for_secret, which refuses rather than accepting an echoed
+    # paste in a session with no echo-free terminal.
+    try:
+        value = prompt_for_secret("Paste the sessionKey value (hidden): ",
+                                  label="claude.ai session cookie",
+                                  env_var=SESSION_ENV, command=SET_SESSION_CMD)
+    except SecretPromptUnavailable as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
     if not value:
         print("ERROR: nothing was entered — no session was stored, and any "
               "previously stored session is untouched.", file=sys.stderr)
@@ -568,6 +580,13 @@ def _set_session() -> int:
               f"{_scrub(f'{type(exc).__name__}: {exc}', value)}", file=sys.stderr)
         return 2
 
+    # Everything that can still reject this session happens BEFORE the write:
+    # _write_session replaces whatever is already stored, so a read of the
+    # response that could fail must fail first. Same ordering rule as
+    # sources/neon.py's --set-neon-key.
+    invoices = payload.get("invoices") if isinstance(payload, dict) else None
+    count = len(invoices) if isinstance(invoices, list) else 0
+
     try:
         _write_session(value, path)
     except OSError as exc:
@@ -575,7 +594,6 @@ def _set_session() -> int:
               f"{_scrub(f'{type(exc).__name__}: {exc}', value)}", file=sys.stderr)
         return 2
 
-    count = len(payload.get("invoices") or [])
     print(f"Stored a validated claude.ai session at {path} (mode 0600, readable only "
           f"by you).\nclaude.ai accepted it: the billing listing for organization "
           f"{org} responded with {count} invoice(s).\n"
