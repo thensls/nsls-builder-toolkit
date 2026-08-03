@@ -75,7 +75,10 @@ def gws(args, params=None, body=None):
         cmd += ["--params", json.dumps(params)]
     if body is not None:
         cmd += ["--json", json.dumps(body)]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    # encoding pinned: text=True alone decodes with the locale codec (cp1252 on
+    # Windows), which crashes on the em dashes present in essentially every
+    # NSLS doc. gws emits UTF-8 everywhere.
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
     if r.returncode == 2:
         sys.exit("gws auth error (exit 2): run `gws auth login`. See references/setup.md.")
 
@@ -213,22 +216,33 @@ def _insert_block(index, title, text, title_heading):
             "paragraphStyle": {"namedStyleType": title_heading},
             "fields": "namedStyleType",
         }})
+    # Pin the body lines to NORMAL_TEXT explicitly. Inserted text otherwise
+    # inherits the paragraph style at the insertion point — inserting above a
+    # heading once turned five body lines into HEADING_1 giants.
+    body_start = index + (len(title) + 1 if title else 0)
+    body_end = index + len(chunk)
+    if body_end > body_start:
+        reqs.append({"updateParagraphStyle": {
+            "range": {"startIndex": body_start, "endIndex": body_end},
+            "paragraphStyle": {"namedStyleType": "NORMAL_TEXT"},
+            "fields": "namedStyleType",
+        }})
     return reqs
 
 
-def do_insert_top(doc, title, text):
+def do_insert_top(doc, title, text, level=2):
     # index 1 == start of body content
-    return batch_update(doc, _insert_block(1, title, text, "HEADING_2"))
+    return batch_update(doc, _insert_block(1, title, text, "HEADING_%d" % level))
 
 
-def do_insert_after(doc, anchor, title, text):
+def do_insert_after(doc, anchor, title, text, level=3):
     d = get_doc(doc)
     hit = [p for p in paragraphs(d) if anchor in p["text"]]
     if not hit:
         return {"ok": False, "error": "anchor not found: " + anchor}
     if len(hit) > 1:
         return {"ok": False, "error": "anchor matched %d paragraphs (not unique)" % len(hit)}
-    return {"ok": True, "res": batch_update(doc, _insert_block(hit[0]["end"], title, text, "HEADING_3"))}
+    return {"ok": True, "res": batch_update(doc, _insert_block(hit[0]["end"], title, text, "HEADING_%d" % level))}
 
 
 def do_append(doc, text):
@@ -271,7 +285,7 @@ def read_text(a):
     if a.text is not None:
         return a.text
     if a.text_file:
-        return open(a.text_file).read()
+        return open(a.text_file, encoding="utf-8").read()
     return ""
 
 
@@ -290,6 +304,9 @@ def main():
     ap.add_argument("--text")
     ap.add_argument("--text-file", dest="text_file")
     ap.add_argument("--file", help="batch edits JSON")
+    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4],
+                    help="heading level for the inserted --title "
+                         "(default: 2 for insert-top, 3 for insert-after)")
     a = ap.parse_args()
 
     if a.action != "create" and not a.doc:
@@ -320,13 +337,14 @@ def main():
     elif a.action == "insert-top":
         if not a.title:
             sys.exit("insert-top needs --title")
-        do_insert_top(a.doc, a.title, read_text(a))
+        do_insert_top(a.doc, a.title, read_text(a), level=a.level or 2)
         print("ok")
 
     elif a.action == "insert-after":
         if not a.anchor:
             sys.exit("insert-after needs --anchor")
-        r = do_insert_after(a.doc, a.anchor[0], a.title or "", read_text(a))
+        r = do_insert_after(a.doc, a.anchor[0], a.title or "", read_text(a),
+                            level=a.level or 3)
         print("ok" if r.get("ok") else "FAILED: " + str(r.get("error", r)))
 
     elif a.action == "append":
@@ -341,7 +359,7 @@ def main():
     elif a.action == "batch":
         if not a.file:
             sys.exit("batch needs --file")
-        cfg = json.load(open(a.file))
+        cfg = json.load(open(a.file, encoding="utf-8"))
         use_regex = cfg.get("regex", False)
         lines = full_text(get_doc(a.doc)).split("\n")
         results = []
