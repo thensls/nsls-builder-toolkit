@@ -36,9 +36,19 @@ Full reference: `references/gws-reference.md` (relative to this skill)
 
 If `gws` is not on the PATH, install it.
 
-**macOS / Linux:**
+**macOS / Linux** — the toolkit installer (`install.sh`) does this for you;
+manual path below. (The old `google-workspace-cli-installer.sh` script was
+retired upstream and its URL 404s — releases ship per-arch tarballs now.)
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/googleworkspace/cli/releases/latest/download/google-workspace-cli-installer.sh | sh
+T="aarch64-apple-darwin"                                   # Apple Silicon
+[ "$(uname -m)" = "x86_64" ] && T="x86_64-apple-darwin"    # Intel Mac; Linux: use the *-unknown-linux-gnu assets
+D=$(mktemp -d) && cd "$D" \
+  && curl --proto '=https' --tlsv1.2 -fsSLO "https://github.com/googleworkspace/cli/releases/latest/download/google-workspace-cli-$T.tar.gz" \
+  && curl --proto '=https' --tlsv1.2 -fsSLO "https://github.com/googleworkspace/cli/releases/latest/download/google-workspace-cli-$T.tar.gz.sha256" \
+  && [ "$(shasum -a 256 "google-workspace-cli-$T.tar.gz" | awk '{print $1}')" = "$(awk '{print $1}' "google-workspace-cli-$T.tar.gz.sha256")" ] \
+  && tar -xzf "google-workspace-cli-$T.tar.gz" \
+  && mkdir -p ~/.local/bin && mv "$(find . -type f -name gws | head -1)" ~/.local/bin/gws && chmod +x ~/.local/bin/gws \
+  && ~/.local/bin/gws --version && echo "gws installed — make sure ~/.local/bin is on your PATH"
 ```
 
 **Windows** (the shell installer above is bash-only) — download the release zip,
