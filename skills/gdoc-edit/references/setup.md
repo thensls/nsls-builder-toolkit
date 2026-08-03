@@ -102,10 +102,14 @@ to any repo.
 gws auth login --services docs,drive
 ```
 
-A browser opens for Google consent. Because the app is **Internal**, only a real
-**`@nsls.org` Google Workspace account** can complete it — an **alias** address, or a
-personal/consumer Google account that merely *uses* an nsls.org address, is **refused**
-with an unhelpful error. `--services docs,drive` requests only the Docs + Drive scopes this
+The command **prints a consent URL and starts a local listener** — on Windows it
+does not open a browser itself, and on Mac don't assume it did. If you're driving
+this for a builder: run it in the background, read the URL from its output, open
+it (`open "<url>"` / `Start-Process "<url>"`) **and** print it as a clickable
+link. The URL is single-use — mint a fresh one on any retry. Because the app is
+**Internal**, only a real **`@nsls.org` Google Workspace account** can complete
+consent — an **alias** address, or a personal/consumer Google account that merely
+*uses* an nsls.org address, is **refused** with an unhelpful error. `--services docs,drive` requests only the Docs + Drive scopes this
 skill needs — not the full Workspace surface. Your refresh token is stored **encrypted** at
 `~/.config/gws`; you won't be asked again.
 

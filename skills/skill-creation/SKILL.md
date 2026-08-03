@@ -131,6 +131,14 @@ Skills that produce output for humans (most of them) benefit from audience-aware
 
 Also: PII awareness, sample size warnings, source attribution when cross-referencing.
 
+**House rule — question last, nothing trailing.** Any skill turn that ends by
+asking the user something must put that question on the **last line**, with no
+informational text after it. Silence after a question must unambiguously mean
+"waiting on you," never "might still be talking." A buried question is the #1
+way a guided flow reads as stalled — a real builder froze mid-`/setup` and asked
+"did setup stall?" because a disclosure paragraph trailed the confirmation
+question. Sweep for this whenever a skill scripts its own messages.
+
 ## Discovering the Full Shape
 
 Before writing a skill, explore broadly at every level. The elements above are the columns (so far — you may discover more). The skill-creation process is about finding all the ROWS and all the CELLS.

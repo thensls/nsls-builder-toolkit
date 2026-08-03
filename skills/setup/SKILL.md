@@ -30,7 +30,7 @@ Welcome to the NSLS Builder Toolkit! Let's get you set up.
 
 This takes about 5 minutes, and I'll do it with you one step at a time:
   1. Confirm your builder email + GitHub username (so the tracker credits your work and your merged PRs)
-  2. Connect your tools — Slack, Google Drive, Calendar, Gmail, Fathom
+  2. Connect your tools — Slack, Google Drive, Calendar, Gmail, Asana, Fathom
   3. Check your plugins are working
   4. Register Windows hooks (Windows only — skipped on Mac/Linux)
   5. Personal productivity skills (optional, your call)
@@ -46,10 +46,19 @@ hook both read `BUILDER_EMAIL` from
 shows up as "unknown" in the Automation Tracker and you don't get credit.
 
 **Don't make the builder type their email.** You already know the email of the
-signed-in Claude account from this session's context — propose it and ask only
-to confirm:
+signed-in Claude account from this session's context. Lead with the
+transparency note as context, then ask — **the question is the LAST line of
+the message, with nothing after it.** (A question buried mid-message reads as
+"still loading"; a builder in this exact flow froze and asked "did setup
+stall?" because the disclosure trailed the question.)
 
 ```
+Quick transparency note first: each time you use a skill, the toolkit sends a
+one-line ping to the NSLS tracker so you get credit for your work — the skill
+name and your email, nothing about what you were doing. There's also a
+once-per-launch sync that updates the toolkit and records your daily session
+(email, GitHub username, platform) — same purpose: your work counts.
+
 I'll credit your work to <signed-in account email>. Sound right? (yes / or paste a different email)
 ```
 
@@ -75,14 +84,13 @@ touch "$ENV_FILE"
 echo "BUILDER_EMAIL=<confirmed email>" >> "$ENV_FILE"
 ```
 
-Confirm, and be transparent about the one bit of tracking so it never feels
-hidden: "Got it — your work is now credited to <email>. Heads up: each time you
-use a skill, the toolkit fires a tiny one-line ping to our NSLS tracker so you
-get credit for it — just the skill name and your email, nothing about what you
-were doing. You'll see it noted in the status line as it runs. That's the only
-thing it phones home about." (If a permission prompt for `skill-event.sh` ever
-appears, that's this same harmless ping — safe to approve; the installer
-allowlists it so it shouldn't recur.)
+Confirm briefly: "Got it — your work is now credited to <email>." (If a
+permission prompt for `skill-event.sh` ever appears later, that's the same
+credit ping from the transparency note — safe to approve; the installer
+allowlists it so it shouldn't recur.) If the builder ever asks you to review
+or explain one of these hook scripts, give the accurate technical facts AND
+restate in the same breath that this is the expected credit mechanism — facts
+and framing travel together.
 
 ### Step 1.5: Reconcile early events (automatic, silent — no question)
 
@@ -175,6 +183,32 @@ echo "GITHUB_USERNAME=<validated username>" >> "$ENV_FILE"
 
 Confirm: "PR credit goes to github.com/<username>."
 
+### Step 1.8: Git identity (~15 sec)
+
+Commits are stamped with `git config --global user.email` / `user.name` — a
+**separate mechanism from tracker credit**. Left unset, every commit the
+builder pushes (to anything they build later) is authored as an unclickable
+`user@COMPUTERNAME`, and GitHub attributes nothing to their profile. **Never
+describe a missing git identity as bare "harmless"** — it's harmless for
+tracker credit and broken for commit attribution; say which is which.
+
+```bash
+git config --global user.email; git config --global user.name
+```
+
+If either is empty, **ask — don't note**: "One more credit thing: commits you
+push need a Git identity or GitHub won't show them as yours. Want me to set it
+to <their name> / <builder email>?" On yes:
+
+```bash
+git config --global user.email "<builder email>"
+git config --global user.name "<Full Name>"
+```
+
+Skippable, but asked — same pattern as the email and GitHub username above:
+every credit-relevant identity field gets actively collected, none left as a
+passing mention.
+
 ## Step 2: Connect Your Tools (~2 min) — guided, one at a time
 
 This is the most important step and the one builders stall on. **Do NOT dump a
@@ -184,14 +218,16 @@ the exact Connectors panel, wait for them to come back. **Collect them all
 first — do not verify yet.** Verification happens after a single restart at the
 end of this step.
 
-All five are **one-click "Authorize" connectors** in the desktop app — no API
+All six are **one-click "Authorize" connectors** in the desktop app — no API
 keys, no tokens to paste. The bundle, in order:
 
 1. **Slack** — team channels, standups, searches
 2. **Google Drive** — read/write docs and files
 3. **Google Calendar** — powers `/open-day`'s daily schedule
 4. **Gmail** — draft and triage email
-5. **Fathom** — meeting recordings and transcripts (`/close-day`, `person-intelligence`)
+5. **Asana** — your task list; without it `/open-day` has no tasks to pull and
+   `/close-day` has nothing to update (the day-planner's task half is dead)
+6. **Fathom** — meeting recordings and transcripts (`/close-day`, `person-intelligence`)
 
 > **Do not rely on a programmatic MCP-registry probe to decide what's
 > available** — a probe has missed Fathom even though its connector exists
@@ -209,14 +245,22 @@ keys, no tokens to paste. The bundle, in order:
 1. **One line on why**, then ask: "Want to connect **<tool>** now? (yes / skip)"
    - If skip: "No problem — run /setup again anytime to add it." Move on.
 2. **If yes, send them to the panel.** Give the **full explanation for connector
-   #1 (Slack) only**:
+   #1 (Slack) only** — and it must teach **where Settings actually is** (nothing
+   else in the flow ever does; "Open Settings" with no path is where a
+   non-technical builder stalls):
    ```
-   Open Settings → Connectors, find Slack, and click Authorize. A browser window
-   opens — sign in and approve, then come back. Heads up: the app often drops you
-   on the Home tab afterward and it looks like you lost this chat — you didn't.
-   Click **Code** (top left) to return, and tell me when you're back.
+   First, open Settings: press Ctrl+, (that's Control and the comma key) — on
+   Mac it's Cmd+, — or click your initials in the bottom-left corner and choose
+   Settings. In Settings, click Connectors in the sidebar. Find Slack and click
+   Authorize. A browser window opens — sign in and approve, then come back.
+   Heads up: the app often drops you on the Home tab afterward and it looks like
+   you lost this chat — you didn't. Click **Code** (top left) to return, and
+   tell me when you're back.
    ```
-   For **connectors #2–#5**, collapse to a one-line breadcrumb (the Home-tab
+   <!-- Maintainers: re-verify the click path against the current desktop build
+        whenever the app UI shifts — the shortcut (Ctrl+,/Cmd+,) is the stable
+        route; the initials/avatar location has moved between builds. -->
+   For **connectors #2–#6**, collapse to a one-line breadcrumb (the Home-tab
    note folds into it — don't repeat the whole paragraph):
    ```
    Next: Google Drive → Settings › Connectors › Google Drive › Authorize, approve
@@ -227,7 +271,7 @@ keys, no tokens to paste. The bundle, in order:
 
 ### End of Step 2: one restart, then verify
 
-Once they've connected (or skipped) all five:
+Once they've connected (or skipped) all six:
 
 ```
 That's the bundle. One thing makes them actually load: fully restart Claude Code
@@ -242,6 +286,7 @@ builder connected, with a **live read call** (not a registry probe):
 - Google Drive: a minimal Drive search/list call.
 - Google Calendar: `list_calendars`.
 - Gmail: `list_labels` (or a minimal thread search).
+- Asana: the connector's `get_me` (your own user record).
 - Fathom: `get_identity` / `list_meetings` (via the `api.fathom.ai` path).
 
 Then summarize:
@@ -382,13 +427,16 @@ the Google consent themselves):
 gws auth login --services docs,drive
 ```
 Exactly `docs,drive` — never broader. The command **prints a consent URL and
-starts a local listener**; a browser *usually* opens on its own, but never
-rely on that — run it in the background, read the consent URL from its
-output, and give the builder that URL **as a clickable link**, phrased as a
-fallback ("a sign-in page should have opened — if it didn't, click here").
-The URL is single-use and dies with the process: if nothing opened or it
-shows "can't reach localhost", start the login again and hand over the
-**fresh** link, never the old one.
+starts a local listener** — on Windows it does **not** open a browser at all,
+and on Mac you can't verify from your side that one opened. So, always, all
+three parts: run it in the background, read the consent URL from its output,
+**open it yourself** (`open "<url>"` on macOS, `Start-Process "<url>"` on
+Windows), **and print the same URL as a clickable link in the same message** —
+"a Google sign-in page should now be open in your browser — if it isn't,
+click here: <url>". Never phrase a browser launch as a prediction. The URL is
+single-use and dies with the process: if nothing opened or it shows "can't
+reach localhost", start the login again and open + hand over the **fresh**
+link, never the old one.
 
 > ⚠️ **Real @nsls.org Workspace accounts only.** The consent screen is
 > **Internal** to the nsls.org Workspace org, so an **alias** address, or a
