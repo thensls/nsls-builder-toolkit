@@ -93,6 +93,23 @@ Davo's chat instruction (suggest, don't apply) overrides the handoff's edit-the-
 - **gdoc-edit comment extension** (INBOX spec, Jul 31) — status unclear; not in scope unless Davo says so.
 - Noticed in passing: session-start hook worst case (git pull 10s + replay 35s + live ping 35s) sits at the 90s budget edge — fine today, revisit if timeouts reappear.
 
+## Status — 2026-08-03, end of build
+
+Everything above is **built, locally committed, and Codex-reviewed (one round
+per repo; review-driven fixes folded in)**. Builder kit: 13 commits on
+`claude/objective-chaum-2bdc69`. Personal toolkit: 7 commits on
+`pp-final-polish` (~/worktrees/pt-final-polish), companion suite 304 green.
+Master prompts v4 live on both docs (in place, verified). Guide change set
+drafted, not applied. NOTHING PUSHED — per-action approval pending.
+
+**Known limitations accepted this round:** gdoc.py's pre-existing
+regex-replace index mapping still counts code points (new insert ranges are
+UTF-16-correct); install.sh picks gnu Linux artifacts (musl/Alpine now fails
+honestly instead of silently — asset selection not built); B-6 bonus-refocus
+deferred (needs interactive repro). **Human verification still owed:** T-2/T-3
++ Settings click path on a real PS 5.1 box; the Mac handoff's 16-point
+dual-platform simulation once pushes land.
+
 ## Verification before "done"
 
 Mac handoff's 16-point dual-platform simulation checklist runs after edits land (both master prompts + repos). Companion test suite (~301 at last count) stays green for PR B. `bash -n` / `py_compile` / pwsh parse for every touched script.
