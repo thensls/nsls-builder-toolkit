@@ -28,11 +28,13 @@ def _source_lines(skipped_sources, sources_loaded, sources_searched=None) -> lis
     for note in skipped_sources:
         name, _, reason = note.partition(": ")
         # A TRUNCATED note means the source ran successfully and returned
-        # partial results — it was never skipped. Wrapping it as
-        # "SKIPPED (TRUNCATED (...))" tells the user something untrue about
-        # what happened, and "SKIPPED" is exactly the word that stops most
-        # readers from reading further. Render it plainly instead.
-        if reason.startswith("TRUNCATED"):
+        # partial results — it was never skipped. A NOTE means it ran
+        # completely and still has something the user needs (e.g. Gmail found
+        # a relayed receipt with no vendor display name). Wrapping either as
+        # "SKIPPED (...)" tells the user something untrue about what happened,
+        # and "SKIPPED" is exactly the word that stops most readers from
+        # reading further. Render them plainly instead.
+        if reason.startswith(("TRUNCATED", "NOTE")):
             lines.append(f"SOURCE {name}: {reason}")
         else:
             lines.append(f"SOURCE {name}: SKIPPED ({reason})")
@@ -219,6 +221,13 @@ def main(argv: list[str]) -> int:
             truncated = getattr(src, "truncated", None)
             if truncated:
                 skipped.append(f"{name}: TRUNCATED ({truncated})")
+            # A source can also complete a full search and still have found
+            # something the user has to act on by hand — a receipt it could
+            # not attribute to a merchant, say. That is neither a skip nor a
+            # truncation, but it is still a gap, and a gap nobody is told
+            # about is the same silent degradation in a different costume.
+            for note in getattr(src, "notes", None) or []:
+                skipped.append(f"{name}: NOTE ({note})")
         except SourceUnavailable as exc:
             skipped.append(f"{name}: {exc}")
         except Exception as exc:

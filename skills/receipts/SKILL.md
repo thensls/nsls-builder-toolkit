@@ -116,9 +116,12 @@ gws auth login -s gmail
 ```
 
 Covers vendors that email a receipt PDF: Asana, Groq, OpenAI, Hex, and
-others as your inbox has them. If `gws` isn't authenticated, the Gmail
-source is skipped and announced in the report; every other source still
-runs.
+others as your inbox has them — including vendors whose receipts are sent
+**by Stripe on their behalf** (Macroscope, SendBird, Clay Labs, and similar),
+where the vendor's name is in the sender's display name rather than its
+domain. See [Coverage](#stripe-relayed-vendors--a-ceiling-that-turned-out-to-be-a-bug).
+If `gws` isn't authenticated, the Gmail source is skipped and announced in
+the report; every other source still runs.
 
 ### 3. Anthropic source (optional)
 
@@ -297,6 +300,36 @@ there's no source to build against. Don't expect the skill to close 22/22;
 expect it to close what has a source, and leave a short, correctly-labeled
 manual list for the rest.
 
+### Stripe-relayed vendors — a ceiling that turned out to be a bug
+
+That snapshot understated the Gmail source, and the gap is worth naming
+because it looked exactly like a ceiling. Vendors that don't send their own
+receipts — Stripe sends on their behalf — arrive as
+`Macroscope <invoice+statements+acct_…@stripe.com>`: the vendor is the
+**display name**, the domain is the relay's. Merchant resolution read the
+domain, got `stripe` for every one of them, matched no Ramp transaction, and
+the receipt was discarded without a word. Four vendors were affected, one of
+them the highest-volume vendor in the account by a wide margin.
+
+Fixed 2026-08-01: when the sending domain is a known **billing relay**
+(`BILLING_RELAY_DOMAINS` in `sources/gmail.py`, currently just `stripe.com`),
+the display name is the authoritative half of the header and is used instead.
+Direct senders are unchanged — domain first, then the alias map — so Anthropic,
+Zoom, and Asana resolve exactly as before. Adding the next relay (Paddle,
+Chargebee, …) is a one-line change to that set.
+
+These vendors were on the manual list and no longer need to be. Read the
+22-transaction snapshot above as the measurement it was, not as a permanent
+floor: "no receipt found" is sometimes a source bug wearing a ceiling's
+clothes, and the way to tell them apart is to check what the source actually
+did with the mail rather than trusting that it found nothing.
+
+One residual case stays manual by design. A relayed message with **no display
+name** names its vendor nowhere in the header, so there is nothing
+authoritative to resolve and nothing is guessed — it resolves to a key that
+can only equal itself, never binds, and is **counted and reported** as a
+`SOURCE GMAIL: NOTE (…)` line so the miss is visible rather than silent.
+
 ## Troubleshooting
 
 **The commands below are shown in their short, relative form for
@@ -398,6 +431,17 @@ whatever directory you're in, not just the repository root.
   Narrow the date window (`--since`/`--until`) and re-run to get a query small
   enough to finish. Download failures are usually transient — re-running is
   often enough.
+- **`SOURCE <NAME>: NOTE (...)`** — the source ran **completely** (not a skip,
+  not a truncation) and still found something you have to handle by hand.
+  Today there is one: Gmail found a receipt sent by a billing relay
+  (`stripe.com`) whose `From` header carried **no vendor display name**. The
+  vendor is named nowhere in that message, so the skill refuses to guess one —
+  guessing would risk attaching a receipt to the wrong merchant's charge —
+  and the receipt is counted and reported here instead of vanishing. Find it
+  in Gmail (search `from:stripe.com` over the same window), open the PDF to
+  see which vendor it's for, and attach it in Ramp directly. If a whole vendor
+  keeps landing here, that vendor is sending without a display name and
+  nothing in `sources/gmail.py` can fix it.
 - **`SOURCES: N loaded, 0 searched (...)` + exit 2** — zero sources actually
   searched, even though `N` loaded. "Loaded" only means the module imported
   cleanly; it says nothing about whether `fetch()` ever ran. On a fresh,
