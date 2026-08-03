@@ -519,6 +519,14 @@ else
           if [ -n "$GWS_BIN" ]; then
             mkdir -p "$HOME/.local/bin"
             mv "$GWS_BIN" "$HOME/.local/bin/gws" && chmod +x "$HOME/.local/bin/gws" && GWS_OK=1
+            # Gate success on the binary actually running — a wrong-libc
+            # artifact (e.g. the gnu build on musl/Alpine) exec-fails here,
+            # and reporting it "installed" would be a lie.
+            if [ "$GWS_OK" = "1" ] && ! "$HOME/.local/bin/gws" --version >/dev/null 2>&1; then
+              GWS_OK=0
+              echo "  Note: gws downloaded but won't run on this system (libc mismatch?) — removing it."
+              rm -f "$HOME/.local/bin/gws"
+            fi
           fi
         fi
       else
@@ -539,7 +547,17 @@ else
           if [ -f "$HOME/.zshrc" ]; then GWS_RC="$HOME/.zshrc";
           elif [ -f "$HOME/.bashrc" ]; then GWS_RC="$HOME/.bashrc";
           elif [ -f "$HOME/.bash_profile" ]; then GWS_RC="$HOME/.bash_profile"; fi
-          if [ -n "$GWS_RC" ] && ! grep -q '\.local/bin' "$GWS_RC" 2>/dev/null; then
+          if [ -z "$GWS_RC" ]; then
+            # Fresh machines often have NO rc file at all (stock macOS ships
+            # without ~/.zshrc) — create the shell's default one rather than
+            # silently leaving gws off PATH.
+            case "$(uname -s)" in
+              Darwin) GWS_RC="$HOME/.zshrc" ;;
+              *)      GWS_RC="$HOME/.bashrc" ;;
+            esac
+            touch "$GWS_RC"
+          fi
+          if ! grep -q '\.local/bin' "$GWS_RC" 2>/dev/null; then
             { echo ""; echo "# gws (NSLS Builder Toolkit)"; echo 'export PATH="$HOME/.local/bin:$PATH"'; } >> "$GWS_RC"
             echo "  Added ~/.local/bin to PATH in $(basename "$GWS_RC") (takes effect in new terminals)."
           fi

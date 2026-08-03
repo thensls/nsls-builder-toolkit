@@ -74,10 +74,12 @@ This installs the latest release from https://github.com/googleworkspace/cli.
 > this skill is bash-shaped. PS 5.1 strips the embedded double quotes at the
 > native-command boundary, so gws receives `{key:value}` and fails with
 > `key must be a string at line 1 column 2`; hand-escaping splits the argument
-> on spaces instead. The working form is escape-at-the-boundary:
+> on spaces instead. The working form is escape-at-the-boundary (doubles any
+> backslashes before each quote, then escapes the quote — survives values that
+> themselves contain quotes):
 > ```powershell
 > $body = '{"properties": {"title": "My Sheet"}}'   # or ConvertTo-Json -Compress
-> gws sheets spreadsheets create --json ($body -replace '"','\"')
+> gws sheets spreadsheets create --json ($body -replace '([\\]*)"','$1$1\"')
 > ```
 > (Git Bash passes single-quoted JSON fine, which is why the bug hides there.
 > `--params` takes JSON too — same rule.)

@@ -229,6 +229,9 @@ if ($NodeCmd) {
     }
     $PrereqReport += "                  Open one: Start -> type 'powershell' -> right-click Windows PowerShell -> Run as administrator. Then run:"
     $PrereqReport += "                  winget install --id OpenJS.NodeJS.LTS -e --source winget"
+    if (-not $HasWinget) {
+        $PrereqReport += "                  (This machine has no winget - instead download Node LTS from https://nodejs.org and run the installer.)"
+    }
     $PrereqReport += "                  Afterwards restart Claude Code and run /signal-setup."
 }
 

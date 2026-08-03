@@ -202,6 +202,15 @@ def do_replace_regex(doc, pattern, replace):
     return len(matches)
 
 
+def _u16len(s):
+    """Length in UTF-16 code units — the unit the Docs API indexes by.
+
+    len() counts code points; the two differ on astral chars (emoji), which
+    would shift every styled range that follows one.
+    """
+    return len(s.encode("utf-16-le")) // 2
+
+
 def _insert_block(index, title, text, title_heading):
     """Return batchUpdate requests to insert `title` (styled) + `text` lines at `index`."""
     chunk = ""
@@ -212,15 +221,15 @@ def _insert_block(index, title, text, title_heading):
     reqs = [{"insertText": {"location": {"index": index}, "text": chunk}}]
     if title:
         reqs.append({"updateParagraphStyle": {
-            "range": {"startIndex": index, "endIndex": index + len(title) + 1},
+            "range": {"startIndex": index, "endIndex": index + _u16len(title) + 1},
             "paragraphStyle": {"namedStyleType": title_heading},
             "fields": "namedStyleType",
         }})
     # Pin the body lines to NORMAL_TEXT explicitly. Inserted text otherwise
     # inherits the paragraph style at the insertion point — inserting above a
     # heading once turned five body lines into HEADING_1 giants.
-    body_start = index + (len(title) + 1 if title else 0)
-    body_end = index + len(chunk)
+    body_start = index + (_u16len(title) + 1 if title else 0)
+    body_end = index + _u16len(chunk)
     if body_end > body_start:
         reqs.append({"updateParagraphStyle": {
             "range": {"startIndex": body_start, "endIndex": body_end},
@@ -285,13 +294,18 @@ def read_text(a):
     if a.text is not None:
         return a.text
     if a.text_file:
-        return open(a.text_file, encoding="utf-8").read()
+        return open(a.text_file, encoding="utf-8-sig").read()  # -sig: tolerate a PS 5.1 BOM
     return ""
 
 
 # ---------- CLI ----------
 
 def main():
+    # Windows consoles default to a legacy codepage; re-encode stdout so
+    # printing doc text (em dashes, smart quotes) can't crash read/comments —
+    # the output-side twin of the subprocess decode fix above.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="Read, edit, and create Google Docs via gws.")
     ap.add_argument("action", choices=["read", "comments", "create", "replace", "insert-top",
                                        "insert-after", "append", "remove", "batch"])
@@ -359,7 +373,7 @@ def main():
     elif a.action == "batch":
         if not a.file:
             sys.exit("batch needs --file")
-        cfg = json.load(open(a.file, encoding="utf-8"))
+        cfg = json.load(open(a.file, encoding="utf-8-sig"))  # -sig: tolerate a PS 5.1 BOM
         use_regex = cfg.get("regex", False)
         lines = full_text(get_doc(a.doc)).split("\n")
         results = []
