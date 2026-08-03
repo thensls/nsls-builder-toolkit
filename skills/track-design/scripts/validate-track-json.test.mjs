@@ -470,13 +470,71 @@ test("without nextSection the button text is legitimate", () => {
   assert.deepEqual(suppressionWarnings(celebration({ celebrationButtonText: "Okay, got it!" })), []);
 });
 
-test("blank and empty suppressed fields do not warn", () => {
+test("empty suppressed fields do not warn", () => {
   // Clearing a field in the editor leaves "" or [], not undefined. Warning on
   // those would fire on every celebration that had ever been edited.
+  //
+  // Note "   " is deliberately NOT in this list any more — see the whitespace
+  // tests below. The first version of this test asserted a whitespace-only
+  // string was silent, which encoded the bug Macroscope caught.
   assert.deepEqual(suppressionWarnings(celebration({
     celebrationCompletedSection: "Getting Started",
     celebrationNextStepsTitle: "",
+    celebrationTasks: [],
+  })), []);
+});
+
+// ---------------------------------------------------------------------------
+// Whitespace must be judged the way the RENDERER judges it, not the way a
+// human reads it (found by Macroscope on nsls-builder-toolkit#124).
+//
+// The predicate used to trim, so `celebrationCompletedSection: "   "` counted
+// as unset and stayed silent — while CelebrationContent selects its layout with
+// `!!completedSection`, for which "   " is TRUTHY. So the exact input the rule
+// exists to catch was the one it waved through: three fields suppressed, no
+// warning. A validator more forgiving than the renderer reports success on
+// precisely the input that fails.
+// ---------------------------------------------------------------------------
+
+test("a whitespace-only trigger still suppresses, so it still warns", () => {
+  // Macroscope's repro, verbatim.
+  const hits = suppressionWarnings(celebration({
+    celebrationCompletedSection: "   ",
+    celebrationNextStepsTitle: "Onboarding",
+    celebrationTasks: ["Told us your name"],
+  }));
+  assert.equal(hits.length, 1, `expected a warning, got ${JSON.stringify(hits)}`);
+  assert.match(hits[0], /celebrationNextStepsTitle/);
+  assert.match(hits[0], /celebrationTasks/);
+});
+
+test("a whitespace-only celebrationNextSection still overrides the button text", () => {
+  // Same asymmetry on the other rule: "   " makes the button read "Up Next:    ".
+  const hits = suppressionWarnings(celebration({
+    celebrationNextSection: "   ",
+    celebrationButtonText: "Okay, got it!",
+  }));
+  assert.equal(hits.length, 1, `expected a warning, got ${JSON.stringify(hits)}`);
+  assert.match(hits[0], /celebrationButtonText/);
+});
+
+test("a whitespace-only SUPPRESSED field counts as populated too", () => {
+  // The renderer would render it (`{nextStepsDescription && …}`), so an author
+  // who typed spaces into a field the layout drops should still hear about it.
+  const hits = suppressionWarnings(celebration({
+    celebrationCompletedSection: "Getting Started",
     celebrationNextStepsDescription: "   ",
+  }));
+  assert.equal(hits.length, 1, `expected a warning, got ${JSON.stringify(hits)}`);
+  assert.match(hits[0], /celebrationNextStepsDescription/);
+});
+
+test("an empty task array is still not populated, even under a raw-truthiness rule", () => {
+  // The trap in the suggested one-line fix: `[] !== undefined && [] !== null &&
+  // [] !== ""` is all true, so a bare raw-truthiness check would warn on every
+  // cleared task list. Arrays need the length test.
+  assert.deepEqual(suppressionWarnings(celebration({
+    celebrationCompletedSection: "   ",
     celebrationTasks: [],
   })), []);
 });

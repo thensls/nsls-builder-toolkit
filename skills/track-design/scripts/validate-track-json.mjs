@@ -143,6 +143,13 @@ export function validateTracks(tracks, opts = {}) {
         // member sees the literal "New sub step — edit me in the editor panel"
         // placeholder. A null-only check let that through, which is the symptom reported
         // in track-studio#49.
+        //
+        // This one TRIMS on purpose, and must keep trimming — do not "unify" it with the
+        // celebration `populated` helper below, which deliberately does not. The two ask
+        // different questions. Here: "is there usable content for the model?", and a
+        // whitespace-only prompt gives it nothing, so "   " is an error. There: "does the
+        // renderer treat this field as set?", and the renderer's raw truthiness makes
+        // "   " very much set. Making either match the other reintroduces a real bug.
         if (sub.prompt === undefined || sub.prompt === null) errors.push(`${blabel} missing required "prompt".`);
         else if (sub.type === "generate" && String(sub.prompt).trim() === "")
           errors.push(`${blabel} has an empty "prompt" — a generate substep needs one, or the member sees the editor placeholder.`);
@@ -210,11 +217,29 @@ export function validateTracks(tracks, opts = {}) {
         // accessor, so it needs no capability manifest: both suppressions are visible in
         // CelebrationContent.tsx and hold for every fieldType that renders it.
         if (ft === "celebration") {
+          // "Did the author set this" must mirror the RENDERER's own test for that field's
+          // shape — per shape, because CelebrationContent does not use one test for all of
+          // them:
+          //   completedSection    `!!completedSection`            → raw truthiness
+          //   nextStepsTitle      `{nextStepsTitle && …}`         → raw truthiness
+          //   nextStepsDescription`{nextStepsDescription && …}`   → raw truthiness
+          //   celebrationTasks    `celebrationTasks.length > 0`   → length
+          //   buttonText          `buttonText || "Continue"`      → raw truthiness
+          //
+          // This originally trimmed strings, which under-warned in the one case the rule
+          // exists for: `celebrationCompletedSection: "   "` is falsy after a trim, so no
+          // warning — but it is TRUTHY to the renderer, which then suppresses three fields
+          // silently. A validator that is more forgiving than the renderer reports success
+          // on exactly the input that fails.
+          //
+          // Note it cannot be a single raw-truthiness check either: `[]` is truthy in JS,
+          // so an array needs the length test or every cleared task list warns.
           const populated = (k) => {
             const v = sub[k];
             if (v === undefined || v === null) return false;
             if (Array.isArray(v)) return v.length > 0;
-            return String(v).trim() !== "";
+            if (typeof v === "string") return v !== "";
+            return Boolean(v);
           };
           for (const rule of CELEBRATION_SUPPRESSIONS) {
             if (!populated(rule.when)) continue;
