@@ -36,9 +36,19 @@ Full reference: `references/gws-reference.md` (relative to this skill)
 
 If `gws` is not on the PATH, install it.
 
-**macOS / Linux:**
+**macOS / Linux** — the toolkit installer (`install.sh`) does this for you;
+manual path below. (The old `google-workspace-cli-installer.sh` script was
+retired upstream and its URL 404s — releases ship per-arch tarballs now.)
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/googleworkspace/cli/releases/latest/download/google-workspace-cli-installer.sh | sh
+T="aarch64-apple-darwin"                                   # Apple Silicon
+[ "$(uname -m)" = "x86_64" ] && T="x86_64-apple-darwin"    # Intel Mac; Linux: use the *-unknown-linux-gnu assets
+D=$(mktemp -d) && cd "$D" \
+  && curl --proto '=https' --tlsv1.2 -fsSLO "https://github.com/googleworkspace/cli/releases/latest/download/google-workspace-cli-$T.tar.gz" \
+  && curl --proto '=https' --tlsv1.2 -fsSLO "https://github.com/googleworkspace/cli/releases/latest/download/google-workspace-cli-$T.tar.gz.sha256" \
+  && [ "$(shasum -a 256 "google-workspace-cli-$T.tar.gz" | awk '{print $1}')" = "$(awk '{print $1}' "google-workspace-cli-$T.tar.gz.sha256")" ] \
+  && tar -xzf "google-workspace-cli-$T.tar.gz" \
+  && mkdir -p ~/.local/bin && mv "$(find . -type f -name gws | head -1)" ~/.local/bin/gws && chmod +x ~/.local/bin/gws \
+  && ~/.local/bin/gws --version && echo "gws installed — make sure ~/.local/bin is on your PATH"
 ```
 
 **Windows** (the shell installer above is bash-only) — download the release zip,
@@ -59,6 +69,26 @@ if (($u -split ';') -notcontains $dir) { [Environment]::SetEnvironmentVariable('
 ```
 
 This installs the latest release from https://github.com/googleworkspace/cli.
+
+> ⚠️ **Windows PowerShell 5.1 and `--json`:** every `--json '{...}'` example in
+> this skill is bash-shaped. PS 5.1 strips the embedded double quotes at the
+> native-command boundary, so gws receives `{key:value}` and fails with
+> `key must be a string at line 1 column 2`. Escaping the quotes alone does NOT
+> fix it: the binder counts the escaped quotes, treats the whitespace as
+> "already quoted", skips wrapping — and the argument splits at the first space
+> inside a value (`error: unexpected argument '...' found`). Bypass the binder
+> instead: escape the quotes, park the JSON in an env var, and pass it after the
+> stop-parsing token `--%`:
+> ```powershell
+> $body = '{"properties": {"title": "My Sheet"}}'   # or ConvertTo-Json -Compress
+> $env:GWS_JSON = $body -replace '([\\]*)"','$1$1\"'
+> gws sheets spreadsheets create --% --json "%GWS_JSON%"
+> ```
+> After `--%` everything on the line is literal except cmd-style `%VAR%`
+> expansion — no `$vars`, pipes, or `;` there, so put every dynamic value in an
+> env var. Same behavior on PS 5.1 and PS 7. (Git Bash passes single-quoted
+> JSON fine, which is why the bug hides there. `--params` takes JSON too — same
+> rule.)
 
 > ⚠️ **Windows needs the MS Visual C++ x64 runtime.** Without it `gws.exe` exits with
 > `0xC0000135` and **prints nothing at all** — near-impossible to debug blind. Install it
