@@ -15,6 +15,14 @@ version: 2.2.0
 
 # ScoreCard Builder
 
+> **If `gws` fails (403 naming a project other than `nsls-gdocs-skill`, or exit 2):**
+> run the doctor — it provisions/repairs the toolkit's own gws profile without touching
+> any other tool's files, and computes the right scope union automatically:
+> `python3 <plugin>/skills/gws/scripts/gws_doctor.py --services docs,drive`
+> (Windows: use the real Python at `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`.)
+> Details: `../gws/references/multi-secret-profiles.md`.
+
+
 Turn a manager's real knowledge of a report into a clean **founder-template ScoreCard Google Doc** — weighted outcome accountabilities (Side A), core competencies (Side B), and a binary Core Values gate — that aligns manager and employee on what the role is *for* and how "meets" is judged. **The Doc is the deliverable.**
 
 Two disciplines make this skill work, and both are easy to skip:

@@ -14,6 +14,14 @@ description: >-
 
 # academic-outcomes
 
+> **If `gws` fails (403 naming a project other than `nsls-gdocs-skill`, or exit 2):**
+> run the doctor — it provisions/repairs the toolkit's own gws profile without touching
+> any other tool's files, and computes the right scope union automatically:
+> `python3 <plugin>/skills/gws/scripts/gws_doctor.py --services docs,drive`
+> (Windows: use the real Python at `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`.)
+> Details: `../gws/references/multi-secret-profiles.md`.
+
+
 ## SAFETY: THREE-TIER PERMISSION MODEL
 
 1. **Read-only** — reading a track's brief, its `track.json`, existing outcomes

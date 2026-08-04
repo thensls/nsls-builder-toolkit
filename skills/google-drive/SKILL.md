@@ -15,6 +15,13 @@ when_to_use: Drive file management, sharing files, uploading documents, converti
 
 # Google Drive Management Skill
 
+> **Scope of the gws note:** only the operations here that shell out to `gws` follow the
+> toolkit-profile rules (`../gws/references/multi-secret-profiles.md`) — on a 403 naming a
+> project other than `nsls-gdocs-skill`, run `python3 <plugin>/skills/gws/scripts/gws_doctor.py --services docs,drive`.
+> This skill's primary engine uses its own Ruby OAuth files under `~/.claude/.google`;
+> failures there are UNRELATED to gws — do not apply gws profile repair to them.
+
+
 ## Purpose
 
 Manage Google Drive files with comprehensive operations:

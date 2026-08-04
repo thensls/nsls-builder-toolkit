@@ -7,8 +7,29 @@ macOS/Linux, `install.ps1` on Windows; if you're on a machine where it isn't pre
 permissions. **No per-person deployment: you fetch one shared client file, then mint your
 own token.** Setup is a one-time `gws auth login`.
 
-If `gws` is already authenticated on your machine (`gws auth status` shows a `storage`
-other than `none`), you're done — skip to the smoke test.
+**Everything below happens inside the toolkit's gws PROFILE** — its own config
+directory, so this skill coexists with any other Google tool's client file on the same
+machine (that collision is a real, recurring incident). Set it before every step here,
+once per shell:
+
+```bash
+export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"
+```
+```powershell
+$env:GOOGLE_WORKSPACE_CLI_CONFIG_DIR = "$env:USERPROFILE\.config\gws-profiles\nsls-gdocs-skill"
+```
+
+With that set: if `gws auth status` shows `storage` other than `none` **and** the file at
+`client_config` is the canonical client (`client_id` starts with `598752584124-` — check
+snippets in `../../gws/references/multi-secret-profiles.md`), you're done — skip to the
+smoke test. A client file that exists but has a different `client_id` belongs to another
+tool: **don't touch it**; continue below to provision the profile.
+
+**Fast path — run the doctor instead of the manual steps:**
+`python3 <plugin>/skills/gws/scripts/gws_doctor.py` does everything below (acquire,
+validate, strip, verify, consent with the right scopes) and prints `DOCTOR: HEALTHY`
+when done. The manual steps remain for machines with no working Python
+(Windows Store-stub trap — see the smoke-test note at the bottom).
 
 ---
 
@@ -57,29 +78,80 @@ per-user token, minted in the next step.
 > secret **once, at creation** — it can never be viewed or re-downloaded afterwards. So
 > the client JSON is distributed as a file instead.
 
+0. **Zero-download shortcut:** if a PRE-PROFILE install left the canonical client at the
+   default `~/.config/gws/client_secret.json` (verify the `client_id` starts with
+   `598752584124-`), copy that into the profile instead of downloading — then jump to the
+   placement snippet below. Never move or modify the default-dir file, and never use it if
+   its `client_id` differs (it's another tool's).
 1. Download `client_secret.json` from the NSLS builders shared Drive location,
    signed in as your **@nsls.org** account:
    **https://drive.google.com/file/d/1fOu-0M35vgGO6mzbd0BInEt_sgkmgCn7/view**
-   (file ID `1fOu-0M35vgGO6mzbd0BInEt_sgkmgCn7` — view-only, restricted to
-   @nsls.org accounts, unlisted and not discoverable by search). If the link is
-   dead or access is denied, ask in **#builders** for the current link.
-2. Save it where `gws` expects it — confirm the path with `gws auth status`
-   (it prints the `client_config` location; don't assume `~/.config/gws` blindly):
+   (file ID `1fOu-0M35vgGO6mzbd0BInEt_sgkmgCn7` — view-only; shared to
+   `allstaff@nsls.org` and `gcp-builders@nsls.org`, unlisted and not discoverable by
+   search). Access denied? Staff: ask in **#builders**. **Contractors: you're not in
+   allstaff — ask to be added to `gcp-builders@nsls.org`** (that group also carries the
+   API quota grant you'll need).
+2. Place it in the **profile** (env var above still set) — confirm the target with
+   `gws auth status` (it prints the `client_config` location) — **neutralizing
+   `project_id` (set it to `""`) as you place it** (defends against gws bug #729, which
+   otherwise 403s anyone not IAM-bound to the client's project). **Set to empty — never
+   REMOVE the field:** gws's strict parser rejects the whole file if `project_id` is
+   absent ("No OAuth client configured").
+
+**Manual fallback (no working Python).** The placement below **validates the source** (Downloads can contain other tools' client
+files too — never place on filename alone), **backs up** any foreign file squatting in
+OUR profile (other tools' own directories are still never touched), **neutralizes
+`project_id` to `""`**, and **verifies the result**.
 
 **macOS / Linux:**
 ```bash
-mkdir -p ~/.config/gws && cp ~/Downloads/client_secret*.json ~/.config/gws/client_secret.json
-chmod 600 ~/.config/gws/client_secret.json
+mkdir -p "$GOOGLE_WORKSPACE_CLI_CONFIG_DIR"
+# Choose exactly ONE source line:
+SRC=$(ls -t ~/Downloads/*client_secret*.json | head -1)   # (a) fresh Drive download (common case)
+# SRC="$HOME/.config/gws/client_secret.json"                # (b) step-0 copy from a pre-profile install
+python3 - "$SRC" "$GOOGLE_WORKSPACE_CLI_CONFIG_DIR/client_secret.json" << 'EOF'
+import json, os, sys, time
+src, dest = sys.argv[1], sys.argv[2]
+d = json.load(open(src)); ins = d.get("installed", {})
+cid = ins.get("client_id", "")
+if not cid.startswith("598752584124-"):
+    sys.exit(f"STOP: source is a FOREIGN client ({cid[:20] or 'no client_id'}…) — wrong file, pick the canonical one")
+if os.path.exists(dest):
+    old = json.load(open(dest)).get("installed", {}).get("client_id", "")
+    if not old.startswith("598752584124-"):
+        bak = dest + f".foreign-{int(time.time())}.bak"
+        os.rename(dest, bak); print(f"note: foreign file was in OUR profile — backed up to {bak}")
+ins["project_id"] = ""  # NEVER pop: gws refuses the file if the field is absent
+json.dump(d, open(dest, "w"))
+chk = json.load(open(dest)).get("installed", {})
+assert chk.get("client_id", "").startswith("598752584124-") and chk.get("project_id") == "", "verify failed — redo from a fresh download"
+print("placed + verified: canonical client, project_id neutralized")
+EOF
+chmod 600 "$GOOGLE_WORKSPACE_CLI_CONFIG_DIR/client_secret.json"
 ```
 
-**On Windows** — `~/.config/gws` needs **no** translation (`gws auth status`
-reports `C:\Users\<user>\.config\gws\...`); **drop `chmod`** (profile ACLs already
-restrict the user profile):
+**On Windows** — same `.config` shape (`gws auth status` reports
+`C:\Users\<user>\.config\...`); no `chmod` (profile ACLs already restrict the user
+profile); written **without a BOM** (a BOM breaks JSON consumers):
 ```powershell
-$dir = "$env:USERPROFILE\.config\gws"
-New-Item -ItemType Directory -Force $dir | Out-Null
-$src = (Get-ChildItem "$env:USERPROFILE\Downloads\*client_secret*.json" | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
-Copy-Item $src "$dir\client_secret.json" -Force
+New-Item -ItemType Directory -Force $env:GOOGLE_WORKSPACE_CLI_CONFIG_DIR | Out-Null
+# Choose exactly ONE source line:
+$src = (Get-ChildItem "$env:USERPROFILE\Downloads\*client_secret*.json" | Sort-Object LastWriteTime | Select-Object -Last 1).FullName   # (a) fresh download (common case)
+# $src = "$env:USERPROFILE\.config\gws\client_secret.json"  # (b) step-0 copy from a pre-profile install
+$dest = "$env:GOOGLE_WORKSPACE_CLI_CONFIG_DIR\client_secret.json"
+$d = Get-Content $src -Raw | ConvertFrom-Json
+if (-not "$($d.installed.client_id)".StartsWith("598752584124-")) { throw "STOP: source is a FOREIGN client - wrong file, pick the canonical one" }
+if (Test-Path $dest) {
+  if (-not "$((Get-Content $dest -Raw | ConvertFrom-Json).installed.client_id)".StartsWith("598752584124-")) {
+    Move-Item $dest "$dest.foreign.bak" -Force; "note: foreign file was in OUR profile - backed up to $dest.foreign.bak"
+  }
+}
+# NEVER remove project_id - gws refuses the file if the field is absent; empty it instead
+$d.installed | Add-Member -NotePropertyName project_id -NotePropertyValue "" -Force
+[System.IO.File]::WriteAllText($dest, ($d | ConvertTo-Json -Depth 10), (New-Object System.Text.UTF8Encoding $false))
+$chk = (Get-Content $dest -Raw | ConvertFrom-Json).installed
+if (-not ("$($chk.client_id)".StartsWith("598752584124-") -and ($chk.project_id -eq ""))) { throw "verify failed - redo from a fresh download" }
+"placed + verified: canonical client, project_id neutralized"
 ```
 
 The file is low-sensitivity by design: it's a Desktop-type client on an **Internal**
@@ -97,8 +169,10 @@ A browser opens for Google consent. Because the app is **Internal**, only a real
 **`@nsls.org` Google Workspace account** can complete it — an **alias** address, or a
 personal/consumer Google account that merely *uses* an nsls.org address, is **refused**
 with an unhelpful error. `--services docs,drive` requests only the Docs + Drive scopes this
-skill needs — not the full Workspace surface. Your refresh token is stored **encrypted** at
-`~/.config/gws`; you won't be asked again.
+skill needs — not the full Workspace surface. Your refresh token is stored **encrypted**
+inside the profile directory; you won't be asked again. (Builders who authed in the
+default dir before profiles existed re-consent once here — ~20 seconds; their old
+credentials are left untouched.)
 
 ### 4. Smoke test
 
@@ -150,11 +224,15 @@ here in case it ever has to be recreated.
    Google shows/downloads a client secret **only at creation**; there is no retrieval later.
    (Missed the window? Open the client → **Add secret** → capture the new secret in the same
    dialog, disable+delete the old one. A client holds max 2 secrets.)
-5. **Distribute**: save the JSON as `~/.config/gws/client_secret.json` (mode 600) and put a
-   copy in the NSLS builders shared Drive location (restricted to @nsls.org) — that's what
-   builder-setup step 2 points at.
-6. **Log in and verify**: `gws auth login --services docs,drive`, then the smoke test. The
-   `client_id` is the detail to register/track centrally.
+5. **Distribute**: place the JSON into YOUR toolkit profile using the validated placement
+   snippet above (**never the default `~/.config/gws` — it may hold another tool's client
+   file, which must not be overwritten**), and put a copy in the NSLS builders shared
+   Drive location (shared to `allstaff@nsls.org` + `gcp-builders@nsls.org` as readers) —
+   that's what builder-setup step 2 points at.
+6. **Log in and verify** (profile env var set): `gws auth login --services docs,drive`,
+   then the smoke test. The `client_id` is the detail to register/track centrally — if it
+   ever changes, update the canonical prefix in `multi-secret-profiles.md` and everywhere
+   that validates it.
 
 Do **not** commit `client_secret.json` (or the id/secret) to the toolkit repo. It's a
 Desktop-type client — low sensitivity by Google's model, useless outside @nsls.org thanks
