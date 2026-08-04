@@ -80,16 +80,16 @@ Then: B1 narration discipline + "verbose" toggle (note: doesn't suppress request
 
 Platform idiom per doc (`open` vs `start <url>`, tray-exit, VC++ UAC step, Python-stub warning stay Windows-only). Mechanics: read each doc first, integrate with its voice, dedupe if partially present; update in place (file IDs stable — docx replace via `gws drive files update`, or gdoc-edit); bump BOTH footers v3 → v4 with a changelog line; line-by-line parity check. Verify B4's tracker-credit wording against what the hooks actually send.
 
-## Installation guide — consolidated change set, DRAFTED not applied
+## Installation guide — suggestions only, surfaced in chat (change-set file retracted 2026-08-04)
 
-Davo's chat instruction (suggest, don't apply) overrides the handoff's edit-the-doc directive — the set ships ready-to-apply, and touches the doc only on his word. Contents: **I-1** Node + VC++ need an elevated shell (click path + winget command + consequence) · **I-2** two-hook tracking truth (coordinate with M-2) · **I-3** one step-numbering scheme across guide + prompt (guide's "what Claude does next" becomes Steps 3–7, five titles, prompt's wording) · **I-4** honest time estimate (happy-path floor vs friction range; guide self-contradicts today) · **I-5** real "Python was not found" fix (verify against install.ps1; keep tell-Claude as fallback) · **I-6** day-planner dashboard's Node dependency named in its troubleshooting entry → I-1 · **I-7** how to create the Projects folder (verify current app UI) · **I-8** version-state housekeeping (footer says Draft v2 vs prompts v3; align or declare independent; regenerate the rendered artifact after edits) — plus the still-standing Mac A1 (sign-in-page troubleshooting entry) and PC-R1 §1 survivors (Git-at-step-2 say-YES framing, prerequisites table, connector FAQ, connectors-are-per-account note, token-budget note).
+The earlier `installation-guide-change-set.md` was anchored to the superseded local draft (INSTALLATION-GUIDE-DRAFT.md v2) — retracted. The real guide is the published artifact "NSLS Builder Toolkit — Installation Guide" (claude.ai artifact `484d34f5`, regenerated from its Google-Doc source via instructional-design; Davo links it as start.nsls.org/installation…). Checked live 2026-08-04: master-prompt links intact (both doc IDs), "Ten skills worth trying next" already present (old G-9 was moot). Remaining suggestions are small — troubleshooting buffs (Node/admin-shell in the dashboard entry, two-hook wording parity with v4, VC++ "one thing" softened), +Asana in the connector list, a one-line Steps-3–7 numbering reconcile, time-estimate honesty, Projects-folder how-to, footer still says "Draft v2". Surfaced in chat 2026-08-04; applied only on Davo's word, in the Google-Doc source, then regenerate.
 
 ## Parked / deferred / watch
 
 - **Proxy (tracker) items** — parked per Davo: poller 30-PR window (backlog #4, do NOT re-credit #43/#86), 4.4 install-event dedupe. Action only if a proxy PR happens anyway; Kevin deploys.
 - **C8** — setup Step 5 GCP question: gate/move to /deployment-guide, but the 2026-04-13 spec records it as deliberate — confirm with its author first. Not in PR A.
 - **Instructional-design skill** — PR #125 open, not merged. Register via /register-automation **when it ships** (gdoc visual companion + gdoc-edit were registered 2026-08-02).
-- **PC round 2 deliverable** — missing (see Inputs). Fold into this framework when supplied.
+- ~~PC round 2 deliverable — missing~~ — supplied 2026-08-03 (`nsls-onboarding-handoff-2026-08-03.md`) and fully folded in.
 - **gdoc-edit comment extension** (INBOX spec, Jul 31) — status unclear; not in scope unless Davo says so.
 - Noticed in passing: session-start hook worst case (git pull 10s + replay 35s + live ping 35s) sits at the 90s budget edge — fine today, revisit if timeouts reappear.
 
@@ -99,8 +99,9 @@ Everything above is **built, locally committed, and Codex-reviewed (one round
 per repo; review-driven fixes folded in)**. Builder kit: 13 commits on
 `claude/objective-chaum-2bdc69`. Personal toolkit: 7 commits on
 `pp-final-polish` (~/worktrees/pt-final-polish), companion suite 304 green.
-Master prompts v4 live on both docs (in place, verified). Guide change set
-drafted, not applied. NOTHING PUSHED — per-action approval pending.
+Master prompts v4 live on both docs (in place, verified). Guide suggestions
+surfaced in chat only (change-set file retracted — wrong anchor).
+NOTHING PUSHED — per-action approval pending.
 
 **Known limitations accepted this round:** gdoc.py's pre-existing
 regex-replace index mapping still counts code points (new insert ranges are
