@@ -12,6 +12,8 @@ script tries $PLAYWRIGHT_CHROMIUM, /opt/pw-browsers/chromium, then
 playwright-core's own default. Contrast checks always run; rendering
 degrades gracefully with a warning if Chromium is unavailable.
 """
+from __future__ import annotations
+
 import json
 import re
 import subprocess
@@ -52,9 +54,15 @@ def extract_tokens(css: str, block_start: str) -> dict:
 
 def check_contrast(html: str) -> bool:
     ok = True
+    light = extract_tokens(html, ":root {")
+    toggle = extract_tokens(html, ':root[data-theme="dark"]')
     themes = {
-        "light": extract_tokens(html, ":root {"),
-        "dark": extract_tokens(html, "@media (prefers-color-scheme: dark)"),
+        "light": light,
+        "dark (media)": extract_tokens(html, "@media (prefers-color-scheme: dark)"),
+        # Manual toggle on a light-OS machine: the cascade is the light tokens
+        # overridden by the [data-theme="dark"] block. Empty toggle block ->
+        # empty dict -> fails below like a missing theme.
+        "dark (toggle)": {**light, **toggle} if toggle else {},
     }
     for theme, tokens in themes.items():
         if not tokens:
@@ -131,10 +139,14 @@ def render(guide: Path, sections: bool, pdf: bool) -> None:
         "pdf": pdf,
         "executablePath": find_chromium(),
     })
-    proc = subprocess.run(
-        ["node", "-e", NODE_RENDER, cfg],
-        capture_output=True, text=True, cwd=guide.resolve().parent,
-    )
+    try:
+        proc = subprocess.run(
+            ["node", "-e", NODE_RENDER, cfg],
+            capture_output=True, text=True, cwd=guide.resolve().parent,
+        )
+    except (FileNotFoundError, OSError):
+        print("  warning: node not installed — render step skipped")
+        return
     print(proc.stdout.strip())
     if proc.returncode != 0:
         print("  warning: render step failed (is playwright-core installed here?)")
