@@ -79,7 +79,7 @@ Alt text describes what the reader should find, not "screenshot of app".
 
 ## Embed
 
-Base64 the cropped PNG into a `data:` URI (`base64 -w0 crop.png`). Keep
+Base64 the cropped PNG into a `data:` URI (`base64 < crop.png | tr -d '\n'`). Keep
 each embedded image under ~150KB (2× PNG of a tight crop lands well under
 this; if not, crop tighter or use JPEG for photographic content). The guide
 must stay a single self-contained file — no external image references.

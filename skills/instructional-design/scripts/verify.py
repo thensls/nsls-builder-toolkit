@@ -58,10 +58,14 @@ def check_contrast(html: str) -> bool:
     }
     for theme, tokens in themes.items():
         if not tokens:
-            print(f"  warning: could not extract {theme} tokens")
+            print(f"  [FAIL] {theme}: theme block missing or has no tokens")
+            ok = False
             continue
         for fg, bg, label in CONTRAST_PAIRS:
             if fg not in tokens or bg not in tokens:
+                missing = ", ".join(t for t in (fg, bg) if t not in tokens)
+                print(f"  [FAIL] {theme} {label}: missing token(s) {missing}")
+                ok = False
                 continue
             r = ratio(tokens[fg], tokens[bg])
             status = "PASS" if r >= 4.5 else "FAIL"
@@ -149,12 +153,14 @@ def main() -> int:
     ok = check_contrast(html)
 
     if "__FONT_B64__" in html:
-        print("  warning: font token not yet spliced — run assemble.py first")
+        print("  [FAIL] font token not spliced — run assemble.py first")
+        ok = False
     if 'name="viewport"' not in html:
-        print("  warning: viewport meta missing — mobile breakpoints will not fire")
+        print("  [FAIL] viewport meta missing — mobile breakpoints will not fire")
+        ok = False
 
     render(guide, "--sections" in sys.argv, "--pdf" in sys.argv)
-    print("contrast:", "all pass" if ok else "FAILURES above — fix before shipping")
+    print("verify:", "all pass" if ok else "FAILURES above — fix before shipping")
     return 0 if ok else 1
 
 
