@@ -63,7 +63,10 @@ def check_contrast(html: str) -> bool:
     toggle_light = extract_tokens(html, ':root[data-theme="light"]')
     themes = {
         "light": light,
-        "dark (media)": media_dark,
+        # Media block overrides inherit from :root — a partial override is
+        # legitimate. Guarded so an absent block still fails, never passes
+        # as light.
+        "dark (media)": {**light, **media_dark} if media_dark else {},
         # Manual-toggle cascades — what readers actually get when the theme
         # toggle overrides the OS preference: base tokens, then the OS media
         # block (dark OS), then the explicit data-theme override. An empty or
