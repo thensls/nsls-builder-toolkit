@@ -48,21 +48,28 @@ def extract_tokens(css: str, block_start: str) -> dict:
     idx = css.find(block_start)
     if idx == -1:
         return {}
-    body = css[idx : css.index("}", idx)]
+    end = css.find("}", idx)
+    if end == -1:
+        return {}  # malformed/truncated block — treat like a missing theme
+    body = css[idx:end]
     return dict(re.findall(r"(--[\w-]+):\s*(#[0-9A-Fa-f]{6})", body))
 
 
 def check_contrast(html: str) -> bool:
     ok = True
     light = extract_tokens(html, ":root {")
-    toggle = extract_tokens(html, ':root[data-theme="dark"]')
+    media_dark = extract_tokens(html, "@media (prefers-color-scheme: dark)")
+    toggle_dark = extract_tokens(html, ':root[data-theme="dark"]')
+    toggle_light = extract_tokens(html, ':root[data-theme="light"]')
     themes = {
         "light": light,
-        "dark (media)": extract_tokens(html, "@media (prefers-color-scheme: dark)"),
-        # Manual toggle on a light-OS machine: the cascade is the light tokens
-        # overridden by the [data-theme="dark"] block. Empty toggle block ->
-        # empty dict -> fails below like a missing theme.
-        "dark (toggle)": {**light, **toggle} if toggle else {},
+        "dark (media)": media_dark,
+        # Manual-toggle cascades — what readers actually get when the theme
+        # toggle overrides the OS preference: base tokens, then the OS media
+        # block (dark OS), then the explicit data-theme override. An empty or
+        # missing override block fails below like a missing theme.
+        "dark (toggle)": {**light, **toggle_dark} if toggle_dark else {},
+        "light (toggle)": {**light, **media_dark, **toggle_light} if toggle_light else {},
     }
     for theme, tokens in themes.items():
         if not tokens:
