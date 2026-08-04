@@ -93,23 +93,32 @@ The earlier `installation-guide-change-set.md` was anchored to the superseded lo
 - **gdoc-edit comment extension** (INBOX spec, Jul 31) — status unclear; not in scope unless Davo says so.
 - Noticed in passing: session-start hook worst case (git pull 10s + replay 35s + live ping 35s) sits at the 90s budget edge — fine today, revisit if timeouts reappear.
 
-## Status — 2026-08-03, end of build
+## Status — 2026-08-04, pushes approved
 
 Everything above is **built, locally committed, and Codex-reviewed (one round
-per repo; review-driven fixes folded in)**. Builder kit: 13 commits on
-`claude/objective-chaum-2bdc69`. Personal toolkit: 7 commits on
-`pp-final-polish` (~/worktrees/pt-final-polish), companion suite 304 green.
-Master prompts v4 live on both docs (in place, verified). Guide suggestions
-surfaced in chat only (change-set file retracted — wrong anchor).
-NOTHING PUSHED — per-action approval pending.
+per repo; review-driven fixes folded in)**. Builder kit: 14 commits on
+`claude/objective-chaum-2bdc69`, pushed to the fork + PR opened for Kevin
+2026-08-04 on Davo's approval. Personal toolkit: 7 commits on `pp-final-polish`
+(~/worktrees/pt-final-polish), companion suite 304 green, pushed + PR opened
+(Davo self-merges). Master prompts v4 live on both docs (in place, verified).
+Guide v3 proposal (troubleshooting buffs + small fixes) built via
+instructional-design, awaiting Davo's approval to replace the live artifact.
+
+**T-2 revision (2026-08-04):** Davo's first PS 5.1 spot-check caught the
+escape-only `--json` recipe splitting at spaces inside values — WinPS 5.1's
+binder counts the escaped quotes, treats the whitespace as already quoted, and
+skips wrapping. Recipe rewritten to env-var + `--%` stop-parsing in all three
+doc files (gws SKILL, gdoc-build SKILL + upload-recipes); validated by
+simulating the 5.1 binder + CommandLineToArgvW. This commit is HELD off the PR
+until Davo's on-box re-test passes.
 
 **Known limitations accepted this round:** gdoc.py's pre-existing
 regex-replace index mapping still counts code points (new insert ranges are
 UTF-16-correct); install.sh picks gnu Linux artifacts (musl/Alpine now fails
 honestly instead of silently — asset selection not built); B-6 bonus-refocus
-deferred (needs interactive repro). **Human verification still owed:** T-2/T-3
-+ Settings click path on a real PS 5.1 box; the Mac handoff's 16-point
-dual-platform simulation once pushes land.
+deferred (needs interactive repro). **Human verification still owed:** T-2
+re-test (revised `--%` recipe) + Settings click path on a real PS 5.1 box; the
+Mac handoff's 16-point dual-platform simulation once pushes land.
 
 ## Verification before "done"
 

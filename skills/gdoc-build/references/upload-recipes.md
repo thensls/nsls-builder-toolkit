@@ -6,7 +6,9 @@ Copy-paste shell snippets for the upload flow. Tested 2026-05-01 on the builder-
 > `cd $env:USERPROFILE`; `~/foo.docx` → `$env:USERPROFILE\foo.docx`; `tail -10` →
 > `Select-Object -Last 10`. Use `$env:VAR`, **not** `%VAR%` — CMD-style `%VAR%` is
 > passed through literally by PowerShell, so `gws --upload` gets a path containing
-> the text `%USERPROFILE%` and can't find your file. The `gws --upload` cwd restriction is the same on
+> the text `%USERPROFILE%` and can't find your file. (One exception: after the
+> `--%` stop-parsing token in the JSON recipe below, the rule flips — `%VAR%` is
+> the only expansion that works there.) The `gws --upload` cwd restriction is the same on
 > every platform — build the `.docx` in your home dir and run `gws` from there.
 >
 > ⚠️ **Don't pipe `gws` straight into `Select-Object`.** PowerShell throws away a
@@ -15,11 +17,13 @@ Copy-paste shell snippets for the upload flow. Tested 2026-05-01 on the builder-
 > pipeline. Assign, check, then trim:
 > ```powershell
 > # PS 5.1 strips the embedded quotes out of --json '{...}' at the native-command
-> # boundary (gws sees {name:...} → `key must be a string at line 1 column 2`).
-> # Build the JSON and escape at the call site — double backslashes before each
-> # quote, then escape the quote (survives titles that contain quotes):
-> $body = @{ name = 'YOUR DOC TITLE'; mimeType = 'application/vnd.google-apps.document' } | ConvertTo-Json -Compress
-> $out = gws drive files create --json ($body -replace '([\\]*)"','$1$1\"') --upload your_doc_name.docx --upload-content-type "application/vnd.openxmlformats-officedocument.wordprocessingml.document" --format json
+> # boundary (gws sees {name:...} → `key must be a string at line 1 column 2`),
+> # and escaping the quotes alone makes the binder skip quote-wrapping, so the
+> # arg splits at the first space in the title (`unexpected argument ... found`).
+> # Bypass the binder: escape quotes, park the JSON in an env var, pass it after
+> # the stop-parsing token --% (only %VAR% expands there — no $vars or pipes):
+> $env:GWS_JSON = (@{ name = 'YOUR DOC TITLE'; mimeType = 'application/vnd.google-apps.document' } | ConvertTo-Json -Compress) -replace '([\\]*)"','$1$1\"'
+> $out = gws drive files create --% --json "%GWS_JSON%" --upload your_doc_name.docx --upload-content-type "application/vnd.openxmlformats-officedocument.wordprocessingml.document" --format json
 > if ($LASTEXITCODE -ne 0) { throw "gws failed (exit $LASTEXITCODE)" }
 > $out | Select-Object -Last 10
 > ```

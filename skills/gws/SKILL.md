@@ -73,16 +73,22 @@ This installs the latest release from https://github.com/googleworkspace/cli.
 > ⚠️ **Windows PowerShell 5.1 and `--json`:** every `--json '{...}'` example in
 > this skill is bash-shaped. PS 5.1 strips the embedded double quotes at the
 > native-command boundary, so gws receives `{key:value}` and fails with
-> `key must be a string at line 1 column 2`; hand-escaping splits the argument
-> on spaces instead. The working form is escape-at-the-boundary (doubles any
-> backslashes before each quote, then escapes the quote — survives values that
-> themselves contain quotes):
+> `key must be a string at line 1 column 2`. Escaping the quotes alone does NOT
+> fix it: the binder counts the escaped quotes, treats the whitespace as
+> "already quoted", skips wrapping — and the argument splits at the first space
+> inside a value (`error: unexpected argument '...' found`). Bypass the binder
+> instead: escape the quotes, park the JSON in an env var, and pass it after the
+> stop-parsing token `--%`:
 > ```powershell
 > $body = '{"properties": {"title": "My Sheet"}}'   # or ConvertTo-Json -Compress
-> gws sheets spreadsheets create --json ($body -replace '([\\]*)"','$1$1\"')
+> $env:GWS_JSON = $body -replace '([\\]*)"','$1$1\"'
+> gws sheets spreadsheets create --% --json "%GWS_JSON%"
 > ```
-> (Git Bash passes single-quoted JSON fine, which is why the bug hides there.
-> `--params` takes JSON too — same rule.)
+> After `--%` everything on the line is literal except cmd-style `%VAR%`
+> expansion — no `$vars`, pipes, or `;` there, so put every dynamic value in an
+> env var. Same behavior on PS 5.1 and PS 7. (Git Bash passes single-quoted
+> JSON fine, which is why the bug hides there. `--params` takes JSON too — same
+> rule.)
 
 > ⚠️ **Windows needs the MS Visual C++ x64 runtime.** Without it `gws.exe` exits with
 > `0xC0000135` and **prints nothing at all** — near-impossible to debug blind. Install it

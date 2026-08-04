@@ -69,12 +69,14 @@ The fastest path for a builder asking for a Google Doc:
 > & $py build_mydoc.py           # produces mydoc.docx in the home dir
 > # PS 5.1 CANNOT pass --json '{...}' directly: it strips the embedded double
 > # quotes at the native-command boundary, gws receives {name:My Doc,...} and
-> # fails with `key must be a string at line 1 column 2`. Build the JSON, then
-> # escape at the call site: double any backslashes before each quote, then
-> # escape the quote (the plain -replace '"','\"' corrupts titles that
-> # themselves contain quotes, which ConvertTo-Json emits as \"):
-> $body = @{ name = 'My Doc'; mimeType = 'application/vnd.google-apps.document' } | ConvertTo-Json -Compress
-> $gwsOut = gws drive files create --json ($body -replace '([\\]*)"','$1$1\"') --upload mydoc.docx --upload-content-type "application/vnd.openxmlformats-officedocument.wordprocessingml.document" --format json
+> # fails with `key must be a string at line 1 column 2`. Escaping the quotes
+> # alone ALSO fails — the binder then skips quote-wrapping and the argument
+> # splits at the space in the title (`unexpected argument 'Doc' found`).
+> # Bypass the binder: escape quotes, park the JSON in an env var, and pass it
+> # after the stop-parsing token --% (only cmd-style %VAR% expands there — no
+> # $vars, pipes, or ; on that line):
+> $env:GWS_JSON = (@{ name = 'My Doc'; mimeType = 'application/vnd.google-apps.document' } | ConvertTo-Json -Compress) -replace '([\\]*)"','$1$1\"'
+> $gwsOut = gws drive files create --% --json "%GWS_JSON%" --upload mydoc.docx --upload-content-type "application/vnd.openxmlformats-officedocument.wordprocessingml.document" --format json
 > if ($LASTEXITCODE -ne 0) { throw "gws upload failed (exit $LASTEXITCODE)" }
 > $gwsOut | Select-Object -Last 10
 > ```
@@ -145,7 +147,7 @@ These are the wounds. Codified so we don't relive them.
 | Bullet list renders as plain paragraphs | Wrong style name | Use exact built-ins: `'List Bullet'` and `'List Number'` (case-sensitive, space included) |
 | Literal `"` inside a content string breaks the build | `SyntaxError: invalid syntax. Perhaps you forgot a comma?` on an `add_para`/`add_bullet`/`add_table` line | A straight `"` inside the Python string closes it early. Use curly quotes `“ ”` for quotes inside content (they render better in Google Docs anyway) or escape as `\"`. Easy to hit when content quotes a phrase, e.g. the `"school-official"` exception. |
 | `gws` upload fails (401 / no creds) and gws can't be set up | `Access denied. No credentials` from `gws`, and `gws auth setup` dies on GCP org-permission walls | Don't conclude you can't make a Doc. Use the Drive MCP connector + `text/html` → native Google Doc (see "If `gws` auth is unavailable" above). Don't go down the docx/base64 path. |
-| PowerShell 5.1 mangles `--json '{...}'` | `key must be a string at line 1 column 2` (quotes stripped), or the arg splits on spaces when you escape by hand | Never pass raw JSON to gws in PS 5.1. Use the escape-at-the-boundary form from the Windows block above: `--json ($body -replace '([\\]*)"','$1$1\"')`. Git Bash doesn't have the bug — which is exactly why it hides it. |
+| PowerShell 5.1 mangles `--json '{...}'` | `key must be a string at line 1 column 2` (quotes stripped), or `unexpected argument '...' found` once quotes are escaped (arg splits at spaces) | Never pass JSON to gws inline in PS 5.1 — quote-escaping alone still splits on spaces. Use the env-var + `--%` stop-parsing form from the Windows block above. Git Bash doesn't have the bug — which is exactly why it hides it. |
 | Pandoc-from-markdown was used | Tables look fine raw, render without borders / banding once in Google Docs | Don't. Build with python-docx. See `feedback_docx_pipeline` memory. |
 | Old draft URL piles up after iterations | Drive fills with `DRAFT v1`, `DRAFT v2`, etc. | Trash old drafts: `gws drive files update --params '{"fileId":"<old_id>"}' --json '{"trashed":true}'` |
 | Replacing canonical doc directly breaks shared link history | Shared URL changes if you delete + recreate | NEVER replace canonical content automatically. Always create a new draft, give the user the URL, let them copy-paste into the existing canonical doc. |
