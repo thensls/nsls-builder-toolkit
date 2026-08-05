@@ -28,8 +28,10 @@ tool: **don't touch it**; continue below to provision the profile.
 **Fast path — run the doctor instead of the manual steps:**
 `python3 <plugin>/skills/gws/scripts/gws_doctor.py` does everything below (acquire,
 validate, strip, verify, consent with the right scopes) and prints `DOCTOR: HEALTHY`
-when done. The manual steps remain for machines with no working Python
-(Windows Store-stub trap — see the smoke-test note at the bottom).
+when done. The manual steps below remain as the fallback for when the doctor script
+itself isn't on disk yet (plugin not installed). On Windows they are also the
+no-Python path (Store-stub trap — see the smoke-test note at the bottom); the
+macOS/Linux placement snippet needs the same `python3` the doctor does.
 
 ---
 
@@ -112,19 +114,24 @@ SRC=$(ls -t ~/Downloads/*client_secret*.json | head -1)   # (a) fresh Drive down
 python3 - "$SRC" "$GOOGLE_WORKSPACE_CLI_CONFIG_DIR/client_secret.json" << 'EOF'
 import json, os, sys, time
 src, dest = sys.argv[1], sys.argv[2]
+# Full-ID equality, not prefix: sibling clients in the same GCP project share the prefix
+CANON = "598752584124-4t7bdffqchrt8b6nlv1uuhpkl1b24vtc.apps.googleusercontent.com"
 d = json.load(open(src)); ins = d.get("installed", {})
 cid = ins.get("client_id", "")
-if not cid.startswith("598752584124-"):
+if cid != CANON:
     sys.exit(f"STOP: source is a FOREIGN client ({cid[:20] or 'no client_id'}…) — wrong file, pick the canonical one")
-if os.path.exists(dest):
+if os.path.islink(dest):  # never write THROUGH a link — its target may live in another tool's directory
+    bak = dest + f".symlink-{int(time.time())}.bak"
+    os.rename(dest, bak); print(f"note: dest was a symlink — moved the link aside to {bak} (target untouched)")
+elif os.path.exists(dest):
     old = json.load(open(dest)).get("installed", {}).get("client_id", "")
-    if not old.startswith("598752584124-"):
+    if old != CANON:
         bak = dest + f".foreign-{int(time.time())}.bak"
         os.rename(dest, bak); print(f"note: foreign file was in OUR profile — backed up to {bak}")
 ins["project_id"] = ""  # NEVER pop: gws refuses the file if the field is absent
 json.dump(d, open(dest, "w"))
 chk = json.load(open(dest)).get("installed", {})
-assert chk.get("client_id", "").startswith("598752584124-") and chk.get("project_id") == "", "verify failed — redo from a fresh download"
+assert chk.get("client_id") == CANON and chk.get("project_id") == "", "verify failed — redo from a fresh download"
 print("placed + verified: canonical client, project_id neutralized")
 EOF
 chmod 600 "$GOOGLE_WORKSPACE_CLI_CONFIG_DIR/client_secret.json"
@@ -139,10 +146,16 @@ New-Item -ItemType Directory -Force $env:GOOGLE_WORKSPACE_CLI_CONFIG_DIR | Out-N
 $src = (Get-ChildItem "$env:USERPROFILE\Downloads\*client_secret*.json" | Sort-Object LastWriteTime | Select-Object -Last 1).FullName   # (a) fresh download (common case)
 # $src = "$env:USERPROFILE\.config\gws\client_secret.json"  # (b) step-0 copy from a pre-profile install
 $dest = "$env:GOOGLE_WORKSPACE_CLI_CONFIG_DIR\client_secret.json"
+# Full-ID equality, not prefix: sibling clients in the same GCP project share the prefix
+$canon = "598752584124-4t7bdffqchrt8b6nlv1uuhpkl1b24vtc.apps.googleusercontent.com"
 $d = Get-Content $src -Raw | ConvertFrom-Json
-if (-not "$($d.installed.client_id)".StartsWith("598752584124-")) { throw "STOP: source is a FOREIGN client - wrong file, pick the canonical one" }
-if (Test-Path $dest) {
-  if (-not "$((Get-Content $dest -Raw | ConvertFrom-Json).installed.client_id)".StartsWith("598752584124-")) {
+if ("$($d.installed.client_id)" -ne $canon) { throw "STOP: source is a FOREIGN client - wrong file, pick the canonical one" }
+if ((Test-Path $dest) -and (Get-Item $dest -Force).LinkType) {
+  # never write THROUGH a link - its target may live in another tool's directory
+  Move-Item $dest "$dest.symlink.bak" -Force; "note: dest was a symlink - moved the link aside (target untouched)"
+}
+elseif (Test-Path $dest) {
+  if ("$((Get-Content $dest -Raw | ConvertFrom-Json).installed.client_id)" -ne $canon) {
     Move-Item $dest "$dest.foreign.bak" -Force; "note: foreign file was in OUR profile - backed up to $dest.foreign.bak"
   }
 }
@@ -150,7 +163,7 @@ if (Test-Path $dest) {
 $d.installed | Add-Member -NotePropertyName project_id -NotePropertyValue "" -Force
 [System.IO.File]::WriteAllText($dest, ($d | ConvertTo-Json -Depth 10), (New-Object System.Text.UTF8Encoding $false))
 $chk = (Get-Content $dest -Raw | ConvertFrom-Json).installed
-if (-not ("$($chk.client_id)".StartsWith("598752584124-") -and ($chk.project_id -eq ""))) { throw "verify failed - redo from a fresh download" }
+if (-not ("$($chk.client_id)" -eq $canon -and ($chk.project_id -eq ""))) { throw "verify failed - redo from a fresh download" }
 "placed + verified: canonical client, project_id neutralized"
 ```
 

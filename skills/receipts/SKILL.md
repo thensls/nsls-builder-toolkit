@@ -10,6 +10,11 @@ description: Find Ramp transactions missing receipts, fetch each receipt from An
 > any other tool's files, and computes the right scope union automatically:
 > `python3 <plugin>/skills/gws/scripts/gws_doctor.py --services docs,drive,gmail`
 > (Windows: use the real Python at `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`.)
+> **The doctor heals its own profile, not your default gws setup** — so after
+> `DOCTOR: HEALTHY`, run this skill's `gws` commands against that profile, chained in
+> the SAME shell command (each agent Bash call is a fresh shell):
+> `export GOOGLE_WORKSPACE_CLI_CONFIG_DIR=~/.config/gws-profiles/nsls-gdocs-skill; gws …`
+> (Windows: `$env:GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$env:USERPROFILE\.config\gws-profiles\nsls-gdocs-skill"; gws …`)
 > Details: `../gws/references/multi-secret-profiles.md`.
 
 
@@ -62,7 +67,7 @@ Run it from the repository root, so the relative path resolves:
 
 ```bash
 python3.12 skills/receipts/scripts/run.py
-``
+```
 
 That is the dry run — it reaches Ramp and the receipt sources read-only and
 uploads nothing. To execute the uploads, and only when the user has actually
@@ -70,7 +75,7 @@ asked to send:
 
 ```bash
 python3.12 skills/receipts/scripts/run.py --send
-``
+```
 
 Map the user's request onto the flags and pass them through verbatim:
 
@@ -105,7 +110,7 @@ report; it never fails the whole run.
 ```bash
 curl -fsSL https://agents.ramp.com/install.sh | sh
 ramp auth login
-``
+```
 
 Install via the script above, not Homebrew. `brew install
 ramp-public/ramp/ramp-cli` works in principle — the formula just fetches a
@@ -121,7 +126,7 @@ this one isn't optional.
 
 ```bash
 gws auth login -s gmail
-``
+```
 
 Covers vendors that email a receipt PDF: Asana, Groq, OpenAI, Hex, and
 others as your inbox has them — including vendors whose receipts are sent
@@ -141,7 +146,7 @@ at all. Two things are required:
 ```bash
 export ANTHROPIC_ORG_UUID=<your-claude.ai-org-uuid>   # Settings > Organization
 python3.12 skills/receipts/scripts/run.py --set-session
-``
+```
 
 Run this from the root of your `nsls-builder-toolkit` checkout, same as
 [Execution](#execution) — the relative path only resolves there. This is the
@@ -193,7 +198,7 @@ session here to expire. Two things are required:
 ```bash
 export NEON_ORG_ID=org-your-organization-id
 python3.12 skills/receipts/scripts/run.py --set-neon-key
-``
+```
 
 `NEON_ORG_ID` is the `org-…` segment in the Neon Console URL
 (`console.neon.tech/app/projects?org_id=org-…`). Run the second command from

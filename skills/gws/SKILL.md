@@ -45,6 +45,10 @@ scope union (run with a generous timeout; the login step waits for a human):
 python3 <plugin>/skills/gws/scripts/gws_doctor.py --services docs,drive
 ```
 
+After `DOCTOR: HEALTHY`, run your gws commands with the profile — **agents: chain the
+export and the command in ONE shell call** (each Bash call is a fresh shell):
+`export GOOGLE_WORKSPACE_CLI_CONFIG_DIR=~/.config/gws-profiles/nsls-gdocs-skill; gws <command>`
+
 Background, manual fallback, and the 403-signature table:
 [`references/multi-secret-profiles.md`](references/multi-secret-profiles.md).
 

@@ -53,7 +53,9 @@ import webbrowser
 PROFILE = os.path.expanduser(
     os.path.join("~", ".config", "gws-profiles", "nsls-gdocs-skill")
 )
-CANONICAL_PREFIX = "598752584124-"
+# Full-ID equality, not prefix: every OAuth client in the same GCP project
+# shares the numeric prefix — a prefix match would bless a sibling client.
+CANONICAL_ID = "598752584124-4t7bdffqchrt8b6nlv1uuhpkl1b24vtc.apps.googleusercontent.com"
 DRIVE_FILE_ID = "1fOu-0M35vgGO6mzbd0BInEt_sgkmgCn7"
 DRIVE_URL = f"https://drive.google.com/file/d/{DRIVE_FILE_ID}/view"
 MIN_GWS = (0, 22, 5)  # oldest version the profile env var is verified to work on
@@ -160,7 +162,7 @@ def client_id_of(path):
 
 
 def is_canonical(path):
-    return client_id_of(path).startswith(CANONICAL_PREFIX)
+    return client_id_of(path) == CANONICAL_ID
 
 
 def inside_profile(path):
@@ -205,11 +207,15 @@ def place_client(src, dest):
     """Validated, atomic placement: canonical source only, project_id neutralized,
     staged in a temp file inside the profile, then os.replace()'d over dest.
     Reads src fully into memory first, so self-placement (src == dest) is safe."""
-    if not inside_profile(dest):
+    # Judge containment on the PARENT directory, not the resolved final
+    # component: a hostile symlink AT dest must pass this guard so
+    # sidestep_existing() below can move the link aside (the self-heal path);
+    # os.replace() then swaps in a regular file without following the link.
+    if not inside_profile(os.path.dirname(dest)):
         finish("ERROR", f"internal error: refusing to write outside the profile ({dest})", 1)
     data = read_json_dict(src)
     installed = data.get("installed") if data else None
-    if not isinstance(installed, dict) or not str(installed.get("client_id", "")).startswith(CANONICAL_PREFIX):
+    if not isinstance(installed, dict) or installed.get("client_id") != CANONICAL_ID:
         finish("ERROR", f"refusing to place a FOREIGN or malformed client from {src}", 1)
     # NEVER pop project_id: gws (>=0.22.5, strict parser) refuses the whole file
     # if the field is missing. Empty string parses AND gives #729's
@@ -232,7 +238,7 @@ def place_client(src, dest):
         os.chmod(dest, 0o600)
 
     check = installed_of(dest) or {}
-    if not str(check.get("client_id", "")).startswith(CANONICAL_PREFIX) or check.get("project_id") != "":
+    if check.get("client_id") != CANONICAL_ID or check.get("project_id") != "":
         finish("ERROR", "placed client failed verification — redo from a fresh download", 1)
     log(f"placed canonical client (project_id neutralized) -> {dest}")
 

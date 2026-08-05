@@ -20,6 +20,11 @@ version: 2.2.0
 > any other tool's files, and computes the right scope union automatically:
 > `python3 <plugin>/skills/gws/scripts/gws_doctor.py --services docs,drive`
 > (Windows: use the real Python at `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`.)
+> **The doctor heals its own profile, not your default gws setup** — so after
+> `DOCTOR: HEALTHY`, run this skill's `gws` commands against that profile, chained in
+> the SAME shell command (each agent Bash call is a fresh shell):
+> `export GOOGLE_WORKSPACE_CLI_CONFIG_DIR=~/.config/gws-profiles/nsls-gdocs-skill; gws …`
+> (Windows: `$env:GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$env:USERPROFILE\.config\gws-profiles\nsls-gdocs-skill"; gws …`)
 > Details: `../gws/references/multi-secret-profiles.md`.
 
 

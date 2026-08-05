@@ -44,12 +44,12 @@ client id is the actual identity of a client. Validation one-liner (works with a
 python3 - "$FILE" << 'EOF'
 import json,sys
 cid=json.load(open(sys.argv[1])).get('installed',{}).get('client_id','')
-print("CANONICAL" if cid.startswith("598752584124-") else f"FOREIGN ({cid[:20]}…)")
+print("CANONICAL" if cid == "598752584124-4t7bdffqchrt8b6nlv1uuhpkl1b24vtc.apps.googleusercontent.com" else f"FOREIGN ({cid[:20]}…)")
 EOF
 ```
 ```powershell
 $cid = "$((Get-Content $FILE -Raw | ConvertFrom-Json).installed.client_id)"
-if ($cid.StartsWith("598752584124-")) { "CANONICAL" } else { "FOREIGN ($cid)" }
+if ($cid -eq "598752584124-4t7bdffqchrt8b6nlv1uuhpkl1b24vtc.apps.googleusercontent.com") { "CANONICAL" } else { "FOREIGN ($cid)" }
 ```
 (The `"$( … )"` wrapper coerces a missing/`web`-shaped `client_id` to an empty string, so
 non-`installed` JSON safely classifies as FOREIGN instead of throwing.)
