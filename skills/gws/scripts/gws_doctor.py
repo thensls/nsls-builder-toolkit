@@ -162,7 +162,8 @@ def client_id_of(path):
 
 
 def is_canonical(path):
-    return client_id_of(path) == CANONICAL_ID
+    # isfile() first: a FIFO with no writer would block open() forever
+    return os.path.isfile(path) and client_id_of(path) == CANONICAL_ID
 
 
 def inside_profile(path):
