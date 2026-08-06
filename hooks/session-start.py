@@ -126,9 +126,10 @@ def git_pull():
 def org_plugin_installed():
     """True once the toolkit is installed as a real Claude Code plugin."""
     try:
+        # utf-8-sig: tolerate a UTF-8 BOM (PowerShell-written files carry one).
         registry = json.loads(
             (CONFIG_DIR / "plugins" / "installed_plugins.json").read_text(
-                encoding="utf-8"
+                encoding="utf-8-sig"
             )
         )
         return any(
@@ -137,6 +138,28 @@ def org_plugin_installed():
         )
     except Exception:
         return False
+
+
+def org_plugin_active():
+    """Installed AND not explicitly disabled.
+
+    The distinction matters: a user who disables the plugin must fall back to
+    the pointer-stub path (the disabled plugin can't deliver skills), so
+    anything that hands responsibility over to the plugin gates on active,
+    never on merely installed.
+    """
+    if not org_plugin_installed():
+        return False
+    try:
+        settings = json.loads(
+            (CONFIG_DIR / "settings.json").read_text(encoding="utf-8-sig")
+        )
+        for key, enabled in settings.get("enabledPlugins", {}).items():
+            if key.startswith("nsls-builder-toolkit@") and enabled is False:
+                return False
+    except Exception:
+        pass
+    return True
 
 
 def run_plugin_migration():
@@ -166,7 +189,7 @@ def ensure_plugin_fresh():
     a machine that loses the settings-shim git-pull path would silently
     freeze on an old version.
     """
-    if not org_plugin_installed():
+    if not org_plugin_active():
         return
     marker = CONFIG_DIR / ".nsls-plugin-update-check"
     try:
@@ -179,9 +202,13 @@ def ensure_plugin_fresh():
         if not claude:
             return
         marker.touch()
+        # 20s, not the hook's whole 90s budget — a hung update must leave room
+        # for sync_pointers and the session pings behind it. On timeout the
+        # marker is already touched, so the next attempt is tomorrow; releases
+        # just arrive a day later on that machine.
         subprocess.run(
             [claude, "plugin", "update", "nsls-builder-toolkit@nsls-toolkit"],
-            capture_output=True, timeout=60,
+            capture_output=True, timeout=20,
         )
     except Exception:
         pass
@@ -199,10 +226,12 @@ def sync_pointers():
     created = 0
 
     for plugin_name in SYNC_PLUGINS:
-        # Once the org toolkit is a real plugin, its skills load through the
-        # plugin system — stop regenerating its pointer stubs so the stage-B
-        # migration cleanup sticks. Personal-toolkit pointers keep syncing.
-        if plugin_name == "nsls-builder-toolkit" and org_plugin_installed():
+        # Once the org toolkit is an ACTIVE plugin, its skills load through
+        # the plugin system — stop regenerating its pointer stubs so the
+        # stage-B migration cleanup sticks. Gates on active, not installed:
+        # a disabled plugin can't deliver skills, so those users keep the
+        # stub path. Personal-toolkit pointers keep syncing regardless.
+        if plugin_name == "nsls-builder-toolkit" and org_plugin_active():
             continue
         plugin_dir = CONFIG_DIR / "local-plugins" / plugin_name
         skills_src = plugin_dir / "skills"
