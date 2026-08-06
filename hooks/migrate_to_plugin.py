@@ -68,6 +68,18 @@ _HOOK_MARKER = "nsls-builder-toolkit/hooks/"
 _STUB_MARKER = "local-plugins/nsls-builder-toolkit/skills/"
 _LOCK = _CONFIG_DIR / ".nsls-plugin-migration.lock"
 _LOCK_STALE_SECS = 300
+# Written once stage B has VERIFIED the machine is clean (no shim hooks, no
+# org stubs, no stale user-scope signal). Stage B re-runs every session until
+# then, so a partial cleanup (one stub failing to delete, a timed-out mcp
+# remove) retries instead of being orphaned forever.
+_DONE = _CONFIG_DIR / ".nsls-plugin-migration-done"
+
+
+def _read_json(path):
+    # utf-8-sig: settings.json on machines installed via PowerShell can carry
+    # a UTF-8 BOM, which plain utf-8 json.loads rejects — that failure mode
+    # would wedge the machine in the shim/plugin overlap state permanently.
+    return json.loads(Path(path).read_text(encoding="utf-8-sig"))
 
 
 def _find_claude():
@@ -101,11 +113,7 @@ def _claude(args, timeout):
 
 def _plugin_installed():
     try:
-        registry = json.loads(
-            (_CONFIG_DIR / "plugins" / "installed_plugins.json").read_text(
-                encoding="utf-8"
-            )
-        )
+        registry = _read_json(_CONFIG_DIR / "plugins" / "installed_plugins.json")
         return any(
             key.startswith("nsls-builder-toolkit@")
             for key in registry.get("plugins", {})
@@ -117,7 +125,7 @@ def _plugin_installed():
 def _plugin_disabled_by_user():
     """True if the user explicitly disabled the plugin — respect that."""
     try:
-        settings = json.loads(_SETTINGS.read_text(encoding="utf-8"))
+        settings = _read_json(_SETTINGS)
         for key, enabled in settings.get("enabledPlugins", {}).items():
             if key.startswith("nsls-builder-toolkit@") and enabled is False:
                 return True
@@ -128,9 +136,23 @@ def _plugin_disabled_by_user():
 
 def _shims_present():
     try:
-        return _HOOK_MARKER in _SETTINGS.read_text(encoding="utf-8")
+        return _HOOK_MARKER in _SETTINGS.read_text(encoding="utf-8-sig")
     except Exception:
         return False
+
+
+def _org_stubs_exist():
+    if not _SKILLS_DIR.is_dir():
+        return False
+    for entry in _SKILLS_DIR.iterdir():
+        stub = entry / "SKILL.md"
+        try:
+            if (entry.is_dir() and not entry.is_symlink() and stub.exists()
+                    and _STUB_MARKER in stub.read_text(encoding="utf-8-sig")):
+                return True
+        except Exception:
+            continue
+    return False
 
 
 def _announce(text):
@@ -155,7 +177,9 @@ def _stage_a():
             print(f"toolkit migration: marketplace add failed ({out.strip()[:200]}); "
                   "will retry next session", file=sys.stderr)
             return
-    ok, out = _claude(["plugin", "install", _PLUGIN_ID], timeout=120)
+    # 60s, not more: the SessionStart hook budget is 90s total and a killed
+    # install is safe — stage A is idempotent and retries next session.
+    ok, out = _claude(["plugin", "install", _PLUGIN_ID], timeout=60)
     if not ok:
         print(f"toolkit migration: plugin install failed ({out.strip()[:200]}); "
               "will retry next session", file=sys.stderr)
@@ -171,7 +195,7 @@ def _stage_a():
 
 def _remove_settings_hooks():
     """Drop hook entries whose command references this repo. Returns count."""
-    settings = json.loads(_SETTINGS.read_text(encoding="utf-8"))
+    settings = _read_json(_SETTINGS)
     hooks = settings.get("hooks")
     if not isinstance(hooks, dict):
         return 0
@@ -221,7 +245,7 @@ def _remove_org_stubs():
         try:
             if not (entry.is_dir() and not entry.is_symlink() and stub.exists()):
                 continue
-            if _STUB_MARKER not in stub.read_text(encoding="utf-8"):
+            if _STUB_MARKER not in stub.read_text(encoding="utf-8-sig"):
                 continue
             shutil.rmtree(entry)
             removed += 1
@@ -232,16 +256,27 @@ def _remove_org_stubs():
 
 def _remove_user_scope_signal():
     """Remove the user-scope signal MCP registration if it points into this
-    repo — the plugin now registers signal at plugin scope."""
+    repo — the plugin now registers signal at plugin scope.
+
+    Returns (changed, clean): clean means there is verifiably nothing left to
+    do (absent, not ours, or removal confirmed). A failed removal returns
+    clean=False so the done-marker is withheld and the next session retries.
+    """
     ok, out = _claude(["mcp", "get", "signal"], timeout=15)
-    if ok and "nsls-builder-toolkit" in out:
-        _claude(["mcp", "remove", "signal", "-s", "user"], timeout=15)
-        return True
-    return False
+    if not ok or "nsls-builder-toolkit" not in out:
+        return False, True  # absent or not ours — nothing to migrate
+    removed, _ = _claude(["mcp", "remove", "signal", "-s", "user"], timeout=15)
+    return (True, True) if removed else (False, False)
 
 
 def _stage_b():
-    """Retire the shims now that the plugin is live."""
+    """Retire the shims now that the plugin is live.
+
+    Re-runs every session until the machine VERIFIES clean, then writes the
+    done-marker. This is what makes partial failures (one stub that wouldn't
+    delete, a timed-out mcp remove) retry instead of being orphaned once the
+    settings hooks are gone.
+    """
     if sys.platform == "win32":
         # The plugin's hooks.json invokes python3/bash, which is unverified on
         # Windows. Until parity is proven, Windows keeps the settings-based
@@ -250,12 +285,18 @@ def _stage_b():
     # CLI calls first: the claude CLI may normalize/rewrite settings.json as a
     # side effect (observed live: it rewrote a model alias during `mcp get`),
     # so our own settings edit must come after every CLI invocation.
-    signal_moved = _remove_user_scope_signal()
+    signal_moved, signal_clean = _remove_user_scope_signal()
     hooks_removed = _remove_settings_hooks()
     stubs_removed = _remove_org_stubs()
+
+    clean = signal_clean and not _shims_present() and not _org_stubs_exist()
+    if clean:
+        _DONE.write_text("migrated\n", encoding="utf-8")
+
     if hooks_removed or stubs_removed or signal_moved:
         _announce(
-            "NSLS Builder Toolkit plugin migration complete (step 2 of 2): "
+            "NSLS Builder Toolkit plugin migration"
+            + (" complete (step 2 of 2)" if clean else " progressed") + ": "
             f"removed {stubs_removed} legacy skill pointers, {hooks_removed} "
             "legacy hook entries"
             + (", and moved the signal MCP server to plugin scope"
@@ -269,14 +310,28 @@ def _stage_b():
 
 
 def _acquire_lock():
-    try:
-        if _LOCK.exists() and time.time() - _LOCK.stat().st_mtime > _LOCK_STALE_SECS:
-            _LOCK.unlink()
-        fd = os.open(str(_LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.close(fd)
-        return True
-    except Exception:
-        return False
+    """O_EXCL-first: never unlink before an exclusive create has failed.
+
+    A pre-emptive stale unlink lets two contenders each remove the other's
+    fresh lock (both validated against the SAME stale stat) and both proceed.
+    Here a contender only reclaims after O_EXCL fails AND a fresh stat still
+    shows the lock stale — and then must still win a second O_EXCL.
+    """
+    for _ in range(2):
+        try:
+            fd = os.open(str(_LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+            return True
+        except FileExistsError:
+            try:
+                if time.time() - _LOCK.stat().st_mtime <= _LOCK_STALE_SECS:
+                    return False  # live contender holds it
+                _LOCK.unlink()
+            except OSError:
+                return False
+        except Exception:
+            return False
+    return False
 
 
 def run_migration():
@@ -289,7 +344,7 @@ def run_migration():
             _stage_a()
         elif _plugin_disabled_by_user():
             return
-        elif _shims_present():
+        elif not _DONE.exists():
             _stage_b()
     except Exception:
         pass  # fail-open: shims still work; retry next session
