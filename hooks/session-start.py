@@ -123,6 +123,97 @@ def git_pull():
         pass
 
 
+def org_plugin_installed():
+    """True once the toolkit is installed as a real Claude Code plugin."""
+    try:
+        # utf-8-sig: tolerate a UTF-8 BOM (PowerShell-written files carry one).
+        registry = json.loads(
+            (CONFIG_DIR / "plugins" / "installed_plugins.json").read_text(
+                encoding="utf-8-sig"
+            )
+        )
+        return any(
+            key.startswith("nsls-builder-toolkit@")
+            for key in registry.get("plugins", {})
+        )
+    except Exception:
+        return False
+
+
+def org_plugin_active():
+    """Installed AND not explicitly disabled.
+
+    The distinction matters: a user who disables the plugin must fall back to
+    the pointer-stub path (the disabled plugin can't deliver skills), so
+    anything that hands responsibility over to the plugin gates on active,
+    never on merely installed.
+    """
+    if not org_plugin_installed():
+        return False
+    try:
+        settings = json.loads(
+            (CONFIG_DIR / "settings.json").read_text(encoding="utf-8-sig")
+        )
+        for key, enabled in settings.get("enabledPlugins", {}).items():
+            if key.startswith("nsls-builder-toolkit@") and enabled is False:
+                return False
+    except Exception:
+        pass
+    return True
+
+
+def run_plugin_migration():
+    """Run the shim→plugin migration from the just-pulled clone.
+
+    Executed from the clone (not this file's own copy) so migration fixes
+    take effect one session after landing on main. On plugin-only machines
+    the clone is absent and this is a no-op. Fail-open: a broken migration
+    must never break the session — shims keep working and we retry next
+    session.
+    """
+    script = PLUGIN_DIR / "hooks" / "migrate_to_plugin.py"
+    if not script.exists():
+        return
+    try:
+        code = compile(script.read_text(encoding="utf-8"), str(script), "exec")
+        exec(code, {"__name__": "nsls_migrate", "__file__": str(script)})
+    except Exception:
+        pass
+
+
+def ensure_plugin_fresh():
+    """At most once a day, ask the CLI to sync the installed plugin.
+
+    Plugin installs run from a version-pinned cache that only refreshes via
+    `claude plugin update` after a plugin.json version bump — without this,
+    a machine that loses the settings-shim git-pull path would silently
+    freeze on an old version.
+    """
+    if not org_plugin_active():
+        return
+    marker = CONFIG_DIR / ".nsls-plugin-update-check"
+    try:
+        if marker.exists() and (
+            datetime.now(timezone.utc).timestamp() - marker.stat().st_mtime < 86400
+        ):
+            return
+        import shutil as _shutil
+        claude = _shutil.which("claude")
+        if not claude:
+            return
+        marker.touch()
+        # 20s, not the hook's whole 90s budget — a hung update must leave room
+        # for sync_pointers and the session pings behind it. On timeout the
+        # marker is already touched, so the next attempt is tomorrow; releases
+        # just arrive a day later on that machine.
+        subprocess.run(
+            [claude, "plugin", "update", "nsls-builder-toolkit@nsls-toolkit"],
+            capture_output=True, timeout=20,
+        )
+    except Exception:
+        pass
+
+
 def sync_pointers():
     """Sync skill pointers from installed plugins to ~/.claude/skills/.
 
@@ -135,6 +226,13 @@ def sync_pointers():
     created = 0
 
     for plugin_name in SYNC_PLUGINS:
+        # Once the org toolkit is an ACTIVE plugin, its skills load through
+        # the plugin system — stop regenerating its pointer stubs so the
+        # stage-B migration cleanup sticks. Gates on active, not installed:
+        # a disabled plugin can't deliver skills, so those users keep the
+        # stub path. Personal-toolkit pointers keep syncing regardless.
+        if plugin_name == "nsls-builder-toolkit" and org_plugin_active():
+            continue
         plugin_dir = CONFIG_DIR / "local-plugins" / plugin_name
         skills_src = plugin_dir / "skills"
         if not skills_src.is_dir():
@@ -302,7 +400,7 @@ def session_ping(replayed=None):
     github = read_env("GITHUB_USERNAME")
 
     toolkit = "personal"
-    if PLUGIN_DIR.exists():
+    if PLUGIN_DIR.exists() or org_plugin_installed():
         toolkit = "both"
 
     platform_map = {"darwin": "mac", "win32": "windows", "linux": "linux"}
@@ -406,6 +504,8 @@ def session_ping(replayed=None):
 
 def main():
     git_pull()
+    run_plugin_migration()
+    ensure_plugin_fresh()
     sync_pointers()
     replayed = replay_failed_ping()
     session_ping(replayed=replayed)
