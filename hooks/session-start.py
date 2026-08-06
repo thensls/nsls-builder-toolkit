@@ -123,6 +123,70 @@ def git_pull():
         pass
 
 
+def org_plugin_installed():
+    """True once the toolkit is installed as a real Claude Code plugin."""
+    try:
+        registry = json.loads(
+            (CONFIG_DIR / "plugins" / "installed_plugins.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        return any(
+            key.startswith("nsls-builder-toolkit@")
+            for key in registry.get("plugins", {})
+        )
+    except Exception:
+        return False
+
+
+def run_plugin_migration():
+    """Run the shim→plugin migration from the just-pulled clone.
+
+    Executed from the clone (not this file's own copy) so migration fixes
+    take effect one session after landing on main. On plugin-only machines
+    the clone is absent and this is a no-op. Fail-open: a broken migration
+    must never break the session — shims keep working and we retry next
+    session.
+    """
+    script = PLUGIN_DIR / "hooks" / "migrate_to_plugin.py"
+    if not script.exists():
+        return
+    try:
+        code = compile(script.read_text(encoding="utf-8"), str(script), "exec")
+        exec(code, {"__name__": "nsls_migrate", "__file__": str(script)})
+    except Exception:
+        pass
+
+
+def ensure_plugin_fresh():
+    """At most once a day, ask the CLI to sync the installed plugin.
+
+    Plugin installs run from a version-pinned cache that only refreshes via
+    `claude plugin update` after a plugin.json version bump — without this,
+    a machine that loses the settings-shim git-pull path would silently
+    freeze on an old version.
+    """
+    if not org_plugin_installed():
+        return
+    marker = CONFIG_DIR / ".nsls-plugin-update-check"
+    try:
+        if marker.exists() and (
+            datetime.now(timezone.utc).timestamp() - marker.stat().st_mtime < 86400
+        ):
+            return
+        import shutil as _shutil
+        claude = _shutil.which("claude")
+        if not claude:
+            return
+        marker.touch()
+        subprocess.run(
+            [claude, "plugin", "update", "nsls-builder-toolkit@nsls-toolkit"],
+            capture_output=True, timeout=60,
+        )
+    except Exception:
+        pass
+
+
 def sync_pointers():
     """Sync skill pointers from installed plugins to ~/.claude/skills/.
 
@@ -135,6 +199,11 @@ def sync_pointers():
     created = 0
 
     for plugin_name in SYNC_PLUGINS:
+        # Once the org toolkit is a real plugin, its skills load through the
+        # plugin system — stop regenerating its pointer stubs so the stage-B
+        # migration cleanup sticks. Personal-toolkit pointers keep syncing.
+        if plugin_name == "nsls-builder-toolkit" and org_plugin_installed():
+            continue
         plugin_dir = CONFIG_DIR / "local-plugins" / plugin_name
         skills_src = plugin_dir / "skills"
         if not skills_src.is_dir():
@@ -302,7 +371,7 @@ def session_ping(replayed=None):
     github = read_env("GITHUB_USERNAME")
 
     toolkit = "personal"
-    if PLUGIN_DIR.exists():
+    if PLUGIN_DIR.exists() or org_plugin_installed():
         toolkit = "both"
 
     platform_map = {"darwin": "mac", "win32": "windows", "linux": "linux"}
@@ -406,6 +475,8 @@ def session_ping(replayed=None):
 
 def main():
     git_pull()
+    run_plugin_migration()
+    ensure_plugin_fresh()
     sync_pointers()
     replayed = replay_failed_ping()
     session_ping(replayed=replayed)
