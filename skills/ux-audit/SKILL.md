@@ -1,11 +1,24 @@
 ---
 name: ux-audit
-description: Conduct a heuristic UX audit of a web page, Figma frame, screenshot, or HTML snippet, OR run a Design Validation Layer that predicts member reaction to a proposed change before it ships. Produces (1) a Predicted SUS estimate against the 10 System Usability Scale dimensions, (2) findings against 21 Laws of UX, (3) WCAG 2.1 A/AA accessibility checks, (4) brand-style findings against NSLS or Society brand guidelines, and (5) optionally, a Design Validation readout — surface-area map, past-test cross-reference, member-fit persona panel, DESIGN.md alignment, and three views of impact confidence. Use when the user wants a UX review, usability audit, accessibility audit, brand audit, heuristic evaluation, design critique, or pre-test design validation. Audit triggers include "audit this", "review the UX of", "is this accessible", "WCAG check", "predict SUS", "heuristic eval", "brand audit", or pasting a URL / Figma link / screenshot with audit intent. Design-validation triggers include "validate this design", "design validate", "/design-validate", "QA this change", "predict member reaction", "what will members think", "is this safe to test", "test this hypothesis". Especially relevant for NSLS enrollment pages and Figma frames in the EE sprint.
+description: Conduct a heuristic UX audit of a web page, Figma frame, screenshot, or HTML snippet, OR run a Design Validation Layer that predicts member reaction to a proposed change before it ships. Produces (1) a Predicted SUS estimate against the 10 System Usability Scale dimensions, (2) findings against 21 Laws of UX, (3) WCAG 2.1 A/AA accessibility checks, (4) brand-style findings against NSLS or Society brand guidelines, and (5) optionally, a Design Validation readout — surface-area map, past-test cross-reference, member-fit persona panel, DESIGN.md alignment, and three views of impact confidence. Use when the user wants a UX review, usability audit, accessibility audit, brand audit, heuristic evaluation, design critique, or pre-test design validation. Audit triggers include "audit this", "review the UX of", "is this accessible", "WCAG check", "predict SUS", "heuristic eval", "brand audit", or pasting a URL / Figma link / screenshot with audit intent. Design-validation triggers include "validate this design", "design validate", "/design-validate", "QA this change", "predict member reaction", "what will members think", "is this safe to test", "test this hypothesis". Runs in two modes: full (all four layers plus optional Design Validation) or QA (usability + UX + accessibility + functional build quality — links resolve, responsive breakpoints, console errors, tap targets, form error states, semantic landmarks, code readiness — with no brand layer and no member research). QA-mode triggers include "QA this page", "QA this build", "is this ready to ship", "check the responsive behavior", "build-quality pass", "ux qa", or a call from /page-qa. Especially relevant for NSLS enrollment pages and Figma frames in the EE sprint.
 ---
 
 # UX Audit Skill
 
-Heuristic expert review covering four layers: SUS (usability), Laws of UX (design principles), WCAG 2.1 A/AA (accessibility), and brand-style alignment (NSLS or Society). This is **expert review, not user testing**. Findings predict where users will struggle; they don't measure where they actually struggled.
+Heuristic expert review covering four layers: SUS (usability), Laws of UX (design principles), WCAG 2.1 A/AA (accessibility), and brand-style alignment (NSLS or Society) — plus a functional-QA layer in QA mode. This is **expert review, not user testing**. Findings predict where users will struggle; they don't measure where they actually struggled.
+
+## Modes — pick one in Step 1
+
+| Mode | Layers | Use when |
+|---|---|---|
+| **Full** (default) | SUS · Laws of UX · WCAG · **Brand** · optional behavioral data + Design Validation | design review, pre-test validation, anything brand-facing |
+| **QA** | SUS · Laws of UX · WCAG · **Functional QA** — no brand, no member research | a build-quality pass before handoff or merge, and every call from `/page-qa` |
+
+Treat it as **QA mode** when the request says "QA this page", "QA this build", "is this ready to ship", "check the responsive behavior", "build-quality pass", or when the caller is `/page-qa`. Say which mode you're running in the report header.
+
+**QA mode adds a fifth lens the heuristic layers cannot cover: does the thing actually work?** A page can pass SUS, Laws of UX, and WCAG and still ship a dead CTA, a layout that collapses at 768px, a form with no error state, or console errors. Read `references/qa-checks.md` and prefix those findings `QA.<area>`.
+
+**QA mode deliberately drops brand and member research — do not improvise them.** No font, palette, or voice findings; no personas, past A/B outcomes, sentiment, or behavioral analytics. If a finding depends on brand rules or on what a past test showed, say so and note that full mode covers it, rather than guessing. In the pre-output gate and failure-mode catalog, skip **F2** (proxy fonts) and **F3** (validated wins) — both are brand/research-dependent — and apply every other entry.
 
 ## What this skill is NOT a substitute for
 
@@ -119,8 +132,9 @@ Mobile Figma frames at iPhone width (393px) often render at small image dimensio
 | SUS estimate | `references/sus-dimensions.md` |
 | Laws of UX | `references/laws-of-ux.md` |
 | WCAG | `references/wcag-21-AA.md` |
-| Brand — NSLS | `references/brand-nsls.md` |
-| Brand — Society | `references/brand-society.md` |
+| Brand — NSLS (full mode only) | `references/brand-nsls.md` |
+| Brand — Society (full mode only) | `references/brand-society.md` |
+| Functional QA (QA mode) | `references/qa-checks.md` |
 | Severity (always) | `references/severity-rubric.md` |
 | NSLS audience context (if NSLS member-facing page) | `references/nsls-context.md` |
 | Design Validation Layer (Step 6, any design output) | `references/design-validate-surfaces.md`, `design-validate-personas.md`, `design-validate-confidence.md`, `design-validate-hubspot-retrieval.md`, `design-validate-encoded-principles.md` |
@@ -146,7 +160,8 @@ The Layer prefix tells the reader which lens the finding came from:
 - `SUS-N` (e.g., `SUS-3` = "Easy to use" item)
 - `LoUX.<Law>` (e.g., `LoUX.Hick`, `LoUX.Fitts`, `LoUX.Jakob`)
 - `WCAG.<criterion>` (e.g., `WCAG.1.4.3`, `WCAG.3.3.4`)
-- `Brand.<area>` (e.g., `Brand.typography`, `Brand.color`, `Brand.logo`, `Brand.voice`)
+- `Brand.<area>` (e.g., `Brand.typography`, `Brand.color`, `Brand.logo`, `Brand.voice`) — full mode only
+- `QA.<area>` (e.g., `QA.links`, `QA.responsive`, `QA.forms`, `QA.code`) — QA mode only
 
 ### Step 5 (optional) — Layer in behavioral data
 
