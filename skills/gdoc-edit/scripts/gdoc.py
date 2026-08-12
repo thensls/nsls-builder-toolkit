@@ -43,6 +43,14 @@ rich tables with /gdoc-build.
 """
 import argparse, json, os, re, subprocess, sys
 
+# The gdoc family ALWAYS runs gws from the toolkit's own profile — forced per
+# spawned process, so neither the default config dir nor an ambient
+# GOOGLE_WORKSPACE_CLI_CONFIG_DIR (which may point at another tool's profile)
+# can leak in. See skills/gws/references/multi-secret-profiles.md.
+GWS_PROFILE = os.path.expanduser(
+    os.path.join("~", ".config", "gws-profiles", "nsls-gdocs-skill")
+)
+
 
 def _parse_gws_json(out):
     """Parse gws stdout, tolerating a leading keyring/log line. None if unparseable."""
@@ -75,12 +83,24 @@ def gws(args, params=None, body=None):
         cmd += ["--params", json.dumps(params)]
     if body is not None:
         cmd += ["--json", json.dumps(body)]
+    # Profile forced into the child (never setdefault, never a separate export:
+    # an ambient/foreign GOOGLE_WORKSPACE_CLI_CONFIG_DIR would leak in, and an
+    # export doesn't survive between an agent's Bash calls).
+    env = dict(os.environ, GOOGLE_WORKSPACE_CLI_CONFIG_DIR=GWS_PROFILE)
     # encoding pinned: text=True alone decodes with the locale codec (cp1252 on
     # Windows), which crashes on the em dashes present in essentially every
     # NSLS doc. gws emits UTF-8 everywhere.
-    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", env=env)
     if r.returncode == 2:
-        sys.exit("gws auth error (exit 2): run `gws auth login`. See references/setup.md.")
+        sys.exit(
+            "gws auth error (exit 2): no credentials in the toolkit profile.\n"
+            "Fix:  python3 <plugin>/skills/gws/scripts/gws_doctor.py\n"
+            "(It sets the profile itself and logs in with `granted ∪ requested`. Do NOT"
+            " run a bare `gws auth login` — that authenticates the WRONG directory — nor a"
+            " raw `gws auth login --services docs,drive`, which overwrites this shared"
+            " profile's scopes and breaks squad-dashboard/receipts. Details:"
+            " references/setup.md.)"
+        )
 
     out = (r.stdout or "").strip()
     parsed = _parse_gws_json(out)
