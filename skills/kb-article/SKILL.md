@@ -61,14 +61,33 @@ ARG_MAX). Always write with `valueInputOption: RAW` so HTML bodies are stored
 literally, never parsed as formulas.
 
 Adding/updating one article:
-1. Read the URL column: `gws sheets +read --spreadsheet <ID> --range "Articles!A:A"`.
-2. If the article's **Article URL already exists**, overwrite that row in place:
-   `values update` at `Articles!A<rownum>` with the 8-column row.
+1. Read the URL column on **both** tabs — an article lives on exactly one of
+   them, and which one is a function of its body size, not its identity:
+   ```
+   gws sheets +read --spreadsheet <ID> --range "Articles!A:A"
+   gws sheets +read --spreadsheet <ID> --range "'Oversized (import separately)'!A:A"
+   ```
+   Searching only `Articles!A:A` is how you get a duplicate: an existing
+   oversized article isn't found, so step 3 appends a second row for a slug that
+   already has one, and the next import ships two conflicting versions of it.
+2. If the article's **Article URL already exists**, overwrite that row in place
+   **on whichever tab holds it** — `values update` at `Articles!A<rownum>` or
+   `'Oversized (import separately)'!A<rownum>` — with the 8-column row.
 3. If it's **new**, append it: `values append` at `Articles!A1`
    (`{"insertDataOption":"INSERT_ROWS"}`).
-4. **Body over 50,000 chars:** put the row on the `Oversized` tab instead (body
-   cell = a `[Body exceeds ...]` pointer), and write the full row to a companion
+4. **Body over 50,000 chars:** the row belongs on the
+   `Oversized (import separately)` tab (body cell = a `[Body exceeds ...]`
+   pointer), with the full row written to a companion
    `nsls_kb_import_<slug>.csv`.
+5. **Crossing the threshold means MOVING the row, not writing a second one.**
+   An edit that pushes a body past 50,000 chars — or back under it — changes
+   which tab the article belongs on. Write the row to the new tab and
+   **delete the row from the old one** (`batchUpdate` →
+   `deleteDimension` on that row; clearing the cells leaves a blank row that
+   downloads as an empty CSV record). Leaving the stale row behind puts the
+   same slug on both tabs, and since both get imported, whichever lands last
+   wins — silently, and differently depending on import order. Say out loud
+   that you moved it.
 
 ## Critical gotchas of the importer
 
@@ -83,8 +102,11 @@ Adding/updating one article:
 - **Category descriptions are not importable.** They live on the category and
   are set manually (Content → Knowledge Base → edit category → Description). The
   Category column only assigns an article to a category.
-- **Drafts:** keep drafts in a separate CSV and import them with "Import as
-  draft" so an overwrite pass on published articles cannot flip a draft live.
+- **Drafts:** keep drafts in a separate CSV (`nsls_kb_draft_<slug>.csv`) and
+  import them with "Import as draft" so an overwrite pass on published articles
+  cannot flip a draft live. **This means a draft row never goes on the `Articles`
+  tab** — that tab IS the publish set, so a draft parked there ships the next
+  time anyone imports, including a colleague syncing something unrelated.
 
 ## The workflow
 
@@ -98,12 +120,25 @@ Adding/updating one article:
    column before creating.
 4. **Draft or edit** the body in the house style (below). Show the user the
    draft (new) or a change summary (edit) before writing anything.
-5. **Write the row into the master sheet** — overwrite in place if the Article
-   URL already exists, append if new, route to the Oversized tab if the body is
-   over 50,000 chars. This is the step that keeps the registry complete.
-6. **Deliver the sync instructions** (see "Delivering and publishing"): download
-   the Articles tab, import with overwrite, and the audience-access reminder.
-   Emit a standalone CSV only for an oversized article.
+5. **Establish whether this is a draft or a publish — before writing anything.**
+   The two take different paths and the choice is not recoverable after an
+   import. If the user said "draft", "write it up for review", "not live yet",
+   or anything short of publish, it is a draft. Ask if it's genuinely unclear.
+   - **Publish** → write the row into the master sheet: overwrite in place if the
+     Article URL already exists, append if new, route to the
+     `Oversized (import separately)` tab if the body is over 50,000 chars. This
+     is the step that keeps the registry complete.
+   - **Draft** → **keep the row OFF the `Articles` tab.** Anything on `Articles`
+     is published by the normal overwrite import, so a draft parked there goes
+     live the next time anyone syncs — including someone else, syncing something
+     unrelated. Write the draft to a standalone
+     `nsls_kb_draft_<slug>.csv` instead (same 8 columns), and hand it over with
+     the draft import instructions below. The registry records it only when it
+     publishes.
+6. **Deliver the sync instructions** (see "Delivering and publishing"): for a
+   publish, the changed-row CSV plus the audience-access reminder; for a draft,
+   the draft CSV imported with **Import as draft**. Emit the companion CSV for an
+   oversized article.
 
 ## House style for article bodies
 
@@ -197,23 +232,53 @@ cleanup) before finalizing.
 
 ## Delivering and publishing
 
-The article is already in the master sheet. To sync HubSpot, give the user these
-instructions verbatim:
+The article is already in the master sheet. **Default to shipping only the rows
+you changed.** An overwrite import matches on Article URL and rewrites the body
+of *every* row in the file — so a whole-sheet import to publish one new article
+also pushes the sheet's stored body over every other article, reverting anything
+edited in HubSpot since the sheet last saw it. That damage is silent, unrelated
+to the change being made, and invisible until someone notices their edit is gone.
 
-> 1. Open the master sheet, `Articles` tab: **File → Download →
->    Comma-separated values (.csv)**.
+**Default path — one article (or the few you touched):**
+
+> 1. Build a CSV with the header row plus **only the changed article's row(s)**,
+>    named `nsls_kb_import_<slug>.csv`. Same 8 columns in the same order.
 > 2. In HubSpot: **Content → Knowledge Base → Current view dropdown → Import
 >    knowledge base**, upload that CSV, map the columns.
 >    - Check **"Overwrite any existing content with imported content"** — it
->      matches by the Article URL column, so it updates existing articles and
->      creates any new ones in a single pass.
-> 3. For any article on the **Oversized** tab, import its companion
->    `nsls_kb_import_<slug>.csv` separately the same way.
-> 4. After importing, the articles reset to **Public**. Re-select them and set
+>      matches by the Article URL column, so it updates the article if the slug
+>      exists and creates it if not. Rows absent from the file are untouched.
+> 3. After importing, the articles reset to **Public**. Re-select them and set
 >    **Control audience access → Private, SSO required**.
 
-Because the whole sheet re-imports with overwrite, this is idempotent: run it
-anytime to bring HubSpot fully up to date with the registry.
+**Whole-sheet path — only after reconciling.** A full `Articles`-tab import is
+the right tool for a deliberate mass sync, and it is the ONLY way to guarantee
+HubSpot matches the registry. It is not a routine publish step. Before running
+it, do the reconcile pass (see the reconcile gotcha): pull a fresh
+`hubspot-knowledge-base-export-*`, diff it against the sheet, and fold any
+HubSpot-side edits into the sheet first. Then download the `Articles` tab as CSV
+and import it with overwrite, plus each `Oversized (import separately)` article's
+companion CSV separately.
+
+If the user asks for "the usual import" and hasn't reconciled, say what a
+whole-sheet overwrite would do and offer the single-row path instead. Don't
+present the two as equivalent.
+
+**Draft path — never touches `Articles`:**
+
+> 1. Take the `nsls_kb_draft_<slug>.csv` produced for this draft (it is not on
+>    the master sheet — that's deliberate).
+> 2. In HubSpot: **Content → Knowledge Base → Current view dropdown → Import
+>    knowledge base**, upload it, map the columns, and choose
+>    **Import as draft**.
+>    - Leave **"Overwrite any existing content"** UNCHECKED. Overwrite plus a
+>      slug that already exists live would replace the live article with the
+>      draft body.
+> 3. Review in HubSpot and publish there when it's ready.
+
+Once a draft is published, write its row into the master sheet (the publish path
+above) so the registry stops being incomplete — an article live in HubSpot with
+no sheet row is invisible to every future reconcile.
 
 If the article was drafted from a project doc in the Obsidian vault, offer to
 add a stub link from that doc to `https://info.nsls.org/internal/<slug>`.
@@ -221,7 +286,9 @@ add a stub link from that doc to `https://info.nsls.org/internal/<slug>`.
 ## Gotchas recap
 
 - The master Google Sheet is the registry and authoring source of truth; every
-  new/edited article must be written into it, or it drifts out of sync.
+  **published** new/edited article must be written into it, or it drifts out of
+  sync. Drafts are the one exception and stay off the `Articles` tab until they
+  publish — that tab is the publish set, not a workspace.
 - **Reconcile before a full re-import.** The sheet holds the body as *we* last
   authored it. If someone edits an article directly in HubSpot, a wholesale
   re-import will overwrite (clobber) their change with the sheet's older body.
