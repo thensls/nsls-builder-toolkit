@@ -160,6 +160,11 @@ company page (memo sections, coverage claims, stance) with `market.alternatives`
 keeping only this bet's synthesis. Record `absent` coverage explicitly — a
 missing claim reads as unassessed, not as open water.
 
+Freshness excuses re-deriving the **memo**, never the **per-bet layer**: a
+fresh page still needs `map_competitor_job` coverage and a `link_competitor_bet`
+stance for THIS bet, plus the bet's own `market.alternatives`. Skip those and
+the bet reads as having no competitors at all.
+
 Heartbeat each dimension: *"sizing next because assumption #1 is
 market-risk…"* Never silently batch through all five.
 
@@ -298,5 +303,6 @@ point at `/connect` or the README's Strategy Studio setup section
 | "I'll just write the competitor findings into `market.alternatives`." | Then B-2, B-3 and B-9 each re-research the same company. Findings go on the company page; the bet keeps the synthesis. |
 | "I only log what competitors DO cover — the gaps are obvious." | A cell with no claim renders `unassessed`, never open water. Unlogged `absent` findings manufacture blank space nobody can act on. Record the negative. |
 | "There's already a page for them, I'll refresh the research anyway." | Check `freshness` first. A `fresh` page is a colleague's finished work — cite its evidence rows. Re-deriving it is exactly the waste this axis removes. |
+| "The page came back `fresh`, so I read it and moved on." | Freshness is a property of the company page, not of your bet. Coverage claims and the `link_competitor_bet` stance have never been made for THIS bet — skipping them leaves the bet's competition view empty, which renders identically to having no competitors. |
 | "One stance covers the bet, the b2b/b2c split can go in the note." | A note is not queryable and the bet page cannot show two stances. Pass `payer_type` when the sides genuinely differ. |
 | "Sizing's close enough, I won't flag the divergence." | A >3× top-down/bottom-up gap gets named out loud, with the assumption driving it — silence there just hides the riskiest number. |
