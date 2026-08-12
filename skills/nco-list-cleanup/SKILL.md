@@ -137,10 +137,18 @@ reconciliation is over the eligible pool, not the raw file:
 
 ```
 unique students in file
-  = ineligible (filtered out)          ← seniors/grad, invalid class year, GPA below
-  +                                       threshold, international/military address
+  = ineligible (filtered out)     ← seniors/grad, invalid class year, GPA below
+  +                                 threshold, AND — on postal file types 1-4
+  |                                 only — international/military address
     eligible = NCO (up to the cap) + Ignite (the remainder)
 ```
+
+**Eligibility is per file type, so the ineligible set is too.** The address screen belongs
+to the postal channel. On an **Email Only** file (types 5–6) nothing gets mailed, so an
+international or APO/FPO address excludes nobody and those students stay fully eligible.
+Apply only the filters this file type's output channel actually depends on — carrying the
+address screen into an Email Only run silently drops perfectly invitable students from
+both lists.
 
 Neither list receives a filtered-out student — Ignite is the overflow of people we *could*
 invite but didn't have cap room for, not a bucket for everyone we excluded. Report all
