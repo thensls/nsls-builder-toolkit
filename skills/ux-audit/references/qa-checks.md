@@ -13,11 +13,16 @@ them into changes the spec never asked for.
 
 | Label | Means |
 |---|---|
+| **Build defect** | The page is functionally broken, independent of any standard — a dead link or missing route, a failed asset request, a console exception, an unresolved `{{ }}`/`undefined`/`NaN` rendered to the user, a control that does nothing. Cite the observed break (status code, console message, the literal rendered string). Usually the highest-priority thing in the report. |
 | **AA failure** | Cites a specific success criterion AND the page actually fails it, exceptions considered. Blocking. |
 | **House standard** | Our bar, above the spec (44px targets, `rem` typography, token colors). Real, but not a conformance claim. |
 | **Best practice** | Widely-recommended, not in the spec at any level (single `<h1>`, unskipped heading levels). |
 
-Only the first label may name a criterion as failed.
+**Build defect is the label most of this layer produces** — QA.links, QA.errors, QA.forms'
+missing states, and QA.consistency are mostly hunting functional breakage, not conformance.
+It is a separate axis from the WCAG question: a dead primary CTA is a build defect whether
+or not any success criterion mentions it, and it does not become a "house standard" just
+because no criterion covers it. Only **AA failure** may name a criterion as failed.
 
 ---
 
