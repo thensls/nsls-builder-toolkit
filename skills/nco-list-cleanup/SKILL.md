@@ -10,7 +10,10 @@ description: >-
   "weekly master" or "Master Ignite List"; building Presidential/Generic, class-year, or GPA-
   band columns; or looking up a school's Total Enrollment to set the cap. Applies even if
   "NCO" is never said. Not for generic contact-list dedupe, a bare enrollment lookup, or
-  reporting/dashboard questions.
+  reporting/dashboard questions. Processes FERPA-covered student records and therefore
+  REFUSES to run unless the session is on the ZDR/Bedrock endpoint
+  (`CLAUDE_CODE_USE_BEDROCK=1`) — on any other session it declines without reading the
+  file.
 ---
 
 # NCO List Cleanup
@@ -18,6 +21,39 @@ description: >-
 You are an automated data-cleaning system for NSLS **NCO (New Chapter Onboarding)**
 student lists. You take a raw student file from a school, clean and standardize it,
 apply the business rules below, and produce files ready for invitation processing.
+
+## STOP: this skill only runs on a ZDR endpoint
+
+**Check this before reading the roster, and before any other step.** The input is a
+student education record under FERPA — names, personal and campus emails, GPA, and home
+street addresses for thousands of students at a partner institution. It may only be
+processed on an endpoint covered by zero data retention.
+
+```bash
+# Must print 1. Anything else — empty, 0, unset — means STOP.
+echo "${CLAUDE_CODE_USE_BEDROCK:-unset}"
+```
+
+- **Prints `1`** → the session runs against NSLS's Bedrock deployment. Proceed.
+- **Anything else** → **refuse, and do not read the file.** Say exactly why:
+
+  > This roster is FERPA-covered student data, and this session isn't on the ZDR
+  > endpoint it has to run on. I haven't opened the file. NCO list cleanup runs from the
+  > Bedrock-configured environment — ask in #builders for access, or hand the file to
+  > someone who has it.
+
+  Then stop. Do not offer a partial pass, a de-identified workaround, a "just this once,"
+  or a summary of the file you didn't read. There is no degraded mode: the whole point of
+  the gate is that the data never reaches a retaining endpoint, and reading it to explain
+  why you can't process it has already broken that.
+
+**Why a check and not a note.** This skill lives in the shared toolkit, so it loads for
+every builder, and its triggers are deliberately broad ("roster", "student list", "40% of
+enrollment") — it fires on intent, not on an explicit `/nco-list-cleanup`. A builder on a
+normal seat can reach it by accident with a roster attached. The env check is the only
+thing between that and a FERPA disclosure, so it is not skippable, not overridable by the
+user saying it's fine, and not satisfied by asking them to confirm they're on Bedrock —
+read the variable.
 
 ## How to run
 
@@ -254,7 +290,18 @@ word character, so `#`-style unit numbers silently stay stuck in ADDR1. Split on
 strip trailing whitespace/commas from ADDR1. After splitting, sanity-check that no ADDR1 value
 still contains one of those tokens.
 **Dedup:** primary key EMAIL (case-insensitive); keep first occurrence; log how many
-removed. Some schools issue unique auto-generated addresses, so exact-email dedup finds
+removed.
+
+> ⚠️ **Never dedup on a null email.** File types 3 and 4 (Mail Only) have NO email column
+> at all, so every student's key is null — group by it and the entire roster collapses to
+> one student, with the "removed N duplicates" line reporting it as a successful clean.
+> Rows with a missing/blank email are **exempt from email dedup and always preserved**
+> (this is the same rule stated under *Master Ignite List*, and it applies here too, at
+> the point the dedup actually runs). For Mail Only files, dedup on
+> `LAST + FIRST + ADDR1 + ZIP` instead, and say in the summary which key you used.
+>
+> Sanity check before writing anything: if the post-dedup row count is a tiny fraction of
+> the input, you hit this bug — stop and report, don't ship the file. Some schools issue unique auto-generated addresses, so exact-email dedup finds
 nothing even when the *same person* appears twice under two different emails (sometimes in
 two different GPA bands, which is impossible for one person). Don't silently merge these —
 but do surface them: note in the summary how many same-name / different-email pairs you
@@ -291,7 +338,10 @@ DATA CLEANING
   7,480 valid records after cleaning
 
 SAMPLING
-  Took first 4,800 (sorted A–Z by last name); met 40% cap exactly
+  Academic Achievement file → filled the cap from the highest GPA band down
+  (A–Z within each band): 3.3+ all 1,247 · 3.0-3.29 all 1,986 · 2.7-2.99 1,567
+  of 2,104 (partial band taken A–Z); met 40% cap exactly at 4,800
+  Dedup key: EMAIL (case-insensitive)
 
 NCO OUTPUT
   Total: 4,800 (Presidential: 1,247 / Generic: 3,553)
@@ -299,7 +349,8 @@ NCO OUTPUT
   Appended to: Standard_Academic_Achievement_Week_of_2026-02-16.xlsx
 
 IGNITE OUTPUT
-  Added 2,680 students (ranked 4,801–7,480 A–Z) to Master_Ignite_List_Fall_2026.xlsx
+  Added 2,680 students (everyone below the cap line: rest of 2.7-2.99 plus all
+  lower bands) to Master_Ignite_List_Fall_2026.xlsx
 
 CYCLE
   Fall 2026 (file received Aug 2026)
@@ -309,10 +360,16 @@ CYCLE
 
 ## CRITICAL REMINDERS
 
+0. **ZDR gate first** — `CLAUDE_CODE_USE_BEDROCK` must be `1` before the roster is read.
+   No exceptions, no degraded mode. See the top of this skill.
 1. Always look up HubSpot enrollment first — it drives the 40% cap.
 2. Never exceed the 40% cap.
-3. Sort A–Z by last name before sampling.
-4. Deduplicate by email before anything else.
+3. Sample in the order the file type demands: **highest GPA band down** for any
+   Academic Achievement file (A–Z within each band), A–Z by last name only when there is
+   no GPA to rank on. See *Sampling order* — A–Z is the fallback, not the default.
+4. Deduplicate by email before anything else — **except** when emails are null (Mail Only
+   file types 3 and 4), where email dedup would collapse the whole roster to one student.
+   Use `LAST + FIRST + ADDR1 + ZIP` there.
 5. Keep the Ignite list growing — append, never overwrite.
 6. Ask when unclear — better to confirm than guess wrong.
 

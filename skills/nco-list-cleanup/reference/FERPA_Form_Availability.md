@@ -5,6 +5,14 @@ FERPA/directory information requests at each of the 104 institutions listed. Eac
 reflects the most current publicly available information found on each school's registrar
 or FERPA policy page.
 
+> **Match on the email domain, not the school name.** Several entries here are
+> same-named institutions in different states — e.g. Southwestern Community College
+> exists in both Sylva NC (`southwesterncc.edu`) and Creston IA (`swcciowa.edu`), with
+> different registrars and different forms. Sending a student to the wrong school's
+> registrar is a privacy-process failure, not a typo. The roster's email domain is the
+> reliable key; if a name matches an entry but the domain doesn't, treat the entry as
+> not applicable and verify.
+
 ---
 
 | # | School | Electronic Form / PDF Available |
@@ -84,7 +92,8 @@ or FERPA policy page.
 | 73 | South Louisiana Community College | No online form; form completed in person at Office of the Registrar; registrar@solacc.edu |
 | 74 | Southern Wesleyan University | No online form; non-disclosure form available in person at Office of Academic Records |
 | 75 | Southwest Mississippi Community College | No dedicated form found; written request to Registrar's Office at (601) 276-2001 |
-| 76 | Southwestern Community College (Iowa/NC) | PDF forms available at https://www.southwesterncc.edu/registrar/forms-0 (Authorization to Release, Request to Prohibit Directory Info Release, Revocation forms) |
+| 76 | Southwestern Community College — **Sylva, NC** (`southwesterncc.edu`) | PDF forms available at https://www.southwesterncc.edu/registrar/forms-0 (Authorization to Release, Request to Prohibit Directory Info Release, Revocation forms) |
+| 76a | Southwestern Community College — **Creston, IA** (`swcciowa.edu`) | ⚠️ Separate institution — form not yet verified. Do NOT use the NC forms URL. Confirm with the Creston registrar before acting; identify by the `swcciowa.edu` email domain. |
 | 77 | St. Bonaventure University | No dedicated form found; written request to Registrar no later than 5 days after first day of fall classes; (716) 375-2020 |
 | 78 | St. Olaf College | No dedicated form found; written request to registrar@stolaf.edu |
 | 79 | SUNY Maritime College | PDF form ("FERPA Release Form") available on Registrar's Office page; registrar@sunymaritime.edu |

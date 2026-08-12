@@ -2,6 +2,11 @@
 
 Automates cleaning of NSLS NCO (New Chapter Onboarding) student lists sent by schools.
 
+> ⚠️ **ZDR endpoint only.** The input is FERPA-covered student data (names, emails, GPA,
+> home addresses). The skill checks `CLAUDE_CODE_USE_BEDROCK=1` and refuses — without
+> reading the file — on any other session. Run it from the Bedrock-configured environment;
+> ask in #builders if you need access.
+
 Given a raw school roster, it:
 
 - identifies the school from email domains and looks up Total Enrollment in HubSpot,
