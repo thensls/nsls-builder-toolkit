@@ -23,7 +23,11 @@ Only the first label may name a criterion as failed.
 
 ## QA.links — destinations resolve and behave
 
-- Every `href` resolves. Fetch each one; quote the status code. A 200 is a pass, a 3xx needs the final destination checked, 4xx/5xx is P0 if it's a primary CTA.
+- Every `href` resolves. **Branch on the scheme first** — only `http(s)` has a status code to quote:
+  - `mailto:` / `tel:` / `sms:` — no fetch, no status. Check the payload is well-formed (a valid address, an E.164-ish number) and move on. Never report these as broken.
+  - `#fragment` — covered by the anchor-target check below, not by fetching.
+  - `http(s)` — fetch and quote the code. 200 passes; a 3xx needs the final destination checked; 4xx/5xx on a primary CTA is P0.
+- **A 401/403 is usually the audit's problem, not the page's.** Authenticated, session-bound, and geo/bot-gated destinations return them to an unauthenticated fetch while working perfectly for a signed-in member. Same for a 405 on a HEAD-only probe and a 429 from rate limiting. Report these as `not auditable from this input` with the code quoted, and say what would settle it (a signed-in check, or asking the author). Do not file a P0 against a link you couldn't legitimately reach.
 - No `href="#"`, `href=""`, or placeholder URLs (`example.com`, `TODO`, `lorem`) left in.
 - External links carry `target="_blank"` with `rel="noopener"` (**house standard**, not a security finding). Every evergreen browser has implied `noopener` on `target="_blank"` since 2021, so the reverse-tabnabbing hole this used to guard is closed by default — write it for explicitness and old-browser reach, and report a missing `rel` as a house-standard nit. Do **not** file it as a vulnerability. `noreferrer` is a separate, opt-in decision: it strips the `Referer` header, which can break partner attribution and analytics, so only require it where the destination shouldn't learn the origin.
 - Internal links use the app's client-side routing rather than forcing a full page reload, where the framework supports it.
@@ -35,7 +39,9 @@ grep -oE 'href="[^"]*"' <file> | sort -u
 
 ## QA.responsive — real breakpoint logic, not doc-wrapper stacking
 
-- Real `@media` queries acting on **content**, at minimum: mobile ≤767px, tablet 768–1023px, desktop ≥1024px.
+- **The layout adapts across the range — judge the outcome, not the mechanism.** Verify behaviour at mobile ≤767px, tablet 768–1023px, and desktop ≥1024px: content reflows, nothing is clipped or overlapped, nothing needs sideways scrolling. `@media` queries are the common way to get there, but a fluid layout (`clamp()`, `minmax()`, flex/grid wrapping) or container queries can satisfy every width with **zero** `@media` rules — and flagging that as a failure is a false positive against a working page.
+- Absence of `@media` is a prompt to test harder, not a finding. If the layout holds at all three ranges, it passes; if it breaks, report the observed break (the width and what broke), not the missing rule.
+- Where the artifact is static and you cannot actually render it at width, say `not auditable from this input` and name what you'd need — don't infer a break from the CSS, and don't infer a pass either.
 - No horizontal scroll at 320px, 375px and 768px.
 - Content parity across breakpoints — mobile is not a truncated desktop. No dropped bullets, links, or pricing. Differences must be deliberate and stated.
 - Images carry `max-width: 100%`. Wide content (tables, code blocks, diagrams) scrolls inside its own container rather than pushing the page.
