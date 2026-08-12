@@ -97,9 +97,15 @@ This installs the latest release from https://github.com/googleworkspace/cli.
 
 After install, authenticate — **mode-specific**:
 
-- **Toolkit gdoc work** (gdoc-edit/gdoc-build/setup): set the profile env var first (see
-  the profile section above), then `gws auth login --services docs,drive` — credentials
-  land inside the profile.
+- **Toolkit gdoc work** (gdoc-edit/gdoc-build/setup): run
+  `python3 <plugin>/skills/gws/scripts/gws_doctor.py` — it forces the profile, validates the
+  client, and logs in with `granted ∪ requested`, so credentials land inside the profile
+  without disturbing scopes another skill already holds there. Do **not** hand-run
+  `gws auth login --services docs,drive` against the profile: it stores only what you asked
+  for, so a gdoc repair silently strips the sheets scope `squad-dashboard` needs (or gmail
+  for `receipts`). If you must log in by hand, follow the union rule in
+  [`references/multi-secret-profiles.md`](references/multi-secret-profiles.md) — request
+  everything `gws auth status` already lists plus what you need.
 - **Ad-hoc gws use:** a bare `gws auth login` stores credentials in the default dir
   (`~/.config/gws`). Fine when that dir is healthy — but don't use a bare login to fix a
   toolkit-skill auth error (it authenticates the wrong directory).

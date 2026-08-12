@@ -88,10 +88,13 @@ wrong-project 403. Idempotent; safe to re-run.
 4. **One-time consent into the profile** (per user, per profile — this is the
    security model, not a gap; the agent kicks it off, the human completes it):
    ```bash
-   gws auth login --services docs,drive
+   python3 <plugin>/skills/gws/scripts/gws_doctor.py
    ```
-   `docs,drive` is the gdoc-family baseline; a skill that needs more follows
-   the **union rule** below — never request services you don't need. Real
+   `docs,drive` is the gdoc-family baseline the doctor requests by default; a
+   skill that needs more passes `--services`. Prefer the doctor over a bare
+   `gws auth login --services docs,drive` even on a first provision — if the
+   profile already holds another skill's scopes, the raw login drops them,
+   whereas the doctor applies the **union rule** below automatically. Real
    @nsls.org Workspace accounts only (the consent screen is Internal; aliases
    and consumer accounts are refused).
 5. Re-run `gws auth status`: confirm `storage` ≠ `none` **and** the `scopes`

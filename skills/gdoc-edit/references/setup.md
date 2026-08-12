@@ -178,6 +178,13 @@ to any repo.
 gws auth login --services docs,drive
 ```
 
+> ⚠️ **Check `gws auth status` first if this profile has ever been used by another skill.**
+> A manual login stores exactly the services you name, replacing what was there — so a bare
+> `--services docs,drive` strips a sheets or gmail scope `squad-dashboard`/`receipts` had
+> granted. Request the **union**: everything `gws auth status` already lists, plus
+> `docs,drive`. `gws_doctor.py` does this arithmetic for you and is the preferred path
+> wherever Python works.
+
 A browser opens for Google consent. Because the app is **Internal**, only a real
 **`@nsls.org` Google Workspace account** can complete it — an **alias** address, or a
 personal/consumer Google account that merely *uses* an nsls.org address, is **refused**
@@ -242,7 +249,8 @@ here in case it ever has to be recreated.
    file, which must not be overwritten**), and put a copy in the NSLS builders shared
    Drive location (shared to `allstaff@nsls.org` + `gcp-builders@nsls.org` as readers) —
    that's what builder-setup step 2 points at.
-6. **Log in and verify** (profile env var set): `gws auth login --services docs,drive`,
+6. **Log in and verify** (profile env var set): `python3 <plugin>/skills/gws/scripts/gws_doctor.py`
+   (or, logging in by hand, `gws auth login --services <union of already-granted + docs,drive>`),
    then the smoke test. The `client_id` is the detail to register/track centrally — if it
    ever changes, update the canonical prefix in `multi-secret-profiles.md` and everywhere
    that validates it.
