@@ -46,7 +46,9 @@ dropdown → Import knowledge base**, upload the CSV, and map columns.
 - **URL:** https://docs.google.com/spreadsheets/d/1vJ70z_fx_SQWPrJRBUyyptOoowJ1hbpm6iTEFLNEoF8/edit
 - **Tabs:**
   - `Articles` (sheetId `1111298109`) — every internal article whose body fits
-    Google Sheets' 50,000-char/cell limit. This tab is downloaded and imported.
+    Google Sheets' 50,000-char/cell limit. This tab is the published set — it is
+    downloaded whole only for a deliberate, reconciled mass sync; routine
+    publishes import a changed-row CSV instead.
   - `Oversized (import separately)` (sheetId `977468579`) — articles whose body
     exceeds 50,000 chars. The body cell holds a pointer, not the HTML; the real
     import-ready row lives in a companion CSV in `~/Downloads`
@@ -202,9 +204,19 @@ sheet's column order):
 `Article URL, Article title, Category, Subcategory, Keywords, Meta description, Article body, Article subtitle`
 
 Build the row as clean, normalized HTML, then write it into the master sheet
-(overwrite-in-place or append). Only emit a `.csv` when the article is oversized
-(companion file) — the normal deliverable is the updated sheet, not a file. Any
-CSV you do write is quoted, UTF-8 with BOM (`utf-8-sig`) so accented characters
+(overwrite-in-place or append). **Every publish also produces a CSV** — the
+changed-row `nsls_kb_import_<slug>.csv` the default publish path imports, since
+the sheet itself is the registry and not something HubSpot reads. Which file you
+emit depends on the case:
+
+| Case | File to emit |
+|---|---|
+| Publish, any size | `nsls_kb_import_<slug>.csv` — header + the changed row(s) |
+| Publish, body >50,000 chars | same filename; it carries the full body the `Oversized (import separately)` tab can't hold |
+| Draft | `nsls_kb_draft_<slug>.csv`, and NO sheet row (see workflow step 5) |
+| Deliberate mass sync | none — download the whole `Articles` tab, after reconciling |
+
+Every CSV is quoted, UTF-8 with BOM (`utf-8-sig`) so accented characters
 survive.
 
 **Normalize every body to the house style** before writing it. Because bodies
