@@ -53,6 +53,7 @@ Then open Claude Code and say `/setup` to connect your tools and optionally inst
 | **/pydoc-pipeline** | Generate documentation from Python code |
 | **/web-research** | Structured web research |
 | **/interrogate** | Deep-dive investigation skill |
+| **/nco-list-cleanup** | Turn a school's student roster into NCO invitation files — HubSpot 40% cap, highest-GPA-band-first sampling, Fall/Spring cycle, Ignite append. ⚠️ FERPA data: runs only on the ZDR/Bedrock endpoint, refuses elsewhere |
 | **/signal-setup** | Wire Claude Code into Signal — query Quick Notes, wins, friction, team summaries. Managers + execs only. |
 | **/society-invite-llm-email-prompt** | Build the LLM-node prompt for personalized Society member-invitation emails — NSLS data fields and fill rates, life-stage resolution, voice rules, and the failure catalogue from real testing |
 | **/llm-email-workflow** | The pipeline around an LLM email — data profiling, audience segmentation, node wiring, safety nodes, sandbox-to-live rollout |
