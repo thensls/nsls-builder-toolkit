@@ -137,14 +137,28 @@ Every synonym target must be a real leaf id; a unit test enforces it.
 **You cannot delete an article from this repo.** Bodies come from HubSpot. Do both halves
 and say so plainly:
 
-1. **This repo:** remove the IA leaf that points at it, plus any crosslinks to that leaf,
-   so nothing in the portal links there.
+1. **This repo:** remove every reference, not just the leaf. Grep the slug **and** the leaf
+   id across `src/data/` — there are four kinds of pointer and missing one leaves a live
+   link to a retired article:
+   - the IA leaf in `help-ia.json` whose `source.ref` is the slug;
+   - any `crosslinks` entry on other leaves pointing at that leaf id;
+   - any **guide task** in `help-prospective-tasks.json` / `help-member-tasks.json` with
+     `kind: "kb"` and `ref: "<slug>"` — these address the article directly and survive the
+     leaf's deletion untouched;
+   - any **Popular Help tile** in `help-top-tasks.json` naming the removed leaf id — that
+     one fails silently, since `getTopTaskLeaves()` just drops what it can't resolve.
 2. **HubSpot:** the article itself must be retired in the KB. The next sync then flips it
    to `status: "archived"`, at which point it drops out of search and browse.
 
 Do not offer a "delete" that only removes the leaf. Until it is retired in HubSpot the
 article stays reachable by direct URL and by search, and a hidden-but-live article is worse
 than a visible one.
+
+**Order matters, and the validator is a backstop, not the check.** `validate-help-ia.mjs`
+fails the build on a `kb` ref with no live article — so a guide task you forgot surfaces as
+a red build, but only *after* the HubSpot retirement and the next sync, which means the
+breakage lands on whoever pushes next rather than on this change. Clear the repo-side refs
+in the same PR that starts the retirement.
 
 ### Report portal health
 
