@@ -45,14 +45,14 @@ Before presenting ANY mockup, change, or design output to the user, verify each 
 4. **Rejected patterns avoided** — scan against the rejected list in encoded-principles.md.
 5. **Web/mobile parity** — same content on both platforms unless there's an explicit user-facing reason to differ. No truncated bullets, no dropped links/pricing on mobile.
 6. **Adjacent visual distinction** — for component groups (payment buttons, social pills, CTA pairs), confirm each can be told apart at a one-second glance.
-7. **Heading hierarchy — count AND order.** Count h1=1 with `grep -oE "<h[1-6]" <file> | sort | uniq -c`. **Also** verify no levels skipped in document order — h1 → h3 without h2, or h2 → h4 without h3, fails WCAG 1.3.1. Use Python: `grep -oE "<h[1-6]" file` then walk and flag any `level > last + 1`. Gate-item-7 fails by ORDER even when COUNT passes — see F11 in failure-modes.
+7. **Heading hierarchy — count AND order.** Count h1=1 with `grep -oE "<h[1-6]" <file> | sort | uniq -c`. **Also** verify no levels skipped in document order — h1 → h3 without h2, or h2 → h4 without h3. Use Python: `grep -oE "<h[1-6]" file` then walk and flag any `level > last + 1`. Gate-item-7 fails by ORDER even when COUNT passes — see F11 in failure-modes. Report both the single-`<h1>` and unskipped-levels items as **best practice**: neither is required by WCAG at any level, so don't cite 1.3.1 as failed. The genuine 1.3.1 failure to hunt alongside them is a visual heading marked up as a styled `<div>`/`<p>`, which keeps the structure out of the accessibility tree entirely.
 8. **Real assets > placeholders** — check `~/Downloads/`, `~/Documents/`, `~/Desktop/` for any real asset (logos, badges, photos) before falling back to styled placeholders.
 9. **Terminology accuracy** — domain terms (induction, membership, FOL, dashboard) verified against `references/nsls-context.md` for the specific funnel moment they appear at.
 10. **No orphan references** — after any removal/change, grep for stale references to removed elements; rationale blocks + legend sections + TOCs are consistent with current state. ALSO grep stylesheet for orphan CSS class definitions whose HTML consumers were removed (F13).
 11. **Responsive breakpoint logic (code-ready)** — for any design claimed as production-ready: real `@media` queries on CONTENT, not just doc-wrapper stacking. At minimum: mobile (≤767px), tablet (768-1023px), desktop (≥1024px). If the design is a demonstration (side-by-side device frames), it MUST include an explicit breakpoint specification annotation block so engineers have unambiguous intent. See F14.
 12. **Form error/invalid states** — if the design includes forms, error/invalid states must be defined: `.error` or `:invalid` CSS, error-message containers, `aria-invalid` + `aria-describedby` linking error text to the failing input. Happy-path-only forms fail WCAG 3.3.1 + 3.3.3. See F16.
 13. **Semantic landmarks + ARIA form attrs** — exactly one `<main>` landmark wrapping content. `aria-required` on required form fields. `aria-describedby` linking helper text to inputs. `aria-live` regions for status messages (payment confirmation, error toasts). See F17.
-14. **Code-readiness (low inline styles, tokenized colors, fluid units)** — inline `style="..."` attributes < 10. Color values use `var(--token)` references where the value is a brand or semantic color; hex literals reserved for one-off brand marks (Apple/Google/PayPal logos). Critical typography + spacing in `rem` (not px) to support WCAG 1.4.4 user text scaling. See F15, F18, F19.
+14. **Code-readiness (low inline styles, tokenized colors, fluid units)** — inline `style="..."` attributes < 10. Color values use `var(--token)` references where the value is a brand or semantic color; hex literals reserved for one-off brand marks (Apple/Google/PayPal logos). Critical typography + spacing in `rem` (not px). This is a **house standard**, not a 1.4.4 failure — browser zoom scales `px` text, so a `px` page normally passes 1.4.4. The real gain from `rem` is respecting the user's browser font-size preference, which zoom doesn't cover. File 1.4.4 only on observed loss at 200% (clipping, overlap, a control scrolled out of reach). See F15, F18, F19.
 
 The full failure-mode catalog (calibrated against real session failures) is in `references/design-validate-failure-modes.md` — read it before output.
 
@@ -293,7 +293,7 @@ If the user wants a real SUS survey, use `templates/sus-instrument.md`.
 ## WCAG 2.2 considerations
 
 This skill covers WCAG 2.1 A + AA. WCAG 2.2 added 9 criteria; three are relevant to enrollment:
-- **2.5.8 Target Size (Minimum)** — AA — 24×24 CSS px minimum
+- **2.5.8 Target Size (Minimum)** — AA — 24×24 CSS px minimum, subject to five exceptions (spacing, inline, equivalent control, user-agent-determined, essential). Rule them out before calling an undersized target a failure — body-copy links and well-separated small controls conform. Detail in `references/qa-checks.md` → QA.targets.
 - **3.3.7 Redundant Entry** — A — don't re-ask info already entered
 - **3.3.8 Accessible Authentication (Minimum)** — AA — no cognitive function tests for login
 

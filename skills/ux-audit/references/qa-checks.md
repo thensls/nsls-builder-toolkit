@@ -6,13 +6,26 @@ Run these against the artifact you were given. For each check, **quote the resul
 
 Finding prefix: `QA.<area>` — e.g. `QA.links`, `QA.responsive`, `QA.forms`.
 
+**Say which kind of finding it is.** Most checks here are house standard, not conformance
+minimums, and calling a house preference a "WCAG failure" is a correctness bug in the audit
+itself — it burns the author's trust on the findings that *are* failures, and it pressures
+them into changes the spec never asked for.
+
+| Label | Means |
+|---|---|
+| **AA failure** | Cites a specific success criterion AND the page actually fails it, exceptions considered. Blocking. |
+| **House standard** | Our bar, above the spec (44px targets, `rem` typography, token colors). Real, but not a conformance claim. |
+| **Best practice** | Widely-recommended, not in the spec at any level (single `<h1>`, unskipped heading levels). |
+
+Only the first label may name a criterion as failed.
+
 ---
 
 ## QA.links — destinations resolve and behave
 
 - Every `href` resolves. Fetch each one; quote the status code. A 200 is a pass, a 3xx needs the final destination checked, 4xx/5xx is P0 if it's a primary CTA.
 - No `href="#"`, `href=""`, or placeholder URLs (`example.com`, `TODO`, `lorem`) left in.
-- External links carry `target="_blank"` **with** `rel="noopener noreferrer"`. `target="_blank"` without `rel` is a security finding, not a nit.
+- External links carry `target="_blank"` with `rel="noopener"` (**house standard**, not a security finding). Every evergreen browser has implied `noopener` on `target="_blank"` since 2021, so the reverse-tabnabbing hole this used to guard is closed by default — write it for explicitness and old-browser reach, and report a missing `rel` as a house-standard nit. Do **not** file it as a vulnerability. `noreferrer` is a separate, opt-in decision: it strips the `Referer` header, which can break partner attribution and analytics, so only require it where the destination shouldn't learn the origin.
 - Internal links use the app's client-side routing rather than forcing a full page reload, where the framework supports it.
 - Anchor targets exist — every `href="#section"` has a matching `id`.
 
@@ -37,7 +50,15 @@ grep -oE 'href="[^"]*"' <file> | sort -u
 
 ## QA.targets — hit areas are usable
 
-- Interactive targets ≥ **44×44 CSS px** (WCAG 2.5.5 AAA / practical mobile floor). 24×24 is the 2.2 AA minimum — treat 44 as the target and 24 as the hard fail.
+- Interactive targets ≥ **44×44 CSS px** — WCAG 2.5.5 is AAA, so this is a **house standard**, and the practical mobile floor.
+- Under 24×24 is an **AA failure under 2.5.8 only after you've ruled out its exceptions.** Check them before writing the finding, because most real undersized controls land in one:
+  - **Spacing** — a 24px-diameter circle centered on the target intersects no other target's circle. Small but well-separated passes.
+  - **Inline** — the target sits in a sentence, or its size is constrained by the line-height of surrounding non-target text. Body-copy links pass.
+  - **Equivalent** — another control on the same page does the same job at conforming size.
+  - **User agent** — the size comes from the UA and the author hasn't modified it.
+  - **Essential** — the presentation is legally required or essential to the information (a map pin, an image-hotspot).
+  
+  Quote which exception you checked. An undersized-but-exempt target can still be a house-standard finding — just don't call it a 2.5.8 failure.
 - Adjacent targets have ≥ 8px separation so a thumb can't hit two.
 - Nothing interactive sits under a fixed header/footer at any breakpoint.
 
@@ -51,7 +72,7 @@ grep -oE 'href="[^"]*"' <file> | sort -u
 ## QA.semantics — structure is machine-readable
 
 - Exactly one `<main>` landmark wrapping the content; `<nav>`, `<header>`, `<footer>` used where they apply.
-- Exactly one `<h1>`, and **no skipped levels in document order** — h1→h3 without h2 fails WCAG 1.3.1. This fails by ORDER even when the COUNT passes. See F11.
+- Exactly one `<h1>`, and **no skipped levels in document order** (h1→h3 without h2). Both are **best practice**, not conformance minimums: WCAG nowhere requires a single `<h1>`, and W3C treats skipped ranks as advisory — a page with correctly marked-up headings satisfies 1.3.1 whether or not the ranks are contiguous. Report these as best-practice findings and do not cite 1.3.1 as failed. What *would* fail 1.3.1 is a visual heading that isn't a heading element at all (a styled `<div>` or a bolded `<p>`) — that removes structure from the accessibility tree, and it's the thing actually worth hunting here. This still fails by ORDER even when the COUNT passes. See F11.
 - `aria-live` regions for status messages (confirmations, error toasts).
 
 ```bash
@@ -63,7 +84,7 @@ Then walk the headings in document order and flag any `level > last + 1`.
 
 - Inline `style="..."` attributes < 10; styling lives in the stylesheet. See F18.
 - Colors reference tokens (`var(--token)`) rather than scattered hex literals. Third-party marks (Apple/Google/PayPal) are the legitimate exception. See F19.
-- Critical typography and spacing in `rem`, not `px`, so user text scaling works (WCAG 1.4.4). See F15.
+- Critical typography and spacing in `rem`, not `px` — **house standard**, not a 1.4.4 failure. 1.4.4 is outcome-based (text resizes to 200% without loss of content or function), and browser zoom scales CSS-pixel text just fine, so a `px` page routinely passes it. The real argument for `rem` is the one thing zoom doesn't cover: `px` ignores a user's browser font-size preference, so someone who set 20px default text still gets your 14px. Make that case; don't cite the criterion. Only file 1.4.4 when you've actually observed loss at 200% — clipped text, overlap, a control scrolled out of reach. See F15.
 - No orphans after any removal — grep for stale references to removed elements, and for CSS class definitions whose HTML consumers are gone. See F13.
 
 ## QA.consistency — the artifact agrees with itself
