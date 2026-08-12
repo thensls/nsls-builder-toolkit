@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
@@ -252,21 +253,41 @@ def _http_post_json(url, body, timeout):
     """
     payload = json.dumps(body)
     if shutil.which("curl"):
-        result = subprocess.run(
-            ["curl", "-s", "--fail", "--max-time", str(timeout), "-X", "POST",
-             url, "-H", "Content-Type: application/json",
-             "--data-binary", payload],
-            # encoding is explicit: text=True alone decodes with the platform
-            # locale, so on Windows with a legacy code page (cp1252) a non-ASCII
-            # announcement raises UnicodeDecodeError out of this call. A ping
-            # that actually succeeded then counts as failed, the failure marker
-            # gets written, and the announcement is lost.
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=timeout + 10,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"curl exited {result.returncode}")
-        return json.loads(result.stdout)
+        # curl PRESENT is not curl WORKING. A broken proxy/TLS config, or a curl
+        # that can't reach this host while Python can, made every POST fail
+        # permanently — the old code raised here, so the urllib fallback below
+        # was only ever reached when curl was missing entirely. Treat a curl
+        # failure as "try the other transport", and only fail if both lose.
+        started = time.monotonic()
+        try:
+            result = subprocess.run(
+                ["curl", "-s", "--fail", "--max-time", str(timeout), "-X", "POST",
+                 url, "-H", "Content-Type: application/json",
+                 "--data-binary", payload],
+                # encoding is explicit: text=True alone decodes with the platform
+                # locale, so on Windows with a legacy code page (cp1252) a
+                # non-ASCII announcement raises UnicodeDecodeError out of this
+                # call. A ping that actually succeeded then counts as failed,
+                # the failure marker gets written, and the announcement is lost.
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=timeout + 10,
+            )
+            if result.returncode == 0:
+                return json.loads(result.stdout)
+            # 28 == curl's own operation-timeout. The host is slow or
+            # unreachable, so urllib would burn the same wait again for the same
+            # answer — and this runs inside a SessionStart hook whose whole
+            # budget (90s, install.sh) covers a replayed ping AND a live one.
+            # Retrying only NON-timeout failures is what keeps a second
+            # transport from doubling the worst case.
+            if result.returncode == 28:
+                raise RuntimeError("curl exited 28 (timeout)")
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("curl timed out")
+        except (OSError, ValueError):
+            pass  # curl unusable or returned unparseable JSON — try urllib
+        # Only the remaining slice of this call's budget, for the same reason.
+        timeout = max(5, timeout - (time.monotonic() - started))
     req = urllib.request.Request(
         url,
         data=payload.encode(),
