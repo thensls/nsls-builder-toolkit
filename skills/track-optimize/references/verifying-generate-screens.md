@@ -56,10 +56,22 @@ no error, so the track looks authored-correctly and the model fills the gap by i
 
 ## 3. Diff every printed number against the snapshot, in code
 
-Never by eye. Load `skills/value-moment/data/grounding-snapshot.json` and assert each printed figure
-exists in `majors[cip].careers[*].medianWageAnnual` or `stateWages[soc][ST]`. Assert each named
-occupation appears in that major's career list; models add plausible neighbours that were never
-supplied.
+Never by eye. Load `skills/value-moment/data/grounding-snapshot.json`. Then, for each printed
+figure, **resolve the occupation the prose attributes it to** and assert the figure matches
+*that* entry — `majors[cip].careers[<that occupation>].medianWageAnnual`, or
+`stateWages[<that occupation's soc>][ST]` for a state figure. Assert each named occupation
+appears in that major's career list too; models add plausible neighbours that were never supplied.
+
+**Pair the number to the name — don't just check set membership.** "Does this figure appear
+somewhere in `careers[*]`?" plus "does this occupation appear somewhere in `careers[*]`?" both
+pass when the sentence names career A and prints career B's wage. That is a misattribution, and
+it is indistinguishable from grounded output to a check that only asks whether each value exists
+in the aggregate. A figure that resolves against the wrong occupation must **fail**.
+
+Note this is a *different* failure from the fabricated `$146,910` placeholder in *Authoring
+rules* below — there the
+number existed nowhere in the snapshot, so a membership check catches it. Misattribution uses only
+real values, so membership checks pass it through. You need both assertions.
 
 ## 4. Test the empty case
 
