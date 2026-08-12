@@ -40,12 +40,21 @@ If `gws` is not on the PATH, install it.
 manual path below. (The old `google-workspace-cli-installer.sh` script was
 retired upstream and its URL 404s — releases ship per-arch tarballs now.)
 ```bash
-T="aarch64-apple-darwin"                                   # Apple Silicon
-[ "$(uname -m)" = "x86_64" ] && T="x86_64-apple-darwin"    # Intel Mac; Linux: use the *-unknown-linux-gnu assets
-D=$(mktemp -d) && cd "$D" \
+# Pick the asset for THIS os/arch — a mac tarball on Linux installs a binary
+# that cannot exec, and the --version check at the end fails with no clue why.
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64)              T="aarch64-apple-darwin" ;;
+  Darwin-x86_64)             T="x86_64-apple-darwin" ;;
+  Linux-aarch64|Linux-arm64) T="aarch64-unknown-linux-gnu" ;;
+  Linux-x86_64)              T="x86_64-unknown-linux-gnu" ;;
+  *) T="" ; echo "No gws release asset for $(uname -s)/$(uname -m)" >&2 ;;
+esac
+# sha256: coreutils ships sha256sum, macOS ships shasum. Pick what exists.
+if command -v shasum >/dev/null 2>&1; then SHA='shasum -a 256'; else SHA='sha256sum'; fi
+[ -n "$T" ] && D=$(mktemp -d) && cd "$D" \
   && curl --proto '=https' --tlsv1.2 -fsSLO "https://github.com/googleworkspace/cli/releases/latest/download/google-workspace-cli-$T.tar.gz" \
   && curl --proto '=https' --tlsv1.2 -fsSLO "https://github.com/googleworkspace/cli/releases/latest/download/google-workspace-cli-$T.tar.gz.sha256" \
-  && [ "$(shasum -a 256 "google-workspace-cli-$T.tar.gz" | awk '{print $1}')" = "$(awk '{print $1}' "google-workspace-cli-$T.tar.gz.sha256")" ] \
+  && [ "$($SHA "google-workspace-cli-$T.tar.gz" | awk '{print $1}')" = "$(awk '{print $1}' "google-workspace-cli-$T.tar.gz.sha256")" ] \
   && tar -xzf "google-workspace-cli-$T.tar.gz" \
   && mkdir -p ~/.local/bin && mv "$(find . -type f -name gws | head -1)" ~/.local/bin/gws && chmod +x ~/.local/bin/gws \
   && ~/.local/bin/gws --version && echo "gws installed — make sure ~/.local/bin is on your PATH"

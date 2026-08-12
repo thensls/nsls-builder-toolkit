@@ -137,7 +137,7 @@ Wrap the item in a document (title, About, the How-learning-works tenets, the on
 item) and render:
 ```bash
 PYTHONPATH="$HOME/.local/lib/nsls-pydeps:/tmp/pptx_deps" python3.12 -c 'import docx' 2>/dev/null \
-  || python3.12 -m pip install python-docx --target "$HOME/.local/lib/nsls-pydeps" -q
+  || python3.12 -m pip install --upgrade python-docx --target "$HOME/.local/lib/nsls-pydeps" -q
 python3.12 scripts/render_academic_outcomes.py document.json out.docx
 ```
 Upload `out.docx` as a Society Google Doc via `gdoc-build`'s `gws drive files

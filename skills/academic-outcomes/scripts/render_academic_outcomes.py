@@ -16,7 +16,7 @@ Then upload the .docx as a Google Doc with gdoc-build's `gws drive files create
 Requires python-docx. Guard on a real import, not a directory (macOS /tmp
 cleanup guts old installs but leaves the dirs):
     PYTHONPATH="$HOME/.local/lib/nsls-pydeps:/tmp/pptx_deps" python3.12 -c 'import docx' 2>/dev/null \
-      || python3.12 -m pip install python-docx --target "$HOME/.local/lib/nsls-pydeps" -q
+      || python3.12 -m pip install --upgrade python-docx --target "$HOME/.local/lib/nsls-pydeps" -q
 
 Document JSON shape — see references/outcomes-json-schema.md. In brief:
 {

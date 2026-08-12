@@ -485,8 +485,16 @@ fi
 
 echo ""
 echo "Installing gws (Google Workspace CLI)..."
+GWS_OK=0
 if command -v gws &>/dev/null; then
   echo "  gws: already installed ($(gws --version 2>/dev/null | head -1))"
+elif [ -x "$HOME/.local/bin/gws" ] && "$HOME/.local/bin/gws" --version >/dev/null 2>&1; then
+  # A working gws already sits at the install target but ~/.local/bin isn't on
+  # PATH, so `command -v` missed it. Do NOT re-download over it — the old code
+  # overwrote this binary and then deleted it if the fresh download failed its
+  # version check, destroying a working install. Just fix the PATH below.
+  echo "  gws: already installed at ~/.local/bin (not on PATH — fixing that below)"
+  GWS_OK=1
 else
   # Upstream retired their installer script (the old
   # google-workspace-cli-installer.sh URL 404s — every fresh Mac install hit
@@ -537,36 +545,62 @@ else
   fi
   if [ "$GWS_OK" = "1" ]; then
     echo "  gws installed to ~/.local/bin ($("$HOME/.local/bin/gws" --version 2>/dev/null | head -1)). Authenticate later with: gws auth login"
-    case ":$PATH:" in
-      *":$HOME/.local/bin:"*) ;;
-      *)
-        if [ "$TEST_MODE" = "1" ]; then
-          echo "  Note: ~/.local/bin isn't on your PATH — add it to use gws (test mode won't touch your shell profile)."
+  else
+    echo "  Note: gws install failed — /gdoc-build and /gdoc-edit will prompt you to install it."
+  fi
+fi
+
+# PATH fix-up, outside the install branch so it also runs for a gws we FOUND at
+# ~/.local/bin rather than downloaded (that's the whole point of the elif above).
+if [ "$GWS_OK" = "1" ]; then
+  case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *)
+      if [ "$TEST_MODE" = "1" ]; then
+        echo "  Note: ~/.local/bin isn't on your PATH — add it to use gws (test mode won't touch your shell profile)."
+      else
+        # Pick the rc file the user's LOGIN SHELL actually reads. Selecting by
+        # file-existence order (zshrc, then bashrc, then bash_profile) wrote the
+        # export into ~/.bashrc for any zsh user who merely happened to have
+        # one — and zsh never sources it, so gws stayed missing while the
+        # installer reported PATH configured.
+        GWS_SHELL=$(basename "${SHELL:-}" 2>/dev/null || true)
+        if [ -z "$GWS_SHELL" ] || [ "$GWS_SHELL" = "sh" ]; then
+          case "$(uname -s)" in
+            Darwin) GWS_SHELL="zsh" ;;
+            *)      GWS_SHELL="bash" ;;
+          esac
+        fi
+        GWS_RC=""
+        case "$GWS_SHELL" in
+          zsh) GWS_RC="${ZDOTDIR:-$HOME}/.zshrc" ;;
+          bash)
+            # bash reads .bashrc for interactive non-login shells, but macOS
+            # Terminal starts login shells, which read .bash_profile instead.
+            if [ -f "$HOME/.bashrc" ]; then GWS_RC="$HOME/.bashrc"
+            elif [ -f "$HOME/.bash_profile" ]; then GWS_RC="$HOME/.bash_profile"
+            else
+              case "$(uname -s)" in
+                Darwin) GWS_RC="$HOME/.bash_profile" ;;
+                *)      GWS_RC="$HOME/.bashrc" ;;
+              esac
+            fi
+            ;;
+          *) GWS_RC="" ;;  # fish/nu/etc: different syntax — instruct, don't corrupt
+        esac
+        if [ -z "$GWS_RC" ]; then
+          echo "  Note: ~/.local/bin isn't on your PATH, and $GWS_SHELL needs a syntax this installer doesn't write."
+          echo "        Add ~/.local/bin to your PATH manually to use gws."
         else
-          GWS_RC=""
-          if [ -f "$HOME/.zshrc" ]; then GWS_RC="$HOME/.zshrc";
-          elif [ -f "$HOME/.bashrc" ]; then GWS_RC="$HOME/.bashrc";
-          elif [ -f "$HOME/.bash_profile" ]; then GWS_RC="$HOME/.bash_profile"; fi
-          if [ -z "$GWS_RC" ]; then
-            # Fresh machines often have NO rc file at all (stock macOS ships
-            # without ~/.zshrc) — create the shell's default one rather than
-            # silently leaving gws off PATH.
-            case "$(uname -s)" in
-              Darwin) GWS_RC="$HOME/.zshrc" ;;
-              *)      GWS_RC="$HOME/.bashrc" ;;
-            esac
-            touch "$GWS_RC"
-          fi
+          [ -f "$GWS_RC" ] || touch "$GWS_RC"
           if ! grep -q '\.local/bin' "$GWS_RC" 2>/dev/null; then
             { echo ""; echo "# gws (NSLS Builder Toolkit)"; echo 'export PATH="$HOME/.local/bin:$PATH"'; } >> "$GWS_RC"
             echo "  Added ~/.local/bin to PATH in $(basename "$GWS_RC") (takes effect in new terminals)."
           fi
         fi
-        ;;
-    esac
-  else
-    echo "  Note: gws install failed — /gdoc-build and /gdoc-edit will prompt you to install it."
-  fi
+      fi
+      ;;
+  esac
 fi
 
 # --- Step 3.8: Node.js check (the signal MCP server needs it) ---

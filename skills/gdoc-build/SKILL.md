@@ -32,7 +32,7 @@ The fastest path for a builder asking for a Google Doc:
 2. **Confirm install pattern.** Guard on a real import, not a directory — macOS `/tmp` cleanup guts old installs but leaves the dirs, so a `-d` check passes on a broken install weeks later:
    ```bash
    PYTHONPATH="$HOME/.local/lib/nsls-pydeps:/tmp/pptx_deps" python3.12 -c 'import docx' 2>/dev/null \
-     || python3.12 -m pip install python-docx --target "$HOME/.local/lib/nsls-pydeps" -q
+     || python3.12 -m pip install --upgrade python-docx --target "$HOME/.local/lib/nsls-pydeps" -q
    ```
    (`~/.local/lib/nsls-pydeps` is the durable home; `/tmp/pptx_deps` stays on the path only as a legacy fallback for machines that already have it.)
 3. **Copy the template.** `cp templates/build_doc.py ~/build_<short-name>.py` (must be in `~`, not `/tmp` — see gws cwd gotcha below). Customize content sections.
@@ -138,7 +138,7 @@ These are the wounds. Codified so we don't relive them.
 | `gws --upload` rejects `/tmp/foo.docx` | Error: `resolves to '/private/tmp/foo.docx' which is outside the current directory` | `cp /tmp/foo.docx ~/foo.docx && cd ~ && gws ...` |
 | `gws` mixes stderr into stdout | JSON parse fails on `Using keyring backend: keyring` line | Pipe through `tail -10` or `grep -v "keyring"` before parsing — **but put `set -o pipefail` first**, or the pipe hides gws failures (next row) |
 | A `gws` write "succeeds" but nothing changed | `\| tail`/`\| grep` makes the pipeline's exit status the *filter's* (always 0), so a 403/404 reads as success | `set -o pipefail` before any piped `gws` call, then verify by re-reading the resource. gws also returns a JSON `{"error":{...}}` body on **stdout** — check for an `error` key even on exit 0 |
-| `python3.14` venv broken on this machine | `pip install` succeeds but `import` fails | Use `python3.12 -m pip install --target ~/.local/lib/nsls-pydeps`; run with `PYTHONPATH=~/.local/lib/nsls-pydeps python3.12 ...` (see MEMORY.md "Python / PPTX / DOCX Environment") |
+| `python3.14` venv broken on this machine | `pip install` succeeds but `import` fails | Use `python3.12 -m pip install --upgrade --target ~/.local/lib/nsls-pydeps`; run with `PYTHONPATH=~/.local/lib/nsls-pydeps python3.12 ...` (see MEMORY.md "Python / PPTX / DOCX Environment") |
 | Deps guard passes but the build explodes with `ImportError` | Guard tested `[ -d /tmp/pptx_deps/docx ]` — macOS `/tmp` cleanup deletes old *files* but leaves *dirs*, so the check passes on a gutted install | Guard on a real import (Quick Start step 2), and keep deps in the durable `~/.local/lib/nsls-pydeps` |
 | Custom brand fonts disappear after upload | Lexend / HW Cigars fall back to system default in Google Docs | Use Calibri for body. Brand expression comes from colors, not fonts. |
 | Table renders without borders in Google Docs | Cells lack explicit `w:tcBorders` — Google's importer **drops** the borders that `table.style` promises | The template's `add_table()` calls `set_cell_borders()` on every cell. If you build a table by hand, do the same — `table.style` alone will NOT survive import |
@@ -171,7 +171,7 @@ For runtime errors:
 
 | Error | Cause | Fix |
 |---|---|---|
-| `ModuleNotFoundError: No module named 'docx'` | `PYTHONPATH` not set or pkg not installed | `python3.12 -m pip install python-docx --target ~/.local/lib/nsls-pydeps && PYTHONPATH=~/.local/lib/nsls-pydeps python3.12 build.py` |
+| `ModuleNotFoundError: No module named 'docx'` | `PYTHONPATH` not set or pkg not installed | `python3.12 -m pip install --upgrade python-docx --target ~/.local/lib/nsls-pydeps && PYTHONPATH=~/.local/lib/nsls-pydeps python3.12 build.py`. **`--upgrade` is load-bearing** — without it pip sees the (damaged) package already present in the target, exits 0 without writing, and the next build raises the same `ImportError`. |
 | `python3.12: command not found` | Older system Python | Check `ls /usr/local/bin/python3.1*`; install via `brew install python@3.12` if missing |
 | gws CLI returns 401/403 | Auth expired | Re-auth via the gws login flow (this is `/gws`'s problem, not this skill's) |
 | gws upload "Bad Request" | Wrong `--upload-content-type` | For `.docx`, use exactly `application/vnd.openxmlformats-officedocument.wordprocessingml.document` |

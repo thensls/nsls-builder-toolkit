@@ -198,12 +198,38 @@ git config --global user.email; git config --global user.name
 
 If either is empty, **ask — don't note**: "One more credit thing: commits you
 push need a Git identity or GitHub won't show them as yours. Want me to set it
-to <their name> / <builder email>?" On yes:
+to <their name> / <builder email>?"
+
+**Before writing `BUILDER_EMAIL`, check it actually earns attribution.** GitHub
+links a commit to a profile only when the author email is an address *verified on
+that account*. `BUILDER_EMAIL` is whatever they gave in Step 1.5 — often a work
+alias that isn't on their GitHub — and setting it produces exactly the
+unattributed orphan commit this step exists to prevent, while reporting success.
+So ask: *"Is <builder email> one of the addresses on your GitHub account?"*
+
+- **Yes** → use it.
+- **No / not sure** → use the account's noreply address, which always attributes
+  and never publishes their real email. Build it from the username validated in
+  Step 1.7:
+
+  ```bash
+  GH_ID=$(curl -fsSL "https://api.github.com/users/<validated username>" | grep -o '"id": *[0-9]*' | grep -o '[0-9]*')
+  echo "${GH_ID}+<validated username>@users.noreply.github.com"
+  ```
+
+  Say which you're using and why — a noreply address looks odd in `git log` if
+  nobody explained it.
+
+On yes:
 
 ```bash
-git config --global user.email "<builder email>"
+git config --global user.email "<attributing email — BUILDER_EMAIL or the noreply address>"
 git config --global user.name "<Full Name>"
 ```
+
+Verify rather than assume: after the first push, the commit avatar links to their
+profile. A plain-grey avatar with no link means the email still isn't on the
+account.
 
 Skippable, but asked — same pattern as the email and GitHub username above:
 every credit-relevant identity field gets actively collected, none left as a

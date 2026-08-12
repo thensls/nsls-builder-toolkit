@@ -3,7 +3,7 @@
 Usage:
     1. cp this file to ~/build_<short-name>.py and customize the BODY section.
     2. PYTHONPATH="$HOME/.local/lib/nsls-pydeps:/tmp/pptx_deps" python3.12 ~/build_<short-name>.py
-       (deps missing? python3.12 -m pip install python-docx --target ~/.local/lib/nsls-pydeps -q)
+       (deps missing? python3.12 -m pip install --upgrade python-docx --target ~/.local/lib/nsls-pydeps -q)
     3. set -o pipefail; cd ~ && gws drive files create \\
          --json '{"name":"<doc title>","mimeType":"application/vnd.google-apps.document"}' \\
          --upload <short-name>.docx \\
