@@ -97,14 +97,45 @@ def _find_claude():
     return None
 
 
+# Cumulative wall-clock ceiling for this whole migration run.
+#
+# The per-call timeouts below bound each CLI call individually but nothing
+# bounded their SUM: stage A alone is marketplace list (30) + add (60) +
+# install (60) = 150s worst case, inside a SessionStart hook whose entire
+# budget is 90s (install.sh). Blowing it doesn't just fail the migration — the
+# hook is killed, so sync_pointers and the session ping never run either, and
+# the builder silently stops getting pointer updates and credit.
+#
+# session-start.py injects `_NSLS_MIGRATION_DEADLINE` (a time.monotonic()
+# value) into the exec globals with the slice it can spare. The fallback
+# applies when the script is run directly.
+#
+# Running out of budget is not a failure mode here: every stage is idempotent
+# and retries next session, so a partial run just makes progress and stops.
+_DEADLINE = globals().get("_NSLS_MIGRATION_DEADLINE") or (time.monotonic() + 35)
+
+
+def _budget_left():
+    return _DEADLINE - time.monotonic()
+
+
 def _claude(args, timeout):
-    """Run a claude CLI subcommand. Returns (ok, stdout+stderr)."""
+    """Run a claude CLI subcommand. Returns (ok, stdout+stderr).
+
+    The requested timeout is clamped to whatever remains of the run's
+    cumulative budget, so no sequence of calls can overrun the hook.
+    """
     claude = _find_claude()
     if not claude:
         return False, "claude CLI not found"
+    remaining = _budget_left()
+    if remaining <= 1:
+        # Don't start work we can't finish; next session picks up here.
+        return False, "migration budget exhausted; will retry next session"
     try:
         result = subprocess.run(
-            [claude, *args], capture_output=True, text=True, timeout=timeout
+            [claude, *args], capture_output=True, text=True,
+            timeout=min(timeout, remaining),
         )
         return result.returncode == 0, (result.stdout or "") + (result.stderr or "")
     except Exception as e:
@@ -142,6 +173,20 @@ def _shims_present():
 
 
 def _org_stubs_exist():
+    """True if any org stub remains — or if we could not prove otherwise.
+
+    Fail-CLOSED on purpose. This is the gate on writing the done-marker, and
+    the marker is permanent: once written, _stage_b never runs again. An
+    unreadable SKILL.md used to be swallowed by `continue` here AND by the same
+    guard in _remove_org_stubs, so a stub that couldn't be deleted also
+    couldn't be detected — the run looked clean, the marker was written, and
+    that machine kept both the legacy shim and the plugin copy of every skill
+    active forever, with no retry.
+
+    Treating "I couldn't tell" as "something's still there" costs one extra
+    retry next session; the alternative costs a permanently double-wired
+    install that nothing will ever notice.
+    """
     if not _SKILLS_DIR.is_dir():
         return False
     for entry in _SKILLS_DIR.iterdir():
@@ -151,7 +196,7 @@ def _org_stubs_exist():
                     and _STUB_MARKER in stub.read_text(encoding="utf-8-sig")):
                 return True
         except Exception:
-            continue
+            return True  # undetermined — assume not clean, retry next session
     return False
 
 

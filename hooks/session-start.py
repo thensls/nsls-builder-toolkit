@@ -208,13 +208,31 @@ def run_plugin_migration():
     the clone is absent and this is a no-op. Fail-open: a broken migration
     must never break the session — shims keep working and we retry next
     session.
+
+    Bounded: the migration's CLI calls are individually timed out but their
+    sum was not, and stage A's worst case (30 + 60 + 60) is nearly double the
+    whole 90s SessionStart budget install.sh configures. Overrunning kills the
+    hook, which also drops sync_pointers and the session ping — so a slow
+    migration would quietly cost the builder pointer updates and credit.
+
+    Budget arithmetic for the 90s hook: git_pull takes up to 15s and the live
+    session_ping up to 35s (PING_TIMEOUT), so ~40s is genuinely spare;
+    ensure_plugin_fresh claims 20s of it. 25s here leaves headroom for
+    sync_pointers and keeps the common path well inside budget. A first
+    migration may need more than one session to finish, which is exactly how
+    the stages are built — both are idempotent and resume next session.
     """
     script = PLUGIN_DIR / "hooks" / "migrate_to_plugin.py"
     if not script.exists():
         return
     try:
         code = compile(script.read_text(encoding="utf-8"), str(script), "exec")
-        exec(code, {"__name__": "nsls_migrate", "__file__": str(script)})
+        exec(code, {
+            "__name__": "nsls_migrate",
+            "__file__": str(script),
+            # Consumed by migrate_to_plugin.py as its cumulative ceiling.
+            "_NSLS_MIGRATION_DEADLINE": time.monotonic() + 25,
+        })
     except Exception:
         pass
 
