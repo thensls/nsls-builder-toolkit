@@ -64,7 +64,7 @@ grep -oE 'href="[^"]*"' <file> | sort -u
 
 ## QA.forms — the unhappy path is designed
 
-- Error and invalid states defined: `.error` / `:invalid` styling, a real error-message container, `aria-invalid` and `aria-describedby` wiring the message to the failing input. Happy-path-only forms fail WCAG 3.3.1 and 3.3.3. See F16.
+- Error and invalid states defined: `.error` / `:invalid` styling, a real error-message container, `aria-invalid` and `aria-describedby` wiring the message to the failing input. Missing them is a **house standard** finding by default. It becomes an **AA failure** under 3.3.1 only where the form *automatically detects* an input error and fails to identify/describe it in text — so a static mockup with no demonstrated validation doesn't qualify; say `not auditable from this input` instead of asserting the criterion. 3.3.3 adds a suggestion requirement only when a correction is known and offering it wouldn't jeopardize security or purpose (don't demand one for a failed password or a card number). See F16.
 - `aria-required` on required fields; `autocomplete` and `inputmode` set correctly (`email`, `tel`, `numeric`, `one-time-code`).
 - Submit is guarded against double-fire while a request is in flight.
 - Labels are real `<label for>` elements, not placeholder text doing double duty.
