@@ -14,8 +14,15 @@ bet has to redo.
 
 ### Read before you research
 
-`list_competitors`, then `get_competitor(<key or name>)` for anything already
-tracked. Each page reports computed `freshness`:
+`list_competitors` first — it returns each company's **`key`**, and that key
+(or the row's id) is what `get_competitor` accepts. It does NOT accept a display
+name: `get_competitor("PathwayU")` returns `competitor not found`, because the
+stored key is `pathwayu`. Take the key from the listing rather than guessing it
+from the name. (The WRITE tools are the opposite — `competitor_name` and
+`competitor_homepage` are exactly how you tag a company you have not looked up.)
+
+Then `get_competitor(<key or id>)` for anything already tracked. Each page
+reports computed `freshness`:
 
 - **`fresh`** — the shared memo is done. Do NOT re-derive what a colleague
   already established; cite the existing evidence rows instead. But freshness
