@@ -26,7 +26,7 @@ Given a raw school roster, it:
 Includes Hannah's February 2026 rules (Presidential column, GENERIC_2 achievement tiers,
 campus-email preference, per-school Dean's List threshold), handles GPA supplied as inline
 band rows and lists with no class-year column, and ships a FERPA form-availability
-reference for 104 schools under `reference/`.
+reference for 105 schools under `reference/`.
 
 **To use:** run `claude` in this repo and say something like *"process this NCO list"*
 with the school file attached or its path. The skill loads automatically.

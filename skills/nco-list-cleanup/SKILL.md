@@ -75,7 +75,8 @@ lookups. If it isn't, just ask the user for the school's Total Enrollment number
 2. **Detect file type** — using the auto-detection table below.
 3. **Clean & standardize** — dedupe by email, parse names, split addresses, validate.
 4. **Apply filters** — valid class years only, GPA thresholds, exclude international/
-   military addresses for standard invitations.
+   military addresses for every **postal** output (Standard *and* Mail Only; Email Only
+   needs no address).
 5. **Sample** — fill the 40% cap (see *Sampling order* — highest GPA band first for
    Academic Achievement files, otherwise A–Z by last name). Never exceed the cap.
 6. **Determine the cycle label** — Fall vs Spring from the file's arrival month (see
@@ -131,8 +132,20 @@ Ignite, so this decision shouldn't be arbitrary.
 - **Files with no GPA at all:** there's nothing to rank on, so sort A–Z by last name and
   take the first N (the original rule).
 
-Either way, everyone not taken into NCO goes to the Ignite list, and NCO + Ignite must
-together account for every unique student (no one dropped, no one in both).
+Either way, every **eligible** student not taken into NCO goes to the Ignite list. The
+reconciliation is over the eligible pool, not the raw file:
+
+```
+unique students in file
+  = ineligible (filtered out)          ← seniors/grad, invalid class year, GPA below
+  +                                       threshold, international/military address
+    eligible = NCO (up to the cap) + Ignite (the remainder)
+```
+
+Neither list receives a filtered-out student — Ignite is the overflow of people we *could*
+invite but didn't have cap room for, not a bucket for everyone we excluded. Report all
+three numbers in the summary so the arithmetic is checkable: filtered-out (by reason),
+NCO, Ignite. No eligible student is dropped, and none appears in both.
 
 ### NCO cycle label (Fall vs Spring)
 Every run belongs to an invitation *cycle* — this label names the Ignite master file
@@ -155,9 +168,14 @@ NCO output. Getting it from the file's arrival month keeps it correct without an
 having to remember to update the skill each season.
 
 ### Address requirements
-- Email-only invitations: no address needed.
-- Standard invitations: must have a valid US address.
+- **Email Only** invitations (file types 5 and 6): no address needed.
+- **Standard AND Mail Only** invitations (types 1–4): must have a valid US address.
 - Exclude international addresses and military addresses (APO / AE / FPO).
+
+**The rule follows the channel, not the file-type name.** Mail Only output is *entirely*
+postal — there is no email fallback for those students — so an unmailable address there is
+worse than in a Standard file, not exempt. Any file type that produces a postal mailing
+gets the same address screen.
 
 ---
 
@@ -375,6 +393,6 @@ CYCLE
 
 ## REFERENCE FILES
 
-- `reference/FERPA_Form_Availability.md` — FERPA form/contact method for 104 schools.
+- `reference/FERPA_Form_Availability.md` — FERPA form/contact method for 105 schools.
   Consult it when a question comes up about how a given school handles FERPA / directory
   information requests.

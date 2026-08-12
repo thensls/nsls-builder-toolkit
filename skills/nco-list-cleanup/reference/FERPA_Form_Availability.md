@@ -1,7 +1,7 @@
-# FERPA Form Availability Across 104 Colleges and Universities
+# FERPA Form Availability Across 105 Colleges and Universities
 
 This reference compiles the electronic form, PDF form, or contact method for submitting
-FERPA/directory information requests at each of the 104 institutions listed. Each entry
+FERPA/directory information requests at each of the 105 institutions listed. Each entry
 reflects the most current publicly available information found on each school's registrar
 or FERPA policy page.
 
@@ -93,45 +93,45 @@ or FERPA policy page.
 | 74 | Southern Wesleyan University | No online form; non-disclosure form available in person at Office of Academic Records |
 | 75 | Southwest Mississippi Community College | No dedicated form found; written request to Registrar's Office at (601) 276-2001 |
 | 76 | Southwestern Community College — **Sylva, NC** (`southwesterncc.edu`) | PDF forms available at https://www.southwesterncc.edu/registrar/forms-0 (Authorization to Release, Request to Prohibit Directory Info Release, Revocation forms) |
-| 76a | Southwestern Community College — **Creston, IA** (`swcciowa.edu`) | ⚠️ Separate institution — form not yet verified. Do NOT use the NC forms URL. Confirm with the Creston registrar before acting; identify by the `swcciowa.edu` email domain. |
-| 77 | St. Bonaventure University | No dedicated form found; written request to Registrar no later than 5 days after first day of fall classes; (716) 375-2020 |
-| 78 | St. Olaf College | No dedicated form found; written request to registrar@stolaf.edu |
-| 79 | SUNY Maritime College | PDF form ("FERPA Release Form") available on Registrar's Office page; registrar@sunymaritime.edu |
-| 80 | Stetson University | PDF forms available on Registrar's forms page (Request to Withhold Directory Information, Inspect/Review Records, Amend Records); registrar@stetson.edu |
-| 81 | Swarthmore College | No dedicated form found; written request to Registrar's Office (Parrish Hall); deans@swarthmore.edu |
-| 82 | Thomas College | Electronic form available via MyThomas student portal; studentaffairs@thomas.edu |
-| 83 | Thomas Jefferson University | No dedicated form found; written request to University.Registrar@jefferson.edu |
-| 84 | Toccoa Falls College | PDF FERPA consent form available on website; non-disclosure forms provided at fall registration; registrar@tfc.edu |
-| 85 | Touro University Nevada | Electronic form available via TouroOne student portal (FERPA Waiver Form); TUN.Registrar@touro.edu |
-| 86 | Universal Technical Institute | FERPA Revocation Form referenced in catalog; written request to Student Services Director at local campus |
-| 87 | University of Arkansas Grantham | No dedicated form found; written request to Registrar; consent/release via Student Portal; (800) 955-2527 |
-| 88 | University of Arkansas Hope-Texarkana | Electronic system available; FERPA privacy settings managed through Workday (UA System) |
-| 89 | University of California-San Francisco | PDF sample consent form available via Registrar; submit requests to Office of the Registrar at (415) 476-8280 |
-| 90 | University of Hawaii Maui College | Electronic form available via Kuali Build platform at https://maui.hawaii.edu/forms |
-| 91 | University of Jamestown | Electronic form available at https://www2.uj.edu/current-student/accepted-students/next-steps/fees-forms-handbooks/ferpa-online-submission (requires UJ login) |
-| 92 | University of Puerto Rico-Humacao | No dedicated form found online; contact Registraduría (Registrar's Office) directly at campus |
-| 93 | Valparaiso University | PDF/DOCX FERPA Release Form available via https://www.valpo.edu/general-counsel/policies/; parent access via DataVU portal; registrar@valpo.edu |
-| 94 | Wagner College | Electronic form ("FERPA Directory Opt-Out Form") available at https://wagner.edu/registrar/forms/; registrar@wagner.edu |
-| 95 | Washington Adventist University | No online form; forms available in person at Office of the Registrar; (301) 891-4119 |
-| 96 | West Coast University | Electronic form via student portal (My Documents → FERPA Release Form); no public PDF |
-| 97 | West Virginia Wesleyan College | No dedicated form found; FERPA block requested through Registrar; registrar@wvwc.edu |
-| 98 | Western Dakota Technical College | PDF forms available on Student Forms page (Authorization to Release Information and Third Party Release); Registrar@wdt.edu |
-| 99 | Widener University | PDF form available at https://sites.widener.edu/registrarmc/files/2019/01/Records-Request-Form-FERPA-2o3ktca.pdf; also online via myWidener portal; registrar-mc@widener.edu |
-| 100 | Wiley University | No online form; forms available in person at Office of Student Records/Registrar; registrar@wileyc.edu |
-| 101 | William Jessup University | Electronic/downloadable form ("FERPA Disclosure Form") at https://my.jessup.edu/registrar/forms-petitions/; registrar@jessup.edu |
-| 102 | William Woods University | PDF form available at https://www.williamwoods.edu/admissions/undergraduate/docs/ferpa_form_pdf.pdf; registrar@williamwoods.edu |
-| 103 | Wisconsin Lutheran College | No dedicated form found; contact registrarsoffice@wlc.edu |
-| 104 | York College of Pennsylvania | Electronic form ("Student Information Release Authorization Form") available via Registrar; proxy access via YCPWeb for Parents portal |
+| 77 | Southwestern Community College — **Creston, IA** (`swcciowa.edu`) | ⚠️ Separate institution — form not yet verified. Do NOT use the NC forms URL. Confirm with the Creston registrar before acting; identify by the `swcciowa.edu` email domain. |
+| 78 | St. Bonaventure University | No dedicated form found; written request to Registrar no later than 5 days after first day of fall classes; (716) 375-2020 |
+| 79 | St. Olaf College | No dedicated form found; written request to registrar@stolaf.edu |
+| 80 | SUNY Maritime College | PDF form ("FERPA Release Form") available on Registrar's Office page; registrar@sunymaritime.edu |
+| 81 | Stetson University | PDF forms available on Registrar's forms page (Request to Withhold Directory Information, Inspect/Review Records, Amend Records); registrar@stetson.edu |
+| 82 | Swarthmore College | No dedicated form found; written request to Registrar's Office (Parrish Hall); deans@swarthmore.edu |
+| 83 | Thomas College | Electronic form available via MyThomas student portal; studentaffairs@thomas.edu |
+| 84 | Thomas Jefferson University | No dedicated form found; written request to University.Registrar@jefferson.edu |
+| 85 | Toccoa Falls College | PDF FERPA consent form available on website; non-disclosure forms provided at fall registration; registrar@tfc.edu |
+| 86 | Touro University Nevada | Electronic form available via TouroOne student portal (FERPA Waiver Form); TUN.Registrar@touro.edu |
+| 87 | Universal Technical Institute | FERPA Revocation Form referenced in catalog; written request to Student Services Director at local campus |
+| 88 | University of Arkansas Grantham | No dedicated form found; written request to Registrar; consent/release via Student Portal; (800) 955-2527 |
+| 89 | University of Arkansas Hope-Texarkana | Electronic system available; FERPA privacy settings managed through Workday (UA System) |
+| 90 | University of California-San Francisco | PDF sample consent form available via Registrar; submit requests to Office of the Registrar at (415) 476-8280 |
+| 91 | University of Hawaii Maui College | Electronic form available via Kuali Build platform at https://maui.hawaii.edu/forms |
+| 92 | University of Jamestown | Electronic form available at https://www2.uj.edu/current-student/accepted-students/next-steps/fees-forms-handbooks/ferpa-online-submission (requires UJ login) |
+| 93 | University of Puerto Rico-Humacao | No dedicated form found online; contact Registraduría (Registrar's Office) directly at campus |
+| 94 | Valparaiso University | PDF/DOCX FERPA Release Form available via https://www.valpo.edu/general-counsel/policies/; parent access via DataVU portal; registrar@valpo.edu |
+| 95 | Wagner College | Electronic form ("FERPA Directory Opt-Out Form") available at https://wagner.edu/registrar/forms/; registrar@wagner.edu |
+| 96 | Washington Adventist University | No online form; forms available in person at Office of the Registrar; (301) 891-4119 |
+| 97 | West Coast University | Electronic form via student portal (My Documents → FERPA Release Form); no public PDF |
+| 98 | West Virginia Wesleyan College | No dedicated form found; FERPA block requested through Registrar; registrar@wvwc.edu |
+| 99 | Western Dakota Technical College | PDF forms available on Student Forms page (Authorization to Release Information and Third Party Release); Registrar@wdt.edu |
+| 100 | Widener University | PDF form available at https://sites.widener.edu/registrarmc/files/2019/01/Records-Request-Form-FERPA-2o3ktca.pdf; also online via myWidener portal; registrar-mc@widener.edu |
+| 101 | Wiley University | No online form; forms available in person at Office of Student Records/Registrar; registrar@wileyc.edu |
+| 102 | William Jessup University | Electronic/downloadable form ("FERPA Disclosure Form") at https://my.jessup.edu/registrar/forms-petitions/; registrar@jessup.edu |
+| 103 | William Woods University | PDF form available at https://www.williamwoods.edu/admissions/undergraduate/docs/ferpa_form_pdf.pdf; registrar@williamwoods.edu |
+| 104 | Wisconsin Lutheran College | No dedicated form found; contact registrarsoffice@wlc.edu |
+| 105 | York College of Pennsylvania | Electronic form ("Student Information Release Authorization Form") available via Registrar; proxy access via YCPWeb for Parents portal |
 
 ---
 
 ## Summary breakdown
 
-Across the 104 institutions surveyed, form availability falls into several broad categories:
+Across the 105 institutions surveyed, form availability falls into several broad categories:
 
 **Schools with electronic web forms or portal-based submission** (approximately 30 schools): Grand Canyon University, McKendree University, Minnesota West, Mitchell Technical College, Moravian University, Otis College, Quincy University, Rhode Island College, Ringling College, Rockhurst University, Rutgers-Camden, Saint Louis Community College, Saint Mary's College (CA), Thomas College, Touro University Nevada, University of Arkansas Hope-Texarkana, University of Hawaii Maui College, University of Jamestown, Wagner College, West Coast University, William Jessup University, York College of Pennsylvania, and others offer electronic submission through student portals or dedicated web forms.
 
-**Schools with downloadable PDF forms** (approximately 30 schools): Georgia Southwestern State, Huntingdon College, Indiana Tech, Kaua'i Community College, Lincoln Memorial University, Lincoln University, Louisiana State-Eunice, Madonna University, MCPHS, Millikin University, Moreno Valley College, Motlow State, Muhlenberg College, Nebraska Methodist College, Oakwood University, Ottawa University, Shippensburg University, Siena Heights, Southwestern Community College, SUNY Maritime, Stetson University, Toccoa Falls College, Valparaiso University, Western Dakota Technical, Widener University, and William Woods University provide downloadable PDF forms.
+**Schools with downloadable PDF forms** (approximately 30 schools): Georgia Southwestern State, Huntingdon College, Indiana Tech, Kaua'i Community College, Lincoln Memorial University, Lincoln University, Louisiana State-Eunice, Madonna University, MCPHS, Millikin University, Moreno Valley College, Motlow State, Muhlenberg College, Nebraska Methodist College, Oakwood University, Ottawa University, Shippensburg University, Siena Heights, Southwestern Community College (NC only — the Iowa school is unverified), SUNY Maritime, Stetson University, Toccoa Falls College, Valparaiso University, Western Dakota Technical, Widener University, and William Woods University provide downloadable PDF forms.
 
 **Schools requiring in-person or written requests only** (approximately 44 schools): The remaining institutions either provide forms only in person at their Registrar's Office or require a written request (by mail, fax, or email) to the Registrar. Notable contact emails include registrar@academyart.edu (Academy of Art), registrar@greensboro.edu (Greensboro College), reginfo@isu.edu (Idaho State), registrar@king.edu (King University), registrar@stolaf.edu (St. Olaf), and University.Registrar@jefferson.edu (Thomas Jefferson University), among others listed above.
 
