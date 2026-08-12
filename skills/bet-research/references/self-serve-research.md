@@ -19,10 +19,17 @@ tracked. Each page reports computed `freshness`:
 
 - **`fresh`** — the shared memo is done. Do NOT re-derive what a colleague
   already established; cite the existing evidence rows instead. But freshness
-  is a property of the **company page, not of your bet**: steps 3 and 4 below
-  (job coverage and this bet's stance) have never been run for THIS bet, so
-  run them, and still write the bet's own `market.alternatives` synthesis. A
-  fresh page you only read leaves the bet's competition view empty — which
+  is a property of the **company page, not of your bet**, and the two halves
+  behave differently:
+  - **Step 4 (stance) is always yours to write** — a stance is per-bet by
+    definition, so a fresh page has none for the bet in hand. Same for the
+    bet's own `market.alternatives` synthesis.
+  - **Step 3 (coverage) is shared, and gated on the JOB, not on your bet** —
+    a claim another bet's research already made still stands. Run it for the
+    jobs THIS bet delivers that carry no claim yet; the grid's `unassessed`
+    cells are that worklist.
+
+  A fresh page you only read leaves the bet's competition view empty — which
   looks identical to having no competitors.
 - **`stale`** (>180 days) or **`never`** — the page needs work. A `never`
   page is a stub that grew out of someone's evidence tagging and has no memo
