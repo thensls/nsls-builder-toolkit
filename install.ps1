@@ -222,15 +222,28 @@ if ($NodeCmd) {
     # Blocking action item, not a passing warn: without Node, /signal-setup
     # fails and the day-planner dashboard (the Step 7 payoff) stays locked.
     $PrereqReport += "  [ACTION NEEDED] Node.js is not installed - /signal-setup and the day-planner dashboard won't work without it."
+    # $NodeInstallExit distinguishes "needs elevation" (retry as admin will work)
+    # from any other winget failure (download error, source error, package not
+    # found) where re-running the identical command as admin changes nothing.
+    # Surface the code and route to the manual installer in that case, rather
+    # than prescribing a retry that already failed.
+    $NodeRetryWorthwhile = $true
     if ($NodeInstallExit -eq 1602) {
         $PrereqReport += "                  The automatic install failed (winget 1602): it needs an elevation prompt this shell can't show."
+    } elseif ($null -ne $NodeInstallExit -and $NodeInstallExit -ne 0) {
+        $PrereqReport += "                  The automatic install failed (winget exit $NodeInstallExit) - not an elevation problem, so re-running it as administrator won't help."
+        $NodeRetryWorthwhile = $false
     } elseif (-not $IsElevated) {
         $PrereqReport += "                  Installing it needs an administrator PowerShell."
     }
-    $PrereqReport += "                  Open one: Start -> type 'powershell' -> right-click Windows PowerShell -> Run as administrator. Then run:"
-    $PrereqReport += "                  winget install --id OpenJS.NodeJS.LTS -e --source winget"
-    if (-not $HasWinget) {
-        $PrereqReport += "                  (This machine has no winget - instead download Node LTS from https://nodejs.org and run the installer.)"
+    if ($NodeRetryWorthwhile -and $HasWinget) {
+        $PrereqReport += "                  Open one: Start -> type 'powershell' -> right-click Windows PowerShell -> Run as administrator. Then run:"
+        $PrereqReport += "                  winget install --id OpenJS.NodeJS.LTS -e --source winget"
+    } else {
+        $PrereqReport += "                  Download Node LTS from https://nodejs.org and run the installer (no winget needed)."
+        if (-not $HasWinget) {
+            $PrereqReport += "                  (This machine has no winget, so that's the only path.)"
+        }
     }
     $PrereqReport += "                  Afterwards restart Claude Code and run /signal-setup."
 }

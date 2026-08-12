@@ -256,7 +256,13 @@ def _http_post_json(url, body, timeout):
             ["curl", "-s", "--fail", "--max-time", str(timeout), "-X", "POST",
              url, "-H", "Content-Type: application/json",
              "--data-binary", payload],
-            capture_output=True, text=True, timeout=timeout + 10,
+            # encoding is explicit: text=True alone decodes with the platform
+            # locale, so on Windows with a legacy code page (cp1252) a non-ASCII
+            # announcement raises UnicodeDecodeError out of this call. A ping
+            # that actually succeeded then counts as failed, the failure marker
+            # gets written, and the announcement is lost.
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=timeout + 10,
         )
         if result.returncode != 0:
             raise RuntimeError(f"curl exited {result.returncode}")

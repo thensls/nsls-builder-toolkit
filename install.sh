@@ -593,7 +593,11 @@ if [ "$GWS_OK" = "1" ]; then
           echo "        Add ~/.local/bin to your PATH manually to use gws."
         else
           [ -f "$GWS_RC" ] || touch "$GWS_RC"
-          if ! grep -q '\.local/bin' "$GWS_RC" 2>/dev/null; then
+          # Match the exact export line, not the bare substring: a commented-out
+          # export, or an unrelated path that merely contains ".local/bin"
+          # (/opt/app/.local/bin), would satisfy a substring grep and we'd skip
+          # appending — leaving gws off PATH while reporting it configured.
+          if ! grep -qE '^[[:space:]]*export PATH="\$HOME/\.local/bin' "$GWS_RC" 2>/dev/null; then
             { echo ""; echo "# gws (NSLS Builder Toolkit)"; echo 'export PATH="$HOME/.local/bin:$PATH"'; } >> "$GWS_RC"
             echo "  Added ~/.local/bin to PATH in $(basename "$GWS_RC") (takes effect in new terminals)."
           fi
