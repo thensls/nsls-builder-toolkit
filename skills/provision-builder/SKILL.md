@@ -52,37 +52,62 @@ anything on GitHub.
 
 ## Inputs (gather interactively, heartbeat each)
 
-- **Builder:** name + **GitHub username** + **work email**. Resolve email/Slack with
+**Ask for the platforms first** — that answer decides which inputs and which preflight
+checks are even relevant. Gathering repo data for a Netlify-only request, or demanding a
+Railway login nobody needs, is how this skill stalls on a non-problem.
+
+- **Platforms (ask first):** which does the builder actually need? Don't provision all
+  three by reflex.
+  - **Railway + Doppler** — apps: a running service, env vars, deploy on push.
+  - **Netlify** — static sites, decks, one-off deploys. **Team membership only:** this
+    skill never creates Netlify sites (see Notes).
+
+  A builder can need one track, the other, or both. **Netlify-only is a normal request**
+  ("add Davo to Netlify") and must run without any repo or Railway/Doppler input.
+- **Builder:** name + **work email**, always. **GitHub username** only if the
+  Railway/Doppler track is in scope — it's needed to verify repo access, and a
+  Netlify-only run has no repo to check. Resolve email/Slack with
   `slack_search_users "<name>"` and confirm; don't guess an address you'll invite.
-- **Repo(s):** one or more `thensls/...`. If they give an app name, find matches with
+- **Repo(s)** — *Railway/Doppler track only, skip entirely for Netlify-only:* one or more
+  `thensls/...`. If they give an app name, find matches with
   `gh repo list thensls --limit 200 | grep -i <name>` and confirm.
-- **Platforms:** ask which the builder actually needs — don't provision all three by
-  reflex. **Railway + Doppler** for apps (services, env vars, a running backend).
-  **Netlify** for static sites and one-off deploys. A builder can need one, the other,
-  or both. Netlify is **team membership only** — this skill never creates Netlify sites
-  (see Notes).
-- **Confirm the plan** before any write:
-  `Provisioning Josh Hrala (jhrala) → 2 apps (NSLS-Alumni-Tracker, invite-email-simulator) on Railway + Doppler under the NSLS team. Proceed?`
+- **Confirm the plan** before any write — name only the platforms in scope:
+  - both tracks: `Provisioning Josh Hrala (jhrala) → 2 apps (NSLS-Alumni-Tracker, invite-email-simulator) on Railway + Doppler under the NSLS team. Proceed?`
+  - Netlify only: `Adding Davo Wood (davowood@nsls.org) to the NSLS Netlify team as Developer — no repos, no Railway/Doppler. Adds a per-seat Pro charge. Proceed?`
 
 ## Preflight — pick the mode
 
-Check the runner's own access and **say what you found** (heartbeat):
+Check the runner's own access and **say what you found** (heartbeat). **Run only the
+checks for the platforms in scope** — an unauthenticated Railway CLI is irrelevant to a
+Netlify-only request and must not block it.
+
+Always (both tracks) — who is the runner:
 
 ```bash
 ME=$(gh api /user --jq .login)
 gh api /orgs/thensls/memberships/$ME --jq .role     # owner/admin vs member
+```
+
+Railway/Doppler track only:
+
+```bash
 railway whoami                                       # logged in? (Kevin/Jenna = NSLS)
 doppler me                                           # logged in? workplace = NSLS?
 ```
 
-Netlify (only if Netlify is in scope) — **never** run `netlify status` or other Netlify
-CLI commands to check this; the CLI hangs waiting on a prompt that never renders. Read
-the token the CLI already stored and ask the API instead:
+Netlify track only — **never** run `netlify status` or other Netlify CLI commands to
+check this; the CLI hangs waiting on a prompt that never renders. Read the token the CLI
+already stored and ask the API instead:
 
 ```bash
-# macOS: ~/Library/Preferences/netlify/config.json   (NOT ~/.config/netlify — empty on macOS)
-# Linux: ~/.config/netlify/config.json   ·   Windows: %APPDATA%\netlify\config.json
-NF_CFG=~/Library/Preferences/netlify/config.json
+# The config path is OS-specific — pick it, don't hardcode. On macOS it is NOT
+# ~/.config/netlify (that directory exists but is empty, which is the trap).
+case "$(uname -s)" in
+  Darwin)               NF_CFG=~/Library/Preferences/netlify/config.json ;;
+  Linux)                NF_CFG=~/.config/netlify/config.json ;;
+  MINGW*|MSYS*|CYGWIN*) NF_CFG="${APPDATA//\\//}/netlify/config.json" ;;
+  *) echo "Unsupported OS for Netlify config lookup" >&2 ;;
+esac
 NF_TOKEN=$(python3 -c "
 import json,os,sys
 d=json.load(open(os.path.expanduser('$NF_CFG')))
@@ -97,21 +122,29 @@ former-employer accounts in it alongside their NSLS one. Select by matching work
 never take the first token. Reference the variable only — never paste a token value into
 a command, where it would land in the transcript.
 
-- If any CLI isn't authenticated, stop and point to `railway login` / `gh auth login` /
-  `doppler login` (or `/connect`). Resume after. For Netlify, if no token matches the
+- If a CLI **needed for a platform in scope** isn't authenticated, stop and point to
+  `railway login` / `gh auth login` / `doppler login` (or `/connect`). Resume after.
+  Ignore CLIs for platforms that aren't in scope. For Netlify, if no token matches the
   runner's work email, they need to log in to the Netlify CLI once (`netlify login`,
   which opens a browser) — that writes the token this skill reads.
-- **Execute mode** — runner is an org admin and the Railway/Doppler CLIs work: do the
-  CLI creation below, then print the dashboard checklist + Slack draft.
+- **Netlify-only runs skip execute-mode steps 1–3 entirely** — no GitHub repo check, no
+  Railway service, no Doppler project. Go straight to step 4, then the Netlify line of
+  the checklist and the handoff.
+- **Execute mode** — runner is an org admin and the CLIs for the platforms in scope work:
+  do the CLI creation below, then print the dashboard checklist + Slack draft.
 - **Request mode** — runner is *not* an admin (e.g. Josh onboarding a new builder), or
   an execute-mode CLI call fails with a permission error: **create nothing.** Emit a
-  clean *Provisioning request* — repos, services to create, Doppler projects, and the
-  invites needed with access levels — and offer to drop it as a Slack draft to an admin
+  clean *Provisioning request* covering only what's in scope — repos, services to create,
+  Doppler projects, and the invites needed with access levels (for Netlify-only, that's
+  just the team invite and its role) — and offer to drop it as a Slack draft to an admin
   (Kevin or Jenna). Don't thrash against a permission wall; hand it off.
 
 ## Execute-mode steps (idempotent — safe to re-run)
 
-### 1. Verify GitHub access (prerequisite, not something to grant)
+Steps **1–3 belong to the Railway/Doppler track** and are skipped wholesale on a
+Netlify-only run. Step 4 is Netlify. Steps 5–6 apply to whatever was in scope.
+
+### 1. Verify GitHub access — *Railway/Doppler track* (prerequisite, not something to grant)
 
 ```bash
 gh api /orgs/thensls/memberships/<user> --jq .role          # must exist (member/admin)
@@ -254,6 +287,7 @@ Each of these is a shortcut that breaks the skill. If you catch yourself doing i
 | "The Netlify member-add is one API call — I'll just run it." | No. Netlify invites follow the same rule as Railway and Doppler: print the checklist, a human clicks. Being easy to automate isn't a reason to; it emails a person and starts a per-seat charge. |
 | "They need Netlify too, I'll add it while I'm here." | Ask which platforms are actually needed. A Netlify seat costs money and exposes every site. Don't provision a platform nobody asked for. |
 | "I'll check Netlify auth with `netlify status`." | The CLI hangs. Read the stored token and call the REST API (preflight). |
+| "It's a Netlify-only ask, but I'll run the full preflight / ask for the repo anyway." | Don't. Netlify-only is a normal request — no repo, no GitHub username, no Railway or Doppler check. Running them invents a blocker out of an unauthenticated CLI nobody needs. |
 
 ## Diagnostic loop
 
