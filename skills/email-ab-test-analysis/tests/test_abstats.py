@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+"""Tests for the verdict engine — pure, no I/O.
+
+The failure this file exists to prevent is a confident winner printed over a
+difference that was never there. Every test below pins one of the gates that
+stands between a spread and a claim: the significance threshold, the metric the
+spread is measured on, and the window it is measured over.
+
+Hermetic: builds payloads in memory, touches no network and no files.
+"""
+
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+
+from abstats import (analyse, check_counts, first_present, mde_at_n, num,
+                     render, required_n_per_arm, two_proportion_z)
+
+
+def arm(name, delivered, clicked, opened=None, subject="Same subject",
+        periods=None, **extra):
+    a = {"id": name, "name": name, "subject": subject,
+         "delivered": delivered, "clicked": clicked}
+    if opened is not None:
+        a["opened"] = opened
+    if periods:
+        a["periods"] = periods
+    a.update(extra)
+    return a
+
+
+def payload(*arms, **kw):
+    p = {"test": "t", "arms": list(arms)}
+    p.update(kw)
+    return p
+
+
+# --- the statistics themselves ----------------------------------------------
+
+def test_two_proportion_z_matches_a_hand_computed_case():
+    # 50/1000 vs 100/1000: pooled p = 0.075, se = 0.01178, z = -4.244
+    _, _, _, z, p = two_proportion_z(50, 1000, 100, 1000)
+    assert abs(z + 4.244) < 0.01, f"z drifted: {z}"
+    assert p < 0.0001
+
+
+def test_identical_rates_are_never_significant():
+    _, _, _, z, p = two_proportion_z(100, 1000, 100, 1000)
+    assert z == 0 and p == 1.0
+
+
+def test_empty_arm_cannot_produce_a_verdict():
+    """A zero denominator must return "no difference", not divide by zero."""
+    assert two_proportion_z(0, 0, 10, 100) == (0.0, 0.0, 0.0, 0.0, 1.0)
+
+
+def test_required_sample_grows_as_the_effect_shrinks():
+    small, large = required_n_per_arm(0.02, 0.05), required_n_per_arm(0.02, 0.50)
+    assert small > large * 10, "detecting a smaller lift must cost more volume"
+
+
+def test_mde_shrinks_as_the_sample_grows():
+    assert mde_at_n(0.02, 100_000) < mde_at_n(0.02, 1_000)
+
+
+# --- the gate ---------------------------------------------------------------
+
+def test_a_spread_inside_the_noise_is_a_no_read_with_the_cost_of_settling_it():
+    r = analyse(payload(arm("A", 1000, 20), arm("B", 1000, 25)))
+    c = r["comparisons"][0]
+    assert not c["significant"] and c["winner"] is None
+    assert c["mde_at_current_n"] and c["n_needed_per_arm"], (
+        "a no read must say what this sample could have detected and what "
+        "would settle it — otherwise it reads as a shrug")
+    assert "NO READ" in render(r)
+
+
+def test_a_real_difference_names_a_winner():
+    r = analyse(payload(arm("A", 20000, 200), arm("B", 20000, 400)))
+    c = r["comparisons"][0]
+    assert c["significant"] and c["winner"] == "B"
+
+
+def test_a_lopsided_split_still_reads_when_the_smaller_arm_has_the_volume():
+    """The ratio settles nothing; only the smaller arm's volume does."""
+    r = analyse(payload(arm("Big", 1_000_000, 20_000), arm("Small", 20_000, 600)))
+    c = r["comparisons"][0]
+    assert c["significant"], "a 98/2 split with a well-powered small arm reads"
+    assert any("SPLIT IMBALANCE" in w for w in r["warnings"]), (
+        "it still has to say the split was lopsided")
+
+
+# --- the pre-shift rescore --------------------------------------------------
+#
+# A lopsided split usually means traffic was moved to a presumed winner
+# mid-flight. Everything after that moment is not randomised. Warning about it
+# and then scoring the whole window anyway states a rule and breaks it in the
+# same breath.
+
+def test_a_lopsided_split_is_rescored_on_the_periods_before_the_shift():
+    a = arm("A", 10_000, 300, periods={"delivered": [1000, 1000, 8000],
+                                       "clicked": [30, 30, 240]})
+    b = arm("B", 2_100, 63, periods={"delivered": [1000, 1000, 100],
+                                     "clicked": [30, 30, 3]})
+    r = analyse(payload(a, b))
+    assert r["basis"] == "pre_shift", (
+        "the balanced periods exist and are the only randomised evidence")
+    c = r["comparisons"][0]
+    assert (c["a_n"], c["b_n"]) == (2000, 2000), "must drop the post-shift period"
+
+
+def test_a_lopsided_split_with_no_period_data_says_it_could_not_be_rescored():
+    """Never imply a rescore that did not happen."""
+    r = analyse(payload(arm("A", 10_000, 300), arm("B", 2_000, 40)))
+    w = [x for x in r["warnings"] if "SPLIT IMBALANCE" in x]
+    assert w and "could not" in w[0].lower()
+    assert r["basis"] == "lifetime"
+
+
+def test_a_split_lopsided_from_the_first_period_is_not_rescored():
+    """No balanced prefix means there is no randomised window to fall back to."""
+    a = arm("A", 9_000, 270, periods={"delivered": [3000, 3000, 3000],
+                                      "clicked": [90, 90, 90]})
+    b = arm("B", 900, 27, periods={"delivered": [300, 300, 300],
+                                   "clicked": [9, 9, 9]})
+    r = analyse(payload(a, b))
+    assert r["basis"] != "pre_shift"
+    assert any("no balanced" in w.lower() for w in r["warnings"])
+
+
+# --- a winner declared part way through ----------------------------------
+#
+# The usual end of a test is not both arms stopping together. One arm stops and
+# the other keeps sending, because somebody called it and routed the remaining
+# traffic to the winner. The volume ratio does not reveal this — a designed
+# uneven split produces the same ratio — but the shape of the series does.
+
+def test_an_arm_that_stops_while_another_continues_is_flagged_as_a_declaration():
+    a = arm("A", 3000, 90, periods={"delivered": [1000, 1000, 1000],
+                                    "clicked": [30, 30, 30]})
+    b = arm("B", 1000, 30, periods={"delivered": [1000, 0, 0],
+                                    "clicked": [30, 0, 0]})
+    w = [x for x in analyse(payload(a, b))["warnings"] if "DECLARED" in x]
+    assert w, "an arm ending while another continues is the declaration pattern"
+    assert "finer" in w[0].lower(), (
+        "the shared period can itself straddle the moment, so it must say the "
+        "resolution may be too coarse rather than implying a clean window")
+
+
+def test_arms_that_run_together_throughout_are_not_flagged():
+    a = arm("A", 2000, 60, periods={"delivered": [1000, 1000], "clicked": [30, 30]})
+    b = arm("B", 2000, 60, periods={"delivered": [1000, 1000], "clicked": [30, 30]})
+    assert not any("DECLARED" in w for w in analyse(payload(a, b))["warnings"])
+
+
+def test_the_declaration_check_is_suppressed_across_two_different_tests():
+    """Two campaigns are expected to start and stop on their own calendars."""
+    a = arm("A", 3000, 90, periods={"delivered": [1000, 1000, 1000],
+                                    "clicked": [30, 30, 30]})
+    b = arm("B", 1000, 30, periods={"delivered": [1000, 0, 0],
+                                    "clicked": [30, 0, 0]})
+    assert not any("DECLARED" in w
+                   for w in analyse(payload(a, b), cross=True)["warnings"])
+
+
+def test_the_split_check_is_suppressed_across_two_different_tests():
+    """Two campaigns were never one pool, so unequal volume implies nothing."""
+    r = analyse(payload(arm("A", 100_000, 2000), arm("B", 10_000, 200)),
+                cross=True)
+    assert not any("SPLIT IMBALANCE" in w for w in r["warnings"])
+
+
+# --- which metric gets scored -----------------------------------------------
+
+def test_raw_clicks_are_preferred_over_human_only_counts():
+    r = analyse(payload(arm("A", 1000, 50, human_clicked=30),
+                        arm("B", 1000, 40, human_clicked=25)))
+    assert r["primary_metric"] == "clicked"
+
+
+def test_human_clicks_are_scored_only_when_raw_counts_are_absent_and_it_says_so():
+    a = {"id": "A", "name": "A", "delivered": 1000, "human_clicked": 30}
+    b = {"id": "B", "name": "B", "delivered": 1000, "human_clicked": 25}
+    r = analyse(payload(a, b))
+    assert r["primary_metric"] == "human_clicked"
+    assert any("HUMAN CLICKS ONLY" in w for w in r["warnings"])
+
+
+def test_first_present_falls_through_to_the_last_candidate():
+    assert first_present([{"human_clicked": 3}], ("clicked", "human_clicked")) \
+        == "human_clicked"
+
+
+# --- the window -------------------------------------------------------------
+
+def test_scoring_prefers_the_window_where_both_arms_were_live():
+    """Lifetime totals compare different calendars; the overlap does not."""
+    a = arm("A", 11000, 300, periods={"delivered": [10000, 1000],
+                                      "clicked": [280, 20]})
+    b = arm("B", 1000, 10, periods={"delivered": [0, 1000], "clicked": [0, 10]})
+    r = analyse(payload(a, b))
+    assert r["basis"] == "overlap"
+    assert r["comparisons"][0]["a_n"] == 1000, "must score the shared period only"
+
+
+def test_no_period_data_says_the_windows_were_never_verified():
+    r = analyse(payload(arm("A", 1000, 30), arm("B", 1000, 25)))
+    assert r["basis"] == "lifetime"
+    assert any("NO PERIOD DATA" in w for w in r["warnings"])
+
+
+# --- reading the open gap ---------------------------------------------------
+
+def test_an_open_gap_under_an_identical_subject_is_flagged_for_investigation():
+    r = analyse(payload(arm("A", 20000, 300, opened=10000),
+                        arm("B", 20000, 300, opened=6000)))
+    gap = [w for w in r["warnings"] if "OPEN GAP" in w]
+    assert gap, "the subject cannot explain it, so it must be raised"
+    assert "deliverability" in gap[0], (
+        "the first suspect is the lower-opening template, not a broken split")
+    assert "B" in gap[0], "it has to name which arm opened worse"
+
+
+def test_the_open_gap_check_is_suppressed_across_two_different_tests():
+    """Two campaigns months apart are expected to differ on opens."""
+    r = analyse(payload(arm("A", 20000, 300, opened=10000),
+                        arm("B", 20000, 300, opened=6000)), cross=True)
+    assert not any("OPEN GAP" in w for w in r["warnings"])
+
+
+# --- inputs that must not produce a confident answer ------------------------
+
+def test_a_numerator_above_its_denominator_is_refused_not_scored():
+    """A mis-mapped column produced a 500% click rate at p=0.0000."""
+    with pytest.raises(SystemExit) as e:
+        analyse(payload(arm("A", 100, 500), arm("B", 1000, 20)))
+    assert "impossible counts" in str(e.value)
+    assert "exceeds delivered" in str(e.value)
+
+
+def test_impossible_counts_never_reach_the_maths():
+    """Both arms over 100% used to raise ValueError out of math.sqrt."""
+    assert two_proportion_z(500, 100, 500, 100) == (5.0, 5.0, 0.0, 0.0, 1.0)
+
+
+def test_a_null_inside_a_period_series_is_read_as_zero():
+    """ESPs return null for a month with no data; comparing it raised."""
+    a = arm("A", 100, 5, periods={"delivered": [10, None, 20],
+                                  "clicked": [1, 0, 4]})
+    b = arm("B", 100, 7, periods={"delivered": [10, 5, 20],
+                                  "clicked": [1, 2, 4]})
+    r = analyse(payload(a, b))
+    assert r["comparisons"][0]["p_value"] <= 1.0
+
+
+def test_num_coerces_only_real_numbers():
+    assert num(None) == 0 and num("12") == 0 and num(True) == 0
+    assert num(7) == 7 and num(1.5) == 1.5
+
+
+def test_every_arm_shares_one_basis_or_none_of_them_do():
+    """One arm's window against another's lifetime produced a decisive winner
+    out of a mismatch — p=0.00026 on numbers that were never comparable."""
+    a = arm("A", 11000, 300, periods={"delivered": [10000, 1000],
+                                      "clicked": [280, 20]})
+    b = arm("B", 1000, 50, periods={"delivered": [0, 1000]})  # no clicked series
+    r = analyse(payload(a, b))
+    assert r["basis"] == "lifetime", "cannot window one arm and not the other"
+    c = r["comparisons"][0]
+    assert (c["a_n"], c["a_x"]) == (11000, 300)
+    assert (c["b_n"], c["b_x"]) == (1000, 50)
+    assert any("MIXED PERIOD DATA" in w for w in r["warnings"])
+
+
+def test_check_counts_passes_clean_data():
+    check_counts([{"name": "A", "delivered": 100, "clicked": 5}], {"clicked"})
+
+
+def test_a_cross_test_read_is_labelled_observational_without_being_asked():
+    r = analyse(payload(arm("A", 20000, 400), arm("B", 20000, 200)), cross=True)
+    assert any("OBSERVATIONAL" in w for w in r["warnings"])
+
+
+def test_a_cross_test_never_reads_like_a_randomised_win():
+    """Even once the cohort is confirmed, the language has to stay downgraded."""
+    r = analyse(payload(arm("A", 20000, 400), arm("B", 20000, 200)),
+                cross=True, cohort_answered=True)
+    out = render(r)
+    assert "outperformed" in out and "wins" not in out
+
+
+def test_an_unqualified_cross_test_payload_asks_before_naming_a_winner():
+    """Across two sends, no cohort metadata means the question is unanswered."""
+    r = analyse(payload(arm("A", 20000, 400), arm("B", 20000, 200)), cross=True)
+    assert r["cohort_gate"]["state"] == "ask"
+    assert "VERDICT WITHHELD" in render(r)
