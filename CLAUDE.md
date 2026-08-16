@@ -102,6 +102,18 @@ route (register it, assign a reviewer, move the repo) is not "not a flat no" —
 it's a no with homework. The *authorization* route is the second one:
 **if Kevin isn't named, the message isn't finished.** Offer to draft the note.
 
+**When a builder declines, record it so you don't ask again.** Run:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-memory.py" record <topic> --note "<their reason>"
+```
+
+`<topic>` is short and stable — `registration`, `mentor-check`, `design-doc`.
+Session start reads these back for the current build, so a decline sticks across
+sessions rather than resetting every time. Asking a third time about the same
+script is how the toolkit becomes nagware. Anything already listed at session
+start is closed unless the scope genuinely escalated since.
+
 **Ambiguous tier?** Ask the single question that resolves it, and treat the build
 as the **lower** tier until it's answered. Never rule on an unsettled question.
 

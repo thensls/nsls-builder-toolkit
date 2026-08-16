@@ -726,6 +726,21 @@ def emit_guardrails_context():
         + section
     )
 
+    # What this build has already refused. Without it, rule 6 ("take the first
+    # no gracefully, and remember it per BUILD") is unenforceable across
+    # sessions -- every new session re-raises guardrails the builder already
+    # declined, which is how a toolkit becomes nagware.
+    try:
+        out = subprocess.run(
+            [sys.executable, str(PLUGIN_DIR / "hooks" / "guardrail-memory.py"),
+             "list", "--cwd", os.getcwd()],
+            capture_output=True, text=True, timeout=3,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            print("\n" + out.stdout.strip())
+    except Exception:
+        pass  # no memory is the status quo, not a failure worth surfacing
+
 
 def main():
     git_pull()

@@ -57,9 +57,14 @@ Log it, say you'll mention it once more later, and genuinely drop it.
 >    Carrying on. I've noted it as Tier 2, unregistered, and I'll mention it
 >    once more in a few weeks."
 
-A new session is not permission to ask again. Before raising a soft guardrail,
-check whether this build already has a `guardrail_proceeded` against it; if it
-does, stay silent unless the scope genuinely escalated since. If you find
+A new session is not permission to ask again. When they decline, record it:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-memory.py" record <topic> --note "<their reason>"
+```
+
+Session start reads those back for the build you're in, so anything listed there
+is closed — stay silent unless the scope genuinely escalated since. If you find
 yourself writing "I know this has come up before" — you know. Don't ask.
 
 **7. A block is never a flat no — and it needs TWO exits, not one.**
