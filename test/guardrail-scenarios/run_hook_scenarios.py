@@ -92,6 +92,15 @@ def run_scenario(sc: dict, stub_url: str):
     cwd = None
     tmp = None
     _stub_mode["mode"] = sc.get("tracker_stub", "empty")
+    # Always point the allowlist at a throwaway file, even for scenarios that
+    # declare no bases -- otherwise a test would read (and a future one might
+    # write) the builder's real list, which decides what the gate lets through
+    # on their own machine.
+    bases_file = tempfile.NamedTemporaryFile(
+        "w", suffix=".bases", delete=False, encoding="utf-8"
+    )
+    bases_file.write("\n".join(sc.get("setup_test_bases", [])) + "\n")
+    bases_file.close()
     try:
         if sc.get("repo"):
             tmp = make_repo(sc["repo"])
@@ -103,7 +112,11 @@ def run_scenario(sc: dict, stub_url: str):
             text=True,
             cwd=cwd,
             timeout=30,
-            env={**os.environ, "NSLS_TRACKER_URL": stub_url},
+            env={
+                **os.environ,
+                "NSLS_TRACKER_URL": stub_url,
+                "NSLS_AIRTABLE_TEST_BASES_FILE": bases_file.name,
+            },
         )
         blocked = bool(proc.stdout.strip())
         reason = ""
@@ -121,6 +134,16 @@ def run_scenario(sc: dict, stub_url: str):
 def main():
     data = json.loads(SCENARIOS.read_text())
     scenarios = data["hook"]
+
+    # A duplicate id means an earlier edit silently dropped or shadowed a
+    # scenario. That happened on 2026-08-16: a new sandbox case reused an
+    # existing id, was skipped by the add script's own collision guard, and the
+    # suite reported all-green while the case it was meant to prove never ran.
+    # A test that isn't there is worse than one that fails.
+    ids = [s["id"] for s in scenarios]
+    dupes = {i for i in ids if ids.count(i) > 1}
+    if dupes:
+        sys.exit(f"Duplicate scenario id(s): {sorted(dupes)} — fix scenarios.json")
 
     srv, stub_url = start_stub()
     passed, failed = 0, []

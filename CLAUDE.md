@@ -114,6 +114,18 @@ sessions rather than resetting every time. Asking a third time about the same
 script is how the toolkit becomes nagware. Anything already listed at session
 start is closed unless the scope genuinely escalated since.
 
+**If a bulk-write block was against a test base**, take them at their word and
+remember it:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-memory.py" trust-base appXXXXXXXXXXXXXX
+```
+
+Airtable sandboxes and real bases share a hostname and differ only by base ID,
+so the gate can't tell them apart — which meant rehearsing a backfill against a
+copy got blocked for being careful. One declaration per base, then it's silent.
+Only the base IDs actually in the blocked command; never guess one.
+
 **Ambiguous tier?** Ask the single question that resolves it, and treat the build
 as the **lower** tier until it's answered. Never rule on an unsettled question.
 

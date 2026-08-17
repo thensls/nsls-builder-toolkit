@@ -23,9 +23,17 @@ Keyed by git remote slug where there is one, so the memory survives a re-clone
 and follows the build rather than the directory. Falls back to the absolute path
 for repos with no remote.
 
+Also holds the builder's declared Airtable sandbox bases, for the same reason:
+the bulk-write gate cannot tell a test base from the real one (same host, only
+the base ID differs), so a builder rehearsing a backfill against a copy used to
+get blocked for being careful. They say "that's my sandbox" once, and that base
+stops stopping them.
+
 Usage:
     guardrail-memory.py record <topic> [--note "..."] [--cwd PATH]
     guardrail-memory.py list [--cwd PATH]
+    guardrail-memory.py trust-base <appXXXXXXXXXXXXXX>
+    guardrail-memory.py list-bases
 
 Any failure prints nothing and exits 0. A broken memory must never be the reason
 a builder cannot work.
@@ -125,6 +133,45 @@ def describe(cwd):
     )
 
 
+# Same override the gate honours, so tests and the writer agree on one path.
+TEST_BASES_FILE = Path(
+    os.environ.get("NSLS_AIRTABLE_TEST_BASES_FILE")
+    or (Path.home() / ".claude" / ".nsls-airtable-test-bases")
+)
+
+# Airtable base IDs are "app" + exactly 14 alphanumerics. Validated rather than
+# trusted: this file decides what the bulk-write gate lets through, so a typo
+# or a pasted URL fragment must not silently become an allowlist entry.
+BASE_ID_RE = re.compile(r"^app[A-Za-z0-9]{14}$")
+
+
+def trust_base(base_id):
+    if not BASE_ID_RE.match(base_id or ""):
+        print(f"Not an Airtable base ID: {base_id!r} (expected app + 14 chars)")
+        return
+    try:
+        existing = {
+            ln.strip() for ln in TEST_BASES_FILE.read_text().splitlines()
+            if ln.strip() and not ln.strip().startswith("#")
+        }
+    except Exception:
+        existing = set()
+    if base_id in existing:
+        print(f"{base_id} is already trusted as a test base.")
+        return
+    try:
+        TEST_BASES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        new = not TEST_BASES_FILE.exists()
+        with TEST_BASES_FILE.open("a") as f:
+            if new:
+                f.write("# Airtable bases this builder has declared as sandboxes.\n"
+                        "# The bulk-write guardrail will not stop writes to these.\n")
+            f.write(base_id + "\n")
+        print(f"{base_id} trusted as a test base — bulk writes to it won't be stopped.")
+    except Exception:
+        print("Couldn't save that — the guardrail will keep asking.")
+
+
 def main():
     args = sys.argv[1:]
     if not args:
@@ -141,6 +188,13 @@ def main():
         out = describe(cwd)
         if out:
             print(out)
+    elif cmd == "trust-base" and len(args) > 1:
+        trust_base(args[1])
+    elif cmd == "list-bases":
+        try:
+            print(TEST_BASES_FILE.read_text().strip())
+        except Exception:
+            print("No test bases declared.")
 
 
 if __name__ == "__main__":

@@ -436,6 +436,60 @@ WRITE_VERB_RE = re.compile(r"-X\s*(POST|PUT|PATCH|DELETE)\b", re.I)
 BATCH_RE = re.compile(r"https?://\S*\b(batch|bulk|backfill|import|/records)\b", re.I)
 DRYRUN_RE = re.compile(r"--dry[-_]?run|\bDRY_RUN=(1|true)\b", re.I)
 
+# Airtable base IDs are "app" + 14 chars and appear directly in the URL path.
+AIRTABLE_RE = re.compile(r"api\.airtable\.com", re.I)
+AIRTABLE_BASE_RE = re.compile(r"\bapp[A-Za-z0-9]{14}\b")
+
+# Bases the builder has told us are sandboxes. One ID per line, # for comments.
+#
+# Airtable has no separate sandbox host -- a test base and the real one are both
+# api.airtable.com and differ only by base ID -- so the gate cannot tell them
+# apart on its own. Before this list, rehearsing a bulk write against a copy got
+# blocked, which punished exactly the careful behaviour we want people to have.
+#
+# An allowlist of DECLARED test bases rather than a list of known production
+# ones: we don't have a reliable inventory of NSLS's production bases, and
+# inverting it would silently un-protect every base nobody had got round to
+# listing. This way the default stays "block", and a builder who hits it once
+# says "that's my sandbox" and is never bothered about that base again.
+# Overridable so the scenario suite can point at a throwaway file. The suite is
+# hermetic by design (it already stubs the tracker over loopback); a test that
+# rewrote the builder's real allowlist would be changing what the gate lets
+# through on their machine.
+TEST_BASES_FILE = Path(
+    os.environ.get("NSLS_AIRTABLE_TEST_BASES_FILE")
+    or (Path.home() / ".claude" / ".nsls-airtable-test-bases")
+)
+
+
+def declared_test_bases():
+    try:
+        lines = TEST_BASES_FILE.read_text().splitlines()
+    except Exception:
+        return set()  # no file, unreadable => nothing declared => block as before
+    return {
+        ln.strip() for ln in lines
+        if ln.strip() and not ln.strip().startswith("#")
+    }
+
+
+def only_hits_test_bases(cmd: str) -> bool:
+    """True only when this command is Airtable-only AND every base in it is declared.
+
+    Conservative on every axis. If the command also touches HubSpot or
+    Customer.io, a declared Airtable base is irrelevant. If no base ID is
+    visible -- the common case of `$AIRTABLE_BASE_ID` from the environment --
+    we cannot know which base it is, so it does not qualify.
+    """
+    if not AIRTABLE_RE.search(cmd):
+        return False
+    if re.search(r"(api\.hubapi\.com|track\.customer\.io|api\.customer\.io)", cmd, re.I):
+        return False
+    found = set(AIRTABLE_BASE_RE.findall(cmd))
+    if not found:
+        return False
+    return found <= declared_test_bases()
+
 
 def gate_bulk_production_write(tool: str, ti: dict):
     """Production write at scale.
@@ -456,12 +510,19 @@ def gate_bulk_production_write(tool: str, ti: dict):
     ):
         return
 
+    # Rehearsing against a base the builder has already told us is a sandbox.
+    # This is the behaviour we want to encourage, so it passes in silence.
+    if only_hits_test_bases(cmd):
+        return
+
     block(
         "Critical flag — this writes to a production system of record in bulk, "
         "with no dry run and no rollback path I can see. I'm not worried about "
         "the code; I'm worried about the version of this that runs twice.\n\n"
         "A dry-run pass first shows what it would touch — want me to set that "
-        "up? Kevin can also authorize it as-is, and I'll draft that note.",
+        "up? Kevin can also authorize it as-is, and I'll draft that note.\n\n"
+        "If this is a test base, tell me and I'll remember it — you won't be "
+        "stopped on it again.",
         gate="bulk_production_write",
     )
 
