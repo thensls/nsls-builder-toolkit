@@ -182,3 +182,14 @@ def test_an_arm_with_no_sends_is_not_stamped_with_todays_date(
     sys.path.insert(0, str(SCRIPTS))
     from abstats import send_windows
     assert send_windows(w["stats"]) is None
+
+
+def test_an_unsupported_period_is_rejected_before_it_is_sent(monkeypatch,
+                                                             tmp_path, capsys):
+    """`month` for `months` is not an error at the API: it returns every field
+    null and every total zero, which reads exactly like a campaign that never
+    sent. Reject the typo here, where it is still visible."""
+    api = Api({"1": [], "2": []}, {"1": {}, "2": {}})
+    with pytest.raises(SystemExit):
+        run_main(monkeypatch, tmp_path, api, ["--period", "month"])
+    assert "invalid choice" in capsys.readouterr().err

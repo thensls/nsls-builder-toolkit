@@ -376,7 +376,11 @@ def main():
     ap.add_argument("--metric", default="clicked",
                     help="decision metric (default: raw clicks, machine and "
                          "human alike)")
-    ap.add_argument("--period", default="months")
+    # An unsupported value is not an error at the API: it returns every
+    # field null and every total zero, which reads exactly like a campaign
+    # that never sent. Reject the typo here, where it is still visible.
+    ap.add_argument("--period", default="months",
+                    choices=("months", "weeks", "days"))
     ap.add_argument("--steps", type=int, default=12)
     ap.add_argument("--exclude", help="regex of arm names to drop "
                                       f"(default {DEFAULT_EXCLUDE!r})")

@@ -72,6 +72,14 @@ one observed would take about N per arm* — is a **first-class verdict**, not a
 caveat. `abstats.py` computes both figures automatically; report them rather
 than a bare "not significant".
 
+**A p-value assumes one look at a fixed horizon.** Calling a live test the first
+time it crosses the bar is a different procedure with a far worse false-positive
+rate — peek often enough and almost anything crosses. The engine cannot see how
+many times it has been run, so ask what volume was planned, and treat the
+required-n figure as the horizon. An interim read is *what the numbers say so
+far*, reported with the volume still to come; reaching the horizon is what makes
+it a decision.
+
 **The verdict leads; it is never a caveat.** Baseline testing of this task found
 the failure is not ignorance of the statistics — agents compute the p-value
 correctly and then demote it, opening with a confident rollout recommendation
@@ -146,20 +154,17 @@ act on both arms alike, so they cannot favour one, and a click they generate is
 itself evidence the mail reached a real, inbox-placed account.
 
 **That neutrality has one edge, and the engine checks it rather than assuming
-it.** Machine activity is only even-handed while it treats both arms the same,
-and it stops doing so when the arms differ in their links: a security gateway or
-a prefetcher visits a changed URL, a new domain or a new redirect on its own
-schedule, and every one of those visits lands in `clicked` looking exactly like a
-person deciding to act. So where the ESP separates the two counts, `abstats.py`
-scores the raw default and re-runs the same comparison on human clicks alone as a
-check. Agreement is reported and the verdict stands. Disagreement — raw
-significant, human not, or the two pointing at different arms — and the verdict
-is **withheld**, not footnoted. Then look at whether the links or their domains
-differ between the arms. If they do, the raw spread is a machine artefact rather
-than a result, and the test should be scored on `human_clicked`; say which count
-the number came from either way. Where the ESP reports no machine split there is
-nothing to check, and a link change is on its own a reason to read the raw number
-with suspicion.
+it.** Machine activity is even-handed only while it treats both arms the same,
+and it stops doing so when the arms differ in their links: a gateway or
+prefetcher visits a changed URL, domain or redirect on its own schedule, and
+those visits land in `clicked` looking exactly like a person acting. So where the
+ESP separates the counts, `abstats.py` re-runs the comparison on human clicks as
+a check. Agreement is reported and the verdict stands. Disagreement — raw
+significant, human not, or the two pointing at different arms — **withholds** the
+verdict rather than footnoting it, and points at the link diff. If the links do
+differ, the raw spread is a machine artefact, not a result: score it on
+`human_clicked`, and say which count the number came from either way. Where no
+machine split is reported there is nothing to check.
 
 Let the operator set the bar. If they name a conversion metric they actually
 track, score on that. If they ask what to use, recommend clicks. If they sound
@@ -316,6 +321,14 @@ calling the US host returns a redirect rather than an error anyone notices.
 
 **Arm names are not reliable identifiers.** A test can have three arms, and two
 of them can carry an identical name. Key on `action_id` always.
+
+**Three arms is three comparisons, and the bar moves for all of them.** Three
+pairwise tests at 0.05 each carry roughly a 14% chance of a false winner
+somewhere; six arms carry better than even odds. `abstats.py` applies a Šidák
+correction, prints the tightened per-comparison bar in its header, and sizes
+required-n against it, so a multi-arm test needs more volume per arm to say the
+same thing. Report the corrected bar with the verdict — a raw p-value read
+against 0.05 is the mistake this prevents.
 
 **Resend-to-non-opener legs are excluded by default** (matched on a configurable
 name pattern). They send to an already-declined population, so the denominator is

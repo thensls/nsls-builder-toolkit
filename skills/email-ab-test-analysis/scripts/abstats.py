@@ -47,18 +47,32 @@ is the cohort question, not the calendar one.
 """
 
 import argparse
+import calendar
 import json
 import math
 import re
 import sys
 import time
 from itertools import combinations
+from statistics import NormalDist
 
 from espconfig import utf8_stdout
 
 # Normal quantiles, hardcoded so the skill has no scipy dependency.
-Z_ALPHA = {0.10: 1.6448536, 0.05: 1.9599640, 0.01: 2.5758293}
-Z_POWER = {0.80: 0.8416212, 0.90: 1.2815516, 0.95: 1.6448536}
+# Computed, not looked up. A table keyed on 0.10/0.05/0.01 answers a
+# multiple-comparison-corrected alpha with the 0.05 z-value and no complaint,
+# so the sizing figures come back quietly sized against a bar nobody is using.
+_NORM = NormalDist()
+
+
+def z_alpha(alpha):
+    """Two-sided critical z for a significance level."""
+    return _NORM.inv_cdf(1 - alpha / 2)
+
+
+def z_power(power):
+    """One-sided z for a power level."""
+    return _NORM.inv_cdf(power)
 
 # Which elements a metric normally speaks to. Subject and preheader are
 # pre-open decisions; body and CTA are post-open. This is the default reading,
@@ -273,12 +287,19 @@ def check_counts(arms, fields):
     """
     problems = []
     for a in arms:
+        who = a.get("name") or a.get("id")
         n = num(a.get("delivered"))
+        # A negative count does not crash either. two_proportion_z returns a
+        # neutral p=1 for it, so a malformed payload reads as a test that
+        # settled nothing rather than as the input error it is.
+        if n < 0:
+            problems.append(f"  {who}: delivered={n:,} is negative")
         for f in fields:
             x = num(a.get(f))
-            if x > n:
-                problems.append(f"  {a.get('name') or a.get('id')}: "
-                                f"{f}={x:,} exceeds delivered={n:,}")
+            if x < 0:
+                problems.append(f"  {who}: {f}={x:,} is negative")
+            elif x > n:
+                problems.append(f"  {who}: {f}={x:,} exceeds delivered={n:,}")
     if problems:
         raise SystemExit(
             "impossible counts — a numerator above its denominator is a "
@@ -307,7 +328,7 @@ def two_proportion_z(x1, n1, x2, n2):
 
 def required_n_per_arm(p_base, rel_lift, alpha=0.05, power=0.80):
     """Per-arm sample needed to detect a relative lift on a base rate."""
-    za, zb = Z_ALPHA.get(alpha, 1.9599640), Z_POWER.get(power, 0.8416212)
+    za, zb = z_alpha(alpha), z_power(power)
     p2 = p_base * (1 + rel_lift)
     if p2 >= 1 or p_base <= 0 or rel_lift == 0:
         return None
@@ -317,11 +338,52 @@ def required_n_per_arm(p_base, rel_lift, alpha=0.05, power=0.80):
 
 def mde_at_n(p_base, n, alpha=0.05, power=0.80):
     """Smallest relative lift this sample size could have detected."""
-    za, zb = Z_ALPHA.get(alpha, 1.9599640), Z_POWER.get(power, 0.8416212)
+    za, zb = z_alpha(alpha), z_power(power)
     if n <= 0 or p_base <= 0:
         return None
     abs_mde = (za + zb) * math.sqrt(2 * p_base * (1 - p_base) / n)
     return abs_mde / p_base
+
+
+def align_period_axes(arms):
+    """Put every arm's series on one date axis, or say why they cannot be.
+
+    `overlap_window` and `windowed` address periods by INDEX. That is sound for
+    one fetch, where the fetcher already builds a shared axis, and false for a
+    payload composed by `abcompare.py`: two campaigns each carry their own axis,
+    so index 0 is January for one arm and July for the other. Intersecting those
+    positions invents an overlap window out of two calendars that never touched,
+    and then sums mismatched dates into the rates it scores.
+
+    Returns arms whose series are index-comparable, as shallow copies — the
+    payload handed in is not modified.
+    """
+    axes = [a.get("period_dates") for a in arms]
+    if not all(axes):
+        return arms                      # nothing to align against; index is all there is
+    resolutions = {a.get("period_resolution") for a in arms}
+    if len(resolutions) > 1:
+        raise SystemExit(
+            "the arms carry series at different resolutions "
+            f"({', '.join(sorted(str(r) for r in resolutions))}). A day summed "
+            "against a month is not a comparison. Re-fetch both arms the same "
+            "way, or score them on lifetime totals by dropping the series.")
+    if all(ax == axes[0] for ax in axes):
+        return arms                      # already one axis, which is the common case
+
+    axis = sorted({d for ax in axes for d in ax})
+    out = []
+    for a in arms:
+        at = {d: i for i, d in enumerate(a["period_dates"])}
+        periods = {}
+        for k, series in (a.get("periods") or {}).items():
+            periods[k] = [num(series[at[d]]) if d in at and at[d] < len(series)
+                          else 0 for d in axis]
+        b = dict(a)
+        b["periods"] = periods
+        b["period_dates"] = axis
+        out.append(b)
+    return out
 
 
 def overlap_window(arms, key="delivered"):
@@ -406,6 +468,60 @@ def windowed(arm, indices, key):
     if not p or indices is None:
         return None
     return sum(num(p[i]) for i in indices if i < len(p))
+
+
+DAY_SECONDS = 86400
+
+
+def day_start(date):
+    """Unix timestamp of midnight UTC on a YYYY-MM-DD day label."""
+    return calendar.timegm(time.strptime(date, "%Y-%m-%d"))
+
+
+def clip_to_intersection(arms, indices, intersection):
+    """Keep only the periods the measured intersection covers END TO END.
+
+    A period is a bucket, and a bucket the intersection covers only part of
+    holds volume from outside it. The shape that matters is the declared
+    winner: the stopper's last send lands part way through a day, and the
+    runner's sends over the rest of that day were randomised against nothing —
+    yet the day qualifies as shared, because both arms have volume in it.
+
+    Only meaningful at day resolution, which is the only resolution a verified
+    window comes back at. Returns (indices, dropped).
+    """
+    dates = next((a.get("period_dates") for a in arms if a.get("period_dates")),
+                 None)
+    res = next((a.get("period_resolution") for a in arms
+                if a.get("period_resolution")), None)
+    if not dates or res != "day" or not indices:
+        return indices, []
+    lo, hi = intersection
+    kept, dropped = [], []
+    for i in indices:
+        if i >= len(dates):
+            continue
+        start = day_start(dates[i])
+        (kept if start >= lo and start + DAY_SECONDS <= hi + 1
+         else dropped).append(i)
+    if not kept:
+        # Every period straddles an edge — a flight short enough that clipping
+        # would leave nothing to score. Keep the partial window and say so
+        # rather than turning a real, small test into no data at all.
+        return indices, []
+    return kept, dropped
+
+
+def window_day(window, key):
+    """A window's calendar day for `key`, formatted if it was not labelled.
+
+    `send_windows` guarantees the timestamps and nothing else: the date labels
+    beside them are written by the fetcher and absent from a hand-built payload.
+    Reading them directly turned a missing label into a KeyError out of a
+    warning, which is a worse answer than the warning.
+    """
+    return window.get(f"{key}_date") or time.strftime(
+        "%Y-%m-%d", time.gmtime(window[key]))
 
 
 def send_windows(arms):
@@ -510,11 +626,23 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
     arms = payload["arms"]
     if len(arms) < 2:
         raise SystemExit("need at least two arms to compare")
+    arms = align_period_axes(arms)
 
     metric = payload.get("primary_metric") or first_present(arms, CLICK_FIELDS)
     if metric in CLICK_FIELDS and not any(a.get(metric) is not None
                                           for a in arms):
         metric = first_present(arms, CLICK_FIELDS)
+    missing = [a.get("name") or a.get("id") or f"arm {i + 1}"
+               for i, a in enumerate(arms) if a.get(metric) is None]
+    if missing:
+        raise SystemExit(
+            f"the decision metric {metric!r} is missing for: "
+            + ", ".join(missing) +
+            f"\n  An absent count reads as zero, and zero is not an error "
+            f"anywhere below it: against another zero it is a tidy no-read, and "
+            f"against a real count it is a significant win for whichever arm "
+            f"happened to carry the field. Check the field name, or name a "
+            f"metric every arm carries with --metric.")
     open_field = first_present(arms, OPEN_FIELDS)
 
     cross = cross or payload.get("mode") == "cross_test"
@@ -543,6 +671,26 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
     intersection = window_intersection(windows) if windows else None
     if windows and intersection is None:
         idx = []
+    elif windows and intersection and idx and not cross and \
+            declaration_by_timestamp(arms, windows):
+        # Gated on a declaration, and deliberately. Arms almost never stop on
+        # the same second, so the last shared period is partly uncovered in
+        # nearly every well-run test — clipping on that alone would throw away
+        # a whole period of a clean flight to remove a few minutes of jitter.
+        # The guards in `declaration_by_timestamp` are what separate jitter
+        # from an arm that was switched off while the other kept sending, and
+        # that is the case where the uncovered remainder carries real volume.
+        idx, clipped = clip_to_intersection(arms, idx, intersection)
+        if clipped:
+            warnings.append(
+                f"BOUNDARY PERIOD(S) DROPPED: {len(clipped)} shared period(s) "
+                f"were only partly inside the measured window — one arm started "
+                f"or stopped part way through them, so the other arm's sends "
+                f"over the rest of those periods were randomised against "
+                f"nothing. A period counts as shared when both arms have volume "
+                f"in it, which a partly-covered one does. Scored on the periods "
+                f"the window covers end to end."
+            )
     # Only where buckets exist to be mistaken for a window. With no series at
     # all there is no bucket to misread, NO PERIOD DATA below says so, and
     # claiming the window "came from calendar buckets" would be false on the
@@ -626,9 +774,9 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
                                key=lambda p: p[0]["first_send"])
                 earlier, later = order[0], order[-1]
                 when = (f" '{earlier[1].get('name')}' last sent "
-                        f"{earlier[0]['last_send_date']}; "
+                        f"{window_day(earlier[0], 'last_send')}; "
                         f"'{later[1].get('name')}' first sent "
-                        f"{later[0]['first_send_date']}.")
+                        f"{window_day(later[0], 'first_send')}.")
             warnings.append(
                 "NO OVERLAP: the arms never sent at the same time, so this is "
                 f"sequential rather than simultaneous.{when} It can still be "
@@ -765,6 +913,25 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
                 f"before trusting the read."
             )
 
+    # Every extra arm is more chances to see a spread that is not there. Three
+    # arms is three pairwise tests, and three tests at alpha=0.05 carry a ~14%
+    # chance of at least one false winner; six arms is fifteen tests and better
+    # than even odds. Šidák rather than Bonferroni because the exact form costs
+    # nothing here and is fractionally less conservative.
+    n_pairs = len(arms) * (len(arms) - 1) // 2
+    pair_alpha = 1 - (1 - alpha) ** (1.0 / n_pairs) if n_pairs > 1 else alpha
+    if n_pairs > 1:
+        warnings.append(
+            f"{len(arms)} ARMS, {n_pairs} COMPARISONS: the significance bar is "
+            f"tightened from {alpha} to {pair_alpha:.4f} per comparison, so the "
+            f"chance of naming a false winner ANYWHERE in this test stays at "
+            f"{alpha}. Reading each pair at {alpha} instead would put it near "
+            f"{1 - (1 - alpha) ** n_pairs:.0%}. The p-values below are raw; the "
+            f"bar they are read against is the corrected one. A multi-arm test "
+            f"needs more volume per arm than a two-arm test to say the same "
+            f"thing, and that is a property of the design, not of this tool."
+        )
+
     results = []
     for a, b in combinations(arms, 2):
         n1, x1, o1 = counts(a)
@@ -775,7 +942,7 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
         hi, lo = max(p1, p2), min(p1, p2)
         rel = (hi - lo) / lo if lo > 0 else None
 
-        significant = pv < alpha
+        significant = pv < pair_alpha
         base = lo or (x1 + x2) / (n1 + n2 or 1)
         entry = {
             "a": a.get("name"), "b": b.get("name"),
@@ -783,21 +950,27 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
             "a_n": n1, "b_n": n2, "a_x": x1, "b_x": x2,
             "abs_diff_pp": diff * 100, "rel_lift": rel,
             "z": z, "p_value": pv, "significant": significant,
+            "alpha_used": pair_alpha, "comparisons_in_family": n_pairs,
             "winner": winner.get("name") if significant else None,
             "loser": loser.get("name") if significant else None,
         }
         if not significant:
-            entry["mde_at_current_n"] = mde_at_n(base, min(n1, n2), alpha, power)
+            # Sized against the bar it will actually be read at, or the answer
+            # to "how much more do I need" is short by the correction.
+            entry["mde_at_current_n"] = mde_at_n(base, min(n1, n2), pair_alpha,
+                                                 power)
             observed_rel = rel or 0.10
             entry["n_needed_per_arm"] = required_n_per_arm(
-                base, observed_rel if observed_rel > 0.01 else 0.10, alpha, power
+                base, observed_rel if observed_rel > 0.01 else 0.10,
+                pair_alpha, power
             )
         # Click-to-open, when we have opens: isolates body/CTA from subject.
         if metric in CLICK_FIELDS and o1 and o2:
             ctor1, ctor2, _, zc, pc = two_proportion_z(x1, o1, x2, o2)
             unsplit = any(x.get("opens_not_split_by_source") for x in (a, b))
             entry["ctor"] = {"a": ctor1, "b": ctor2, "z": zc, "p_value": pc,
-                             "significant": pc < alpha, "opens_unsplit": unsplit}
+                             "significant": pc < pair_alpha,
+                             "opens_unsplit": unsplit}
 
         # The machine-click split. Raw clicks are the default because machine
         # activity falls on both arms alike — and that holds until the arms
@@ -813,7 +986,7 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
             if h1 is not None and h2 is not None and (h1 or h2) \
                     and n1 and n2:
                 hr1, hr2, _, _, ph = two_proportion_z(h1, n1, h2, n2)
-                corroborates = ph < alpha and (hr1 > hr2) == (p1 > p2)
+                corroborates = ph < pair_alpha and (hr1 > hr2) == (p1 > p2)
                 entry["human_click_check"] = {
                     "a_rate": hr1, "b_rate": hr2, "p_value": ph,
                     "significant": ph < alpha, "corroborates": corroborates}
@@ -849,6 +1022,8 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
         "power": power,
         "cross_test": cross,
         "cohort_gate": gate,
+        "alpha_per_comparison": pair_alpha,
+        "comparisons_in_family": n_pairs,
         "warnings": warnings,
         "comparisons": results,
         "metric_scope": METRIC_SCOPE.get(metric, ()),
@@ -858,8 +1033,12 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
 def render(r):
     out = []
     out.append(f"TEST: {r['test']}")
+    fam = r.get("comparisons_in_family", 1)
+    bar = (f"alpha={r['alpha']} over {fam} comparisons "
+           f"→ {r['alpha_per_comparison']:.4f} each" if fam > 1
+           else f"alpha={r['alpha']}")
     out.append(f"Decision metric: {r['primary_metric']}  "
-               f"(alpha={r['alpha']}, power={r['power']}, basis={r['basis']})")
+               f"({bar}, power={r['power']}, basis={r['basis']})")
     w = r.get("scored_window") or {}
     if r["basis"] in ("overlap", "pre_shift") and r["overlap_periods"]:
         # State the window, not a count of buckets. A count reads as a

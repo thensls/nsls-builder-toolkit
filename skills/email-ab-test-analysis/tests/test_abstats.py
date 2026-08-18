@@ -387,3 +387,68 @@ def test_no_machine_split_means_nothing_to_check():
     c = r["comparisons"][0]
     assert "human_click_check" not in c
     assert c["significant"] and c["winner"] == "b"
+
+
+# --- regressions from the second Macroscope review on PR #144 ----------------
+
+def test_a_metric_no_arm_carries_is_refused_not_scored_as_zero():
+    """An absent count reads as zero, and zero is not an error anywhere below:
+    against another zero it is a tidy no-read, and against a real count it is a
+    significant win for whichever arm happened to carry the field."""
+    with pytest.raises(SystemExit) as e:
+        analyse({"test": "typo", "primary_metric": "clickd", "arms": [
+            arm("a", 10000, 200), arm("b", 10000, 400)]})
+    assert "clickd" in str(e.value)
+
+
+def test_one_arm_missing_the_metric_cannot_hand_the_other_a_win():
+    with pytest.raises(SystemExit) as e:
+        analyse({"test": "half", "primary_metric": "converted", "arms": [
+            arm("a", 10000, 200, converted=90),
+            arm("b", 10000, 400)]})
+    assert "converted" in str(e.value) and "b" in str(e.value)
+
+
+def test_negative_counts_are_input_errors_not_a_no_read():
+    with pytest.raises(SystemExit) as e:
+        check_counts([arm("a", 1000, -5), arm("b", 1000, 50)], ["clicked"])
+    assert "negative" in str(e.value)
+
+    with pytest.raises(SystemExit) as e:
+        check_counts([arm("a", -1000, 5), arm("b", 1000, 50)], ["clicked"])
+    assert "negative" in str(e.value)
+
+
+def test_three_arms_are_scored_against_a_tightened_bar():
+    """Three pairwise tests at 0.05 each carry a ~14% chance of a false winner
+    somewhere. A spread that clears 0.05 but not the corrected bar is a no-read,
+    and saying otherwise is the error the correction exists to stop."""
+    arms_ = [arm("a", 8000, 160), arm("b", 8000, 198), arm("c", 8000, 175)]
+    r = analyse(payload(*arms_))
+    assert r["comparisons_in_family"] == 3
+    assert 0.016 < r["alpha_per_comparison"] < 0.018
+
+    ab = next(c for c in r["comparisons"]
+              if {c["a"], c["b"]} == {"a", "b"})
+    assert 0.017 < ab["p_value"] < 0.05, "the fixture must sit in the gap"
+    assert not ab["significant"], "read at 0.05 this would be a false winner"
+    assert any("3 ARMS, 3 COMPARISONS" in w for w in r["warnings"])
+
+
+def test_two_arms_keep_the_configured_alpha():
+    r = analyse(payload(arm("a", 8000, 160), arm("b", 8000, 198)))
+    assert r["comparisons_in_family"] == 1
+    assert r["alpha_per_comparison"] == 0.05
+    assert r["comparisons"][0]["significant"]
+    assert not any("COMPARISONS:" in w for w in r["warnings"])
+
+
+def test_the_required_sample_is_sized_against_the_corrected_bar():
+    """Otherwise the answer to "how much more do I need" is short by the
+    correction, and the next read arrives just as unable to settle it."""
+    two = analyse(payload(arm("a", 8000, 160), arm("b", 8000, 170)))
+    three = analyse(payload(arm("a", 8000, 160), arm("b", 8000, 170),
+                            arm("c", 8000, 165)))
+    ab2 = two["comparisons"][0]
+    ab3 = next(c for c in three["comparisons"] if {c["a"], c["b"]} == {"a", "b"})
+    assert ab3["n_needed_per_arm"] > ab2["n_needed_per_arm"]

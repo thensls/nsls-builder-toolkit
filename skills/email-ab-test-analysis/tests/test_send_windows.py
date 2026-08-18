@@ -216,19 +216,45 @@ def build_stops_early():
 
 
 def test_the_scored_window_is_the_real_send_range_not_the_bucket():
+    """A month-long bucket is not the window; eight days of shared sending is.
+
+    The challenger's last send lands at 01:00 on the 8th, so the 8th is only
+    partly inside the measured intersection — the control's sends over the rest
+    of that day were randomised against nothing. Where a declared winner is
+    detected the partly-covered boundary period is dropped, which is why this
+    reads to the 7th rather than to the 8th.
+    """
     r = analyse(build_stops_early(), cohort_answered="same")
     w = r["scored_window"]
-    assert w["from"] == "2026-06-01" and w["to"] == "2026-06-08"
-    assert w["days"] == 8 and w["verified"]
+    assert w["from"] == "2026-06-01" and w["to"] == "2026-06-07"
+    assert w["days"] == 7 and w["verified"]
+    assert any("BOUNDARY PERIOD(S) DROPPED" in x for x in r["warnings"])
 
 
 def test_post_declaration_volume_is_excluded_from_the_comparison():
     """The whole defect in one assertion: the surviving arm's solo sends must
-    not sit in the denominator it is scored on."""
+    not sit in the denominator it is scored on. That holds inside the boundary
+    day as well as after it — hence 7 days rather than 8."""
     r = analyse(build_stops_early(), cohort_answered="same")
     c = r["comparisons"][0]
-    assert c["a_n"] == 8000 and c["b_n"] == 8000
+    assert c["a_n"] == 7000 and c["b_n"] == 7000
     assert r["basis"] == "overlap"
+
+
+def test_a_clean_simultaneous_flight_keeps_its_last_day():
+    """The clip must not fire on jitter. Arms almost never stop on the same
+    second, so a rule that dropped every partly-covered boundary period would
+    cost a clean eight-day test its eighth day to remove a couple of hours."""
+    dates = days(T0, 8)
+    payload = {"test": "clean", "primary_metric": "clicked", "arms": [
+        arm("a", dates, [1000] * 8, clicked=[10] * 8),
+        arm("b", dates, [1000] * 8, clicked=[12] * 8,
+            last=_ts("2026-06-08") + 7200),
+    ]}
+    r = analyse(payload, cohort_answered="same")
+    assert r["scored_window"]["to"] == "2026-06-08"
+    assert r["scored_window"]["days"] == 8
+    assert not any("BOUNDARY PERIOD(S)" in x for x in r["warnings"])
 
 
 def test_the_declaration_is_reported_with_real_dates():
@@ -384,3 +410,62 @@ def test_a_dates_axis_shorter_than_the_series_reports_rather_than_raises():
         a["period_dates"] = dates[:2]
     w = scored_window(arms_, [5, 6, 7])
     assert w["periods"] == 3 and "from" not in w
+
+
+# --- regressions from the second Macroscope review on PR #144 ----------------
+
+def test_arms_from_separate_tests_are_aligned_by_date_not_by_position():
+    """`abcompare.py` composes arms from independent payloads, each carrying its
+    own date axis. Addressed by index, period 0 is June for one arm and August
+    for the other — so an overlap window gets invented out of two calendars that
+    never touched, and mismatched dates get summed into the rates."""
+    june = days(T0, 10)
+    august = days(_ts("2026-08-01"), 10)
+    payload = {"test": "cross", "mode": "cross_test", "primary_metric": "clicked",
+               "arms": [arm("q2", june, [1000] * 10, clicked=[20] * 10),
+                        arm("q3", august, [1000] * 10, clicked=[40] * 10)]}
+    r = analyse(payload, cohort_answered="same")
+    assert r["overlap_periods"] == [], (
+        "two flights two months apart never overlapped")
+    assert r["basis"] == "lifetime"
+    assert any("NO OVERLAP" in w for w in r["warnings"])
+
+
+def test_a_genuine_overlap_across_different_axes_is_still_found():
+    """Alignment must find the real overlap, not merely refuse everything."""
+    a_dates = days(T0, 10)                       # 06-01 .. 06-10
+    b_dates = days(T0 + 5 * DAY, 5)              # 06-06 .. 06-10
+    payload = {"test": "staggered", "primary_metric": "clicked", "arms": [
+        arm("a", a_dates, [1000] * 10, clicked=[20] * 10),
+        arm("b", b_dates, [1000] * 5, clicked=[24] * 5)]}
+    r = analyse(payload, cohort_answered="same")
+    w = r["scored_window"]
+    assert w["from"] == "2026-06-06" and w["to"] == "2026-06-10"
+    assert w["days"] == 5
+
+
+def test_series_at_different_resolutions_are_refused():
+    dates = days(T0, 4)
+    a = arm("a", dates, [1000] * 4, clicked=[20] * 4)
+    b = arm("b", ["2026-06", "2026-07", "2026-08", "2026-09"], [1000] * 4,
+            clicked=[24] * 4, verified=False)
+    b["period_resolution"] = "month"
+    with pytest.raises(SystemExit) as e:
+        analyse({"test": "mixed", "primary_metric": "clicked", "arms": [a, b]})
+    assert "different resolutions" in str(e.value)
+
+
+def test_a_window_without_date_labels_reports_instead_of_raising():
+    """`send_windows` guarantees the timestamps; the date labels beside them are
+    written by the fetcher and absent from a hand-built payload. Reading them
+    directly turned a missing label into a KeyError out of a warning."""
+    dates = days(T0, 20)
+    a = arm("a", dates, [1000] * 10 + [0] * 10, clicked=[10] * 10 + [0] * 10)
+    b = arm("b", dates, [0] * 10 + [1000] * 10, clicked=[0] * 10 + [12] * 10)
+    for x in (a, b):
+        x["window"].pop("first_send_date")
+        x["window"].pop("last_send_date")
+    r = analyse({"test": "adjacent", "primary_metric": "clicked",
+                 "arms": [a, b]}, cohort_answered="same")
+    when = next(w for w in r["warnings"] if "NO OVERLAP" in w)
+    assert "2026-06-10" in when and "2026-06-11" in when
