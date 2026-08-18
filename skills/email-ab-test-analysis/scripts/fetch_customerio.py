@@ -122,7 +122,12 @@ def cohort_of(camp, cid, base=None, key=None):
             # ESP-neutral terms, so they travel as static lists.
             "static_lists": [s["id"] for s in segments
                              if s.get("type") == "manual"],
-            "resolved": bool(found)}
+            # Every referenced segment has to have been read. A campaign that
+            # names three segments and resolved none of them knows no more
+            # about its population than one that named none — and `resolved`
+            # is what the gate reads to decide it may proceed without asking.
+            "resolved": bool(found) and
+                        len(segments) == len(camp.get("trigger_segment_ids") or [])}
 
 
 def get(base, path, key, params=None, soft=False):
@@ -135,15 +140,21 @@ def get(base, path, key, params=None, soft=False):
     url = f"{base}{path}"
     if params:
         url += "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={
-        "Authorization": f"Bearer {key}", "Accept": "application/json"})
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    # urllib copies a Request's ordinary headers onto the request it makes after
+    # a redirect. The check below runs on the response, which is too late: an
+    # open redirect would already have been handed the App API key. An
+    # unredirected header is sent to this host and no other, so a cross-host
+    # redirect fails to authenticate instead of leaking the credential.
+    req.add_unredirected_header("Authorization", f"Bearer {key}")
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             # urllib follows redirects silently; a changed host means the
             # region is wrong and the caller should be told, not guessed at.
             if urllib.parse.urlparse(r.geturl()).netloc != \
                     urllib.parse.urlparse(url).netloc:
-                print(f"  note: redirected to {r.geturl()} — check --region",
+                print(f"  note: redirected to {r.geturl()} — check --region "
+                      f"(the credential was not sent to that host)",
                       file=sys.stderr)
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
@@ -548,7 +559,23 @@ def main():
         axis = shared_axis([g["sends_per_day"] for g in grains.values()])
         for arm in stats_arms:
             g = grains.get(arm["id"])
-            if not g:
+            if not g or g["first_send"] is None:
+                # No sends to measure. day_of(None) is time.gmtime(None), which
+                # is now — so this arm would carry today as both its first and
+                # last send, marked verified, and appear to overlap every arm
+                # that really did send. Say it is unverified and let the engine
+                # fall back to the coarse read for the whole set.
+                arm["period_resolution"] = "month"
+                arm["window"] = {
+                    "verified": False, "source": "per-send records",
+                    "messages": 0,
+                    "why": "no message records for this arm" +
+                           (" in the requested window" if narrowed else "")}
+                print(f"  note: no sends recorded for arm {arm['id']} "
+                      f"'{arm['name']}'"
+                      + (" in the requested window" if narrowed else "") +
+                      " — its send window is unverified, so the read is coarse "
+                      "for every arm.", file=sys.stderr)
                 continue
             arm["periods"] = {k: on_axis(g["per_day"].get(k, {}), axis)
                               for k in ("delivered", "opened", "clicked",
@@ -575,6 +602,17 @@ def main():
                     if f in arm:
                         arm[f] = g["totals"].get(f, 0)
     else:
+        if narrowed:
+            raise SystemExit(
+                "--since/--until asked for a bounded window, and no message "
+                "records came back for it" +
+                (f" ({unavailable})" if unavailable else "") +
+                ".\n  The only numbers left are lifetime totals and lifetime "
+                "period arrays, which describe a different span than the one "
+                "requested — scoring them would answer a question nobody "
+                "asked, and nothing in the output would say so. Refusing.\n"
+                "  Drop --since/--until for a labelled coarse read of the "
+                "arm's whole life, or widen the window.")
         why = unavailable or ("no message records were returned for any arm"
                               if want_messages else
                               "--windows periods was requested")

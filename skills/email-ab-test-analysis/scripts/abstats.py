@@ -89,14 +89,28 @@ SPLIT_LOPSIDED = 0.65
 
 
 def first_present(arms, names):
-    """First of `names` that any arm actually carries a value for."""
+    """First of `names` that any arm actually carries a value for.
+
+    Presence, not truthiness. A measured zero is a value: an arm that genuinely
+    earned no clicks reported `clicked: 0`, read as "no raw count was supplied",
+    and got silently rescored on human clicks — under a warning that said the
+    raw count was missing when it was there and was zero.
+    """
     for n in names:
-        if any(a.get(n) for a in arms):
+        if any(a.get(n) is not None for a in arms):
             return n
     return names[-1]
 
 
-DATEISH = re.compile(r"^\s*(\d{4}-\d{2}-\d{2}|\d{9,13})")
+# Fully matched, and only a calendar date or an ISO datetime. Anchored at one
+# end only, this matched any 9-13 digit run — so `"123456789"`, an ordinary
+# customer or list identifier, was blanked to "<date>" and two rules naming
+# different populations compared as one rule run twice. A numeric timestamp is
+# still blanked, but by the int/float branch of `undate`, where the type itself
+# says it is not an identifier string.
+DATEISH = re.compile(
+    r"^\s*\d{4}-\d{2}-\d{2}"
+    r"(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?\s*$")
 
 
 def trigger_rules(cohort):
@@ -125,7 +139,7 @@ def undate(obj):
         return [undate(v) for v in obj]
     if isinstance(obj, (int, float)) and 10 ** 9 < obj < 10 ** 13:
         return "<date>"
-    if isinstance(obj, str) and DATEISH.match(obj):
+    if isinstance(obj, str) and DATEISH.fullmatch(obj):
         return "<date>"
     return obj
 
@@ -252,13 +266,17 @@ def check_counts(arms, fields):
     error, never a result. Left alone it does not crash — it produces a 500%
     click rate with z=95 and p=0.0000, which reads as the most decisive win the
     tool has ever printed.
+
+    `delivered: 0` with a nonzero numerator is the same error wearing a quieter
+    face: it does not print a 500% rate, it prints a neutral no-read, which is
+    indistinguishable from a test that genuinely settled nothing.
     """
     problems = []
     for a in arms:
         n = num(a.get("delivered"))
         for f in fields:
             x = num(a.get(f))
-            if n and x > n:
+            if x > n:
                 problems.append(f"  {a.get('name') or a.get('id')}: "
                                 f"{f}={x:,} exceeds delivered={n:,}")
     if problems:
@@ -451,7 +469,7 @@ def declaration_by_timestamp(arms, windows, min_gap_share=0.10,
     after, total = volume_after(runner, time.strftime(
         "%Y-%m-%d", time.gmtime(first_end)))
     share = after / total if total else 0.0
-    if gap < min_gap_share * span and share < min_volume_share:
+    if gap < min_gap_share * span or share < min_volume_share:
         return None
     return {"stopper": stopper.get("name"), "runner": runner.get("name"),
             "stopped": time.strftime("%Y-%m-%d", time.gmtime(first_end)),
@@ -477,6 +495,12 @@ def scored_window(arms, indices):
         return {"periods": len(indices), "resolution": res,
                 "verified": verified}
     picked = [dates[i] for i in indices if i < len(dates)]
+    if not picked:
+        # A dates axis shorter than the series it labels. Report the window the
+        # way an undated one is reported rather than raising out of a helper
+        # whose whole job is to describe what was scored.
+        return {"periods": len(indices), "resolution": res,
+                "verified": verified}
     return {"from": min(picked), "to": max(picked), "days": len(picked),
             "resolution": res, "verified": verified}
 
@@ -488,7 +512,8 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
         raise SystemExit("need at least two arms to compare")
 
     metric = payload.get("primary_metric") or first_present(arms, CLICK_FIELDS)
-    if metric in CLICK_FIELDS and not any(a.get(metric) for a in arms):
+    if metric in CLICK_FIELDS and not any(a.get(metric) is not None
+                                          for a in arms):
         metric = first_present(arms, CLICK_FIELDS)
     open_field = first_present(arms, OPEN_FIELDS)
 
@@ -565,8 +590,8 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
     # campaigns are expected to differ on opens.
     subjects = [(a.get("subject") or "").strip() for a in arms]
     if not cross and len(arms) == 2 and all(subjects) and subjects[0] == subjects[1]:
-        n1, n2 = arms[0].get("delivered", 0), arms[1].get("delivered", 0)
-        o1, o2 = arms[0].get(open_field, 0), arms[1].get(open_field, 0)
+        n1, n2 = num(arms[0].get("delivered")), num(arms[1].get("delivered"))
+        o1, o2 = num(arms[0].get(open_field)), num(arms[1].get(open_field))
         if n1 and n2 and (o1 or o2):
             _, _, _, _, p_o = two_proportion_z(o1, n1, o2, n2)
             if p_o < alpha:
@@ -649,8 +674,19 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
             "randomised split — say so alongside any winner."
         )
 
-    def counts(arm):
+    def on_basis(arm, field):
+        """One field for one arm, over whatever window is being scored.
+
+        None means unavailable, which is not zero: in the windowed basis this
+        arm carries no series for the field, and in the lifetime basis it
+        carries no such count at all.
+        """
         # basis is decided once, for every arm together — see `windowable`.
+        if basis in ("overlap", "pre_shift"):
+            return windowed(arm, idx, field)
+        return None if arm.get(field) is None else num(arm.get(field))
+
+    def counts(arm):
         if basis in ("overlap", "pre_shift"):
             return (windowed(arm, idx, "delivered"),
                     windowed(arm, idx, metric),
@@ -762,6 +798,43 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
             unsplit = any(x.get("opens_not_split_by_source") for x in (a, b))
             entry["ctor"] = {"a": ctor1, "b": ctor2, "z": zc, "p_value": pc,
                              "significant": pc < alpha, "opens_unsplit": unsplit}
+
+        # The machine-click split. Raw clicks are the default because machine
+        # activity falls on both arms alike — and that holds until the arms
+        # differ in their links. A security gateway or a prefetcher visits a
+        # changed URL, a new domain or a new redirect on its own schedule, and
+        # those visits land in `clicked` as outcomes indistinguishable from a
+        # person deciding to act. Where the ESP separates human from machine,
+        # the split settles it, so check rather than assume. This does not
+        # change the metric: it refuses to let a raw-click win stand as a claim
+        # about people when the human counts do not corroborate it.
+        if metric == "clicked":
+            h1, h2 = on_basis(a, "human_clicked"), on_basis(b, "human_clicked")
+            if h1 is not None and h2 is not None and (h1 or h2) \
+                    and n1 and n2:
+                hr1, hr2, _, _, ph = two_proportion_z(h1, n1, h2, n2)
+                corroborates = ph < alpha and (hr1 > hr2) == (p1 > p2)
+                entry["human_click_check"] = {
+                    "a_rate": hr1, "b_rate": hr2, "p_value": ph,
+                    "significant": ph < alpha, "corroborates": corroborates}
+                if significant and not corroborates:
+                    lead = a if p1 > p2 else b
+                    warnings.append(
+                        f"RAW CLICKS WIN, HUMAN CLICKS DO NOT: "
+                        f"'{lead.get('name')}' wins on every click "
+                        f"(p={pv:.4f}) but the same comparison on human clicks "
+                        f"only is {hr1:.2%} vs {hr2:.2%} (p={ph:.4f}). Machine "
+                        f"activity is only neutral while it treats both arms "
+                        f"alike, and it stops treating them alike when the "
+                        f"links differ — a scanner or prefetcher visits a "
+                        f"changed URL, a new domain or a new redirect on its "
+                        f"own schedule. Check whether the links or their "
+                        f"domains differ between the arms. If they do, this is "
+                        f"a machine artefact and not a result; score it on "
+                        f"human_clicked (--metric human_clicked) and say which "
+                        f"you used. Do not name a winner on the raw count "
+                        f"until that is settled."
+                    )
         results.append(entry)
 
     return {
@@ -830,11 +903,31 @@ def render(r):
             out.append(f"   VERDICT WITHHELD — {reason}. The rates are shown "
                        f"because they are facts; which one is 'better' is not "
                        f"one until the populations are known to match.")
+        elif c["significant"] and not (c.get("human_click_check") or
+                                       {"corroborates": True})["corroborates"]:
+            # The verdict leads, so a verdict the human counts do not support
+            # cannot be printed clean and qualified three lines later.
+            hc = c["human_click_check"]
+            lift = f"{c['rel_lift']*100:.1f}%" if c["rel_lift"] else "n/a"
+            out.append(f"   VERDICT: WITHHELD. {c['winner']} wins on every "
+                       f"click (+{lift} relative, p={c['p_value']:.4f}), but "
+                       f"human clicks alone are {hc['a_rate']*100:.2f}% vs "
+                       f"{hc['b_rate']*100:.2f}% (p={hc['p_value']:.4f}) and do "
+                       f"not agree. A raw-click win that human clicks do not "
+                       f"corroborate is what a scanner visiting one arm's "
+                       f"changed links looks like. Settle that before naming a "
+                       f"winner — see the warning above.")
         elif c["significant"]:
             lift = f"{c['rel_lift']*100:.1f}%" if c["rel_lift"] else "n/a"
             verb = "outperformed the other (+%s relative)" % lift if r["cross_test"] \
                 else "wins (+%s relative)" % lift
             out.append(f"   VERDICT: {c['winner']} {verb}.")
+            hc = c.get("human_click_check")
+            if hc and hc["corroborates"]:
+                out.append(f"      Human clicks agree: {hc['a_rate']*100:.2f}% "
+                           f"vs {hc['b_rate']*100:.2f}% (p="
+                           f"{hc['p_value']:.4f}), same direction, so the win "
+                           f"is not machine activity on changed links.")
         else:
             out.append("   VERDICT: NO READ. The difference is inside the noise.")
             if c.get("mde_at_current_n"):

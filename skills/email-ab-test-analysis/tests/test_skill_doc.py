@@ -29,6 +29,13 @@ RUBRIC_BUILD = "## Quick Start" in TEXT
 # search over TEXT fails on wording that is actually present and correct.
 FLAT = re.sub(r"\s+", " ", re.sub(r"[*_`]+", "", TEXT))
 
+# The same flattening, minus the underscore. Stripping `_` is right for prose
+# and silently fatal for identifiers: it turns `human_clicked` in the document
+# into `humanclicked`, so a search for the field name matches nothing and an
+# assertion that loops over the matches passes by never running. Identifier
+# assertions use this and are guarded by the vacuity test below.
+FLAT_IDS = re.sub(r"\s+", " ", re.sub(r"[*`]+", "", TEXT))
+
 
 # --- spec compliance (Phase 3 of the cascade) -------------------------------
 
@@ -89,14 +96,39 @@ def test_every_shipped_script_is_listed_in_the_files_section():
     assert shipped <= listed, f"undocumented: {shipped - listed}"
 
 
+def test_the_identifier_search_is_not_vacuous():
+    """The guard on the guard.
+
+    `FLAT` strips underscores, so the field-name assertion below spent its whole
+    life iterating over an empty match list and passing. A loop-shaped assertion
+    that can silently have nothing to loop over is not an assertion, so pin the
+    thing that made it empty.
+    """
+    assert "human_clicked" not in FLAT, \
+        "FLAT is for prose; it eats underscores"
+    assert "human_clicked" in FLAT_IDS, \
+        "FLAT_IDS must preserve field names, or every check using it is vacuous"
+
+
 def test_it_states_that_raw_engagement_is_what_gets_scored():
-    """The engine defaults to `clicked`; the prose must not prescribe human."""
+    """The engine defaults to `clicked`; the prose must not prescribe human.
+
+    Three contexts are legitimate: the documented fallback when no raw count was
+    supplied, the human/machine split read as a diagnostic, and the rescore the
+    engine calls for when a raw-click win is not corroborated by human clicks —
+    which is a machine artefact on changed links, not a result. Anything else is
+    the prose drifting into prescribing the human-only metric.
+    """
     assert re.search(r"raw clicks", FLAT, re.I)
-    for m in re.finditer(r"human_clicked", FLAT):
-        near = FLAT[max(0, m.start() - 250):m.end() + 250]
-        assert re.search(r"fall back|only when|absent|diagnostic", near, re.I), (
-            "human_clicked may only appear as the documented fallback, never "
-            "as the metric to score on")
+    hits = list(re.finditer(r"human_clicked", FLAT_IDS))
+    assert hits, "the fallback metric is never named"
+    for m in hits:
+        near = FLAT_IDS[max(0, m.start() - 300):m.end() + 300]
+        assert re.search(r"fall back|only when|absent|diagnostic|machine",
+                         near, re.I), (
+            "human_clicked may appear as the documented fallback, as a "
+            "diagnostic, or as the rescore for a machine-click artefact — "
+            "never as the metric to score on by default")
 
 
 def test_it_documents_the_cohort_gate_as_withholding_a_verdict():

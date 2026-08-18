@@ -63,7 +63,19 @@ def main():
             ap.error(f"{spec!r} must look like PREFIX:ARM_ID")
         prefix, arm_id = spec.rsplit(":", 1)
         stats, copy = load(prefix)
-        metric = metric or stats.get("primary_metric", "clicked")
+        source_metric = stats.get("primary_metric", "clicked")
+        if args.metric is None:
+            if metric is None:
+                metric = source_metric
+            elif metric != source_metric:
+                ap.error(
+                    f"{prefix} was scored on {source_metric!r} but an earlier "
+                    f"source was scored on {metric!r}. Composing them would "
+                    f"label the output with one metric and score arms that "
+                    f"carry the other as zero — a false comparison that never "
+                    f"looks like a failure. "
+                    f"Re-fetch on one metric, or pass --metric to name the one "
+                    f"every arm carries.")
         sa = pick(stats["arms"], arm_id, prefix, "stats")
         ca = pick(copy["arms"], arm_id, prefix, "copy")
         if i < len(labels) and labels[i]:

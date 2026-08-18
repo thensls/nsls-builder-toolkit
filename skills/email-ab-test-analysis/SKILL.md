@@ -101,8 +101,10 @@ the open gap can be a downstream effect of that arm genuinely being better.
 `abstats.py` flags the gap. Work out which of those it is before reading
 anything else, and say which.
 
-**Count the changes before explaining them.** Pinning the result on a single
-element is only safe when a single element differs. Two or more means a bundle
+**Count the changes before explaining them.** `abdiff.py` reads five elements —
+sender name, subject, preheader, CTA and links, and body prose — and the sender
+name counts, because it is read before the subject is and it moves opens. Pinning
+the result on a single element is only safe when a single element differs. Two or more means a bundle
 beat a bundle, which does not transfer to the next email. State every difference
 in full. If one of them is the likely driver, say so and say why. Name the one
 that would be cleanest to isolate in the next test, and state whatever can still
@@ -111,6 +113,13 @@ be concluded. If nothing stands out as the likely driver, say that as well —
 say plainly that the cause cannot be tied to one element. `abdiff.py` prints the
 gate in plain words: *Is the difference in performance attributable to one
 element? No — N elements changed.*
+
+An element that could not be read is **unknown, not unchanged**. Without the body
+markup — the credential-free path unless `--body-dir` was given — body, CTA and
+links were never compared, so a lone subject change is not "one element changed".
+`abdiff.py` names what it could not see and withholds attribution rather than
+counting an unread element as identical. Supply the bodies to get an answer
+instead of a guess.
 
 **Match the metric to the element, usually.** Subject and preheader are normally
 read on opens; body and CTA on clicks and conversions. A body change read on open
@@ -135,6 +144,22 @@ the ideal. Count every click, machine or human. As of August 2026 that is the
 sounder read rather than a compromise: prefetching clients and security gateways
 act on both arms alike, so they cannot favour one, and a click they generate is
 itself evidence the mail reached a real, inbox-placed account.
+
+**That neutrality has one edge, and the engine checks it rather than assuming
+it.** Machine activity is only even-handed while it treats both arms the same,
+and it stops doing so when the arms differ in their links: a security gateway or
+a prefetcher visits a changed URL, a new domain or a new redirect on its own
+schedule, and every one of those visits lands in `clicked` looking exactly like a
+person deciding to act. So where the ESP separates the two counts, `abstats.py`
+scores the raw default and re-runs the same comparison on human clicks alone as a
+check. Agreement is reported and the verdict stands. Disagreement — raw
+significant, human not, or the two pointing at different arms — and the verdict
+is **withheld**, not footnoted. Then look at whether the links or their domains
+differ between the arms. If they do, the raw spread is a machine artefact rather
+than a result, and the test should be scored on `human_clicked`; say which count
+the number came from either way. Where the ESP reports no machine split there is
+nothing to check, and a link change is on its own a reason to read the raw number
+with suspicion.
 
 Let the operator set the bar. If they name a conversion metric they actually
 track, score on that. If they ask what to use, recommend clicks. If they sound
@@ -333,6 +358,10 @@ TRY → OBSERVE → DIAGNOSE → ADAPT → TRY AGAIN.
 | Arms look wildly unequal | Traffic was shifted mid-flight, or the split was designed that way | Verify which. A designed split reads fine if the smaller arm has the volume; after a shift the engine rescores on the pre-shift window automatically |
 | One arm sent months after the other | Sequential, not simultaneous | Confirm the cohort rules match, lead with any overlap, attach the weaknesses |
 | A payload diffs to "nothing changed" | Copy arrived under a key the differ does not read | `abdiff.py` refuses and names the key — fix it, never report unknown as unchanged |
+| Diff reports "UNKNOWN, not unchanged" | No body markup for an arm, so body, CTA and links were never compared | Pass `--body-dir`; until then attribution stays withheld, and it should |
+| Verdict withheld with human clicks disagreeing | Machine clicks on links that differ between the arms | Compare the links and their domains; if they differ, score on `human_clicked` and say so |
+| `--since/--until` refused with no records | The requested window is empty; only lifetime numbers remain | Widen the window, or drop the flags for a labelled read of the whole flight |
+| Sources scored on different metrics | `abcompare.py` refuses to compose them | Re-fetch on one metric, or pass `--metric` naming one every arm carries |
 | Verdict significant, diff shows 3 changes | Bundle vs bundle | Refuse single-element attribution; name the likely driver if there is one, and the cleanest one to isolate next |
 | CSV column silently read as 0 | Header alias missed | Check the printed mapping; `--map "field=Header"` |
 | A field is missing from an API response | Shape differs from expectation | The fetchers print the keys actually received — start there |

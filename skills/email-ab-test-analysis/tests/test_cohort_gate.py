@@ -140,3 +140,35 @@ def test_undate_blanks_epoch_timestamps():
 def test_trigger_rules_is_none_when_any_segment_has_no_rule():
     assert trigger_rules(cohort(1, 10, "manual")) is None
     assert trigger_rules(cohort(1, 10, rule=PRO)) is not None
+
+
+# --- regressions from the Macroscope review on PR #144 -----------------------
+
+def test_an_ordinary_numeric_identifier_is_not_blanked_as_a_date():
+    """`undate` blanks the date window so one rule run twice reads as one rule.
+    Matching any 9-13 digit run made it blank identifiers too, so two rules
+    naming different lists compared as identical and a winner was named for
+    populations that never overlapped."""
+    assert undate({"list_id": "123456789"}) == {"list_id": "123456789"}
+    assert undate({"list_id": "1234567890123"}) == {"list_id": "1234567890123"}
+
+
+def test_two_rules_differing_only_by_a_list_id_are_two_populations():
+    a = [{"attribute": {"field": "list_id", "operator": "eq",
+                        "value": "123456789"}}]
+    b = [{"attribute": {"field": "list_id", "operator": "eq",
+                        "value": "987654321"}}]
+    gate = cohort_gate(arms(cohort(1, "s1", rule=a), cohort(2, "s2", rule=b)),
+                       cross=True)
+    assert gate["state"] == "void", gate
+
+
+def test_a_real_date_window_is_still_blanked():
+    """The feature the regression above must not break: April and June are one
+    rule applied twice, in either notation."""
+    assert undate("2026-04-01") == "<date>"
+    assert undate("2026-04-01T00:00:00Z") == "<date>"
+    assert undate(1712000000) == "<date>"
+    gate = cohort_gate(arms(cohort(1, "s1", rule=PRO_APRIL),
+                            cohort(2, "s2", rule=PRO_JUNE)), cross=True)
+    assert gate["state"] == "ok" and "date window" in gate["why"]

@@ -113,3 +113,78 @@ def test_a_missing_body_is_reported_as_unknown_rather_than_unchanged(capsys):
 def test_harmless_metadata_does_not_trip_the_refusal():
     check_shape([{"name": "A", "body_html": "<p>x</p>", "campaign_id": "9"},
                  {"name": "B", "body_html": "<p>y</p>", "campaign_id": "9"}])
+
+
+# --- regressions from the Macroscope review on PR #144 -----------------------
+
+def test_a_link_change_is_seen_when_the_href_has_spaces_around_the_equals():
+    """`href = "..."` is valid HTML. Read only in its tight form, two arms that
+    differ by exactly one link reported as identical — the "nothing differs"
+    conclusion this tool exists to refuse."""
+    a = {"name": "A", "subject": "S",
+         "body_html": '<p>Go</p><a href = "https://x.test/one">Read</a>'}
+    b = {"name": "B", "subject": "S",
+         "body_html": '<p>Go</p><a href = "https://x.test/two">Read</a>'}
+    r = compare(a, b)
+    assert r["elements_changed"] == ["links"]
+    assert r["attribution_allowed"]
+
+
+def test_the_sender_name_is_an_element_not_metadata():
+    a = {"name": "A", "subject": "S", "from_name": "Kevin",
+         "body_html": "<p>x</p>"}
+    b = {"name": "B", "subject": "S", "from_name": "The NSLS",
+         "body_html": "<p>x</p>"}
+    r = compare(a, b)
+    assert r["elements_changed"] == ["from_name"]
+    assert r["attribution_allowed"]
+
+
+def test_a_sender_change_beside_a_subject_change_blocks_attribution():
+    """The defect in one assertion: read as metadata, the sender change vanished
+    and the result licensed "the subject did it" for a test that also changed
+    who the mail appeared to come from."""
+    a = {"name": "A", "subject": "One", "from_name": "Kevin",
+         "body_html": "<p>x</p>"}
+    b = {"name": "B", "subject": "Two", "from_name": "The NSLS",
+         "body_html": "<p>x</p>"}
+    r = compare(a, b)
+    assert r["n_changed"] == 2
+    assert set(r["elements_changed"]) == {"subject", "from_name"}
+    assert not r["attribution_allowed"]
+
+
+def test_a_sender_name_still_does_not_trip_the_key_refusal():
+    check_shape([{"name": "A", "from_name": "Kevin", "body_html": "<p>x</p>"},
+                 {"name": "B", "from_name": "Kevin", "body_html": "<p>y</p>"}])
+
+
+def test_two_bodyless_arms_do_not_report_that_nothing_differs():
+    """Both bodies unavailable is the credential-free path, not a finding of
+    equality. Body, CTA and links were never compared."""
+    r = compare({"name": "A", "subject": "One"}, {"name": "B", "subject": "Two"})
+    assert r["unknown_elements"] == ["body", "cta", "links"]
+    assert r["elements_changed"] == ["subject"]
+    assert not r["attribution_allowed"], (
+        "one readable element out of a set that was only partly readable is "
+        "not one element")
+    assert "UNKNOWN, not unchanged" in render(r)
+
+
+def test_one_missing_body_is_not_reported_as_deleted_copy():
+    """The other half: an absent body against a present one used to diff as a
+    body whose every block had been removed."""
+    r = compare({"name": "A", "subject": "S", "body_html": "<p>one</p><p>two</p>"},
+                {"name": "B", "subject": "S"})
+    assert "body" not in r["detail"] and "body" not in r["elements_changed"]
+    assert r["body_unreadable_for"] == ["B"]
+    assert not r["attribution_allowed"]
+    assert "CANNOT SAY" in render(r)
+
+
+def test_a_readable_pair_reports_nothing_unknown():
+    r = compare({"name": "A", "subject": "S", "body_html": "<p>one</p>"},
+                {"name": "B", "subject": "S", "body_html": "<p>one</p>"})
+    assert r["unknown_elements"] == [] and r["body_unreadable_for"] == []
+    assert r["n_changed"] == 0
+    assert "NOT APPLICABLE" in render(r)

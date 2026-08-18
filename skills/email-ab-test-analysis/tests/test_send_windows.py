@@ -28,7 +28,7 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from abstats import analyse, declaration_by_timestamp, render, \
-    send_windows, window_intersection  # noqa: E402
+    scored_window, send_windows, window_intersection  # noqa: E402
 from fetch_customerio import daily_counts, fetch_arm_messages, on_axis, \
     reconcile, shared_axis  # noqa: E402
 
@@ -346,3 +346,41 @@ def test_the_coarse_warning_names_both_failure_modes():
     r = analyse(build_monthly(), cohort_answered="same")
     w = next(x for x in r["warnings"] if "NOT VERIFIED" in x)
     assert "stopping part way" in w and "never sent on the same day" in w
+
+
+# --- regressions from the Macroscope review on PR #144 -----------------------
+
+def test_both_declaration_guards_must_pass_not_either():
+    """Two guards, documented as both required. Joined with `and` on the reject
+    branch, either one on its own declared a winner — so a long tail of a few
+    stragglers, or a wide gap carrying almost no volume, read as a called test.
+    """
+    dates = days(T0, 30)
+    a_sent = [1000] * 8 + [0] * 22
+    # A wide gap, and the runner puts almost nothing into it: 8 sends against
+    # 8,000. Real, but nowhere near a routed-traffic shape.
+    b_sent = [1000] * 8 + [1] * 8 + [0] * 14
+    payload = {"test": "trickle", "primary_metric": "clicked", "arms": [
+        arm("a", dates, a_sent, clicked=[10] * 8 + [0] * 22),
+        arm("b", dates, b_sent, clicked=[10] * 8 + [0] * 22),
+    ]}
+    assert declaration_by_timestamp(payload["arms"],
+                                    send_windows(payload["arms"])) is None
+
+
+def test_a_real_declaration_still_declares():
+    """The guard above must not disarm the check it guards."""
+    r = analyse(build_stops_early(), cohort_answered="same")
+    assert r["declared_winner"] is not None
+
+
+def test_a_dates_axis_shorter_than_the_series_reports_rather_than_raises():
+    """`scored_window` is a reporting helper. A short axis made min() over an
+    empty list raise out of it, taking the whole analysis with it."""
+    dates = days(T0, 10)
+    arms_ = [arm("a", dates, [1000] * 10, clicked=[10] * 10),
+             arm("b", dates, [1000] * 10, clicked=[10] * 10)]
+    for a in arms_:
+        a["period_dates"] = dates[:2]
+    w = scored_window(arms_, [5, 6, 7])
+    assert w["periods"] == 3 and "from" not in w

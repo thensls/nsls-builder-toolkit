@@ -297,3 +297,93 @@ def test_an_unqualified_cross_test_payload_asks_before_naming_a_winner():
     r = analyse(payload(arm("A", 20000, 400), arm("B", 20000, 200)), cross=True)
     assert r["cohort_gate"]["state"] == "ask"
     assert "VERDICT WITHHELD" in render(r)
+
+
+# --- regressions from the Macroscope review on PR #144 -----------------------
+
+def test_a_measured_zero_is_a_value_not_an_absent_field():
+    """An arm that genuinely earned no clicks reported `clicked: 0`. Read by
+    truthiness that was "no raw count was supplied", so the scorer switched to
+    human clicks and printed a warning saying the raw count was missing when it
+    was there and was zero."""
+    arms = [arm("a", 1000, 0, **{"human_clicked": 5}),
+            arm("b", 1000, 0, **{"human_clicked": 9})]
+    assert first_present(arms, ("clicked", "human_clicked")) == "clicked"
+    r = analyse(payload(*arms))
+    assert r["primary_metric"] == "clicked"
+    assert not any("HUMAN CLICKS ONLY" in w for w in r["warnings"])
+
+
+def test_a_genuinely_absent_raw_count_still_falls_back():
+    arms = [{"id": "a", "name": "a", "subject": "S", "delivered": 1000,
+             "human_clicked": 40},
+            {"id": "b", "name": "b", "subject": "S", "delivered": 1000,
+             "human_clicked": 60}]
+    r = analyse(payload(*arms))
+    assert r["primary_metric"] == "human_clicked"
+    assert any("HUMAN CLICKS ONLY" in w for w in r["warnings"])
+
+
+def test_a_numerator_above_a_zero_denominator_is_still_a_mapping_error():
+    """`delivered: 0, clicked: 10` is the same impossible count as 500%, but it
+    does not print 500% — the z-test turns it into a neutral no-read, which is
+    indistinguishable from a test that genuinely settled nothing."""
+    with pytest.raises(SystemExit) as e:
+        check_counts([arm("a", 0, 10), arm("b", 1000, 50)], ["clicked"])
+    assert "exceeds delivered" in str(e.value)
+
+
+def test_an_arm_that_has_simply_not_sent_yet_is_not_an_error():
+    check_counts([arm("a", 0, 0), arm("b", 1000, 50)], ["clicked"])
+
+
+def test_identical_subject_diagnostic_survives_string_counts():
+    """These four values bypassed num(), so string open counts raised TypeError
+    out of a diagnostic and aborted the whole analysis. num() reads a string as
+    zero, so the diagnostic now declines to run instead of crashing."""
+    arms = [arm("a", 1000, 50, opened="300"), arm("b", 1000, 50, opened="200")]
+    r = analyse(payload(*arms))
+    assert r["comparisons"]
+    assert not any("OPEN GAP" in w for w in r["warnings"])
+
+
+def test_a_wholly_stringly_typed_payload_is_a_mapping_error_not_a_no_read():
+    """num() reads a string as zero, so string counts used to score as a tidy
+    nothing-happened. With the zero-denominator guard gone they land where every
+    other impossible count lands."""
+    with pytest.raises(SystemExit) as e:
+        analyse(payload(arm("a", "1000", 50), arm("b", "1000", 50)))
+    assert "exceeds delivered" in str(e.value)
+
+
+def test_a_raw_click_win_human_clicks_contradict_is_withheld():
+    """Machine activity is only even-handed while it treats both arms alike, and
+    it stops doing so when the links differ. A scanner working one arm's changed
+    URLs lands in `clicked` looking exactly like a person acting."""
+    arms = [arm("a", 10000, 200, **{"human_clicked": 100}),
+            arm("b", 10000, 400, **{"human_clicked": 105})]
+    r = analyse(payload(*arms))
+    c = r["comparisons"][0]
+    assert c["significant"], "the raw spread is real; that is the point"
+    assert c["human_click_check"]["corroborates"] is False
+    assert any("RAW CLICKS WIN, HUMAN CLICKS DO NOT" in w for w in r["warnings"])
+    assert "VERDICT: WITHHELD" in render(r)
+
+
+def test_a_raw_click_win_human_clicks_confirm_still_reads_as_a_win():
+    arms = [arm("a", 10000, 200, **{"human_clicked": 180}),
+            arm("b", 10000, 400, **{"human_clicked": 370})]
+    r = analyse(payload(*arms))
+    c = r["comparisons"][0]
+    assert c["significant"] and c["human_click_check"]["corroborates"]
+    out = render(r)
+    assert "VERDICT: WITHHELD" not in out and "Human clicks agree" in out
+
+
+def test_no_machine_split_means_nothing_to_check():
+    """Most ESPs do not report the split. Its absence must not manufacture a
+    doubt, and must not crash the check either."""
+    r = analyse(payload(arm("a", 10000, 200), arm("b", 10000, 400)))
+    c = r["comparisons"][0]
+    assert "human_click_check" not in c
+    assert c["significant"] and c["winner"] == "b"
