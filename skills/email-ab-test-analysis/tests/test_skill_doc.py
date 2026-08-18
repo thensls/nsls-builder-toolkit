@@ -233,3 +233,16 @@ def test_illustrative_numbers_are_round():
     for path in skill_files():
         for n in re.findall(r"\b\d{1,3},\d{3}\b", path.read_text(encoding="utf-8")):
             assert n.endswith("00"), f"{path.name}: {n} does not read as a placeholder"
+
+
+def test_the_quick_start_can_actually_be_run_from_where_it_says_to_run_it():
+    """The block `cd`s to a working directory outside the repo, and the scripts
+    live beside this file. Invoked by a bare relative path they are all
+    file-not-found — the first command a reader types, failing."""
+    block = re.search(r"```bash\n(.*?)```", TEXT, re.S).group(1)
+    assert re.search(r"^\s*cd ", block, re.M), "the cd is what makes this matter"
+    for line in block.splitlines():
+        if "scripts/" in line and "#" not in line.split("scripts/")[0]:
+            assert "$SKILL_DIR" in line or "SKILL_DIR" in line, (
+                f"script invoked by a path relative to the working directory: "
+                f"{line.strip()}")

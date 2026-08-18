@@ -452,3 +452,77 @@ def test_the_required_sample_is_sized_against_the_corrected_bar():
     ab2 = two["comparisons"][0]
     ab3 = next(c for c in three["comparisons"] if {c["a"], c["b"]} == {"a", "b"})
     assert ab3["n_needed_per_arm"] > ab2["n_needed_per_arm"]
+
+
+# --- regressions from the third Macroscope review on PR #144 -----------------
+
+def test_period_series_that_do_not_survive_summing_are_refused():
+    """`check_counts` validated the lifetime totals. `windowed` sums a different
+    set of numbers, and nothing had checked those — so a payload whose totals
+    are sound and whose series are not reached the z-test as a rate above 100%
+    and came back as the most decisive win the tool can print."""
+    a = arm("a", 10000, 50, periods={"delivered": [10, 10], "clicked": [50, 0]})
+    b = arm("b", 10000, 90, periods={"delivered": [5000, 5000],
+                                     "clicked": [45, 45]})
+    with pytest.raises(SystemExit) as e:
+        analyse(payload(a, b))
+    assert "scored window" in str(e.value)
+
+
+def test_lifetime_scoring_is_not_blocked_by_the_windowed_check():
+    """The check applies to the numbers actually scored. With no overlap basis
+    there is no windowed sum to validate."""
+    r = analyse(payload(arm("a", 10000, 200), arm("b", 10000, 400)))
+    assert r["basis"] == "lifetime" and r["comparisons"]
+
+
+def test_json_does_not_name_a_winner_the_report_withholds():
+    """The renderer hid these verdicts and the JSON handed them straight back.
+    A refusal that only exists in the text output is not a refusal — `--json` is
+    what anything downstream reads."""
+    arms_ = [arm("a", 10000, 200, **{"human_clicked": 100}),
+             arm("b", 10000, 400, **{"human_clicked": 105})]
+    c = analyse(payload(*arms_))["comparisons"][0]
+    assert c["verdict"] == "withheld"
+    assert c["winner"] is None and c["loser"] is None
+    assert c["leader"] == "b", "who leads is a fact and stays reported"
+    assert "corroborate" in c["verdict_reason"]
+
+
+def test_a_blocked_cohort_also_clears_the_winner_in_json():
+    def side(name, cid, seg, rule):
+        a = arm(name, 10000, 200 if name == "a" else 400)
+        a["cohort"] = {"campaign_id": cid, "campaign_name": cid,
+                       "fields": {"trigger_segment_ids": [seg]}, "context": {},
+                       "segments": [{"id": seg, "name": seg, "type": "manual",
+                                     "rule": rule}],
+                       "static_lists": [seg], "resolved": True}
+        return a
+
+    r = analyse(payload(side("a", "c1", "s1", None), side("b", "c2", "s2", None),
+                        mode="cross_test"))
+    c = r["comparisons"][0]
+    assert r["cohort_gate"]["state"] in ("ask", "void")
+    assert c["verdict"] == "withheld" and c["winner"] is None
+    assert "cohort" in c["verdict_reason"]
+
+
+def test_a_clean_win_still_names_its_winner():
+    c = analyse(payload(arm("a", 10000, 200),
+                        arm("b", 10000, 400)))["comparisons"][0]
+    assert c["verdict"] == "winner" and c["winner"] == "b" and c["loser"] == "a"
+
+
+def test_a_no_read_says_so_in_json():
+    c = analyse(payload(arm("a", 10000, 200),
+                        arm("b", 10000, 205)))["comparisons"][0]
+    assert c["verdict"] == "no_read" and c["winner"] is None
+
+
+def test_no_window_is_reported_when_none_was_scored():
+    """Reporting a window beside lifetime totals describes a measurement that
+    did not happen."""
+    r = analyse(payload(arm("a", 10000, 200), arm("b", 10000, 400)))
+    assert r["basis"] == "lifetime"
+    assert r["scored_window"].get("scored") == "lifetime totals"
+    assert "from" not in r["scored_window"] and "days" not in r["scored_window"]

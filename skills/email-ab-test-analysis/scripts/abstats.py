@@ -605,6 +605,12 @@ def scored_window(arms, indices):
     res = next((a.get("period_resolution") for a in arms
                 if a.get("period_resolution")), None)
     verified = bool(send_windows(arms))
+    if indices is None:
+        # Not "a window of zero days" — no window was scored at all. Reporting
+        # a window beside lifetime totals describes a measurement that did not
+        # happen.
+        return {"scored": "lifetime totals", "resolution": res,
+                "verified": verified}
     if not indices:
         return {"days": 0, "resolution": res, "verified": verified}
     if not dates:
@@ -932,6 +938,42 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
             f"thing, and that is a property of the design, not of this tool."
         )
 
+    if basis in ("overlap", "pre_shift"):
+        # `check_counts` validated the lifetime totals. These are different
+        # numbers: `windowed` sums the period series, so a payload whose totals
+        # are sound and whose series are not reaches the z-test as a rate above
+        # 100% and comes back as the most decisive win the tool can print.
+        #
+        # Deliberately on the summed window and not period by period. Metrics
+        # bucket on their own timestamp, so a click on a day with no deliveries
+        # is ordinary and an element-wise check would refuse real data.
+        problems = []
+        for a in arms:
+            who = a.get("name") or a.get("id")
+            n, x, o = counts(a)
+            if n is None:
+                continue
+            if n < 0:
+                problems.append(f"  {who}: delivered={n:,} is negative "
+                                f"over the scored window")
+            for label, v in ((metric, x), (open_field, o)):
+                if v is None:
+                    continue
+                if v < 0:
+                    problems.append(f"  {who}: {label}={v:,} is negative "
+                                    f"over the scored window")
+                elif v > n:
+                    problems.append(f"  {who}: {label}={v:,} exceeds "
+                                    f"delivered={n:,} over the scored window")
+        if problems:
+            raise SystemExit(
+                "the per-period series do not survive being summed over the "
+                "window this would be scored on:\n" + "\n".join(problems) +
+                "\n  A numerator above its denominator is a rate above 100%, "
+                "which is a mapping error rather than a result — the lifetime "
+                "totals passed, so the fault is in `periods`. Re-fetch, or "
+                "score on lifetime totals by dropping the series.")
+
     results = []
     for a, b in combinations(arms, 2):
         n1, x1, o1 = counts(a)
@@ -951,8 +993,11 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
             "abs_diff_pp": diff * 100, "rel_lift": rel,
             "z": z, "p_value": pv, "significant": significant,
             "alpha_used": pair_alpha, "comparisons_in_family": n_pairs,
-            "winner": winner.get("name") if significant else None,
-            "loser": loser.get("name") if significant else None,
+            # `leader` is the arm with the higher rate — a fact about the
+            # numbers, true whether or not a winner may be named. `winner` is
+            # the claim, and it is filled in below only if nothing blocks it.
+            "leader": (winner.get("name") if p1 != p2 else None),
+            "winner": None, "loser": None,
         }
         if not significant:
             # Sized against the bar it will actually be read at, or the answer
@@ -1008,6 +1053,28 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
                         f"you used. Do not name a winner on the raw count "
                         f"until that is settled."
                     )
+        # One verdict, decided here rather than in the renderer. A refusal that
+        # only exists in the text output is not a refusal: `--json` is what
+        # anything downstream reads, and it was handing back winners the report
+        # on screen declined to name.
+        if gate["state"] in ("ask", "void"):
+            entry["verdict"] = "withheld"
+            entry["verdict_reason"] = (
+                "the cohort rules differ" if gate["state"] == "void"
+                else "the cohort question is unanswered")
+        elif significant and not (entry.get("human_click_check") or
+                                  {"corroborates": True})["corroborates"]:
+            entry["verdict"] = "withheld"
+            entry["verdict_reason"] = (
+                "a raw-click win the human-click count does not corroborate")
+        elif significant:
+            entry["verdict"] = "winner"
+            entry["verdict_reason"] = None
+            entry["winner"] = winner.get("name")
+            entry["loser"] = loser.get("name")
+        else:
+            entry["verdict"] = "no_read"
+            entry["verdict_reason"] = "the difference is inside the noise"
         results.append(entry)
 
     return {
@@ -1015,7 +1082,8 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
         "primary_metric": metric,
         "basis": basis,
         "overlap_periods": idx,
-        "scored_window": scored_window(arms, idx),
+        "scored_window": scored_window(
+            arms, idx if basis in ("overlap", "pre_shift") else None),
         "declared_winner": declared,
         "coverage": coverage,
         "alpha": alpha,
@@ -1074,21 +1142,21 @@ def render(r):
         out.append(f"   {c['a_x']}/{c['a_n']} = {c['a_rate']*100:.3f}%   "
                    f"vs   {c['b_x']}/{c['b_n']} = {c['b_rate']*100:.3f}%")
         out.append(f"   diff {c['abs_diff_pp']:+.3f}pp  z={c['z']:.2f}  p={c['p_value']:.4f}")
-        blocked = r.get("cohort_gate", {}).get("state") in ("ask", "void")
-        if blocked:
-            state = r["cohort_gate"]["state"]
-            reason = ("the cohort rules differ" if state == "void"
-                      else "the cohort question above is unanswered")
-            out.append(f"   VERDICT WITHHELD — {reason}. The rates are shown "
-                       f"because they are facts; which one is 'better' is not "
-                       f"one until the populations are known to match.")
-        elif c["significant"] and not (c.get("human_click_check") or
-                                       {"corroborates": True})["corroborates"]:
+        # The verdict is decided in analyse(); this only chooses the words for
+        # it. Deriving it twice is how the screen and the JSON came to disagree.
+        cohort_blocked = c["verdict"] == "withheld" and "cohort" in \
+            (c["verdict_reason"] or "")
+        if cohort_blocked:
+            out.append(f"   VERDICT WITHHELD — {c['verdict_reason']}. The rates "
+                       f"are shown because they are facts; which one is "
+                       f"'better' is not one until the populations are known "
+                       f"to match.")
+        elif c["verdict"] == "withheld":
             # The verdict leads, so a verdict the human counts do not support
             # cannot be printed clean and qualified three lines later.
             hc = c["human_click_check"]
             lift = f"{c['rel_lift']*100:.1f}%" if c["rel_lift"] else "n/a"
-            out.append(f"   VERDICT: WITHHELD. {c['winner']} wins on every "
+            out.append(f"   VERDICT: WITHHELD. {c['leader']} wins on every "
                        f"click (+{lift} relative, p={c['p_value']:.4f}), but "
                        f"human clicks alone are {hc['a_rate']*100:.2f}% vs "
                        f"{hc['b_rate']*100:.2f}% (p={hc['p_value']:.4f}) and do "
@@ -1096,7 +1164,7 @@ def render(r):
                        f"corroborate is what a scanner visiting one arm's "
                        f"changed links looks like. Settle that before naming a "
                        f"winner — see the warning above.")
-        elif c["significant"]:
+        elif c["verdict"] == "winner":
             lift = f"{c['rel_lift']*100:.1f}%" if c["rel_lift"] else "n/a"
             verb = "outperformed the other (+%s relative)" % lift if r["cross_test"] \
                 else "wins (+%s relative)" % lift

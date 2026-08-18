@@ -44,19 +44,23 @@ the same confidence as naming a winner.
 ## Quick Start
 
 ```bash
+# Scripts live beside this file; payloads should not. Hold the one before
+# changing to the other, or every command below is a file-not-found.
+SKILL_DIR=<the directory holding this SKILL.md>
 cd <a working directory outside this repo>
 
 # Customer.io, by campaign. Send windows are rebuilt from per-send records by
 # default (--windows auto); --windows periods accepts a coarse, labelled read.
-python3 scripts/fetch_customerio.py --campaign <id> --out <prefix> --key-file <path>
+python3 "$SKILL_DIR/scripts/fetch_customerio.py" --campaign <id> --out <prefix> \
+    --key-file <path>
 
 # Any ESP, from numbers read off the screen — no credentials needed.
 # One row per arm; comma, tab-pasted, semicolon or pipe all parse.
-python3 scripts/fetch_manual.py --csv arms.csv --out <prefix> --esp hubspot \
-    --body-dir bodies
+python3 "$SKILL_DIR/scripts/fetch_manual.py" --csv arms.csv --out <prefix> \
+    --esp hubspot --body-dir bodies
 
-python3 scripts/abdiff.py  <prefix>.copy.json   # what differed — read this FIRST
-python3 scripts/abstats.py <prefix>.stats.json  # whether it means anything
+python3 "$SKILL_DIR/scripts/abdiff.py"  <prefix>.copy.json   # what differed — FIRST
+python3 "$SKILL_DIR/scripts/abstats.py" <prefix>.stats.json  # does it mean anything
 ```
 
 Read the diff before the numbers. Knowing how many elements changed constrains
@@ -75,10 +79,9 @@ than a bare "not significant".
 **A p-value assumes one look at a fixed horizon.** Calling a live test the first
 time it crosses the bar is a different procedure with a far worse false-positive
 rate — peek often enough and almost anything crosses. The engine cannot see how
-many times it has been run, so ask what volume was planned, and treat the
-required-n figure as the horizon. An interim read is *what the numbers say so
-far*, reported with the volume still to come; reaching the horizon is what makes
-it a decision.
+often it has been run, so ask what volume was planned and treat required-n as the
+horizon. An interim read is *what the numbers say so far*, reported with the
+volume still to come.
 
 **The verdict leads; it is never a caveat.** Baseline testing of this task found
 the failure is not ignorance of the statistics — agents compute the p-value
@@ -125,9 +128,8 @@ element? No — N elements changed.*
 An element that could not be read is **unknown, not unchanged**. Without the body
 markup — the credential-free path unless `--body-dir` was given — body, CTA and
 links were never compared, so a lone subject change is not "one element changed".
-`abdiff.py` names what it could not see and withholds attribution rather than
-counting an unread element as identical. Supply the bodies to get an answer
-instead of a guess.
+`abdiff.py` names what it could not see and withholds attribution. Supply the
+bodies to get an answer instead of a guess.
 
 **Match the metric to the element, usually.** Subject and preheader are normally
 read on opens; body and CTA on clicks and conversions. A body change read on open
