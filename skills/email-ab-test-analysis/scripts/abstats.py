@@ -638,6 +638,15 @@ def analyse(payload, alpha=0.05, power=0.80, min_coverage=0.60, cross=False,
     if metric in CLICK_FIELDS and not any(a.get(metric) is not None
                                           for a in arms):
         metric = first_present(arms, CLICK_FIELDS)
+    no_denominator = [a.get("name") or a.get("id") or f"arm {i + 1}"
+                      for i, a in enumerate(arms) if a.get("delivered") is None]
+    if no_denominator:
+        raise SystemExit(
+            "`delivered` is missing for: " + ", ".join(no_denominator) +
+            "\n  Every rate below is a numerator over that count. Absent, it "
+            "reads as zero, and a zero denominator does not fail — it returns a "
+            "neutral no-read, which is what a test that genuinely settled "
+            "nothing looks like. Supply the delivered count per arm.")
     missing = [a.get("name") or a.get("id") or f"arm {i + 1}"
                for i, a in enumerate(arms) if a.get(metric) is None]
     if missing:
@@ -1126,7 +1135,7 @@ def render(r):
                        f"period is unknown.")
         if r["basis"] == "pre_shift":
             out.append("See SPLIT IMBALANCE below.")
-    elif not r["overlap_periods"] and w.get("verified"):
+    elif r["overlap_periods"] == [] and w.get("verified"):
         out.append("Scored on lifetime totals: the arms have no window in "
                    "common — see NO OVERLAP below.")
     out.append("")

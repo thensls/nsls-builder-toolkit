@@ -526,3 +526,42 @@ def test_no_window_is_reported_when_none_was_scored():
     assert r["basis"] == "lifetime"
     assert r["scored_window"].get("scored") == "lifetime totals"
     assert "from" not in r["scored_window"] and "days" not in r["scored_window"]
+
+
+# --- regressions from the fourth Macroscope review on PR #144 ----------------
+
+def test_an_arm_without_a_delivered_count_is_refused():
+    """`num(None)` is 0, and a zero denominator does not fail — it returns a
+    neutral no-read, which is what a test that genuinely settled nothing looks
+    like. `check_counts` only exposes it when the numerator above it is
+    nonzero, so a 0/0 arm sailed through."""
+    a = {"id": "a", "name": "a", "subject": "S", "clicked": 0}
+    b = {"id": "b", "name": "b", "subject": "S", "delivered": 1000,
+         "clicked": 50}
+    with pytest.raises(SystemExit) as e:
+        analyse(payload(a, b))
+    assert "delivered" in str(e.value) and "a" in str(e.value)
+
+
+def test_a_delivered_count_of_zero_is_still_a_value():
+    """An arm that has not sent yet is not a malformed payload."""
+    r = analyse(payload(arm("a", 0, 0), arm("b", 1000, 50)))
+    assert r["comparisons"][0]["verdict"] == "no_read"
+
+
+def test_no_period_data_is_not_reported_as_no_window_in_common():
+    """`not x` is true for both None and []. None means there is no period
+    series to scan; [] means the scan ran and found nothing shared. Only the
+    second is 'no window in common', and saying it for the first contradicts
+    the NO PERIOD DATA warning printed a few lines below it."""
+    a = arm("a", 10000, 200)
+    b = arm("b", 10000, 400)
+    for x, first in ((a, 1780000000), (b, 1780000000)):
+        x["window"] = {"verified": True, "first_send": first,
+                       "last_send": first + 86400,
+                       "first_send_date": "2026-05-28",
+                       "last_send_date": "2026-05-29"}
+    r = analyse(payload(a, b))
+    assert r["overlap_periods"] is None
+    assert "no window in common" not in render(r)
+    assert any("NO PERIOD DATA" in w for w in r["warnings"])
