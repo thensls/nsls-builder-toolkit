@@ -28,12 +28,14 @@ spec.loader.exec_module(hook)
 PAYLOAD = {"builder_email": "builder@nsls.org", "toolkit": "both"}
 
 
-def run(marker, *, unreachable, online, seed=None):
+def run(marker, *, unreachable, online, seed=None, raw=None):
     """Call note_ping_failure with the probes stubbed. Returns (stdout, marker)."""
     hook.PING_FAIL_MARKER = marker
     hook._tracker_unreachable = lambda: unreachable
     hook._internet_up = lambda: online
-    if seed is not None:
+    if raw is not None:
+        marker.write_text(raw, encoding="utf-8")
+    elif seed is not None:
         marker.write_text(json.dumps(seed), encoding="utf-8")
     buf = io.StringIO()
     with redirect_stdout(buf):
@@ -112,6 +114,104 @@ def test_same_day_bursts_count_once(tmp):
         _, state = run(marker, unreachable=False, online=True)
     assert state["failed_days"] == [datetime.now(timezone.utc).date().isoformat()]
     assert state["attempts"] == 3, "attempts still counted, just not as days"
+
+
+# --- Codex review 2026-08-20: state read back from the marker is hostile ---
+
+MALFORMED = [
+    ("not our shape at all", "[]"),
+    ("truncated write", '{"payload": {"a": 1}, "attempts":'),
+    ("attempts is a word", '{"attempts": "x"}'),
+    ("failed_days is a number", '{"failed_days": 3}'),
+    ("timestamp is a number", '{"last_notified_at": 0}'),
+    ("everything wrong at once",
+     '{"attempts": [], "failed_days": {"a": 1}, "last_notified_at": []}'),
+]
+
+
+def test_malformed_marker_never_throws(tmp):
+    """SessionStart must fail silently — this runs with nothing above it to catch."""
+    for i, (label, blob) in enumerate(MALFORMED):
+        marker = tmp / f"bad{i}"
+        try:
+            _, state = run(marker, unreachable=False, online=True, raw=blob)
+        except Exception as exc:
+            raise AssertionError(f"{label!r} raised {type(exc).__name__}: {exc}")
+        assert state["attempts"] >= 1, f"{label}: counter must recover"
+        assert state["failed_days"], f"{label}: today must still be recorded"
+
+
+def test_future_timestamp_does_not_mute_an_outage(tmp):
+    """A clock rollback must not buy more than 24h of silence."""
+    ahead = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+    out, _ = run(
+        tmp / "future", unreachable=True, online=True,
+        seed={"payload": PAYLOAD, "attempts": 5, "failed_days": [days_ago(1)],
+              "last_notified_at": ahead},
+    )
+    assert "can't be reached" in out, f"future stamp suppressed the notice: {out!r}"
+
+
+def test_control_host_http_error_still_means_online(tmp):
+    """api.github.com hands out unauthenticated 403s. A 403 is not "no internet".
+
+    If it were read as offline, a genuinely dead tracker would never be
+    reported — the silent-forever bug, reintroduced through the control probe.
+    """
+    import urllib.error
+    import urllib.request
+
+    real_which, real_urlopen = hook.shutil.which, urllib.request.urlopen
+    hook.shutil.which = lambda _name: None  # force the urllib path
+
+    def forbidden(*_a, **_kw):
+        raise urllib.error.HTTPError("https://api.github.com/", 403,
+                                     "rate limited", {}, None)
+
+    urllib.request.urlopen = forbidden
+    try:
+        assert hook._http_probe("https://api.github.com/", timeout=2,
+                                any_response=True) is True, \
+            "a 403 means the host answered — that is online"
+        assert hook._http_probe("https://example.invalid/", timeout=2) is False, \
+            "a 403 is NOT a healthy service"
+    finally:
+        hook.shutil.which, urllib.request.urlopen = real_which, real_urlopen
+
+
+def test_probe_budget_is_total_not_per_transport(tmp):
+    """The failure path can already have burned ~70s of the 90s hook budget."""
+    import time as _time
+    import urllib.request
+
+    real_which, real_run = hook.shutil.which, hook.subprocess.run
+    real_urlopen = urllib.request.urlopen
+    called = []
+
+    hook.shutil.which = lambda _name: "/usr/bin/curl"
+
+    def slow_curl(*_a, **kw):
+        _time.sleep(1.2)  # eat the whole budget, then fail
+
+        class R:
+            returncode, stdout, stderr = 1, "", ""
+        return R()
+
+    def record(*_a, **_kw):
+        called.append(1)
+        raise AssertionError("urllib must not run with no budget left")
+
+    hook.subprocess.run = slow_curl
+    urllib.request.urlopen = record
+    try:
+        started = _time.monotonic()
+        assert hook._http_probe("https://example.invalid/", timeout=1) is False
+        spent = _time.monotonic() - started
+        assert not called, "second transport ran past the deadline"
+        assert spent < 3, f"probe overran its budget: {spent:.1f}s"
+    finally:
+        hook.shutil.which, hook.subprocess.run = real_which, real_run
+        urllib.request.urlopen = real_urlopen
 
 
 def main():

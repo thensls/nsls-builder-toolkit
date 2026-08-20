@@ -520,28 +520,50 @@ def replay_failed_ping():
         return None  # still unreachable — keep the marker for the next attempt
 
 
-def _http_get_ok(url, timeout=6):
-    """True if a GET on url answers. curl first, urllib as the fallback.
+def _http_probe(url, timeout=4, any_response=False):
+    """Probe url inside a TOTAL time budget. curl first, urllib with what's left.
 
-    Same transport order and the same reason as _http_post_json: a stock
-    Python can carry a CA bundle that trusts nothing, so urllib alone would
-    read a healthy host as dead. curl failing is "try the other transport",
-    not "the host is down".
+    any_response=False — True only on 2xx/3xx: "is this service healthy".
+    any_response=True  — True if the host answered AT ALL, error statuses
+    included: "is this machine online". api.github.com hands out unauthenticated
+    403s freely, and reading a 403 as "no internet" is exactly how a real
+    tracker outage could have stayed silent forever — the suppression branch
+    below only stays quiet when the control says we are offline.
+
+    Transport order and its reasoning are _http_post_json's: a stock Python can
+    carry a CA bundle that trusts nothing, so urllib alone would read a healthy
+    host as dead, and curl failing means "try the other transport".
+
+    The budget is TOTAL, not per transport. This runs on a path that may already
+    have spent ~70s on a replayed POST plus a live one against a 90s SessionStart
+    budget (install.sh), so two full-length probes would run the hook out of room.
     """
+    deadline = time.monotonic() + timeout
     if shutil.which("curl"):
+        args = ["curl", "-s", "--max-time", str(max(1, int(timeout))),
+                "-o", os.devnull, "-w", "%{http_code}", url]
+        if not any_response:
+            args.insert(1, "--fail")
         try:
-            done = subprocess.run(
-                ["curl", "-s", "--fail", "--max-time", str(timeout),
-                 "-o", os.devnull, url],
-                capture_output=True, timeout=timeout + 5,
-            )
-            if done.returncode == 0:
+            done = subprocess.run(args, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace",
+                                  timeout=timeout + 5)
+            if any_response:
+                code = (done.stdout or "").strip()
+                if code and code != "000":
+                    return True  # answered, whatever it said
+            elif done.returncode == 0:
                 return True
         except Exception:
             pass
+    left = deadline - time.monotonic()
+    if left < 1:
+        return False  # no headroom for a second transport; caller must not stall
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:
+        with urllib.request.urlopen(url, timeout=left) as resp:
             return 200 <= getattr(resp, "status", 200) < 400
+    except urllib.error.HTTPError:
+        return any_response  # the host answered; the status is a health question
     except Exception:
         return False
 
@@ -561,18 +583,18 @@ def _tracker_unreachable():
     GET / on the same host is a static health payload that answers in ~0.2s,
     so it tells the two cases apart.
     """
-    return not _http_get_ok(f"{PROXY_URL}/")
+    return not _http_probe(f"{PROXY_URL}/", timeout=4)
 
 
 def _internet_up():
-    """True if anything outside this machine answers.
+    """True if anything outside this machine answers — any status counts.
 
-    Without this, a laptop on a plane trips the "tracker is down" notice —
-    the tracker probe fails for the same reason every other request does.
-    api.github.com is the control host because every builder already depends
-    on GitHub reachability for the toolkit to update at all.
+    Without this, a laptop on a plane trips the "tracker is down" notice: the
+    tracker probe fails for the same reason every other request does.
+    api.github.com is the control because every builder already depends on
+    GitHub reachability for the toolkit to update at all.
     """
-    return _http_get_ok("https://api.github.com/", timeout=4)
+    return _http_probe("https://api.github.com/", timeout=3, any_response=True)
 
 
 def note_ping_failure(body):
@@ -580,47 +602,66 @@ def note_ping_failure(body):
 
     Three rules, each of them paid for:
 
-    1. One failure per DAY, not per session start. The old counter counted
-       attempts, so three sessions opened in the same minute read out as
-       "your last 3 sessions" — which is exactly what fired the false alarm
-       on 2026-08-20 (three 499s inside six seconds, server recorded all
-       three, no points lost, and it still told the builder to raise it in
-       #builders).
+    1. One failure per DAY, not per attempt. The old counter counted attempts,
+       so three sessions opened in the same minute read out as "your last 3
+       sessions" — which is exactly what fired the false alarm on 2026-08-20
+       (three 499s inside six seconds, server recorded all three, no points
+       lost, and it still told the builder to raise it in #builders).
     2. Only speak when the builder is actually losing something. A slow write
        is invisible to them: the payload replays at the next session start and
        daily points dedupe per builder per day, so the day's credit lands from
        whichever ping gets through.
     3. Never go quiet while it IS broken. The old `failures == 3` fired once
-       and then never again for the life of the outage — a month of downtime
-       got a single mention. Both notices below repeat once every 24h for as
-       long as the condition holds.
+       and then never again for the life of an outage, which is the
+       silent-forever mode the original comment was trying to avoid. Both
+       notices below repeat once every 24h for as long as the condition holds.
+
+    Every value read back from the marker is treated as hostile. The file is
+    hand-editable, can be left half-written by a crash, and this function runs
+    inside session_ping()'s failure handler with nothing above it to catch a
+    raise — so a corrupt marker must not be what takes SessionStart down.
     """
     now = datetime.now(timezone.utc)
     today = now.date().isoformat()
 
-    prior = {}
+    prior = None
     try:
         prior = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
     except Exception:
         pass
+    if not isinstance(prior, dict):
+        prior = {}  # valid JSON is not the same as the shape we wrote
 
-    days = [d for d in prior.get("failed_days", []) if isinstance(d, str)]
+    raw_days = prior.get("failed_days")
+    days = ([d for d in raw_days if isinstance(d, str)]
+            if isinstance(raw_days, list) else [])
     if today not in days:
         days.append(today)
     days = sorted(set(days))[-14:]
-    attempts = int(prior.get("attempts", prior.get("failures", 0)) or 0) + 1
+
+    try:
+        attempts = int(prior.get("attempts", prior.get("failures", 0)) or 0) + 1
+    except (TypeError, ValueError):
+        attempts = 1
+
     last_notified = prior.get("last_notified_at")
+    if not isinstance(last_notified, str):
+        last_notified = None
 
     def spoke_within_a_day():
         if not last_notified:
             return False
         try:
             when = datetime.fromisoformat(last_notified)
-        except ValueError:
+        except (TypeError, ValueError):
             return False
         if when.tzinfo is None:
             when = when.replace(tzinfo=timezone.utc)
-        return (now - when).total_seconds() < 86400
+        elapsed = (now - when).total_seconds()
+        if elapsed < 0:
+            return False  # clock rolled back, or hand-edited: don't let a
+            # timestamp from the future mute an outage for longer than a day
+        return elapsed < 86400
 
     notice = None
     if not spoke_within_a_day():
