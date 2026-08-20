@@ -60,7 +60,7 @@ rotation) clicks it through in the Hex UI.
 | 1 credit | $0.50 | |
 | Editor seat allotment | 40 credits/month | Included with the seat. Roughly $20 of agent usage. |
 | Explorer seat allotment | 10 credits/month | Included with the seat. Runs out fast. |
-| Monthly top-up pool | $1,000/month | Set by Jordan. As of 2026-08-13 the workspace was spending **$475** of it. |
+| Monthly top-up pool | $1,000/month | Set by Jordan. Auto top-up refills the pool below 25 credits and stops at the $1,000 limit. Read the live figure, never a remembered one. |
 | Typical power user | ~500 credits/month | Confirmed sufficient by Jordan under aggressive daily use. |
 
 Licensing and credits are separate bills. A tier grants a monthly credit
@@ -107,12 +107,25 @@ anything:
 
 ## Step 2: Read the current state
 
-Hex → **Settings** (bottom left) → scroll to **Plan and billing** → **Credits**.
+**Go straight there:**
+https://app.hex.tech/019847ea-73c2-7002-9a3a-cff99736a83d/settings/credits
 
-The page shows every user's allocation and consumption. The top of the page
-shows the **current cycle** total against the allowance. Check the headroom
-before quoting a number: current spend + (requested credits x $0.50) must stay
-under $1,000/month.
+(Or navigate: Hex → **Settings**, bottom left → **Plan and billing** →
+**Credits**.)
+
+Read four numbers off that page before deciding anything:
+
+| Field | What it tells you |
+|-------|-------------------|
+| **Top-ups** ($ spent / $1,000 spend limit) | The binding constraint. When this hits $1,000, auto top-ups stop and everyone past their seat grant is blocked. |
+| **Add-on credits left** | The workspace pool balance right now. Auto top-up refills it when it drops below 25 credits, up to the monthly spend limit. |
+| **Users past monthly credit grant** | How many people are already living on add-on credits. |
+| **Add-on credits used** | Consumption this cycle. |
+
+Do not trust a spend figure written down anywhere, including in this skill. It
+moves fast. On 2026-08-13 the workspace was at $475 of $1,000. Seven days later
+it was at **$775 with 47.5 credits left in the pool** and four days remaining in
+the cycle. Open the page.
 
 **Usage log** on the same page is where per-user consumption detail lives, and
 it is what the monthly audit runs on. See `reference/monthly-audit.md`.
@@ -131,6 +144,27 @@ it is what the monthly audit runs on. See `reference/monthly-audit.md`.
   itself; only usage bills. The real budget control is the $1,000 pool, not the
   individual number. This is why routine bumps are low-risk and why the pool is
   the thing to watch.
+
+## Step 3.5: Caps oversubscribe the pool, and that is the thing to watch
+
+Per-user caps are allowed to add up to far more than the pool can fund. As of
+2026-08-20 the allocations on the page totalled roughly 3,400 credits/cycle,
+which is about $1,700 of caps drawing on a $1,000 pool.
+
+That is not a misconfiguration, it is how the controls are meant to work. Caps
+stop any one person running away with the budget; the pool is what actually
+limits spend. The consequence is the part that catches people out: **the pool
+can run dry while everybody is still under their individual cap.** When it does,
+the block lands on whoever happens to submit the next prompt, not on the heaviest
+user.
+
+So when a request arrives late in a cycle, the question is not "does this person
+deserve more" but "is there anything left in the pool." Check the top-ups figure
+first, and if the pool is close to the limit, say so in the reply instead of
+quietly raising a cap that cannot be funded.
+
+The workspace default is **No access**, so a new user with no explicit
+allocation gets only their seat grant (40 Editor, 10 Explorer) and then stops.
 
 ## Step 4: The two UI paths
 
