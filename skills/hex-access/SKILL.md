@@ -98,6 +98,13 @@ anything:
 
 - **Training first.** Nobody gets credits or a paid seat before completing the
   Hex training. This is a standing gate, not a formality.
+  **Known gap: there is no list to check this against.** No system records who
+  has completed the training. Attendance at the 2026-08-14 session is
+  reconstructible from that meeting's invite and recording, but nothing is
+  maintained going forward, so today the gate runs on memory. Until a roster
+  exists somewhere, ask rather than assume, and do not treat silence as a pass.
+  Anyone building on this skill should treat the roster as the missing input,
+  not as a detail.
 - **`@nsls.org` only.**
 - **Who is asking?** A manager asking on behalf of their own team is
   pre-approved for Editor (see Licenses). An individual asking for a large
@@ -126,6 +133,29 @@ Do not trust a spend figure written down anywhere, including in this skill. It
 moves fast. On 2026-08-13 the workspace was at $475 of $1,000. Seven days later
 it was at **$775 with 47.5 credits left in the pool** and four days remaining in
 the cycle. Open the page.
+
+### Read it directly rather than asking for the numbers
+
+Claude can read this page itself, through the operator's own logged-in browser
+session. Navigate to the credits URL above and extract the page text. Everything
+Step 3 needs comes back in one read: the top-ups figure, credits left, users past
+their grant, and the full per-user allocation list.
+
+Do this before asking the operator for any figure. Asking a human to read numbers
+off a screen and type them back is the slowest possible version of this step, and
+it is where transcription errors come from.
+
+Three constraints on that read:
+
+- **Read only.** Navigate and extract text. Never click a control, open an Edit
+  dialog, or submit anything on this page. The change is the operator's to make,
+  and a billing page is the wrong place to be exploratory.
+- **It rides the operator's session,** so it works in an interactive session on a
+  machine already signed in to Hex, and not in a scheduled or headless run. That
+  is what the workspace API token would fix.
+- **Admin access is required** to see the page at all. If it does not load, the
+  person driving does not have workspace admin, which is itself the answer to
+  route to whoever does.
 
 **Usage log** on the same page is where per-user consumption detail lives, and
 it is what the monthly audit runs on. See `reference/monthly-audit.md`.

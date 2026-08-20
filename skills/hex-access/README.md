@@ -11,6 +11,11 @@ problem, checks it against the training gate and the $1,000/month pool, picks a
 number, and hands over the exact clicks. It does not execute anything. Hex has
 no API for credit allocations, so a human does the change in Settings.
 
+**Two known gaps**, both worth knowing before relying on this: reading the
+credits page depends on the operator's own browser session, so it does not work
+headless or on a schedule (a Hex workspace API token would fix that), and the
+training gate has no roster behind it, so it currently runs on memory.
+
 **The three things people get wrong:**
 1. Topping up credits for someone on Viewer, who cannot use the agent at any
    credit level.
