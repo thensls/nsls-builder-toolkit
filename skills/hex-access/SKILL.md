@@ -58,12 +58,27 @@ rotation) clicks it through in the Hex UI.
 | Explorer | $40/user/month | The tier that unlocks AI credits. Default for new invites. Right for most staff. |
 | Editor | $75/user/month | Everything Explorer has, plus creating projects and building dashboards. |
 | 1 credit | $0.50 | |
+| Editor seat allotment | 40 credits/month | Included with the seat. Roughly $20 of agent usage. |
+| Explorer seat allotment | 10 credits/month | Included with the seat. Runs out fast. |
 | Monthly top-up pool | $1,000/month | Set by Jordan. As of 2026-08-13 the workspace was spending **$475** of it. |
 | Typical power user | ~500 credits/month | Confirmed sufficient by Jordan under aggressive daily use. |
 
 Licensing and credits are separate bills. A tier grants a monthly credit
 allotment; add-on credits are what a user gets **on top** when they burn through
 it.
+
+**The included allotments are small on purpose.** Hex began metering AI credits
+at 40/Editor and 10/Explorer per month (announced by Jordan in #bi-squad on
+2026-07-31). At 10 credits a month, an Explorer who actually uses the agent is
+out within days. Treat a top-up request as the normal course of business rather
+than as a red flag, and expect the gap between 10 and a 500-credit power user to
+be covered entirely by add-on credits.
+
+Requests arrive in **#bi-squad** (`C091LF62BSB`), which is where Jordan pointed
+everyone. They come in freeform ("Top up please!!"), often as thread replies
+rather than new messages, and frequently mix a license ask and a credit ask in
+one sentence. Kimberly's 2026-08-13 request is the canonical example: four
+people, project-creation rights, and "very limited credits," all in one line.
 
 ## Step 0: Work out what is actually being asked
 
