@@ -144,6 +144,68 @@ def _warn_if_frozen(plugin, plugin_dir, err):
     )
 
 
+def _git_out(plugin_dir, *args):
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(plugin_dir), *args],
+            capture_output=True, text=True, timeout=3,
+            stdin=subprocess.DEVNULL,
+        )
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def _warn_if_stale_by_configuration(plugin, plugin_dir):
+    """Catch the freeze that _warn_if_frozen structurally cannot see.
+
+    _warn_if_frozen only speaks when the pull FAILS. Two shapes of frozen
+    checkout produce a pull that does not fail, and both went unreported for
+    weeks on this machine:
+
+      1. **Tracking a feature branch.** The builder toolkit sat on
+         feat/builder-guardrails, whose upstream is that same branch on origin.
+         Every session pulled, every pull said "already up to date", and main
+         moved five commits ahead. Nothing was wrong with the pull; the pull was
+         aimed somewhere that never changes.
+      2. **A named branch with no upstream at all.** The personal toolkit sat on
+         feat/completion-sweep, nine commits BEHIND main with five of its own. A
+         bare pull exits non-zero with "no tracking information", which is not
+         in _FREEZE_SIGNS -- deliberately, so a pinned fork stays quiet -- and
+         so this said nothing either, forever.
+
+    A detached HEAD stays quiet: that is the deliberate pin the git_pull
+    docstring protects, and it is a different git state than a branch with
+    nowhere to pull from.
+
+    Costs no network. `git pull` fetches the whole remote by default, so
+    origin/main is already current by the time this runs, and everything here is
+    a local ref comparison.
+    """
+    branch = _git_out(plugin_dir, "rev-parse", "--abbrev-ref", "HEAD")
+    if not branch or branch == "HEAD":
+        return  # detached: pinned on purpose
+    behind = _git_out(plugin_dir, "rev-list", "--count", "HEAD..origin/main")
+    if not behind.isdigit() or int(behind) == 0:
+        return  # nothing on main this checkout is missing
+    has_upstream = bool(_git_out(plugin_dir, "rev-parse", "--abbrev-ref",
+                                "--symbolic-full-name", "@{u}"))
+    why = (f"it is on branch '{branch}', which tracks itself rather than main"
+           if has_upstream else
+           f"branch '{branch}' has no upstream, so there is nothing to pull from")
+    print(
+        f"WARNING - {plugin} is {behind} commit(s) behind main and NOT updating: "
+        f"{why}. The checkout at {plugin_dir} reports a clean pull every session "
+        f"while going stale, which is why this needs saying out loud. Tell the "
+        f"user at the first natural moment. The repair depends on what that "
+        f"branch is for: if the work on it is finished, merge or land it and put "
+        f"the checkout back on main; if it is still in progress, merging "
+        f"origin/main into it catches this checkout up without losing it. Do not "
+        f"switch branches on the user's behalf — a live plugin checkout is what "
+        f"their current session is running."
+    )
+
+
 def git_pull():
     """Pull latest changes for every toolkit in SYNC_PLUGINS.
 
@@ -195,6 +257,9 @@ def git_pull():
             )
             if r.returncode != 0:
                 _warn_if_frozen(plugin, plugin_dir, (r.stderr or "") + (r.stdout or ""))
+            # Runs whether the pull succeeded or not: a clean pull aimed at a
+            # branch that never moves is the freeze this catches.
+            _warn_if_stale_by_configuration(plugin, plugin_dir)
         except Exception:
             pass
 
