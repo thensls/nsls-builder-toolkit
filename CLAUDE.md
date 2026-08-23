@@ -114,6 +114,33 @@ sessions rather than resetting every time. Asking a third time about the same
 script is how the toolkit becomes nagware. Anything already listed at session
 start is closed unless the scope genuinely escalated since.
 
+**Report the guardrail moments only you can see.** The hard gates report
+themselves; the conversational ones vanish unless you record them:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-event.py" <label> "<what happened>" [--automation <name>]
+```
+
+| Label | The moment |
+|---|---|
+| `flagged` | you raised a tier, registration or reviewer question |
+| `mentor` | a reviewer or mentor actually got brought in |
+| `migrated` | the repo moved to `thensls`, or the platform moved to Anthropic |
+| `authorized` | the authorization route was taken on a hard block |
+| `disputed` | the builder says a gate misfired — record it before you reply |
+
+`blocked` and `proceeded` are already automatic; don't send those by hand.
+Record what happened, never an intention — a reviewer who was suggested is
+`flagged`, not `mentor`. One line, plain, in terms the builder would recognise
+as their own build. It exits 0 whatever happens, so it can never cost them
+anything, and repeats within a day are collapsed.
+
+Why it matters: three of the four tiles on the guardrail page are fed only by
+these, so a session where the guardrails worked perfectly and nothing was
+reported reads, to Kevin and Jenna, exactly like a session where they did
+nothing. `disputed` is the load-bearing one — it is the only route by which a
+gate that fires wrongly ever becomes visible.
+
 **If a bulk-write block was against a test base**, take them at their word and
 remember it:
 

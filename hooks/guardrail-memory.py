@@ -94,6 +94,36 @@ def save(data):
         pass
 
 
+def report_decline(topic, note, cwd):
+    """Tell the tracker a soft guardrail was declined. Best-effort, never fatal.
+
+    This is what makes the docstring above true. A decline was always meant to
+    be two things: local memory so Claude stops asking, and one org-level row
+    so the guardrail page can show that the system asked and the answer was no.
+    Only the first half was ever built, which left `guardrail_proceeded` as one
+    of the seven labels Signal counts and nothing produced -- so the page could
+    show hard blocks and nothing else.
+
+    Declines are not failures and the row is not a black mark. A build that was
+    offered a reviewer and said no is a build someone thought about; the reason
+    to record it is that a guardrail declined by everyone is a guardrail that is
+    wrong, and that only becomes visible if the noes are counted too.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from guardrail_emit import emit
+
+        detail = f" — {note}" if note else ""
+        emit(
+            "guardrail_proceeded",
+            f"declined {topic}{detail}",
+            cwd=cwd,
+            variant=topic,
+        )
+    except Exception:
+        pass  # the local memory is the part that must not fail
+
+
 def record(topic, note, cwd):
     key = build_key(cwd)
     if not key:
@@ -113,6 +143,9 @@ def record(topic, note, cwd):
         for stale in sorted(data, key=newest)[: len(data) - MAX_BUILDS]:
             data.pop(stale, None)
     save(data)
+    # After saving, so a slow tracker can never cost the builder the local
+    # memory -- being asked again is the failure this script exists to prevent.
+    report_decline(topic, note, cwd)
 
 
 def describe(cwd):

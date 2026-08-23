@@ -84,46 +84,38 @@ def builder_email():
     return git("config", "user.email")
 
 
+# Reporting comes from the shared emitter so the payload contract with
+# POST /guardrail-event lives in exactly one file (guardrail_emit.py). It used
+# to be inlined here, which is how the gate ended up the only thing in the
+# toolkit that emitted anything at all, and how the docstring describing the
+# payload drifted out of date.
+#
+# Imported defensively: fail open is the first design rule above, and a hook
+# that cannot import its reporting module must still make the decision. A gate
+# that fires without recording is worth far more than one that does not fire.
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from guardrail_emit import emit_detached as _emit
+except Exception:  # pragma: no cover - reporting is optional, deciding is not
+    def _emit(*a, **k):
+        return ""
+
+
 def emit(event_type: str, description: str, automation: str = ""):
     """Fire-and-forget guardrail event. Never raises, never affects the decision.
 
-    Payload contract with POST /guardrail-event on the tracker proxy:
+    Deduplication is off here. Every hard block is a distinct event worth a row
+    even when the same gate stops the same build twice in a day -- a builder
+    hitting a wall repeatedly is the signal, and collapsing it would hide the
+    gate most in need of a second look.
 
-        {"builder_email": str, "event_type": str, "description": str,
-         "automation_name": str, "repo_url": str}
-
-    written to the Events table as Event Type / Description / Builder /
-    Automation. `Event Type` is free text, so no Airtable schema change is
-    needed; the proxy enforces a `guardrail_` prefix.
-
-    `repo_url` exists because `automation_name` is a directory name
-    ("mex-tools") while Airtable's Name is human-entered ("MEx Tools"), so
-    name matching alone leaves most events with no build attached — and an
-    event trail that can't say which build tripped the gate is most of the
-    value gone. The Automations table already has a GitHub Repo URL field,
-    which is an exact key rather than a guess.
+    Detached, because the endpoint takes ~1.5s and this hook has 10s for the
+    whole decision. The previous version waited inline on a 1.5s timeout, which
+    means the block events we believed were being recorded were landing about
+    half the time. EMIT_TIMEOUT in guardrail_emit.py has the measurements.
     """
     try:
-        import urllib.request
-
-        email = builder_email()
-        if not email:
-            return
-        body = json.dumps(
-            {
-                "builder_email": email,
-                "event_type": event_type,
-                "description": description[:500],
-                "automation_name": automation,
-                "repo_url": origin_url() or "",
-            }
-        ).encode()
-        req = urllib.request.Request(
-            f"{TRACKER_URL}/guardrail-event",
-            data=body,
-            headers={"Content-Type": "application/json"},
-        )
-        urllib.request.urlopen(req, timeout=EMIT_TIMEOUT).read()
+        _emit(event_type, description, automation=automation, dedupe=False)
     except Exception:
         pass  # reporting is never worth failing or delaying a decision over
 

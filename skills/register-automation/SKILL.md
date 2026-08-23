@@ -125,6 +125,23 @@ Call `POST /register-automation-with-builder`:
 }
 ```
 
+### Record it as a guardrail event
+
+Straight after a successful registration, before presenting results:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-event.py" registered \
+  "MEx Tools registered at Tier 2 — Claude raised it, builder registered the same session" \
+  --automation "<repo or name>"
+```
+
+Every registration, not only the ones a guardrail prompted. A registered build
+is a build somebody owns, which is the whole point; and Signal reads the absence
+of this event as "declined and carried on", so a voluntary registration that
+goes unreported makes a careful builder look like a careless one. Say in the
+description whether a guardrail prompted it — that distinction is worth having,
+but it belongs in the sentence, not in whether the row exists.
+
 ## Step 4: Present Results
 
 From the response, show:
@@ -229,10 +246,27 @@ Every guardrail moment gets an `Events` row so it can be reported on. `Event Typ
 is free text, so no schema change is needed; Signal reads it via the existing
 15-minute Airtable→Supabase sync.
 
+**How to record one.** One command, from anywhere:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-event.py" <label> "<what happened>" [--automation <name>]
+```
+
+`<label>` is the bare word — `mentor`, `disputed`, `registered`. It prints one
+line saying what it did and always exits 0; a tracker that is down or slow is
+never a reason to interrupt what the builder is doing. Two it handles on its own,
+so don't send them by hand: `blocked` comes from the gate itself, and
+`proceeded` from `guardrail-memory.py record` when a builder declines.
+
+Only the labels below are accepted. The proxy checks the `guardrail_` prefix but
+Signal checks the exact string, so an invented label would write a real Airtable
+row that the dashboard silently ignores — reporting that looks like it worked.
+The command refuses unknown labels instead.
+
 | Event Type | When |
 |---|---|
 | `guardrail_flagged` | Claude raised a tier flag |
-| `guardrail_registered` | Builder registered *because of* the flag |
+| `guardrail_registered` | Build registered — note in the description if a flag prompted it |
 | `guardrail_mentor` | Reviewer or mentor brought in |
 | `guardrail_migrated` | Repo moved to the NSLS org, or platform moved to Anthropic |
 | `guardrail_proceeded` | Builder declined; build continued (soft path) |
@@ -254,8 +288,14 @@ not — those are self-reported. Never emit `guardrail_migrated` or
 Some gates will misfire in situations nobody could simulate, and a builder who
 hits a wrong block with no way to say so quietly stops trusting the toolkit.
 
-When a builder says a block was wrong, emit `guardrail_disputed` immediately.
-Put in `Description`: what they were trying to do, which gate fired, and their
+When a builder says a block was wrong, record it immediately, before replying:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-event.py" disputed \
+  "bulk-write gate fired on a 30-row backfill into her own test base — she was rehearsing before the real run"
+```
+
+Put in the description what they were trying to do, which gate fired, and their
 reason in their own words. Then help them get where they were going — the
 authorization route is still open, and a disputed block is not an argument to
 win. **Never push back before logging it.**
