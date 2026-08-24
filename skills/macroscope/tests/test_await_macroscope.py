@@ -227,16 +227,33 @@ def test_fractional_interval_is_allowed_but_not_for_ints():
         am.positive_number("2.5", "--timeout")
 
 
-def test_a_flag_missing_its_argument_exits_2_from_argparse_not_a_traceback():
-    """In bash this died with `unbound variable` and exit 1. argparse handles it."""
-    with pytest.raises(SystemExit) as e:
-        am.main(["--pr"])
-    assert e.value.code == 2  # argparse's own usage-error code
+def test_a_usage_error_returns_4_not_the_timeout_code():
+    """argparse exits 2, but 2 is THIS tool's documented TIMED_OUT.
+
+    A usage error wearing the timeout's code is the same confusion between "I could not
+    answer" and "here is an answer" that the script exists to prevent, surfacing in its own
+    exit codes. In bash this died with `unbound variable` and exit 1.
+    """
+    assert am.main(["--pr"]) == am.QUERY_ERROR
 
 
-def test_bad_numeric_argument_exits_rather_than_polling():
-    with pytest.raises(SystemExit):
-        am.main(["--interval", "0"])
+@pytest.mark.parametrize("bad", [["--interval", "0"], ["--timeout", "abc"],
+                                 ["--interval", "nan"], ["--nonsense"]])
+def test_bad_arguments_return_4_without_polling(bad):
+    assert am.main(bad) == am.QUERY_ERROR
+
+
+def test_help_still_exits_zero():
+    assert am.main(["--help"]) == am.CLEAN
+
+
+def test_detached_head_is_not_a_branch_mismatch():
+    """A detached checkout reports the literal "HEAD", which compared unequal to every real
+    branch name and so looked like a MISMATCH — reporting the stale API SHA after a push.
+    Unknown is not a mismatch; the remote-tip comparison is authoritative."""
+    sha, note = am.resolve_head("stale111", "newtip22", "my-branch", "", "newtip22")
+    assert sha == "newtip22", "a detached checkout on the real tip must still be used"
+    assert "lagging" in note
 
 
 @pytest.mark.parametrize("bad", ["nan", "NaN", "inf", "-inf", "Infinity"])

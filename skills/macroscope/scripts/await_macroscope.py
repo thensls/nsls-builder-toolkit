@@ -312,7 +312,17 @@ def main(argv=None):
         default=20,
     )
     p.add_argument("--quiet", action="store_true")
-    args = p.parse_args(argv)
+
+    # argparse exits 2 on a usage error, but 2 is THIS tool's documented TIMED_OUT. A usage
+    # error must never wear the timeout's code — that is the same confusion between "I could
+    # not answer" and "here is an answer" that the whole script exists to prevent, appearing
+    # in its own exit codes. --help still exits 0.
+    try:
+        args = p.parse_args(argv)
+    except SystemExit as exc:
+        if exc.code in (0, None):
+            return CLEAN
+        return QUERY_ERROR
 
     def say(*a):
         if not args.quiet:
@@ -329,6 +339,13 @@ def main(argv=None):
                            "-q", ".headRefName", check=False)
             local = git("rev-parse", "HEAD")
             current = git("rev-parse", "--abbrev-ref", "HEAD")
+            # A detached checkout (CI, `git checkout <sha>`) reports the literal "HEAD",
+            # which compares unequal to every real branch name and so looked like a branch
+            # MISMATCH — sending it down the "use the PR's own head" path and reporting the
+            # stale API SHA right after a push. Unknown is not a mismatch: normalise it away
+            # and let the remote-tip comparison decide, which is authoritative anyway.
+            if current == "HEAD":
+                current = ""
             # The remote branch's CURRENT TIP — not "does this commit exist somewhere".
             remote_tip = ""
             if local and pr_branch:
@@ -352,6 +369,18 @@ def main(argv=None):
     run = None
 
     while True:
+        # Check the deadline BEFORE asking. Otherwise `--timeout 1 --interval 20` slept ~20s
+        # and then accepted a completed check, reporting a verdict for a run the caller had
+        # already declared itself unwilling to wait for.
+        if time.monotonic() >= deadline:
+            if not answered:
+                print("await-macroscope: never got a successful answer from the API — "
+                      "query error, not a timeout.", file=sys.stderr)
+                return QUERY_ERROR
+            print(f"await-macroscope: TIMED OUT after {args.timeout}s — the check never "
+                  f"settled (last status: {last}). This is a timeout, NOT a pass.",
+                  file=sys.stderr)
+            return TIMED_OUT
         try:
             payload = parse_json(gh("api", f"repos/{repo}/commits/{sha}/check-runs"))
             failures = 0
@@ -373,7 +402,7 @@ def main(argv=None):
                 print("await-macroscope: the query was still failing at the deadline — "
                       "query error, not a timeout.", file=sys.stderr)
                 return QUERY_ERROR
-            time.sleep(args.interval)
+            time.sleep(max(0.0, min(args.interval, deadline - time.monotonic())))
             continue
 
         run = find_macroscope_run(payload)
@@ -384,16 +413,7 @@ def main(argv=None):
             say(f"  status: {'check not created yet' if status == 'absent' else status}")
         last = status
 
-        if time.monotonic() >= deadline:
-            if not answered:
-                print("await-macroscope: never got a successful answer from the API — "
-                      "query error, not a timeout.", file=sys.stderr)
-                return QUERY_ERROR
-            print(f"await-macroscope: TIMED OUT after {args.timeout}s — the check never "
-                  f"settled (last status: {last}). This is a timeout, NOT a pass.",
-                  file=sys.stderr)
-            return TIMED_OUT
-        time.sleep(args.interval)
+        time.sleep(max(0.0, min(args.interval, deadline - time.monotonic())))
 
     conclusion = run.get("conclusion") or ""
     title = ((run.get("output") or {}).get("title") or "").strip()
