@@ -81,12 +81,35 @@ probe() {
 
 deadline=$(( $(date +%s) + TIMEOUT ))
 last=""
+fails=0          # CONSECUTIVE query failures
+MAX_FAILS=3
+answered=0       # have we ever got a real answer from the API?
 while :; do
   if ! out="$(probe)"; then
-    # A query error is NOT "not ready". Say so, and keep trying — transient 5xx is common —
-    # but never let a failed question look like a negative answer.
-    say "  [query failed — retrying; this is not 'not ready']"
-    out=""
+    # A transient 5xx deserves a retry. A persistent failure is a QUERY ERROR (4) and must
+    # never decay into "TIMED OUT" (2) — that would be the exact sin this script exists to
+    # stop: a failed question presented as a negative answer. Bounded retries, then exit 4.
+    fails=$(( fails + 1 ))
+    say "  [query failed (${fails}/${MAX_FAILS}) — retrying; this is NOT 'not ready']"
+    if [ "$fails" -ge "$MAX_FAILS" ]; then
+      die "the check-runs query failed ${fails} times in a row (auth, permissions, or network).\
+ This is a query error, NOT a timeout and NOT a pass."
+    fi
+    query_failed=1
+  else
+    fails=0
+    answered=1
+    query_failed=0
+  fi
+
+  # After a failed query we know NOTHING. Don't fall through and report "check not created
+  # yet" — that is a failed question wearing the costume of an answer.
+  if [ "${query_failed}" = 1 ]; then
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      die "the query was still failing at the deadline — query error, not a timeout."
+    fi
+    sleep "$INTERVAL"
+    continue
   fi
 
   if [ -n "$out" ]; then
@@ -103,6 +126,9 @@ while :; do
   fi
 
   if [ "$(date +%s)" -ge "$deadline" ]; then
+    if [ "$answered" = 0 ]; then
+      die "never got a successful answer from the API in ${TIMEOUT}s — query error, not a timeout."
+    fi
     echo "TIMED OUT after ${TIMEOUT}s — the check never settled (last status: ${last})." >&2
     echo "This is a timeout, not a pass. Re-run or check the PR in the browser." >&2
     exit 2
@@ -112,14 +138,24 @@ done
 
 # --- settled: report ------------------------------------------------------------------
 
+# Only MACROSCOPE's comments. Counting every comment on the SHA meant one human review
+# note flipped a genuinely clean run to "findings present" and exit 1.
 findings="$(gh api "repos/$REPO/pulls/$PR/comments" --paginate \
-  --jq "[.[] | select(.commit_id==\"$SHA\")] | length" 2>/dev/null)" || findings="?"
+  --jq "[.[] | select(.commit_id==\"$SHA\") | select(.user.login==\"macroscopeapp[bot]\")] | length" \
+  2>/dev/null)" || findings="?"
 
-unresolved="$(gh api graphql -f query="
-{ repository(owner:\"${REPO%%/*}\", name:\"${REPO##*/}\") { pullRequest(number:$PR) {
-    reviewThreads(first:100) { nodes { isResolved } } } } }" \
+# PAGINATED. `reviewThreads(first:100)` alone silently undercounts on a long-running PR, so
+# a review with unresolved threads past the first page could report a clean count.
+unresolved="$(gh api graphql --paginate \
+  -F owner="${REPO%%/*}" -F name="${REPO##*/}" -F pr="$PR" \
+  -f query='query($owner:String!,$name:String!,$pr:Int!,$endCursor:String){
+    repository(owner:$owner,name:$name){ pullRequest(number:$pr){
+      reviewThreads(first:100, after:$endCursor){
+        pageInfo{ hasNextPage endCursor }
+        nodes{ isResolved } } } } }' \
   --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved==false)] | length' \
-  2>/dev/null)" || unresolved="?"
+  2>/dev/null | awk '{t+=$1} END{print (NR?t:"?")}')" || unresolved="?"
+[ -n "$unresolved" ] || unresolved="?"
 
 echo
 echo "Macroscope: conclusion=${conclusion:-none}"
