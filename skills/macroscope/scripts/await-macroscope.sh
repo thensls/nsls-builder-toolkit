@@ -51,6 +51,12 @@ done
 say() { [ "$QUIET" = 1 ] || echo "$@"; }
 die() { echo "await-macroscope: $*" >&2; exit 4; }
 
+# Validate before the loop. A bad --interval makes `sleep` fail, and the loop then spins with
+# no delay and hammers the API instead of returning a usage error.
+case "$TIMEOUT" in ''|*[!0-9]*) die "--timeout must be a non-negative integer (got '$TIMEOUT')";; esac
+case "$INTERVAL" in ''|*[!0-9.]*|.|*.*.*) die "--interval must be a non-negative number (got '$INTERVAL')";; esac
+[ "$INTERVAL" = "0" ] && die "--interval 0 would spin without delay"
+
 command -v gh >/dev/null 2>&1 || die "gh is not on PATH"
 
 REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)" \
@@ -66,6 +72,26 @@ fi
 if [ -z "$SHA" ]; then
   SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid 2>/dev/null)" \
     || die "could not resolve the head SHA for PR #$PR"
+
+  # The API's headRefOid LAGS a fresh push by seconds. Resolving it right after `git push`
+  # returns the PREVIOUS commit, and the script then reports that commit's findings as
+  # current — reviewing a stale head while looking authoritative. This is the head-anchored
+  # trap the whole skill warns about, so the helper must not walk into it.
+  #
+  # If local HEAD differs and the remote already has it, the API was simply behind: use local
+  # HEAD. If the remote does NOT have local HEAD, the real problem is unpushed work — say so
+  # rather than silently reviewing the wrong commit.
+  if LOCAL="$(git rev-parse HEAD 2>/dev/null)" && [ -n "$LOCAL" ] && [ "$LOCAL" != "$SHA" ]; then
+    if gh api "repos/$REPO/commits/$LOCAL" --jq .sha >/dev/null 2>&1; then
+      say "  note: the PR API still reports ${SHA:0:8}; local HEAD ${LOCAL:0:8} is already on"
+      say "        the remote, so the API is lagging the push. Using local HEAD."
+      SHA="$LOCAL"
+    else
+      echo "await-macroscope: local HEAD ${LOCAL:0:8} is NOT on the remote — you have unpushed" >&2
+      echo "  commits. The PR head is ${SHA:0:8}; push first, or pass --sha explicitly." >&2
+      exit 4
+    fi
+  fi
 fi
 [ -n "$SHA" ] || die "empty head SHA"
 
@@ -142,7 +168,8 @@ done
 # note flipped a genuinely clean run to "findings present" and exit 1.
 findings="$(gh api "repos/$REPO/pulls/$PR/comments" --paginate \
   --jq "[.[] | select(.commit_id==\"$SHA\") | select(.user.login==\"macroscopeapp[bot]\")] | length" \
-  2>/dev/null)" || findings="?"
+  2>/dev/null | awk '{t+=$1} END{print (NR?t:"?")}')" || findings="?"
+[ -n "$findings" ] || findings="?"
 
 # PAGINATED. `reviewThreads(first:100)` alone silently undercounts on a long-running PR, so
 # a review with unresolved threads past the first page could report a clean count.
@@ -176,8 +203,14 @@ fi
 
 case "$conclusion" in
   success)
-    # Belt and braces: trust the finding count over the label.
-    if [ "$findings" = "0" ] || [ "$findings" = "?" ]; then
+    # Belt and braces: trust the finding count over the label — but an UNKNOWN count is not
+    # a clean one. Treating "?" as zero manufactured a false all-clear whenever the comments
+    # query failed, which is the precise failure mode this script exists to prevent.
+    if [ "$findings" = "?" ]; then
+      echo "  => could not determine the finding count — query error, NOT a clean result." >&2
+      exit 4
+    fi
+    if [ "$findings" = "0" ]; then
       echo "  => CLEAN"
       exit 0
     fi
