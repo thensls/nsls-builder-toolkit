@@ -78,27 +78,43 @@ def find_macroscope_run(payload):
     return None
 
 
-def classify(conclusion, findings):
-    """Map a settled conclusion + finding count onto (exit_code, verdict, detail).
+def classify(conclusion, findings, unresolved):
+    """Map a settled conclusion + counts onto (exit_code, verdict, detail).
 
-    `findings` is an int, or None when it could not be determined.
+    `findings` and `unresolved` are ints, or None when undeterminable.
+
+    On `success`, the actionable signal is UNRESOLVED THREADS — not the raw comment count.
+    GitHub re-anchors an already-resolved comment to the new head whenever the line it points
+    at survives, so a long-lived PR accumulates resolved comments on every subsequent SHA. An
+    earlier version cross-checked the raw count against the conclusion as "belt and braces",
+    and dogfooding immediately showed the cost: a run that genuinely reported "No issues
+    identified" exited 1 because one resolved, re-anchored comment sat on the head. A tool
+    that cries wolf on every clean run stops being read.
+
+    Unresolved threads are still worth failing on, because they mean outstanding work from an
+    earlier round even when this run found nothing new.
     """
     if conclusion == "success":
         # An UNKNOWN count is not a clean one. The bash version tested `= "?"` alongside
         # `= "0"` and printed "=> CLEAN", manufacturing a false all-clear whenever the
-        # comments query failed — the precise failure this script exists to prevent.
-        if findings is None:
+        # query failed — the precise failure this script exists to prevent.
+        if unresolved is None:
             return (
                 QUERY_ERROR,
                 "UNKNOWN",
-                "could not determine the finding count — query error, NOT a clean result",
+                "could not determine the unresolved-thread count — query error, NOT clean",
             )
-        if findings == 0:
-            return CLEAN, "CLEAN", "no findings"
+        if unresolved == 0:
+            detail = "no issues, no unresolved threads"
+            if findings:
+                detail += (
+                    f" ({findings} resolved comment(s) re-anchored to this SHA — not findings)"
+                )
+            return CLEAN, "CLEAN", detail
         return (
             FINDINGS,
-            "FINDINGS PRESENT",
-            f"conclusion says success but {findings} Macroscope comments sit on this head",
+            "UNRESOLVED THREADS",
+            f"this run found nothing new, but {unresolved} thread(s) are still unresolved",
         )
 
     if conclusion == "neutral":
@@ -384,7 +400,7 @@ def main(argv=None):
     findings = count_bot_comments(repo, pr, sha)
     unresolved = count_unresolved_threads(repo, pr)
 
-    code, verdict, detail = classify(conclusion, findings)
+    code, verdict, detail = classify(conclusion, findings, unresolved)
 
     print()
     print(f"Macroscope: conclusion={conclusion or 'none'}")

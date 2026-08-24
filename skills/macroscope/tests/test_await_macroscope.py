@@ -58,40 +58,60 @@ def test_neutral_means_findings_not_skipping():
 
     A six-finding review printed "skipping" and nearly got reported as clean.
     """
-    code, verdict, detail = am.classify("neutral", 6)
+    code, verdict, detail = am.classify("neutral", 6, 6)
     assert code == am.FINDINGS
     assert verdict == "FINDINGS PRESENT"
     assert "skipping" in detail, "the mislabelling must be named in the output"
 
 
-def test_unknown_finding_count_is_never_clean():
+def test_unknown_count_is_never_clean():
     """The High finding against the bash version: `?` was treated as zero."""
-    code, verdict, _ = am.classify("success", None)
+    code, verdict, _ = am.classify("success", 0, None)
     assert code == am.QUERY_ERROR
     assert verdict == "UNKNOWN"
 
 
-def test_success_with_zero_findings_is_clean():
-    assert am.classify("success", 0)[0] == am.CLEAN
+def test_success_with_nothing_unresolved_is_clean():
+    assert am.classify("success", 0, 0)[0] == am.CLEAN
 
 
-def test_success_with_comments_on_the_head_is_not_clean():
-    """Trust the count over the label."""
-    code, _, detail = am.classify("success", 2)
+def test_resolved_comments_re_anchored_to_the_head_do_not_cry_wolf():
+    """Found by dogfooding: the tool failed its own clean run.
+
+    GitHub re-anchors an ALREADY-RESOLVED comment to the new head when the line it points at
+    survives, so a long-lived PR accumulates resolved comments on every later SHA. Keying the
+    verdict on the raw count turned "No issues identified" into exit 1. A tool that cries wolf
+    on every clean run stops being read.
+    """
+    code, verdict, detail = am.classify("success", 1, 0)
+    assert code == am.CLEAN
+    assert verdict == "CLEAN"
+    assert "re-anchored" in detail, "say why the nonzero count is not a finding"
+
+
+def test_success_with_unresolved_threads_still_fails():
+    """Nothing new this run, but earlier findings are still outstanding."""
+    code, verdict, detail = am.classify("success", 5, 2)
     assert code == am.FINDINGS
+    assert verdict == "UNRESOLVED THREADS"
     assert "2" in detail
+
+
+def test_neutral_fails_regardless_of_thread_state():
+    """The run itself found things; resolution state cannot excuse that."""
+    assert am.classify("neutral", 0, 0)[0] == am.FINDINGS
 
 
 @pytest.mark.parametrize("c", ["failure", "cancelled", "timed_out", "action_required", "stale"])
 def test_infrastructure_conclusions_are_not_review_verdicts(c):
-    code, _, detail = am.classify(c, 0)
+    code, _, detail = am.classify(c, 0, 0)
     assert code == am.CHECK_ERROR
     assert "not a review verdict" in detail
 
 
 def test_unrecognized_conclusion_does_not_fall_through_to_clean():
-    assert am.classify("something-new", 0)[0] == am.CHECK_ERROR
-    assert am.classify("", 0)[0] == am.CHECK_ERROR
+    assert am.classify("something-new", 0, 0)[0] == am.CHECK_ERROR
+    assert am.classify("", 0, 0)[0] == am.CHECK_ERROR
 
 
 # ---------------------------------------------------------------------------------------
