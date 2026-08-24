@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 import time
@@ -121,20 +122,21 @@ def classify(conclusion, findings):
     )
 
 
-def resolve_head(api_sha, local_sha, pr_branch, current_branch, remote_has_local):
+def resolve_head(api_sha, local_sha, pr_branch, current_branch, remote_branch_tip):
     """Decide which SHA to inspect. Returns (sha, note) or raises ValueError.
 
-    Two traps, both hit for real:
+    Three traps, all hit for real:
 
     * The PR API's `headRefOid` LAGS a fresh push by seconds, so resolving it right after
-      `git push` returns the PREVIOUS commit and the tool then reviews a stale head while
-      looking authoritative.
-    * Substituting local HEAD unconditionally is worse: run with `--pr N` from another
-      branch, it polls and counts for a commit belonging to a different PR and reports that
-      as PR N's verdict.
-
-    So: substitute only when the checkout is on this PR's own branch AND the remote already
-    has the local commit.
+      `git push` returns the PREVIOUS commit and the tool reviews a stale head while looking
+      authoritative. This is the only reason to prefer local HEAD at all.
+    * Substituting local HEAD unconditionally is worse: run with `--pr N` from another branch,
+      it polls and counts for a commit belonging to a different PR and reports that as PR N's
+      verdict.
+    * Asking merely "does the remote HAVE this commit?" is not enough, because that is true of
+      any OLD commit. A stale checkout would then substitute an older SHA and confidently
+      report a verdict for it. The authoritative question is whether local HEAD IS the remote
+      branch's current tip — so that is what we compare against.
     """
     if not api_sha:
         raise ValueError("could not resolve the PR's head SHA")
@@ -145,14 +147,22 @@ def resolve_head(api_sha, local_sha, pr_branch, current_branch, remote_has_local
             f"checked out '{current_branch}' but PR head branch is '{pr_branch}' — "
             f"using the PR's own head {api_sha[:8]}. Pass --sha to override."
         )
-    if not remote_has_local:
-        raise ValueError(
-            f"local HEAD {local_sha[:8]} is not on the remote — you have unpushed commits. "
-            f"The PR head is {api_sha[:8]}; push first, or pass --sha explicitly."
+    if remote_branch_tip and local_sha == remote_branch_tip:
+        # Local HEAD is the tip on the remote; the PR API is simply behind.
+        return local_sha, (
+            f"the PR API still reports {api_sha[:8]}; local HEAD {local_sha[:8]} is the current"
+            " tip on the remote, so the API is lagging the push. Using local HEAD."
         )
-    return local_sha, (
-        f"the PR API still reports {api_sha[:8]}; local HEAD {local_sha[:8]} is already on "
-        "the remote, so the API is lagging the push. Using local HEAD."
+    if remote_branch_tip:
+        raise ValueError(
+            f"local HEAD {local_sha[:8]} is not the remote tip ({remote_branch_tip[:8]}) — "
+            f"your checkout is stale or has unpushed commits. The PR head is {api_sha[:8]}; "
+            "pull/push, or pass --sha explicitly."
+        )
+    branch_label = pr_branch or "the PR branch"
+    raise ValueError(
+        f"could not determine the remote tip for '{branch_label}'; local HEAD is "
+        f"{local_sha[:8]} and the PR head is {api_sha[:8]}. Pass --sha."
     )
 
 
@@ -187,6 +197,11 @@ def positive_number(raw, name, allow_float=False):
         value = float(raw) if allow_float else int(raw, 10)
     except ValueError:
         raise argparse.ArgumentTypeError(f"{name} must be a number, got {raw!r}")
+    # NaN and inf survive float(): `nan <= 0` is False, so NaN passed the positivity check
+    # and reached time.sleep(nan), which raises; inf would sleep forever. Reject both here so
+    # they surface as the documented usage error instead of a traceback or a hang.
+    if not math.isfinite(value):
+        raise argparse.ArgumentTypeError(f"{name} must be finite, got {raw!r}")
     if value <= 0:
         raise argparse.ArgumentTypeError(f"{name} must be greater than zero, got {raw!r}")
     return value
@@ -298,11 +313,14 @@ def main(argv=None):
                            "-q", ".headRefName", check=False)
             local = git("rev-parse", "HEAD")
             current = git("rev-parse", "--abbrev-ref", "HEAD")
-            remote_has_local = bool(local) and subprocess.run(
-                ["gh", "api", f"repos/{repo}/commits/{local}", "--jq", ".sha"],
-                capture_output=True, text=True,
-            ).returncode == 0
-            sha, note = resolve_head(api_sha, local, pr_branch, current, remote_has_local)
+            # The remote branch's CURRENT TIP — not "does this commit exist somewhere".
+            remote_tip = ""
+            if local and pr_branch:
+                remote_tip = gh(
+                    "api", f"repos/{repo}/git/ref/heads/{pr_branch}",
+                    "--jq", ".object.sha", check=False,
+                )
+            sha, note = resolve_head(api_sha, local, pr_branch, current, remote_tip)
     except (GhError, ValueError) as exc:
         print(f"await-macroscope: {exc}", file=sys.stderr)
         return QUERY_ERROR

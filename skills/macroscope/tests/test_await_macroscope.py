@@ -101,36 +101,55 @@ def test_unrecognized_conclusion_does_not_fall_through_to_clean():
 
 def test_api_lag_after_a_push_uses_local_head():
     """headRefOid lags a fresh push by seconds; using it reviews the previous commit."""
-    sha, note = am.resolve_head("old111", "new222", "my-branch", "my-branch", True)
+    sha, note = am.resolve_head("old111", "new222", "my-branch", "my-branch", "new222")
     assert sha == "new222"
     assert "lagging" in note
 
 
 def test_local_head_is_not_substituted_from_a_different_branch():
     """The dangerous one. `--pr N` from another branch reported a foreign commit as PR N."""
-    sha, note = am.resolve_head("prhead1", "otherbranchhead", "pr-branch", "main", True)
+    sha, note = am.resolve_head("prhead1", "otherbranchhead", "pr-branch", "main", "prhead1")
     assert sha == "prhead1"
     assert "pr-branch" in note and "main" in note
 
 
+def test_a_stale_checkout_is_an_error_not_a_verdict_on_an_old_commit():
+    """Macroscope on the Python version: "does the remote HAVE it" is true of any OLD commit.
+
+    A stale checkout would then substitute an older SHA and confidently report a verdict for
+    it. The authoritative question is whether local HEAD IS the remote branch tip.
+    """
+    with pytest.raises(ValueError) as e:
+        am.resolve_head("newtip9", "oldlocal1", "my-branch", "my-branch", "newtip9")
+    msg = str(e.value)
+    assert "not the remote tip" in msg
+    assert "stale" in msg
+
+
 def test_unpushed_local_head_is_an_error_not_a_silent_wrong_commit():
     with pytest.raises(ValueError) as e:
-        am.resolve_head("prhead1", "localonly", "my-branch", "my-branch", False)
-    assert "unpushed" in str(e.value)
+        am.resolve_head("prhead1", "localonly", "my-branch", "my-branch", "prhead1")
+    assert "not the remote tip" in str(e.value)
+
+
+def test_unknown_remote_tip_refuses_rather_than_guessing():
+    with pytest.raises(ValueError) as e:
+        am.resolve_head("prhead1", "somethingelse", "my-branch", "my-branch", "")
+    assert "could not determine the remote tip" in str(e.value)
 
 
 def test_matching_shas_need_no_substitution():
-    assert am.resolve_head("same", "same", "b", "b", True) == ("same", None)
+    assert am.resolve_head("same", "same", "b", "b", "same") == ("same", None)
 
 
 def test_missing_api_sha_raises():
     with pytest.raises(ValueError):
-        am.resolve_head("", "local", "b", "b", True)
+        am.resolve_head("", "local", "b", "b", "tip")
 
 
 def test_no_local_git_context_falls_back_to_the_api_head():
     """Running outside a checkout must still work."""
-    assert am.resolve_head("prhead", "", None, None, False) == ("prhead", None)
+    assert am.resolve_head("prhead", "", None, None, "") == ("prhead", None)
 
 
 # ---------------------------------------------------------------------------------------
@@ -198,3 +217,12 @@ def test_a_flag_missing_its_argument_exits_2_from_argparse_not_a_traceback():
 def test_bad_numeric_argument_exits_rather_than_polling():
     with pytest.raises(SystemExit):
         am.main(["--interval", "0"])
+
+
+@pytest.mark.parametrize("bad", ["nan", "NaN", "inf", "-inf", "Infinity"])
+def test_non_finite_intervals_are_rejected(bad):
+    """Macroscope on the Python version: `nan <= 0` is False, so NaN passed the positivity
+    check and reached time.sleep(nan), which raises; inf would sleep forever."""
+    with pytest.raises(argparse.ArgumentTypeError) as e:
+        am.positive_number(bad, "--interval", allow_float=True)
+    assert "finite" in str(e.value) or "number" in str(e.value)
