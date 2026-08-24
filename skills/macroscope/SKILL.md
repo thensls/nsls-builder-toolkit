@@ -109,12 +109,17 @@ Push so Macroscope re-reviews the new commit, then wait for the check on the **n
 SHA and report the result as the evidence that the class is closed. Use the helper — do not
 hand-roll a poll loop:
 
-    bash skills/macroscope/scripts/await-macroscope.sh
+    python3.12 skills/macroscope/scripts/await_macroscope.py
 
 It defaults to the current branch's PR and head SHA (`--pr N --sha SHA` to override) and exits
 `0` clean, `1` findings present, `2` timed out, `3` check errored, `4` usage/query error. It
 prints the run's own finding count, the count still anchored to this SHA, and the unresolved
 thread count.
+
+**An unknown answer is never a clean one.** Every path that cannot determine the truth exits
+`4`, not `0` — a failed comments query, a check-runs query that keeps erroring, an
+unrecognized conclusion. A timeout exits `2` and says it is not a pass. Tests:
+`skills/macroscope/tests/test_await_macroscope.py`.
 
 **Two traps it exists to close — both have produced a wrong "all clear":**
 
@@ -127,6 +132,12 @@ thread count.
   loop that piped it into `python -c 'json.load(...)'` with a `|| echo '{}'` fallback reported
   "not ready" on every poll while actually failing to ask — silence indistinguishable from
   "still running". Parse with `--jq`, and never let a failed query look like a negative answer.
+
+- 🔴 **The PR API's `headRefOid` lags a fresh push by seconds**, so resolving it right after
+  `git push` returns the PREVIOUS commit and you review a stale head while looking
+  authoritative. The helper prefers local HEAD when the remote already has it — but only when
+  the checkout is on that PR's own branch, because substituting unconditionally reported a
+  commit from a *different* PR as this one's verdict.
 
 Also: **the title's finding count and the count anchored to your SHA legitimately differ.**
 GitHub re-anchors a comment to a later commit when the line it points at survives, so a
