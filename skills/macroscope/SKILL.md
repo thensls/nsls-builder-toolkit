@@ -105,12 +105,33 @@ class each change closes, how you verified it, and the commit message — and co
 approval.
 
 ### 9. Push, re-review, and confirm the class is gone
-Push so Macroscope re-reviews the new commit. Poll for the review on the **new** commit SHA
-and report the result as the evidence that the class is closed:
+Push so Macroscope re-reviews the new commit, then wait for the check on the **new** commit
+SHA and report the result as the evidence that the class is closed. Use the helper — do not
+hand-roll a poll loop:
 
-    gh api "repos/$REPO/pulls/$PR/reviews" --paginate \
-      -q '[.[] | select(.user.login=="macroscopeapp[bot]") | select(.commit_id|startswith("<NEW_SHA>"))] | length'
-    gh pr checks "$PR" | grep -i "Macroscope"
+    bash skills/macroscope/scripts/await-macroscope.sh
+
+It defaults to the current branch's PR and head SHA (`--pr N --sha SHA` to override) and exits
+`0` clean, `1` findings present, `2` timed out, `3` check errored, `4` usage/query error. It
+prints the run's own finding count, the count still anchored to this SHA, and the unresolved
+thread count.
+
+**Two traps it exists to close — both have produced a wrong "all clear":**
+
+- 🔴 **`gh pr checks` prints a `neutral` conclusion as the word "skipping"**, and Macroscope
+  returns `neutral` *whenever it has findings*. A review that found six real bugs shows as
+  `skipping`, which reads as "didn't run" or "passed". Never take that column as a verdict —
+  read `.conclusion` and `.output.title` (`"6 issues identified (10 code objects reviewed)"`).
+- 🔴 **The check-run payload contains raw control characters** (Macroscope embeds diffs and
+  code), so strict JSON parsing of it raises `Invalid control character`. Every hand-rolled
+  loop that piped it into `python -c 'json.load(...)'` with a `|| echo '{}'` fallback reported
+  "not ready" on every poll while actually failing to ask — silence indistinguishable from
+  "still running". Parse with `--jq`, and never let a failed query look like a negative answer.
+
+Also: **the title's finding count and the count anchored to your SHA legitimately differ.**
+GitHub re-anchors a comment to a later commit when the line it points at survives, so a
+6-finding run can show 3 comments on that SHA. Reading the smaller number as "most of them
+went away" is an easy and costly mistake; the helper prints both and says so.
 
 Resolving the review threads and merging the PR belong to the PR owner. Surface exactly which
 comments remain to be resolved; do not merge on their behalf.
@@ -118,6 +139,11 @@ comments remain to be resolved; do not merge on their behalf.
 ## Anti-patterns (all of these have caused the drip before)
 - Fixing the literal comments one at a time.
 - Trusting a stale plan/summary for the finding count instead of reading the live comments.
+- Reading `gh pr checks`'s "skipping" as a pass. It is a `neutral` conclusion, which is what
+  Macroscope returns when it HAS findings.
+- Hand-rolling a poll loop that parses the check-run payload with strict JSON, or that hides a
+  query failure behind `|| echo '{}'` — both turn "I couldn't ask" into "not ready yet".
+- Reporting a timeout as a clean review. A watcher that goes quiet has told you nothing.
 - Promising "this is the last round" — the bot re-runs on every push; that promise is not
   yours to make.
 - Filing a ticket to defer a real fix so the check goes green.
