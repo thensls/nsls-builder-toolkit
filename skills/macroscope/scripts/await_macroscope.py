@@ -233,14 +233,32 @@ class GhError(Exception):
 
 
 def gh(*args, check=True):
-    proc = subprocess.run(["gh", *args], capture_output=True, text=True)
+    """Run gh. A missing or unexecutable binary is a GhError, not a traceback.
+
+    subprocess.run raises FileNotFoundError (an OSError) when `gh` is not on PATH, and the
+    caller's handler caught only GhError/ValueError — so a machine without gh got a traceback
+    instead of the documented exit 4. An unusable tool has to report itself the same way a
+    failed query does.
+    """
+    try:
+        proc = subprocess.run(["gh", *args], capture_output=True, text=True)
+    except OSError as exc:
+        raise GhError(f"could not execute gh: {exc}") from exc
     if check and proc.returncode != 0:
         raise GhError((proc.stderr or proc.stdout or "gh failed").strip())
     return proc.stdout.strip()
 
 
 def git(*args):
-    proc = subprocess.run(["git", *args], capture_output=True, text=True)
+    """Run git. Any failure — including a missing binary — is an empty answer.
+
+    Unlike gh, git is optional here: without a checkout we fall back to the PR API's head,
+    which resolve_head handles explicitly.
+    """
+    try:
+        proc = subprocess.run(["git", *args], capture_output=True, text=True)
+    except OSError:
+        return ""
     return proc.stdout.strip() if proc.returncode == 0 else ""
 
 

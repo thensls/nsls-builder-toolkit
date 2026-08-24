@@ -263,3 +263,28 @@ def test_non_finite_intervals_are_rejected(bad):
     with pytest.raises(argparse.ArgumentTypeError) as e:
         am.positive_number(bad, "--interval", allow_float=True)
     assert "finite" in str(e.value) or "number" in str(e.value)
+
+
+# ---------------------------------------------------------------------------------------
+# the tools themselves may be missing
+# ---------------------------------------------------------------------------------------
+
+
+def test_missing_gh_is_a_query_error_not_a_traceback(monkeypatch):
+    """subprocess.run raises FileNotFoundError when gh is absent, and the caller caught only
+    GhError/ValueError — so a machine without gh got a traceback instead of exit 4."""
+    def boom(*a, **k):
+        raise FileNotFoundError(2, "No such file or directory: 'gh'")
+    monkeypatch.setattr(am.subprocess, "run", boom)
+    with pytest.raises(am.GhError) as e:
+        am.gh("repo", "view")
+    assert "could not execute gh" in str(e.value)
+    assert am.main(["--pr", "1"]) == am.QUERY_ERROR
+
+
+def test_missing_git_is_an_empty_answer_not_a_crash(monkeypatch):
+    """git is optional: without a checkout we fall back to the PR API head."""
+    def boom(*a, **k):
+        raise FileNotFoundError(2, "No such file or directory: 'git'")
+    monkeypatch.setattr(am.subprocess, "run", boom)
+    assert am.git("rev-parse", "HEAD") == ""
