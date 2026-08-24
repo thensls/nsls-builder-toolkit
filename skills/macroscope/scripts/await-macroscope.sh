@@ -81,7 +81,17 @@ if [ -z "$SHA" ]; then
   # If local HEAD differs and the remote already has it, the API was simply behind: use local
   # HEAD. If the remote does NOT have local HEAD, the real problem is unpushed work — say so
   # rather than silently reviewing the wrong commit.
-  if LOCAL="$(git rev-parse HEAD 2>/dev/null)" && [ -n "$LOCAL" ] && [ "$LOCAL" != "$SHA" ]; then
+  # ONLY substitute local HEAD when the checkout is actually on this PR's head branch.
+  # Without that guard, `--pr N` run from any other branch substituted whatever local HEAD
+  # happened to be — polling checks and counting comments for a commit belonging to a
+  # different PR entirely, and reporting it as PR N's verdict. Introduced by the lag fix in
+  # the previous commit; caught before it shipped.
+  PR_BRANCH="$(gh pr view "$PR" --json headRefName -q .headRefName 2>/dev/null || true)"
+  CUR_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  if [ -n "$PR_BRANCH" ] && [ "$PR_BRANCH" != "$CUR_BRANCH" ]; then
+    say "  note: checked out '$CUR_BRANCH' but PR #$PR is '$PR_BRANCH' — using the PR's own"
+    say "        head ${SHA:0:8}. Pass --sha to override."
+  elif LOCAL="$(git rev-parse HEAD 2>/dev/null)" && [ -n "$LOCAL" ] && [ "$LOCAL" != "$SHA" ]; then
     if gh api "repos/$REPO/commits/$LOCAL" --jq .sha >/dev/null 2>&1; then
       say "  note: the PR API still reports ${SHA:0:8}; local HEAD ${LOCAL:0:8} is already on"
       say "        the remote, so the API is lagging the push. Using local HEAD."
