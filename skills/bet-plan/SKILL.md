@@ -57,13 +57,18 @@ seen it before and owes the author nothing. It ends the way `bet-idea` and
 
 ## Quick Start
 
-Planned-stage bet → **P1** Economics hardening → **P2** Execution & risk →
-**P3** Proof plan → **P4** Adversarial review loop (max 2 rounds) → **P5**
-The advance offer → a live-ready bet (or an honest "not board-ready yet,
-here's what's failing").
+Planned-stage bet → **P0** Size the review to the bet → **P1** Economics
+hardening → **P2** Execution & risk → **P3** Proof plan → **P4** Adversarial
+review loop (max 2 rounds) → **P5** The advance offer → a live-ready bet (or
+an honest "not board-ready yet, here's what's failing").
 
 ## Operating rules
 
+- **Proportion the rigor to the ask (per Step P0).** Read the investment
+  number BEFORE deciding how deep to go. A $5K reversible test and a $2M
+  partnership get the same five gate checks and very different depth. Asking
+  "does this memo meet board standard?" of a cheap pilot is the wrong
+  question; "is this test worth its cost?" is the right one.
 - **Show the gate progress bar** (per `references/gate-progress.md`) after
   every `exec.*`/`proof.*` write and at the end of every session.
 - **Never call `advance_stage` as a probe** — planned→live carries no
@@ -78,8 +83,18 @@ here's what's failing").
   rationale, and a dogfood bet's internal-need rationale is first-class, not
   an apology.
 - **The adversarial review is mandatory, not optional busywork** — it runs
-  in a fresh subagent with zero shared context, max 2 fix rounds, and it
-  cannot be silently skipped.
+  in a fresh subagent with zero shared context and cannot be silently
+  skipped. How many rounds it runs is Step P0's call (never more than 2;
+  normally one for a small, reversible bet) — the review happening at all
+  is what's non-negotiable, not its length.
+- **A `data` write REPLACES the whole object — never merge it in your head.**
+  `update_section(..., data: {...})` overwrites the section's existing `data`
+  wholesale, so any key already there and not repeated in the new call is
+  gone. Every write to a section that carries durable keys — `rigor_band` on
+  `proof.investment` (Step P0), `review_log` on `exec.top_risks` (Step P4) —
+  reads the section first and carries the existing keys forward. The loss is
+  silent: nothing errors, and the next resumed session simply finds the key
+  missing and behaves as if it was never set.
 - **Consume `staleAssumptions`** from every `update_section` response —
   announce it and re-interrogate the listed assumptions, never skip
   silently.
@@ -108,7 +123,89 @@ hands one over with a `bet_id`. Call `get_bet` first.
   section's prose stays exactly the top five risks). The planned→live
   progress bar IS the resume agenda — don't re-derive a different one.
 
+## Step P0 — Size the review to the bet
+
+**Do this first, out loud, before any `econ.*` write.** Read the investment
+ask — `proof.investment` if `bet-research` drafted one, otherwise ask the
+owner for the number and the reversibility in one question. Then say which
+band the bet is in and what that changes.
+
+**Small and reversible** (roughly: under ~$25K all-in, no hire, no build, no
+multi-year commitment, stoppable inside a quarter):
+
+- `econ.*` at honest-estimate depth. A unit-economic sketch and a stated
+  breakeven beat a three-case model built on invented drivers.
+- ONE primary experiment, thresholds stated as **decision aids for the
+  owner**, not automated tests. A directional read with the interval
+  reported is the honest output of a small pilot; a significance bar it
+  cannot clear is not.
+- Empty `market.*`/`econ.*` from a force-advanced gate are **recorded gaps**,
+  not launch blockers — say so plainly and put them in what a continue buys.
+- One review round is usually enough.
+
+**Material or irreversible** (a hire, a build, a multi-year commitment, or
+enough spend that being wrong is expensive):
+
+- Full `references/economics-model.md` treatment, three differentiated
+  cases, named assumptions on every driver.
+- Formal thresholds with inference rules, and the economics page as a real
+  gate rather than an open item.
+- Both review rounds, and the score floor in
+  `references/adversarial-review.md` taken seriously.
+
+### Record the band — the later steps read it, they don't re-derive it
+
+The band is a decision, not a mood. Write it down as soon as you say it, on
+the `proof.investment` section's DATA (`content_md` untouched) — **reading
+the section first and carrying its existing `data` keys forward**, per the
+replace-semantics rule in Operating rules:
+`update_section(bet_id, "proof.investment", data: { ...existing data,
+rigor_band: "small" | "material", band_basis: "<the ask and the
+reversibility that decided it>" }, summary: "rigor band", via: "bet-plan")`.
+
+**Step P3 writes this same section**, so its write must carry `rigor_band`
+and `band_basis` forward too — dropping them there would silently erase the
+band and send the next resumed session back to full rigor.
+
+Steps P1 and P4 branch on this value explicitly. A resumed session reads it
+rather than guessing — and a resumed session that finds no `rigor_band`
+re-runs P0 rather than defaulting to full rigor, because defaulting silently
+is exactly the failure this step exists to prevent.
+
+### What NEVER scales down
+
+The crowding-out test in `exec.core_impact`. A stop threshold that exists and
+that the owner would honour. Sell-first. Honest evidence tagging. The review
+happening at all. Cheap does not mean unexamined — it means examined at the
+right altitude.
+
+### Two failure modes this step exists to prevent
+
+1. **Inventing a bar and then failing the work against it.** If a threshold
+   comes from portfolio-scale ambition arithmetic rather than from the
+   decision in front of you, say where it came from and whether it belongs.
+   A pilot that cannot clear a bar you invented is not a broken pilot.
+2. **Reporting tautologies as findings.** On a bet whose experiment has not
+   run, the evidence axis is capped by construction and the completeness axis
+   largely measures which stage gates were skipped. Both are category
+   statements about where the bet sits, not discoveries. Name them as such
+   instead of stacking them into a verdict.
+
 ## Step P1 — Economics hardening
+
+**Read `rigor_band` from Step P0 first — it decides which of the two
+paths below you run.** Where this step and P0 disagree, **P0 wins**; the
+depth described below is the `material` path.
+
+**Band `small`** — honest-estimate depth. `econ.model_2026_2028` gets a
+single honest trajectory with its drivers named; `econ.cases` gets a stated
+breakeven and the one assumption that would have to be wrong for the bet to
+lose money, in `content_md`, with whatever `data` is genuinely known. The
+three-case `data` shape is **not** required, and a three-case model built on
+invented drivers is a worse answer than a sketch that admits what it doesn't
+know. Skip to the tagging paragraph below — it applies to both bands.
+
+**Band `material`** — the full treatment that follows.
 
 Per `references/economics-model.md`: revise `econ.model_2026_2028` and
 `econ.cases` from `bet-research`'s first-cut estimates into the full
@@ -152,7 +249,10 @@ worth arguing with.
 
 `add_experiment` with a falsifiable hypothesis (a hypothesis with a number
 in it, not "we'll learn a lot"). Write `proof.experiment_2026`,
-`proof.investment`, `proof.milestones`, and the three thresholds
+`proof.investment` — **reading it first and carrying `rigor_band` /
+`band_basis` forward in `data`, since Step P0 recorded them there and a
+`data` write replaces the whole object** — `proof.milestones`, and the three
+thresholds
 (`proof.threshold_continue`, `proof.threshold_accelerate`,
 `proof.threshold_stop`) with numeric `data` where possible, prose-only only
 when a metric genuinely resists a number — and say so explicitly when it
@@ -192,15 +292,35 @@ Per `references/adversarial-review.md`:
    only trace a clean round leaves in `get_bet` — skip it and a resumed
    session has no way to tell the review ran, and will re-run it
    needlessly.
-6. **Re-dispatch a NEW fresh-context reviewer** — never the same subagent
-   context, it would be grading its own suggestions.
-7. **Max 2 fix rounds.** After round 2, remaining disagreements are
+6. **Decide whether round 2 happens — read `rigor_band` from Step P0.**
+   - Band `small` — **stop after round 1.** One round is the expected end
+     state, not a short-changed one. Go to item 7 and record the round's
+     unresolved findings exactly as you would after round 2. Run a second
+     round only if round 1 surfaced a finding that materially changes the
+     bet, and say out loud why this cheap bet earned it.
+   - Band `material` — **re-dispatch a NEW fresh-context reviewer.** Never
+     the same subagent context; it would be grading its own suggestions.
+7. **Never more than 2 fix rounds** (and for band `small`, normally one).
+   After the final round, remaining disagreements are
    RECORDED, not resolved: a challenge that names a genuine RISK joins the
    top-five prose in `exec.top_risks` (displacing a lesser risk if needed);
    everything else lands in the round's `data.review_log` entry (`unresolved`
    list) from step 5. Noted dissent, never silent consensus.
 
 ## Step P5 — The advance offer
+
+**Reading the review scores — apply the band before applying the floor.**
+The board-readiness rule is: any axis below 5 after the final round means
+say plainly the memo is not board-ready. On band `material` that stands as
+written. On band `small` there is one carve-out, and only one: the reviewer
+instructions cap `evidence` at 4 for a memo that is mostly `assumption`-
+tagged, which every pre-experiment pilot is **by construction**. That score
+is a statement about where the bet sits, not a finding about its quality —
+report it, say why it is capped, and **do not let it alone block the advance
+offer**. Everything else holds: a `completeness` or `consistency` below 5 is
+a real failure on any band, and a small-band `evidence` score that is low
+for some reason OTHER than the unrun experiment is a real finding too. Name
+which of the two you are looking at rather than waving the axis through.
 
 Render the planned→live checklist (client-side, per
 `references/gate-progress.md` — never a probe). Draft the exact `rationale`
@@ -257,6 +377,16 @@ Called by `bet-studio`'s "Plan economics / proof plan" hand-off.
   threshold.
 - More than 2 fix rounds. → Analysis paralysis. Record the dissent in
   `exec.top_risks` and let the owner decide.
+- A power calculation, a three-case model, or a significance bar on a
+  sub-$25K reversible pilot. → Step P0. The rigor is out of proportion to the
+  decision, and the most likely outcome is failing the bet against a standard
+  you introduced.
+- Reporting "evidence 2/10" or "completeness 3/10" as a finding on a bet
+  whose experiment has not run. → Those are restatements of "this is early,"
+  not discoveries. Say so.
+- A markdown on a rubric criterion that is really about a different
+  criterion. → Real finding, wrong variable. It double-counts, and it moves
+  the stack rank on a mis-mapping.
 - Advancing to `live` without the review on record and without the owner's
   explicit skip. → The review is a required step, not a formality around
   one.
@@ -295,3 +425,6 @@ and point at `/connect` or the README's Strategy Studio setup section
 | "It's a dogfood bet, I'll just note the build wasn't really tested." | The internal need is a first-class rationale, not an apology — and it still doesn't excuse testing external willingness to pay. |
 | "I'll just call `advance_stage` to see the planned→live checklist." | It moves the bet when the gate passes. Compute progress from `get_bet` instead. |
 | "The core business impact is basically zero, I'll write 'none.'" | Apply the crowding-out test honestly — "none" is almost never true, and it's the fastest way to lose the board's trust in the rest of the page. |
+| "More rigor is never wrong." | It is when it fails a cheap test against a bar you invented, and when it costs the owner review rounds on axes that only restate the bet's stage. Step P0. |
+| "The pilot can't detect the threshold, so the pilot is broken." | Check which one you chose first. If the bar came from 2028 portfolio arithmetic and the pilot costs $5K, the bar is the broken part. |
+| "The owner keeps pushing back on my framing; I should explain it better." | Repeated pushback on framing is evidence about the frame. Re-derive it before defending it. |

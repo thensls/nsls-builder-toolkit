@@ -66,16 +66,25 @@ Work through the findings one at a time, in the order the reviewer scored
 them worst-axis-first, not in the order they happen to appear in the
 transcript.
 
-## Fix rounds — max 2
+## Fix rounds — how many, and never more than 2
 
 For each accepted fix, apply it via the normal write tools —
 `update_section` / `add_experiment` / `update_experiment` /
-`upsert_assumption`, revision-logged, `via: "bet-plan"`. Once the accepted
-fixes for a round are all applied, dispatch a NEW fresh-context reviewer —
-**never the same context**, and never the same subagent conversation — it
-would be grading its own suggestions, which isn't review, it's rehearsal.
+`upsert_assumption`, revision-logged, `via: "bet-plan"`.
 
-After round 2, any remaining disagreements are **RECORDED, not resolved**:
+**Whether a second round happens is Step P0's call, read from `rigor_band`:**
+
+- **Band `small`** — round 1 is normally the whole review. Stop there and go
+  straight to recording unresolved findings below. A second round is earned
+  only by a round-1 finding that materially changes the bet, and taking it
+  should be said out loud. Running two rounds by reflex on a cheap,
+  reversible bet is the over-rigor Step P0 exists to prevent.
+- **Band `material`** — once the accepted fixes for round 1 are all applied,
+  dispatch a NEW fresh-context reviewer — **never the same context**, and
+  never the same subagent conversation — it would be grading its own
+  suggestions, which isn't review, it's rehearsal.
+
+After the final round, any remaining disagreements are **RECORDED, not resolved**:
 unresolved reviewer challenges land in `exec.top_risks` (or the proof plan,
 whichever they concern) as named open risks. This is noted dissent, never
 silent consensus — a memo that goes to `live` with a challenge quietly
@@ -83,8 +92,19 @@ dropped is worse than one that goes with the challenge written down.
 
 ## Score floor guidance
 
-If, after round 2, any axis still scores below 5: say plainly that the memo
+If, after the final round, any axis still scores below 5: say plainly that the memo
 is not board-ready and recommend against advancing. The owner can still
 overrule this — record the overrule and its rationale in the `advance_stage`
 rationale, so the decision to advance over a low score is itself on the
 record, not silently absorbed.
+
+**One carve-out, band `small` only.** The EVIDENCE instruction above caps a
+mostly-`assumption`-tagged memo at 4 — which is every pilot whose experiment
+has not run yet. On a small, reversible bet that 4 is the rubric restating
+the bet's stage, not a judgement on the work, and it must not by itself
+carry a "not board-ready" verdict. Report the score, say why it is capped,
+and let the owner decide. This does NOT extend to `completeness` or
+`consistency` — those below 5 are real failures on any band — nor to an
+`evidence` score that is low for reasons beyond the unrun experiment. Say
+which case you're in; the carve-out is narrow on purpose, because a blanket
+"scores don't apply to cheap bets" would hollow out the review entirely.
