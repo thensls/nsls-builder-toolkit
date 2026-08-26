@@ -80,6 +80,9 @@ def main():
         automation=opt("--automation") or opt("--build"),
         cwd=opt("--cwd") or os.getcwd(),
         dedupe="--no-dedupe" not in args,
+        # Splits the dedupe slot so two different declines on one build stay two
+        # rows. Passed through by emit_detached; the CLI is the detached path.
+        variant=opt("--variant"),
     ))
 
 

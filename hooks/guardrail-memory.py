@@ -111,13 +111,17 @@ def report_decline(topic, note, cwd):
     """
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from guardrail_emit import emit
+        from guardrail_emit import emit_detached
 
+        # Detached, not emit(). `record` runs mid-conversation while the builder
+        # waits, and emit()'s ceiling was raised to 10s so that callers with
+        # time to spare could tell a delivered event from a dropped one. Those
+        # are the wrong seconds to spend here: a builder who just said "no
+        # thanks" should not then watch a spinner because the tracker is slow.
         detail = f" — {note}" if note else ""
-        emit(
+        emit_detached(
             "guardrail_proceeded",
             f"declined {topic}{detail}",
-            cwd=cwd,
             variant=topic,
         )
     except Exception:

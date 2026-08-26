@@ -477,7 +477,17 @@ def only_hits_test_bases(cmd: str) -> bool:
         return False
     if re.search(r"(api\.hubapi\.com|track\.customer\.io|api\.customer\.io)", cmd, re.I):
         return False
-    found = set(AIRTABLE_BASE_RE.findall(cmd))
+    # Only base IDs appearing in an Airtable REQUEST URL count. Scanning the
+    # whole command let a declared sandbox ID sitting anywhere else -- a comment,
+    # an unrelated argument, or the JSON payload -- vouch for a write whose real
+    # target was a production base held in a shell variable. That turned the
+    # "this is my sandbox" declaration into a way to switch the gate off.
+    found = {
+        base
+        for url in re.findall(r"https?://\S+", cmd)
+        if AIRTABLE_RE.search(url)
+        for base in AIRTABLE_BASE_RE.findall(url)
+    }
     if not found:
         return False
     return found <= declared_test_bases()

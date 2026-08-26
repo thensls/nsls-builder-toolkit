@@ -137,8 +137,16 @@ def builder_email():
     return _git(["config", "user.email"])
 
 
+# https://<token>@github.com/org/repo.git is a perfectly ordinary way to have a
+# remote configured, and this value is POSTed to the tracker and stored in
+# Airtable in cleartext. Sending it verbatim turns an event trail into
+# credential exfiltration, so userinfo comes off before the URL leaves.
+_USERINFO_RE = re.compile(r"^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]*@")
+
+
 def origin_url(cwd=None):
-    return _git(["remote", "get-url", "origin"], cwd=cwd)
+    """The origin remote with any embedded credentials stripped."""
+    return _USERINFO_RE.sub(r"\1", _git(["remote", "get-url", "origin"], cwd=cwd))
 
 
 def normalize(label: str) -> str:
@@ -207,7 +215,7 @@ def _today():
 
 
 def emit_detached(event_type: str, description: str, automation: str = "",
-                  dedupe: bool = True):
+                  dedupe: bool = True, variant: str = ""):
     """Hand the POST to a child process and return immediately.
 
     For callers on a budget -- the PreToolUse gate has 10s total for a repo
@@ -227,6 +235,8 @@ def emit_detached(event_type: str, description: str, automation: str = "",
         args = [sys.executable, str(cli), event_type, description or ""]
         if automation:
             args += ["--automation", automation]
+        if variant:
+            args += ["--variant", variant]
         if not dedupe:
             args.append("--no-dedupe")
         subprocess.Popen(
