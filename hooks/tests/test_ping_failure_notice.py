@@ -214,6 +214,132 @@ def test_probe_budget_is_total_not_per_transport(tmp):
         urllib.request.urlopen = real_urlopen
 
 
+# --- Macroscope round, PR #152 ------------------------------------------------
+# Two classes: a marker value that is type-checked but never value-checked, and
+# a notice that names a cause it never verified.
+
+
+def test_junk_failed_days_do_not_trip_the_three_day_notice(tmp):
+    """`{"failed_days": ["x", "y"]}` used to reach the threshold on one failure."""
+    out, state = run(
+        tmp / "j1", unreachable=False, online=True,
+        seed={"payload": PAYLOAD, "attempts": 1, "failed_days": ["x", "y"]},
+    )
+    assert out == "", f"two junk strings are not two failed days: {out!r}"
+    assert state["failed_days"] == [datetime.now(timezone.utc).date().isoformat()]
+
+
+def test_future_failed_day_does_not_count(tmp):
+    """A day that has not happened cannot have cost anyone their points."""
+    ahead = (datetime.now(timezone.utc) + timedelta(days=3)).date().isoformat()
+    out, state = run(
+        tmp / "j2", unreachable=False, online=True,
+        seed={"payload": PAYLOAD, "attempts": 9,
+              "failed_days": [days_ago(1), ahead, ahead]},
+    )
+    assert out == "", f"a future date must not reach the threshold: {out!r}"
+    assert ahead not in state["failed_days"]
+    assert len(state["failed_days"]) == 2
+
+
+def test_failed_days_are_stored_canonically(tmp):
+    """3.11+ date.fromisoformat takes "20260825"; unnormalised it double-counts."""
+    compact = days_ago(1).replace("-", "")
+    out, state = run(
+        tmp / "j3", unreachable=False, online=True,
+        seed={"payload": PAYLOAD, "attempts": 9,
+              "failed_days": [compact, days_ago(1)]},
+    )
+    assert out == "", f"one day written two ways is still one day: {out!r}"
+    assert state["failed_days"] == sorted({days_ago(1),
+                                           datetime.now(timezone.utc).date().isoformat()})
+
+
+def test_negative_attempts_cannot_mute_an_outage(tmp):
+    """A negative counter never reaches 2, so Branch A stayed silent forever."""
+    out, state = run(
+        tmp / "j4", unreachable=True, online=True,
+        seed={"payload": PAYLOAD, "attempts": -50, "failed_days": [days_ago(1)]},
+    )
+    assert state["attempts"] == 1, f"attempts must clamp at 0, got {state['attempts']}"
+    out, state = run(tmp / "j4", unreachable=True, online=True)
+    assert "can't be reached" in out, f"outage must still be reported: {out!r}"
+
+
+def test_three_offline_days_do_not_claim_the_tracker_is_slow(tmp):
+    """The false alarm this PR exists to kill, in its remaining form."""
+    out, _ = run(
+        tmp / "j5", unreachable=True, online=False,
+        seed={"payload": PAYLOAD, "attempts": 1,
+              "failed_days": [days_ago(3), days_ago(2), days_ago(1)]},
+    )
+    assert out == "", f"offline days are not slow tracker writes: {out!r}"
+
+
+def test_slow_notice_still_fires_when_the_tracker_answers(tmp):
+    """The gate must not silence the real case it is guarding."""
+    out, _ = run(
+        tmp / "j6", unreachable=False, online=True,
+        seed={"payload": PAYLOAD, "attempts": 1,
+              "failed_days": [days_ago(3), days_ago(2), days_ago(1)]},
+    )
+    assert "too slow" in out, f"a genuinely slow tracker must be reported: {out!r}"
+
+
+def test_probes_are_evaluated_at_most_once(tmp):
+    """Both branches need them; neither should pay the round-trip twice."""
+    calls = {"unreachable": 0, "online": 0}
+    marker = tmp / "j7"
+    marker.write_text(json.dumps(
+        {"payload": PAYLOAD, "attempts": 9,
+         "failed_days": [days_ago(3), days_ago(2), days_ago(1)]}), encoding="utf-8")
+    hook.PING_FAIL_MARKER = marker
+
+    def count(name, value):
+        def probe():
+            calls[name] += 1
+            return value
+        return probe
+
+    hook._tracker_unreachable = count("unreachable", False)
+    hook._internet_up = count("online", True)
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        hook.note_ping_failure(PAYLOAD)
+    assert calls == {"unreachable": 1, "online": 1}, f"probe budget blown: {calls}"
+
+
+def test_corrupt_replay_payload_is_discarded_not_retried(tmp):
+    """A non-dict payload used to be POSTed, raise, and keep the marker forever."""
+    marker = tmp / "j8"
+    marker.write_text(json.dumps({"payload": "not-a-dict"}), encoding="utf-8")
+    hook.PING_FAIL_MARKER = marker
+    posted = []
+    real_post = hook._post_session_ping
+    hook._post_session_ping = lambda b: posted.append(b)
+    try:
+        assert hook.replay_failed_ping() is None
+    finally:
+        hook._post_session_ping = real_post
+    assert posted == [], f"a malformed payload must never be sent: {posted!r}"
+    assert not marker.exists(), "malformed marker must be cleared, not retried"
+
+
+def test_good_replay_payload_still_posts(tmp):
+    marker = tmp / "j9"
+    marker.write_text(json.dumps({"payload": PAYLOAD}), encoding="utf-8")
+    hook.PING_FAIL_MARKER = marker
+    posted = []
+    real_post = hook._post_session_ping
+    hook._post_session_ping = lambda b: posted.append(b)
+    try:
+        assert hook.replay_failed_ping() == PAYLOAD
+    finally:
+        hook._post_session_ping = real_post
+    assert posted == [PAYLOAD]
+    assert not marker.exists()
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

@@ -19,7 +19,7 @@ import sys
 import time
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 HOME = Path.home()
@@ -511,9 +511,17 @@ def replay_failed_ping():
         return None
     try:
         saved = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
-        body = saved.get("payload")
-        if body:
-            _post_session_ping(body)
+        body = saved.get("payload") if isinstance(saved, dict) else None
+        if not isinstance(body, dict) or not body:
+            # Malformed, per the contract above — clear it. Truthiness alone is
+            # not shape: a payload left as a string or a list by a crash or a
+            # hand-edit used to be POSTed as-is, and the raise that followed
+            # was caught below, which KEPT the marker. That retried the same
+            # broken payload at every session start forever, and looked
+            # identical to "the tracker is still unreachable."
+            PING_FAIL_MARKER.unlink()
+            return None
+        _post_session_ping(body)
         PING_FAIL_MARKER.unlink()
         return body
     except Exception:
@@ -632,15 +640,36 @@ def note_ping_failure(body):
     if not isinstance(prior, dict):
         prior = {}  # valid JSON is not the same as the shape we wrote
 
+    # A day only counts if it is a real calendar day at or before today, and it
+    # is stored canonically. isinstance(str) was not enough on either axis:
+    # "x" counted as a failed day (so one failure could trip the three-day
+    # notice), and on 3.11+ date.fromisoformat also accepts "20260825", which
+    # would survive the set() alongside "2026-08-25" and count the same day
+    # twice. Normalising on the way in closes both.
     raw_days = prior.get("failed_days")
-    days = ([d for d in raw_days if isinstance(d, str)]
-            if isinstance(raw_days, list) else [])
+    days = []
+    if isinstance(raw_days, list):
+        for d in raw_days:
+            if not isinstance(d, str):
+                continue
+            try:
+                parsed = date.fromisoformat(d)
+            except (TypeError, ValueError):
+                continue
+            if parsed > now.date():
+                continue  # clock skew or a hand-edit: a day that has not
+                # happened yet cannot have cost anyone their points
+            days.append(parsed.isoformat())
     if today not in days:
         days.append(today)
     days = sorted(set(days))[-14:]
 
+    # max(0, ...) because a negative attempts — a hand-edit, or a partial
+    # write — is the right type and still poisons the counter: it never
+    # reaches 2, so Branch A's outage notice stays silent for the whole
+    # outage, which is the exact failure this function exists to prevent.
     try:
-        attempts = int(prior.get("attempts", prior.get("failures", 0)) or 0) + 1
+        attempts = max(0, int(prior.get("attempts", prior.get("failures", 0)) or 0)) + 1
     except (TypeError, ValueError):
         attempts = 1
 
@@ -663,11 +692,25 @@ def note_ping_failure(body):
             # timestamp from the future mute an outage for longer than a day
         return elapsed < 86400
 
+    # Both probes cost an HTTP round-trip, and both branches below need them,
+    # so evaluate each at most once per call.
+    _probed = {}
+
+    def unreachable():
+        if "unreachable" not in _probed:
+            _probed["unreachable"] = _tracker_unreachable()
+        return _probed["unreachable"]
+
+    def online():
+        if "online" not in _probed:
+            _probed["online"] = _internet_up()
+        return _probed["online"]
+
     notice = None
     if not spoke_within_a_day():
         # Branch A — the host itself is gone. Two attempts, so one DNS hiccup
         # stays quiet, and only when the rest of the internet answers.
-        if attempts >= 2 and _tracker_unreachable() and _internet_up():
+        if attempts >= 2 and unreachable() and online():
             notice = (
                 "The NSLS automation tracker can't be reached right now, so "
                 "your builder points aren't recording. Your sessions are "
@@ -678,7 +721,17 @@ def note_ping_failure(body):
         # Branch B — the host answers but the writes keep timing out. Harmless
         # for a day or two (see rule 2); past three separate days the daily
         # dedupe is no longer covering it and credit really is going missing.
-        elif len(days) >= 3:
+        #
+        # The probes are the whole point of this branch, not decoration. "Too
+        # slow to record" is a claim about the tracker, and three failed days
+        # on a laptop that was offline are not evidence for it — the writes
+        # failed for the same reason every other request did. Requiring the
+        # tracker to answer its health endpoint RIGHT NOW is what earns the
+        # claim: online, host up, and your writes still failed on 3 days.
+        # (Checking only _internet_up() would not do it — being online now
+        # says nothing about the three days already in the ledger, so an
+        # offline stretch would still fire this on the next online session.)
+        elif len(days) >= 3 and online() and not unreachable():
             notice = (
                 f"The NSLS automation tracker has been too slow to record "
                 f"your sessions on {len(days)} separate days, so some builder "
