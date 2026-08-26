@@ -340,6 +340,139 @@ def test_good_replay_payload_still_posts(tmp):
     assert not marker.exists()
 
 
+# --- Macroscope round 2, PR #152 ---------------------------------------------
+# The payload must outlive the probes, and the failed-day ledger must outlive
+# the retry payload.
+
+
+def test_payload_is_on_disk_before_the_probes_run(tmp):
+    """SessionStart can be killed mid-probe, and nothing replays what was never
+    stashed — so the payload must not depend on a network call returning."""
+    marker = tmp / "r1"
+    # attempts >= 2 so Branch A actually REACHES a probe. With a fresh marker
+    # attempts is 1, no probe is called at all, and this test would pass
+    # against the very code it is meant to catch.
+    marker.write_text(json.dumps({"attempts": 7}), encoding="utf-8")
+    hook.PING_FAIL_MARKER = marker
+
+    def killed():
+        raise KeyboardInterrupt("SessionStart budget exhausted")
+
+    hook._tracker_unreachable = killed
+    hook._internet_up = killed
+    try:
+        hook.note_ping_failure(PAYLOAD)
+    except KeyboardInterrupt:
+        pass
+    assert marker.exists(), "the payload was lost when the probe did not return"
+    state = json.loads(marker.read_text())
+    assert state.get("payload") == PAYLOAD, (
+        "the payload was not persisted before the probes ran, so a hook killed "
+        f"mid-probe drops that session's credit: {state!r}")
+
+
+def test_a_successful_replay_keeps_the_earlier_failed_days(tmp):
+    """Day 1 fails, day 2 replays. Day 1 lost its point and must stay logged."""
+    marker = tmp / "r2"
+    marker.write_text(json.dumps({
+        "payload": PAYLOAD,
+        "failed_days": [days_ago(2), days_ago(1)],
+    }), encoding="utf-8")
+    hook.PING_FAIL_MARKER = marker
+    real_post = hook._post_session_ping
+    hook._post_session_ping = lambda b: None
+    try:
+        assert hook.replay_failed_ping() == PAYLOAD
+    finally:
+        hook._post_session_ping = real_post
+    assert marker.exists(), "the replay used to delete the whole ledger"
+    state = json.loads(marker.read_text())
+    assert state["failed_days"] == [days_ago(2), days_ago(1)]
+    assert "payload" not in state, "the payload was delivered; it must not linger"
+
+
+def test_intermittent_failures_still_reach_the_three_day_notice(tmp):
+    """The shape of the bug end to end: fail, replay, fail, replay, fail."""
+    marker = tmp / "r3"
+    real_post = hook._post_session_ping
+    hook._post_session_ping = lambda b: None
+    hook.PING_FAIL_MARKER = marker
+    try:
+        for d in (days_ago(3), days_ago(2)):
+            carried = (json.loads(marker.read_text())["failed_days"]
+                       if marker.exists() else [])
+            marker.write_text(
+                json.dumps({"payload": PAYLOAD, "failed_days": carried + [d]}),
+                encoding="utf-8")
+            hook.replay_failed_ping()
+            assert marker.exists(), (
+                "the replay deleted the ledger along with the payload — this "
+                "is the wipe that stops intermittent failures ever counting")
+        state = json.loads(marker.read_text())
+        assert state["failed_days"] == [days_ago(3), days_ago(2)], (
+            f"both lost days must survive their replays: {state}")
+    finally:
+        hook._post_session_ping = real_post
+    out, _ = run(marker, unreachable=False, online=True,
+                 seed={"failed_days": [days_ago(3), days_ago(2)]})
+    assert "too slow" in out, (
+        f"the third lost day must finally speak; the ledger used to be "
+        f"wiped before it could: {out!r}")
+
+
+def test_todays_credit_landing_clears_today_only(tmp):
+    marker = tmp / "r4"
+    today = datetime.now(timezone.utc).date().isoformat()
+    marker.write_text(json.dumps({
+        "payload": PAYLOAD,
+        "failed_days": [days_ago(5), today],
+        "last_notified_at": "2026-01-01T00:00:00+00:00",
+    }), encoding="utf-8")
+    hook.PING_FAIL_MARKER = marker
+    real_post = hook._post_session_ping
+    hook._post_session_ping = lambda b: None
+    try:
+        hook.replay_failed_ping()  # go through the real path, not the helper
+    finally:
+        hook._post_session_ping = real_post
+    assert marker.exists(), "the ledger must survive a delivery"
+    state = json.loads(marker.read_text())
+    assert state["failed_days"] == [days_ago(5)], (
+        "today was delivered so today is not a lost day; day 5 still is")
+    assert state["last_notified_at"] == "2026-01-01T00:00:00+00:00", (
+        "clearing a payload must not reset the 24h repeat-suppression")
+
+
+def test_ledger_only_marker_is_not_replayed_and_not_deleted(tmp):
+    marker = tmp / "r5"
+    marker.write_text(json.dumps({"failed_days": [days_ago(1)]}), encoding="utf-8")
+    hook.PING_FAIL_MARKER = marker
+    posted = []
+    real_post = hook._post_session_ping
+    hook._post_session_ping = lambda b: posted.append(b)
+    try:
+        assert hook.replay_failed_ping() is None
+    finally:
+        hook._post_session_ping = real_post
+    assert posted == [], "there is nothing to replay in a ledger-only marker"
+    assert marker.exists(), "a ledger with no payload must survive"
+
+
+def test_last_lost_day_clearing_removes_the_file(tmp):
+    marker = tmp / "r6"
+    today = datetime.now(timezone.utc).date().isoformat()
+    marker.write_text(json.dumps({"payload": PAYLOAD, "failed_days": [today]}),
+                      encoding="utf-8")
+    hook.PING_FAIL_MARKER = marker
+    real_post = hook._post_session_ping
+    hook._post_session_ping = lambda b: None
+    try:
+        hook.replay_failed_ping()
+    finally:
+        hook._post_session_ping = real_post
+    assert not marker.exists(), "no payload and no lost days: no file"
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

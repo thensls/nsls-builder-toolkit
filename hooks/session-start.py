@@ -493,6 +493,66 @@ def _post_session_ping(body, timeout=PING_TIMEOUT):
     return _http_post_json(f"{PROXY_URL}/session-ping", body, timeout)
 
 
+def _discard_marker():
+    """Remove the marker entirely — only for content we cannot read at all."""
+    try:
+        PING_FAIL_MARKER.unlink()
+    except OSError:
+        pass
+
+
+def _retire_ping_payload(drop_today):
+    """Retire the retry payload, but keep the failed-day ledger.
+
+    The two have different lifetimes and used to share one unlink(), which is
+    how a real point loss went silent. `failed_days` records days whose credit
+    never landed ON THAT DAY; `payload` is just the thing waiting to be
+    resent. Deleting the file on success threw both away, so intermittent
+    failures could never reach the three-day notice: day 1 fails, day 2's
+    replay wipes day 1, day 3 starts the count from zero. The docstring in
+    note_ping_failure asserted this could not happen — "the day's credit lands
+    from whichever ping gets through" — which is true within one day and false
+    across two.
+
+    drop_today: a successful delivery means TODAY's credit landed today, so
+    today comes off the ledger. It does NOT rescue an earlier day: the payload
+    carries no timestamp and the server stamps arrival (see session_ping), so
+    replaying Monday's ping on Tuesday credits Tuesday. Monday really did lose
+    its point, and it stays on the ledger to say so.
+
+    `attempts` is deliberately dropped: it counts consecutive failures for the
+    outage notice, and a delivery means the outage is over.
+    """
+    try:
+        prior = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
+    except Exception:
+        prior = None
+    if not isinstance(prior, dict):
+        _discard_marker()
+        return
+
+    raw = prior.get("failed_days")
+    days = [d for d in raw if isinstance(d, str)] if isinstance(raw, list) else []
+    if drop_today:
+        today = datetime.now(timezone.utc).date().isoformat()
+        days = [d for d in days if d != today]
+
+    if not days:
+        _discard_marker()  # no payload, no lost days: nothing worth a file
+        return
+
+    ledger = {"failed_days": days}
+    last = prior.get("last_notified_at")
+    if isinstance(last, str):
+        # Survives so the 24h repeat-suppression is not reset by a delivery.
+        ledger["last_notified_at"] = last
+    try:
+        PING_FAIL_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        PING_FAIL_MARKER.write_text(json.dumps(ledger), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def replay_failed_ping():
     """Replay a previously failed session-ping before the current one.
 
@@ -511,21 +571,33 @@ def replay_failed_ping():
         return None
     try:
         saved = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
-        body = saved.get("payload") if isinstance(saved, dict) else None
-        if not isinstance(body, dict) or not body:
-            # Malformed, per the contract above — clear it. Truthiness alone is
-            # not shape: a payload left as a string or a list by a crash or a
-            # hand-edit used to be POSTed as-is, and the raise that followed
-            # was caught below, which KEPT the marker. That retried the same
-            # broken payload at every session start forever, and looked
-            # identical to "the tracker is still unreachable."
-            PING_FAIL_MARKER.unlink()
-            return None
+    except Exception:
+        _discard_marker()  # unreadable: neither a payload nor a ledger
+        return None
+    if not isinstance(saved, dict):
+        _discard_marker()
+        return None
+
+    body = saved.get("payload")
+    if body is None and saved.get("failed_days"):
+        return None  # ledger-only marker — nothing to replay, and the days
+        # it holds are the record of credit already lost. Leave it alone.
+    if not isinstance(body, dict) or not body:
+        # Malformed, per the contract above. Truthiness alone is not shape: a
+        # payload left as a string or a list by a crash or a hand-edit used to
+        # be POSTed as-is, and the raise that followed was caught, which KEPT
+        # the marker — retrying the same broken payload at every session start
+        # forever, indistinguishable from "the tracker is still unreachable."
+        # Nothing was delivered, so today stays on the ledger.
+        _retire_ping_payload(drop_today=False)
+        return None
+
+    try:
         _post_session_ping(body)
-        PING_FAIL_MARKER.unlink()
-        return body
     except Exception:
         return None  # still unreachable — keep the marker for the next attempt
+    _retire_ping_payload(drop_today=True)
+    return body
 
 
 def _http_probe(url, timeout=4, any_response=False):
@@ -692,6 +764,32 @@ def note_ping_failure(body):
             # timestamp from the future mute an outage for longer than a day
         return elapsed < 86400
 
+    def _write(notified_at):
+        try:
+            PING_FAIL_MARKER.parent.mkdir(parents=True, exist_ok=True)
+            PING_FAIL_MARKER.write_text(
+                json.dumps({
+                    "payload": body,
+                    "attempted_at": now.isoformat(),
+                    "attempts": attempts,
+                    "failed_days": days,
+                    "last_notified_at": notified_at,
+                }),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+
+    # Persist FIRST, probe SECOND. SessionStart runs under a wall-clock budget
+    # that the replay, the live ping and git_pull() have already eaten into,
+    # and the two probes below can spend 8s more of it. If the hook is killed
+    # mid-probe, anything not yet written is gone — and the payload is the one
+    # value whose loss actually costs the builder a point, because nothing can
+    # replay what was never stashed. The notice is a nicety; the payload is
+    # the credit. Write the payload where no network call can precede it, and
+    # come back for last_notified_at only if we end up speaking.
+    _write(last_notified)
+
     # Both probes cost an HTTP round-trip, and both branches below need them,
     # so evaluate each at most once per call.
     _probed = {}
@@ -740,22 +838,9 @@ def note_ping_failure(body):
             )
 
     if notice:
-        last_notified = now.isoformat()
-
-    try:
-        PING_FAIL_MARKER.parent.mkdir(parents=True, exist_ok=True)
-        PING_FAIL_MARKER.write_text(
-            json.dumps({
-                "payload": body,
-                "attempted_at": now.isoformat(),
-                "attempts": attempts,
-                "failed_days": days,
-                "last_notified_at": last_notified,
-            }),
-            encoding="utf-8",
-        )
-    except Exception:
-        pass
+        # Second write, only when we actually spoke — the payload above is
+        # already safe on disk whatever the probes did.
+        _write(now.isoformat())
 
     if notice:
         print(
@@ -814,11 +899,10 @@ def session_ping(replayed=None):
         note_ping_failure(body)
         return
 
-    # Delivered — clear any stale failure marker from a prior session.
-    try:
-        PING_FAIL_MARKER.unlink()
-    except OSError:
-        pass
+    # Delivered — retire the queued payload. Today's credit landed today, so
+    # today comes off the ledger; earlier days stay, because their credit did
+    # not land on their day and no later delivery can give it back.
+    _retire_ping_payload(drop_today=True)
 
     output = []
 
