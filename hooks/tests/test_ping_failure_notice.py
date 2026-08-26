@@ -439,8 +439,72 @@ def test_todays_credit_landing_clears_today_only(tmp):
     state = json.loads(marker.read_text())
     assert state["failed_days"] == [days_ago(5)], (
         "today was delivered so today is not a lost day; day 5 still is")
-    assert state["last_notified_at"] == "2026-01-01T00:00:00+00:00", (
-        "clearing a payload must not reset the 24h repeat-suppression")
+    assert "last_notified_at" not in state, (
+        "a delivery ends the outage, so the 24h suppression must not survive "
+        "it — otherwise a genuine NEW outage inside the window goes unheard")
+
+
+def test_suppression_survives_an_undelivered_payload(tmp):
+    """The flip side: the condition is still on, so don't re-nag."""
+    marker = tmp / "r7"
+    marker.write_text(json.dumps({
+        "payload": "not-a-dict",  # malformed: nothing was delivered
+        "failed_days": [days_ago(5)],
+        "last_notified_at": "2026-01-01T00:00:00+00:00",
+    }), encoding="utf-8")
+    hook.PING_FAIL_MARKER = marker
+    assert hook.replay_failed_ping() is None
+    state = json.loads(marker.read_text())
+    assert state["last_notified_at"] == "2026-01-01T00:00:00+00:00"
+    assert state["failed_days"] == [days_ago(5)]
+
+
+def test_an_unreadable_marker_is_never_deleted(tmp):
+    """A concurrent SessionStart mid-write looks exactly like corruption.
+
+    Deleting it makes the writer finish into an unlinked inode and the payload
+    is gone. Leaving it is free — note_ping_failure treats an unreadable prior
+    as {} and overwrites, so it cannot get stuck either.
+    """
+    marker = tmp / "r8"
+    marker.write_text('{"payload": {"a": ', encoding="utf-8")  # truncated write
+    hook.PING_FAIL_MARKER = marker
+    assert hook.replay_failed_ping() is None
+    assert marker.exists(), "a half-written marker must survive the reader"
+
+    hook._tracker_unreachable = lambda: True
+    hook._internet_up = lambda: True
+    hook.note_ping_failure(PAYLOAD)
+    assert json.loads(marker.read_text())["payload"] == PAYLOAD, \
+        "and the next failure must be able to overwrite it"
+
+
+def test_marker_writes_are_atomic(tmp):
+    """No reader should ever observe a truncated marker."""
+    marker = tmp / "r9"
+    hook.PING_FAIL_MARKER = marker
+    hook._tracker_unreachable = lambda: True
+    hook._internet_up = lambda: True
+    hook.note_ping_failure(PAYLOAD)
+    first = marker.read_text()
+
+    seen = []
+    real_replace = hook.os.replace
+
+    def watching(src, dst):
+        # Whatever a concurrent reader sees at this instant must be valid.
+        seen.append(marker.read_text() if marker.exists() else None)
+        return real_replace(src, dst)
+
+    hook.os.replace = watching
+    try:
+        hook.note_ping_failure(PAYLOAD)
+    finally:
+        hook.os.replace = real_replace
+    assert seen and seen[0] == first, (
+        f"the old marker must still be intact until the swap: {seen!r}")
+    leftovers = [p.name for p in marker.parent.iterdir() if p.name != marker.name]
+    assert leftovers == [], f"temp files must not be left behind: {leftovers}"
 
 
 def test_ledger_only_marker_is_not_replayed_and_not_deleted(tmp):

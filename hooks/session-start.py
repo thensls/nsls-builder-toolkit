@@ -494,11 +494,34 @@ def _post_session_ping(body, timeout=PING_TIMEOUT):
 
 
 def _discard_marker():
-    """Remove the marker entirely — only for content we cannot read at all."""
+    """Remove the marker entirely."""
     try:
         PING_FAIL_MARKER.unlink()
     except OSError:
         pass
+
+
+def _write_marker(state):
+    """Write the marker atomically: temp file in the same dir, then os.replace.
+
+    Builders open several sessions at once — three inside six seconds is what
+    produced the original false alarm — so two SessionStart hooks racing over
+    this file is the normal case, not the exotic one. write_text() truncates
+    before it writes, which leaves a window where a concurrent reader sees
+    empty or half-written JSON and concludes the marker is corrupt. os.replace
+    is atomic on POSIX and Windows: a reader sees the old file or the new one,
+    never a partial one.
+    """
+    try:
+        PING_FAIL_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        tmp = PING_FAIL_MARKER.with_name(PING_FAIL_MARKER.name + f".{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(state), encoding="utf-8")
+        os.replace(tmp, PING_FAIL_MARKER)
+    except Exception:
+        try:
+            tmp.unlink()
+        except Exception:
+            pass
 
 
 def _retire_ping_payload(drop_today):
@@ -543,14 +566,18 @@ def _retire_ping_payload(drop_today):
 
     ledger = {"failed_days": days}
     last = prior.get("last_notified_at")
-    if isinstance(last, str):
-        # Survives so the 24h repeat-suppression is not reset by a delivery.
+    if isinstance(last, str) and not drop_today:
+        # last_notified_at suppresses repeats of an ONGOING condition, so it
+        # only survives when the condition is still on: a malformed or
+        # undelivered payload. A successful delivery ends the outage, and
+        # carrying the timestamp across it would silence a genuine NEW outage
+        # for the rest of the 24h — breaking rule 3 of note_ping_failure,
+        # "never go quiet while it IS broken." (My first cut kept it here to
+        # stop a flapping tracker nagging; that is already handled by
+        # attempts >= 2, which a delivery resets, so Branch A needs two fresh
+        # consecutive failures before it can speak again.)
         ledger["last_notified_at"] = last
-    try:
-        PING_FAIL_MARKER.parent.mkdir(parents=True, exist_ok=True)
-        PING_FAIL_MARKER.write_text(json.dumps(ledger), encoding="utf-8")
-    except OSError:
-        pass
+    _write_marker(ledger)
 
 
 def replay_failed_ping():
@@ -572,11 +599,15 @@ def replay_failed_ping():
     try:
         saved = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
     except Exception:
-        _discard_marker()  # unreadable: neither a payload nor a ledger
+        # Do NOT delete it. Unreadable here is far more likely to be a
+        # concurrent SessionStart mid-write than real corruption, and deleting
+        # it makes the writer finish into an unlinked inode — the payload is
+        # gone and nothing replays it. Leaving it costs nothing: the next
+        # note_ping_failure() already treats an unreadable prior as {} and
+        # overwrites, so a genuinely corrupt marker cannot get stuck either.
         return None
     if not isinstance(saved, dict):
-        _discard_marker()
-        return None
+        return None  # same reasoning: let the next failure overwrite it
 
     body = saved.get("payload")
     if body is None and saved.get("failed_days"):
@@ -765,20 +796,13 @@ def note_ping_failure(body):
         return elapsed < 86400
 
     def _write(notified_at):
-        try:
-            PING_FAIL_MARKER.parent.mkdir(parents=True, exist_ok=True)
-            PING_FAIL_MARKER.write_text(
-                json.dumps({
-                    "payload": body,
-                    "attempted_at": now.isoformat(),
-                    "attempts": attempts,
-                    "failed_days": days,
-                    "last_notified_at": notified_at,
-                }),
-                encoding="utf-8",
-            )
-        except Exception:
-            pass
+        _write_marker({
+            "payload": body,
+            "attempted_at": now.isoformat(),
+            "attempts": attempts,
+            "failed_days": days,
+            "last_notified_at": notified_at,
+        })
 
     # Persist FIRST, probe SECOND. SessionStart runs under a wall-clock budget
     # that the replay, the live ping and git_pull() have already eaten into,
