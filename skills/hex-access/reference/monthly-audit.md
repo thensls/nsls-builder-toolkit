@@ -93,9 +93,17 @@ recommendation that gets someone demoted for doing their job.
 
 With both signals in hand:
 
-- No credit spend **and** no sign-in / project activity for a full cycle: drop
-  to Viewer (free). They keep app access.
-- Viewing dashboards but never using the agent: Viewer is the right tier.
+- No credit spend **and** no sign-in, no project activity **and no app runs**
+  for a full cycle: drop to Viewer (free). They keep app access. All four have
+  to be silent — an app run is real use, and it is the signal most likely to
+  be the only one a light user leaves.
+- Viewing published apps, **never drilling down**, and never using the agent:
+  Viewer is the right tier.
+- **Drilling down into charts, even with no agent use: leave Explorer alone.**
+  Drill-down is an Editor/Explorer capability — Viewers cannot do it — so this
+  downgrade silently removes something the person actively uses, and they will
+  discover it the next time they try to work. ([Hex roles
+  docs](https://learn.hex.tech/docs/collaborate/sharing-and-permissions/roles).)
 - Building nothing but running agent threads: Editor should be Explorer,
   saves $35/month per person.
 - Real project activity, no agent use: leave the seat alone. This is the case
@@ -108,9 +116,22 @@ message, or people will resist it.
 
 Thread-level metadata (thread details, user, credit consumption) can be pulled
 via the Hex CLI or API rather than clicking through the UI. Credit *allocation*
-is UI-only, but credit *consumption* is queryable, which is what the audit
-actually needs. Hex's Admin REST API also covers users and groups on Team and
+is UI-only. Hex's Admin REST API also covers users and groups on Team and
 Enterprise plans, so the seat side of this audit can be scripted.
+
+> **Do not make downgrade decisions from thread data.** Thread-level
+> consumption is not billing-cycle data and does not reconcile with the
+> credits page: deleted threads drop out of it entirely, and usage is
+> attributed to the date the thread was *created* rather than when the
+> messages that spent the credits were added. Both failures point the same
+> way — they make a real user look quiet. Combined with section 4, that is how
+> an active person gets nominated for a downgrade.
+>
+> Use it for what it is good at: which threads are expensive, which workflows
+> to optimise, where the spend is concentrated. The **billing source of truth
+> for any seat decision is the credits page's Usage log**, and even that only
+> answers consumption — it still needs the separate activity signal section 4
+> requires.
 
 No workspace API token is configured on Royce's machine as of 2026-08-20. If
 this audit becomes recurring, that token is the first thing to set up, and it
