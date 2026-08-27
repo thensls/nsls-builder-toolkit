@@ -19,7 +19,7 @@ import sys
 import time
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 HOME = Path.home()
@@ -493,6 +493,93 @@ def _post_session_ping(body, timeout=PING_TIMEOUT):
     return _http_post_json(f"{PROXY_URL}/session-ping", body, timeout)
 
 
+def _discard_marker():
+    """Remove the marker entirely."""
+    try:
+        PING_FAIL_MARKER.unlink()
+    except OSError:
+        pass
+
+
+def _write_marker(state):
+    """Write the marker atomically: temp file in the same dir, then os.replace.
+
+    Builders open several sessions at once — three inside six seconds is what
+    produced the original false alarm — so two SessionStart hooks racing over
+    this file is the normal case, not the exotic one. write_text() truncates
+    before it writes, which leaves a window where a concurrent reader sees
+    empty or half-written JSON and concludes the marker is corrupt. os.replace
+    is atomic on POSIX and Windows: a reader sees the old file or the new one,
+    never a partial one.
+    """
+    try:
+        PING_FAIL_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        tmp = PING_FAIL_MARKER.with_name(PING_FAIL_MARKER.name + f".{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(state), encoding="utf-8")
+        os.replace(tmp, PING_FAIL_MARKER)
+    except Exception:
+        try:
+            tmp.unlink()
+        except Exception:
+            pass
+
+
+def _retire_ping_payload(drop_today):
+    """Retire the retry payload, but keep the failed-day ledger.
+
+    The two have different lifetimes and used to share one unlink(), which is
+    how a real point loss went silent. `failed_days` records days whose credit
+    never landed ON THAT DAY; `payload` is just the thing waiting to be
+    resent. Deleting the file on success threw both away, so intermittent
+    failures could never reach the three-day notice: day 1 fails, day 2's
+    replay wipes day 1, day 3 starts the count from zero. The docstring in
+    note_ping_failure asserted this could not happen — "the day's credit lands
+    from whichever ping gets through" — which is true within one day and false
+    across two.
+
+    drop_today: a successful delivery means TODAY's credit landed today, so
+    today comes off the ledger. It does NOT rescue an earlier day: the payload
+    carries no timestamp and the server stamps arrival (see session_ping), so
+    replaying Monday's ping on Tuesday credits Tuesday. Monday really did lose
+    its point, and it stays on the ledger to say so.
+
+    `attempts` is deliberately dropped: it counts consecutive failures for the
+    outage notice, and a delivery means the outage is over.
+    """
+    try:
+        prior = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
+    except Exception:
+        prior = None
+    if not isinstance(prior, dict):
+        _discard_marker()
+        return
+
+    raw = prior.get("failed_days")
+    days = [d for d in raw if isinstance(d, str)] if isinstance(raw, list) else []
+    if drop_today:
+        today = datetime.now(timezone.utc).date().isoformat()
+        days = [d for d in days if d != today]
+
+    if not days:
+        _discard_marker()  # no payload, no lost days: nothing worth a file
+        return
+
+    ledger = {"failed_days": days}
+    last = prior.get("last_notified_at")
+    if isinstance(last, str) and not drop_today:
+        # last_notified_at suppresses repeats of an ONGOING condition, so it
+        # only survives when the condition is still on: a malformed or
+        # undelivered payload. A successful delivery ends the outage, and
+        # carrying the timestamp across it would silence a genuine NEW outage
+        # for the rest of the 24h — breaking rule 3 of note_ping_failure,
+        # "never go quiet while it IS broken." (My first cut kept it here to
+        # stop a flapping tracker nagging; that is already handled by
+        # attempts >= 2, which a delivery resets, so Branch A needs two fresh
+        # consecutive failures before it can speak again.)
+        ledger["last_notified_at"] = last
+    _write_marker(ledger)
+
+
 def replay_failed_ping():
     """Replay a previously failed session-ping before the current one.
 
@@ -511,13 +598,280 @@ def replay_failed_ping():
         return None
     try:
         saved = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
-        body = saved.get("payload")
-        if body:
-            _post_session_ping(body)
-        PING_FAIL_MARKER.unlink()
-        return body
+    except Exception:
+        # Do NOT delete it. Unreadable here is far more likely to be a
+        # concurrent SessionStart mid-write than real corruption, and deleting
+        # it makes the writer finish into an unlinked inode — the payload is
+        # gone and nothing replays it. Leaving it costs nothing: the next
+        # note_ping_failure() already treats an unreadable prior as {} and
+        # overwrites, so a genuinely corrupt marker cannot get stuck either.
+        return None
+    if not isinstance(saved, dict):
+        return None  # same reasoning: let the next failure overwrite it
+
+    body = saved.get("payload")
+    if body is None and saved.get("failed_days"):
+        return None  # ledger-only marker — nothing to replay, and the days
+        # it holds are the record of credit already lost. Leave it alone.
+    if not isinstance(body, dict) or not body:
+        # Malformed, per the contract above. Truthiness alone is not shape: a
+        # payload left as a string or a list by a crash or a hand-edit used to
+        # be POSTed as-is, and the raise that followed was caught, which KEPT
+        # the marker — retrying the same broken payload at every session start
+        # forever, indistinguishable from "the tracker is still unreachable."
+        # Nothing was delivered, so today stays on the ledger.
+        _retire_ping_payload(drop_today=False)
+        return None
+
+    try:
+        _post_session_ping(body)
     except Exception:
         return None  # still unreachable — keep the marker for the next attempt
+    _retire_ping_payload(drop_today=True)
+    return body
+
+
+def _http_probe(url, timeout=4, any_response=False):
+    """Probe url inside a TOTAL time budget. curl first, urllib with what's left.
+
+    any_response=False — True only on 2xx/3xx: "is this service healthy".
+    any_response=True  — True if the host answered AT ALL, error statuses
+    included: "is this machine online". api.github.com hands out unauthenticated
+    403s freely, and reading a 403 as "no internet" is exactly how a real
+    tracker outage could have stayed silent forever — the suppression branch
+    below only stays quiet when the control says we are offline.
+
+    Transport order and its reasoning are _http_post_json's: a stock Python can
+    carry a CA bundle that trusts nothing, so urllib alone would read a healthy
+    host as dead, and curl failing means "try the other transport".
+
+    The budget is TOTAL, not per transport. This runs on a path that may already
+    have spent ~70s on a replayed POST plus a live one against a 90s SessionStart
+    budget (install.sh), so two full-length probes would run the hook out of room.
+    """
+    deadline = time.monotonic() + timeout
+    if shutil.which("curl"):
+        args = ["curl", "-s", "--max-time", str(max(1, int(timeout))),
+                "-o", os.devnull, "-w", "%{http_code}", url]
+        if not any_response:
+            args.insert(1, "--fail")
+        try:
+            done = subprocess.run(args, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace",
+                                  timeout=timeout + 5)
+            if any_response:
+                code = (done.stdout or "").strip()
+                if code and code != "000":
+                    return True  # answered, whatever it said
+            elif done.returncode == 0:
+                return True
+        except Exception:
+            pass
+    left = deadline - time.monotonic()
+    if left < 1:
+        return False  # no headroom for a second transport; caller must not stall
+    try:
+        with urllib.request.urlopen(url, timeout=left) as resp:
+            return 200 <= getattr(resp, "status", 200) < 400
+    except urllib.error.HTTPError:
+        return any_response  # the host answered; the status is a health question
+    except Exception:
+        return False
+
+
+def _tracker_unreachable():
+    """Is the tracker actually gone, or was that one write just slow?
+
+    A /session-ping timeout is NOT evidence the tracker is unreachable.
+    Measured 2026-08-20 across 24h of Railway HTTP logs for the service:
+    293 pings, p50 9.0s, p90 22.2s, and 45 of them (15%) ran into the 35s
+    client ceiling and were logged 499 "client has closed the request" — while
+    the server went on to answer 200 and record the session. The slow part is
+    the announcement scan plus the Airtable writes, and concurrent session
+    starts queue behind each other, so opening three sessions at once is
+    enough to burn three pings inside six seconds.
+
+    GET / on the same host is a static health payload that answers in ~0.2s,
+    so it tells the two cases apart.
+    """
+    return not _http_probe(f"{PROXY_URL}/", timeout=4)
+
+
+def _internet_up():
+    """True if anything outside this machine answers — any status counts.
+
+    Without this, a laptop on a plane trips the "tracker is down" notice: the
+    tracker probe fails for the same reason every other request does.
+    api.github.com is the control because every builder already depends on
+    GitHub reachability for the toolkit to update at all.
+    """
+    return _http_probe("https://api.github.com/", timeout=3, any_response=True)
+
+
+def note_ping_failure(body):
+    """Stash a failed session-ping, and speak only when it means something.
+
+    Three rules, each of them paid for:
+
+    1. One failure per DAY, not per attempt. The old counter counted attempts,
+       so three sessions opened in the same minute read out as "your last 3
+       sessions" — which is exactly what fired the false alarm on 2026-08-20
+       (three 499s inside six seconds, server recorded all three, no points
+       lost, and it still told the builder to raise it in #builders).
+    2. Only speak when the builder is actually losing something. A slow write
+       is invisible to them: the payload replays at the next session start and
+       daily points dedupe per builder per day, so the day's credit lands from
+       whichever ping gets through.
+    3. Never go quiet while it IS broken. The old `failures == 3` fired once
+       and then never again for the life of an outage, which is the
+       silent-forever mode the original comment was trying to avoid. Both
+       notices below repeat once every 24h for as long as the condition holds.
+
+    Every value read back from the marker is treated as hostile. The file is
+    hand-editable, can be left half-written by a crash, and this function runs
+    inside session_ping()'s failure handler with nothing above it to catch a
+    raise — so a corrupt marker must not be what takes SessionStart down.
+    """
+    now = datetime.now(timezone.utc)
+    today = now.date().isoformat()
+
+    prior = None
+    try:
+        prior = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    if not isinstance(prior, dict):
+        prior = {}  # valid JSON is not the same as the shape we wrote
+
+    # A day only counts if it is a real calendar day at or before today, and it
+    # is stored canonically. isinstance(str) was not enough on either axis:
+    # "x" counted as a failed day (so one failure could trip the three-day
+    # notice), and on 3.11+ date.fromisoformat also accepts "20260825", which
+    # would survive the set() alongside "2026-08-25" and count the same day
+    # twice. Normalising on the way in closes both.
+    raw_days = prior.get("failed_days")
+    days = []
+    if isinstance(raw_days, list):
+        for d in raw_days:
+            if not isinstance(d, str):
+                continue
+            try:
+                parsed = date.fromisoformat(d)
+            except (TypeError, ValueError):
+                continue
+            if parsed > now.date():
+                continue  # clock skew or a hand-edit: a day that has not
+                # happened yet cannot have cost anyone their points
+            days.append(parsed.isoformat())
+    if today not in days:
+        days.append(today)
+    days = sorted(set(days))[-14:]
+
+    # max(0, ...) because a negative attempts — a hand-edit, or a partial
+    # write — is the right type and still poisons the counter: it never
+    # reaches 2, so Branch A's outage notice stays silent for the whole
+    # outage, which is the exact failure this function exists to prevent.
+    try:
+        attempts = max(0, int(prior.get("attempts", prior.get("failures", 0)) or 0)) + 1
+    except (TypeError, ValueError):
+        attempts = 1
+
+    last_notified = prior.get("last_notified_at")
+    if not isinstance(last_notified, str):
+        last_notified = None
+
+    def spoke_within_a_day():
+        if not last_notified:
+            return False
+        try:
+            when = datetime.fromisoformat(last_notified)
+        except (TypeError, ValueError):
+            return False
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        elapsed = (now - when).total_seconds()
+        if elapsed < 0:
+            return False  # clock rolled back, or hand-edited: don't let a
+            # timestamp from the future mute an outage for longer than a day
+        return elapsed < 86400
+
+    def _write(notified_at):
+        _write_marker({
+            "payload": body,
+            "attempted_at": now.isoformat(),
+            "attempts": attempts,
+            "failed_days": days,
+            "last_notified_at": notified_at,
+        })
+
+    # Persist FIRST, probe SECOND. SessionStart runs under a wall-clock budget
+    # that the replay, the live ping and git_pull() have already eaten into,
+    # and the two probes below can spend 8s more of it. If the hook is killed
+    # mid-probe, anything not yet written is gone — and the payload is the one
+    # value whose loss actually costs the builder a point, because nothing can
+    # replay what was never stashed. The notice is a nicety; the payload is
+    # the credit. Write the payload where no network call can precede it, and
+    # come back for last_notified_at only if we end up speaking.
+    _write(last_notified)
+
+    # Both probes cost an HTTP round-trip, and both branches below need them,
+    # so evaluate each at most once per call.
+    _probed = {}
+
+    def unreachable():
+        if "unreachable" not in _probed:
+            _probed["unreachable"] = _tracker_unreachable()
+        return _probed["unreachable"]
+
+    def online():
+        if "online" not in _probed:
+            _probed["online"] = _internet_up()
+        return _probed["online"]
+
+    notice = None
+    if not spoke_within_a_day():
+        # Branch A — the host itself is gone. Two attempts, so one DNS hiccup
+        # stays quiet, and only when the rest of the internet answers.
+        if attempts >= 2 and unreachable() and online():
+            notice = (
+                "The NSLS automation tracker can't be reached right now, so "
+                "your builder points aren't recording. Your sessions are "
+                "queued and replay on their own once it's back — nothing for "
+                "you to fix. Say \"check the tracker\" if you want it looked "
+                "into."
+            )
+        # Branch B — the host answers but the writes keep timing out. Harmless
+        # for a day or two (see rule 2); past three separate days the daily
+        # dedupe is no longer covering it and credit really is going missing.
+        #
+        # The probes are the whole point of this branch, not decoration. "Too
+        # slow to record" is a claim about the tracker, and three failed days
+        # on a laptop that was offline are not evidence for it — the writes
+        # failed for the same reason every other request did. Requiring the
+        # tracker to answer its health endpoint RIGHT NOW is what earns the
+        # claim: online, host up, and your writes still failed on 3 days.
+        # (Checking only _internet_up() would not do it — being online now
+        # says nothing about the three days already in the ledger, so an
+        # offline stretch would still fire this on the next online session.)
+        elif len(days) >= 3 and online() and not unreachable():
+            notice = (
+                f"The NSLS automation tracker has been too slow to record "
+                f"your sessions on {len(days)} separate days, so some builder "
+                f"points are probably missing. Say \"check the tracker\" if "
+                f"you want it looked into."
+            )
+
+    if notice:
+        # Second write, only when we actually spoke — the payload above is
+        # already safe on disk whatever the probes did.
+        _write(now.isoformat())
+
+    if notice:
+        print(
+            "[NSLS Builder Toolkit — surface the following to the user at the "
+            "start of your first reply, then proceed with their request:]\n\n"
+            + notice
+        )
 
 
 def session_ping(replayed=None):
@@ -564,45 +918,15 @@ def session_ping(replayed=None):
         data = _post_session_ping(body)
     except Exception:
         # Delivery failed (timeout / network / proxy down). Stash the payload
-        # so the next session start replays it. Best-effort — never raise.
-        failures = 1
-        try:
-            prior = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
-            failures = int(prior.get("failures", 1)) + 1
-        except Exception:
-            pass
-        try:
-            PING_FAIL_MARKER.parent.mkdir(parents=True, exist_ok=True)
-            PING_FAIL_MARKER.write_text(
-                json.dumps({
-                    "payload": body,
-                    "attempted_at": datetime.now(timezone.utc).isoformat(),
-                    "failures": failures,
-                }),
-                encoding="utf-8",
-            )
-        except Exception:
-            pass
-        # One visible heads-up per failure streak (the marker resets on any
-        # success). Silent-forever is how a CA-cert breakage went unnoticed
-        # for six weeks — the builder must eventually hear about it.
-        if failures == 3:
-            print(
-                "[NSLS Builder Toolkit — surface the following to the user "
-                "at the start of your first reply, then proceed with their "
-                "request:]\n\n"
-                "Heads up: the NSLS automation tracker hasn't been reachable "
-                "for your last 3 sessions, so daily session points aren't "
-                "being recorded. If your network is otherwise fine, mention "
-                "this in #builders so it gets looked at."
-            )
+        # so the next session start replays it, and decide separately whether
+        # this is worth a word to the builder. Best-effort — never raise.
+        note_ping_failure(body)
         return
 
-    # Delivered — clear any stale failure marker from a prior session.
-    try:
-        PING_FAIL_MARKER.unlink()
-    except OSError:
-        pass
+    # Delivered — retire the queued payload. Today's credit landed today, so
+    # today comes off the ledger; earlier days stay, because their credit did
+    # not land on their day and no later delivery can give it back.
+    _retire_ping_payload(drop_today=True)
 
     output = []
 
