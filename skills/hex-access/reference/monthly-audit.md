@@ -14,9 +14,13 @@ reset and the overrun is invisible. Run it:
 - **mid-cycle, or the moment top-ups cross ~60% of the $1,000 spend limit**,
   whichever comes first (the early-warning pass).
 
-The 2026-08 cycle is the worked example: $475 on 8/13 and $775 on 8/20 in a
-Jul 24 – Aug 24 cycle. Only the mid-cycle pass can see that while there is
-still time to act on it.
+The 2026-08 cycle is the worked example, and the answer it gives is "fine":
+$475 on 8/13 and $775 on 8/20 in a Jul 24 – Aug 24 cycle projects to about
+$946 at close, roughly $54 of headroom. The point is not that it was heading
+for trouble — it wasn't — but that a start-of-cycle-only audit could not have
+told you either way, because by its next run the counter has reset. The
+mid-cycle pass is what turns "that slope looks steep" into a number. Section 1
+has the arithmetic.
 
 ## 1. Spend against the pool
 
@@ -35,8 +39,19 @@ concluding anything ratcheted (section 2 does that), and say which of the two
 you actually found.
 
 Observed so far: **$475 on 2026-08-13, $775 on 2026-08-20**, in a cycle running
-Jul 24 to Aug 24. If that pace holds, the pool binds before the cycle closes,
-which is the scenario this audit exists to catch early.
+Jul 24 to Aug 24.
+
+**Do the arithmetic; do not eyeball the shape of it.** $300 over 7 days is
+~$43/day. Four days remain to the 8/24 close, so straight-line the run ends
+near **$946 — under the $1,000 limit.** This cycle did *not* bind, and an
+earlier draft of this file said it would. That is the error the forecast exists
+to prevent, made in the document teaching the forecast: a steep climb read as
+an overrun without anyone multiplying it out.
+
+State the projected close figure and the margin every time — "$946, about $54
+of headroom" — not a verdict. A number can be checked; "the pool binds" cannot.
+Escalate on the projection crossing the limit, or on the pace changing, never
+on the slope looking alarming.
 
 ## 2. Allocations that were meant to be temporary
 
@@ -60,9 +75,23 @@ For each raise found, ask whether the crunch that justified it is over.
 
 ## 3. Total caps against the pool
 
-Add up the per-user limits on the credits page and compare to $1,000 (2 credits
-per dollar). On 2026-08-20 the caps totalled about 3,400 credits/cycle, roughly
-$1,700 of caps against a $1,000 pool.
+Sum each person's **effective** limit and compare to $1,000 (2 credits per
+dollar). Per-user limits alone undercount: a limit can be set at User, Group or
+Workspace Default scope, so a 500-credit group limit covering ten people who
+have no individual limit is 5,000 credits of potential draw that a per-user
+sum reports as zero.
+
+Effective limit resolves by the same precedence as Step 6 in SKILL.md —
+**User > Group (highest wins) > Workspace Default**:
+
+- explicit user limit → that figure, and the person's group limits are
+  irrelevant to them (do **not** also add the group's; that double-counts)
+- no user limit → the highest limit among the groups they belong to
+- neither → the workspace default, which is currently **No access**, so zero
+
+On 2026-08-20 the *per-user* caps alone totalled about 3,400 credits/cycle,
+roughly $1,700 against a $1,000 pool. That figure is a floor, not the total —
+it predates this correction and no group or default exposure was added to it.
 
 Oversubscription is normal and intended. It is worth tracking anyway, because
 the ratio tells you how much of a cushion is left before the pool, rather than
@@ -139,8 +168,17 @@ can be configured to never expire.
 
 ## 6. Report
 
-To Jordan, monthly:
-- current-cycle spend against $1,000, with the month-over-month delta
+**To Jordan after every pass, not once a month.** An early warning nobody sends
+is not an early warning. The mid-cycle pass exists to catch an overrun while
+there is still time, so its result goes out **immediately** when top-ups cross
+~60% of the $1,000 limit — waiting for the monthly report means delivering it
+after the cycle it was about has already closed, which is the exact failure
+the twice-per-cycle schedule was added to fix.
+
+Every pass reports:
+- current-cycle spend against $1,000, with the month-over-month delta, **and
+  the projected close figure with its margin** (see section 1 — the number and
+  the headroom, not a verdict)
 - allocation changes since last audit and who approved each
 - seats recommended for downgrade, with the monthly saving
 - anything that hit a cap twice in one cycle, which usually means the person
