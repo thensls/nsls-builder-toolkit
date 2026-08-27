@@ -191,10 +191,16 @@ def _warn_if_frozen(plugin, plugin_dir, err):
     message that must never be ignored (the real incident this guards: a single
     local commit froze a toolkit for a month with zero signal).
 
-    git's own text is now included. Discarding it made the false positive
-    undiagnosable: the hook asserted a cause it never checked and threw away
-    the only evidence of the real one."""
-    if not any(s in err for s in _FREEZE_SIGNS):
+    Which _FREEZE_SIGNS phrase matched is reported, but git's raw text is NOT.
+    Everything this prints lands in the model's context, and git echoes content
+    an attacker controls — `remote:` lines are printed verbatim from the server,
+    and branch, ref and URL names appear in error text. Passing that through
+    would let a hostile upstream write instructions straight into Claude's
+    context wearing the toolkit's voice. The matched phrase is one of four of
+    OUR OWN literals, so it carries the diagnostic value with none of the
+    surface; the raw text stays in git's own output where a human can read it."""
+    matched = next((s for s in _FREEZE_SIGNS if s in err), None)
+    if matched is None:
         return
     blocker = _checkout_blocks_update(plugin_dir)
     if blocker is None:
@@ -202,7 +208,6 @@ def _warn_if_frozen(plugin, plugin_dir, err):
         # reason and this is not a frozen toolkit. Nothing to repair, so say
         # nothing rather than send Claude after a backup with no target.
         return
-    detail = " ".join(err.split())[:300]
     print(
         f"WARNING - {plugin} could not self-update: the checkout at {plugin_dir} "
         f"has {blocker}, so automatic updates are FROZEN and this "
@@ -210,7 +215,7 @@ def _warn_if_frozen(plugin, plugin_dir, err):
         f"offer the fix: preserve their local changes on a backup branch, then "
         f"fast-forward the checkout to its upstream. (Skills in ~/.claude/skills "
         f"are the right place for personal edits and are unaffected.) "
-        f"git said: {detail}"
+        f"git refused with: {matched!r}"
     )
 
 

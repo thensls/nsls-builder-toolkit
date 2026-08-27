@@ -44,9 +44,14 @@ foreach ($dir in @($BuilderDir, $PersonalDir)) {
         # $null means verified clean and level, or unknowable — either way NOT frozen.
         # Staying quiet costs one session's update; the next pull picks it up.
         if ($blocker) {
-            $detail = ($pullOut -replace '\s+', ' ').Trim()
-            if ($detail.Length -gt 300) { $detail = $detail.Substring(0, 300) }
-            Write-Output ("WARNING - $(Split-Path $dir -Leaf) could not self-update: the checkout at $dir has $blocker, so automatic updates are FROZEN and this toolkit is going stale. Tell the user at the first natural moment and offer the fix: preserve their local changes on a backup branch, then fast-forward the checkout to its upstream. (Skills in ~/.claude/skills are the right place for personal edits and are unaffected.) git said: $detail")
+            # Which phrase matched, never git's raw text: everything written here
+            # reaches the model's context, and git echoes attacker-controlled
+            # content (`remote:` lines come verbatim from the server; branch, ref
+            # and URL names appear in error text). $matched is one of OUR OWN four
+            # literals, so it carries the diagnostic value with none of the surface.
+            $matched = @('fast-forward','would be overwritten','unmerged','not concluded') |
+                Where-Object { $pullOut -match [regex]::Escape($_) } | Select-Object -First 1
+            Write-Output ("WARNING - $(Split-Path $dir -Leaf) could not self-update: the checkout at $dir has $blocker, so automatic updates are FROZEN and this toolkit is going stale. Tell the user at the first natural moment and offer the fix: preserve their local changes on a backup branch, then fast-forward the checkout to its upstream. (Skills in ~/.claude/skills are the right place for personal edits and are unaffected.) git refused with: '$matched'")
         }
     }
 }
