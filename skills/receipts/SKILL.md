@@ -369,8 +369,18 @@ whatever directory you're in, not just the repository root.
   claude.ai session is fine; the account just can't read that organization's
   billing invoices. Storing a new session cannot change it. Ask an org owner
   for admin access, or unset `ANTHROPIC_ORG_UUID` to run without this source.
-  A 401 or a redirect to the logout page is the session-expiry case above and
-  *does* want `--set-session`.
+
+  **Not every 403 is this one, and the status code alone cannot tell you
+  which.** claude.ai answers an *invalid or expired session* with 403 as well
+  — a JSON body carrying `error_code: account_session_invalid` — so for a
+  while an ordinary expiry was reported here, sending people to request admin
+  access they already held while the real fix was a ten-second cookie re-copy.
+  Fixed 2026-08-25: the body is read (`_looks_session_invalid` in
+  `sources/anthropic.py`) and that code routes to the expiry message instead,
+  so reaching *this* message now establishes what it claims — the session was
+  accepted and the permission was refused. A 401, a redirect to the logout
+  page, or a 403 carrying that error code are all the session-expiry case
+  above and *do* want `--set-session`.
 - **`SOURCE ANTHROPIC: SKIPPED (Cloudflare challenged the request …)`** — a
   third, distinct failure, and neither of the two above. Cloudflare answered
   instead of claude.ai, so the request never arrived: this is not your

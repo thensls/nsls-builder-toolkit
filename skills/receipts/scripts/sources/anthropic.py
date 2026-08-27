@@ -54,6 +54,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -122,6 +123,24 @@ _CF_HEADER_MARKERS = ("cf-mitigated", "cf-chl-bypass")
 
 # A 200 that has quietly landed here is a dead session, not an empty account.
 _LOGGED_OUT_PATHS = ("/login", "/logout", "/sign-in", "/signin")
+
+# claude.ai answers an invalid/expired session with **403**, not 401 — the body
+# is JSON carrying `error.details.error_code`. Branching on the status alone
+# read that as "not an org admin" and sent the user to ask an org owner for
+# access they already had, while the real fix was a ten-second cookie re-copy.
+# Verified live 2026-08-25 on /api/account, /api/organizations, and the invoice
+# listing: all three returned 403 with error_code `account_session_invalid`.
+_SESSION_INVALID_ERROR_CODES = ("account_session_invalid",)
+
+# claude.ai's edge challenges authenticated reads INTERMITTENTLY — measured
+# 2026-08-26: three identical single requests seconds apart, and limit=1 was
+# challenged while limit=25 and limit=100 both returned 200. It is not the page
+# size and not the session; it is probabilistic. Because one challenge aborted
+# the whole source, a run firing several listing calls almost never completed,
+# and every Anthropic charge fell through to "no receipt found" — a wrong answer
+# produced by giving up on a retryable condition.
+_CF_RETRIES = 4
+_CF_BACKOFF_SECONDS = (2, 5, 12)
 
 # Third instance of the same bug class in this module's history (see the
 # ImportError note on the relative import above, and the run.py-from-anywhere
@@ -318,6 +337,30 @@ def _looks_logged_out(url: str) -> bool:
     return any(marker in (url or "").lower() for marker in _LOGGED_OUT_PATHS)
 
 
+def _looks_session_invalid(resp) -> bool:
+    """True when claude.ai has explicitly rejected the *session* — as opposed
+    to accepting it and refusing the *permission*. Both are 403, and only the
+    body tells them apart, so the status code alone cannot be trusted here.
+
+    Keyed on the machine-readable `error_code` rather than the human-facing
+    `message`, which is prose and can be reworded without notice. An unknown
+    code falls through to the permissions branch, which is the safe default:
+    it names a cause the user can verify rather than asserting expiry.
+    """
+    if resp is None or resp.status != 403:
+        return False
+    try:
+        body = json.loads(resp.text() or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not isinstance(body, dict):
+        return False
+    details = (body.get("error") or {}).get("details") or {}
+    if not isinstance(details, dict):
+        return False
+    return details.get("error_code") in _SESSION_INVALID_ERROR_CODES
+
+
 def _fetch_listing(org: str, session: str, page: str = "", limit: int = 100) -> dict:
     """One authenticated GET against the invoice listing.
 
@@ -341,17 +384,32 @@ def _fetch_listing(org: str, session: str, page: str = "", limit: int = 100) -> 
         "Accept": "application/json",
     })
 
-    try:
+    def _attempt() -> "_HttpResponse":
         with _open(req) as raw:
-            resp = _HttpResponse(getattr(raw, "status", 200), getattr(raw, "headers", None),
-                                 raw.read(), raw.geturl() if hasattr(raw, "geturl") else url)
-    except urllib.error.HTTPError as exc:
-        try:
-            body = exc.read()
-        except Exception:
-            body = b""
-        resp = _HttpResponse(exc.code, getattr(exc, "headers", None), body,
-                             getattr(exc, "url", url) or url)
+            return _HttpResponse(
+                getattr(raw, "status", 200), getattr(raw, "headers", None),
+                raw.read(), raw.geturl() if hasattr(raw, "geturl") else url)
+
+    try:
+        # Retry ONLY a Cloudflare challenge. A challenge means the request never
+        # reached claude.ai, so nothing about the account or the session has been
+        # established and trying again is legitimate. Every other outcome —
+        # expired session, missing permission, unexpected status — is claude.ai's
+        # own answer and is honoured first time: retrying those would just spend
+        # the user's time to print the same message.
+        for attempt in range(_CF_RETRIES):
+            try:
+                resp = _attempt()
+            except urllib.error.HTTPError as exc:
+                try:
+                    body = exc.read()
+                except Exception:
+                    body = b""
+                resp = _HttpResponse(exc.code, getattr(exc, "headers", None), body,
+                                     getattr(exc, "url", url) or url)
+            if not _is_cloudflare_challenge(resp) or attempt == _CF_RETRIES - 1:
+                break
+            time.sleep(_CF_BACKOFF_SECONDS[min(attempt, len(_CF_BACKOFF_SECONDS) - 1)])
     except urllib.error.URLError as exc:
         raise SourceUnavailable(_scrub(
             f"Could not reach claude.ai to list billing invoices: {exc.reason}. "
@@ -377,7 +435,12 @@ def _fetch_listing(org: str, session: str, page: str = "", limit: int = 100) -> 
             f"{SET_SESSION_CMD} and paste a new sessionKey value."
         )
 
-    if resp.status == 401 or (resp.status == 200 and _looks_logged_out(resp.url)):
+    # `_looks_session_invalid` is what keeps the 403 below honest: claude.ai
+    # reports a dead session as 403, so without reading the body an ordinary
+    # expiry is indistinguishable from a permissions wall.
+    if (resp.status == 401
+            or _looks_session_invalid(resp)
+            or (resp.status == 200 and _looks_logged_out(resp.url))):
         raise SourceUnavailable(
             f"The stored claude.ai session has expired — claude.ai no longer "
             f"accepts it for organization {org}. Sessions expire periodically; "
@@ -385,6 +448,8 @@ def _fetch_listing(org: str, session: str, page: str = "", limit: int = 100) -> 
             f"{SET_SESSION_CMD}"
         )
 
+    # Reached only when the session was NOT rejected above — so "the session
+    # was accepted" is now a claim this branch has actually established.
     if resp.status == 403:
         raise SourceUnavailable(
             f"claude.ai refused the billing invoice listing for organization "

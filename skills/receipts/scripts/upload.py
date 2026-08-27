@@ -2,6 +2,7 @@
 """Upload a matched receipt to Ramp and record the outcome."""
 
 import base64
+import sys
 import hashlib
 import json
 import os
@@ -142,6 +143,18 @@ class Ledger:
             raise
 
 
+def _announce_failure(txn, rec, exc, transient: bool = False) -> None:
+    """Say why an upload was refused, on stderr, at the moment it happens.
+
+    A `FAILED` with no cause is indistinguishable from a `FAILED` whose cause
+    is a one-character bug in the arguments — and the second kind never gets
+    found, because there is nothing to read.
+    """
+    kind = "transport failure" if transient else "Ramp refused it"
+    print(f"ERROR uploading {txn.id} ({txn.merchant} {txn.date}): {kind} — "
+          f"{type(exc).__name__}: {exc}", file=sys.stderr)
+
+
 def upload(pairing, ledger: Ledger, dry_run: bool) -> str:
     txn, rec = pairing.transaction, pairing.receipt
 
@@ -161,10 +174,21 @@ def upload(pairing, ledger: Ledger, dry_run: bool) -> str:
         ledger.record(txn.id, rec.provenance, "ESCALATED")
         return "ESCALATED"
 
+    # NOT sent: --idempotency_key. `ramp receipts upload` has no such option
+    # and rejects the whole call with {"error": {"code": 2, "message": "No such
+    # option: --idempotency_key"}} — verified 2026-08-26 against CLI 0.2.4 AND
+    # 0.2.29 (the then-latest). The flag was never valid in any version, so this
+    # is not a version workaround to undo after the next `ramp update`.
+    # Passing it made EVERY upload fail, and because the reason was swallowed
+    # below the run still exited 0, so the skill reported a clean send that had
+    # attached nothing. Idempotency comes from two other places instead: the
+    # `needs_receipt` re-check above (a transaction that already has a receipt
+    # is skipped before any upload) and the ledger keyed on
+    # (transaction, provenance). Re-add the flag only once the CLI lists it in
+    # `ramp receipts upload --help`.
     args = [
         "receipts", "upload",
         "--transaction_uuid", txn.id,
-        "--idempotency_key", idempotency_key(txn.id, rec.provenance),
         "--filename", "receipt.pdf",
         "--content_type", "application/pdf",
         "--file_content_base64", base64.b64encode(rec.pdf_bytes).decode(),
@@ -177,13 +201,23 @@ def upload(pairing, ledger: Ledger, dry_run: bool) -> str:
         # here would burn an escalation attempt and bury a dead login inside a
         # per-transaction FAILED line.
         raise
-    except RampError:
+    except RampError as exc:
         # Ramp looked at the request and refused it. That is a real attempt.
+        #
+        # The message MUST be printed here. `run.py` only prints "ERROR
+        # uploading …" for an exception that escapes this function, and this
+        # branch deliberately does not escape — so for the whole life of this
+        # skill a refused upload produced a bare "FAILED" with the reason
+        # discarded from the report, the ledger, and stderr alike. That is how
+        # a flag the CLI never accepted went unnoticed: the only signal was a
+        # word with no cause attached.
+        _announce_failure(txn, rec, exc)
         ledger.record(txn.id, rec.provenance, "FAILED")
         return "FAILED"
-    except Exception:
+    except Exception as exc:
         # Transport-level: timeout, reset connection, unparseable response.
         # Reported as FAILED, but not counted toward MAX_ATTEMPTS.
+        _announce_failure(txn, rec, exc, transient=True)
         ledger.record(txn.id, rec.provenance, "FAILED", transient=True)
         return "FAILED"
 

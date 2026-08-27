@@ -67,7 +67,7 @@ def test_dry_run_never_calls_ramp():
     assert calls == [], "dry run must not invoke the CLI"
 
 
-def test_upload_passes_transaction_uuid_and_idempotency_key():
+def test_upload_passes_transaction_uuid():
     seen = {}
 
     def fake(args, rationale):
@@ -80,7 +80,29 @@ def test_upload_passes_transaction_uuid_and_idempotency_key():
 
     assert "--transaction_uuid" in seen["args"]
     assert "t1" in seen["args"]
-    assert idempotency_key("t1", "anthropic:invoice A") in seen["args"]
+
+
+def test_upload_does_not_send_the_flag_the_ramp_cli_rejects():
+    """`ramp receipts upload` has no --idempotency_key option and refuses the
+    entire call when it is passed, so every upload failed. The old test here
+    asserted the opposite — it patched `run`, so it proved the argument was
+    assembled and could never notice that the real CLI rejects it. Patching
+    the boundary is why this shipped: both sides of a contract change agreed
+    with each other and disagreed with production."""
+    seen = {}
+
+    def fake(args, rationale):
+        seen["args"] = args
+        return [{"id": "r1"}]
+
+    with patch("upload.needs_receipt", return_value=True):
+        with patch("upload.run", side_effect=fake):
+            upload(PAIR, _ledger(), dry_run=False)
+
+    assert "--idempotency_key" not in seen["args"], (
+        "the Ramp CLI rejects this option and fails the whole upload: "
+        + " ".join(seen["args"])
+    )
 
 
 def test_already_receipted_is_skipped():
@@ -189,7 +211,7 @@ def test_a_different_receipt_candidate_gets_its_own_retry_budget():
         "a never-tried receipt candidate must not inherit another candidate's "
         f"exhausted retry budget (got {result})"
     )
-    assert idempotency_key("t1", "gmail:msg 19f9") in r.call_args[0][0]
+    assert "--idempotency_key" not in r.call_args[0][0]
 
 
 def test_skipped_rows_do_not_burn_a_candidates_retry_budget():
@@ -367,3 +389,29 @@ if __name__ == "__main__":
         if n.startswith("test_"):
             f(); print(f"  ok {n}")
     print("\nAll upload tests passed.")
+
+
+def test_a_refused_upload_says_why_on_stderr(capsys):
+    """A `FAILED` with no cause attached is unactionable — and is exactly how a
+    rejected CLI flag survived every run: the only signal was the word."""
+    from ramp import RampError
+
+    with patch("upload.needs_receipt", return_value=True):
+        with patch("upload.run", side_effect=RampError("No such option: --nope")):
+            assert upload(PAIR, _ledger(), dry_run=False) == "FAILED"
+
+    err = capsys.readouterr().err
+    assert "ERROR uploading" in err, err
+    assert "No such option: --nope" in err, (
+        "the reason Ramp gave must reach the user: " + err
+    )
+    assert "t1" in err, err
+
+
+def test_a_transport_failure_also_says_why(capsys):
+    with patch("upload.needs_receipt", return_value=True):
+        with patch("upload.run", side_effect=TimeoutError("connection reset")):
+            assert upload(PAIR, _ledger(), dry_run=False) == "FAILED"
+
+    err = capsys.readouterr().err
+    assert "connection reset" in err, err
