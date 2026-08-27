@@ -198,13 +198,21 @@ allocation gets only their seat grant (40 Editor, 10 Explorer) and then stops.
 
 ## Step 4: The two UI paths
 
-**If the user has no allocation yet:** click the user in the credits table, then
-**Add allocation**.
+Both live under **Settings → Credits → Credit usage controls**. The Workspace
+Default limit is always listed there; every other limit is one you added.
 
-**If "Add allocation" is greyed out:** that means they already have a monthly
-allocation. This is the single most confusing moment on the page. Use the
-**three-dot menu → Edit → add-on credits per cycle**. Options are Unlimited,
-Custom amount, or No access. Use Custom amount.
+**If the person has no limit yet:** click **`+ Add limit`**, choose the scope —
+**User** or **Group** — then the amount. Options are **Unlimited**, **Custom
+amount**, or **No access**. Use Custom amount.
+
+**If they already have one:** it is already a row in that list. Adjust it from
+the **three-dot (`...`) menu → Edit** on the right of the row. This is the
+single most confusing moment on the page — an existing limit is edited in
+place, not re-added, so reaching for `+ Add limit` a second time is the wrong
+door.
+
+*(Source: Hex docs, "Credits" — <https://learn.hex.tech/docs/administration/credits>.
+If the UI has moved again, trust the page over this file and fix this file.)*
 
 ## Step 5: The recurrence trap (say this out loud every time)
 
@@ -227,9 +235,26 @@ Related rollover behavior, which is easy to get backwards:
 
 ## Step 6: Precedence, if the number does not take effect
 
-Credit limits resolve **User > Group > Workspace default, and the highest limit
-wins.** A generous group limit will silently override a tighter individual one.
-If a change appears to do nothing, check the group before assuming the UI failed.
+Credit limits resolve **User > Group (highest wins) > Workspace default.** Read
+that carefully, because the "highest wins" applies **only among groups**: an
+explicit user limit always wins the argument, even when it is *lower* than a
+group limit the person also matches. Only when no user limit exists does the
+highest matching group limit apply, and only when neither exists does the
+workspace default.
+
+So if a change appears to do nothing:
+
+1. **Check for an explicit user limit first.** That is what is binding, and it
+   is the thing to change. A tighter individual limit is not being overridden
+   by a generous group — that cannot happen.
+2. Only if there is no user limit, look at the groups the person belongs to and
+   find the highest limit among them.
+3. Only if neither exists is the workspace default in play.
+
+Changing a group limit while an explicit user limit exists is the most common
+way to spend ten minutes fixing nothing.
+
+*(Source: Hex docs, "Credits" — <https://learn.hex.tech/docs/administration/credits>.)*
 
 ## Licenses
 
