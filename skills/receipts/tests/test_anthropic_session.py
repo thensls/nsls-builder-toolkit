@@ -328,6 +328,58 @@ def test_no_session_stored_is_its_own_message_naming_set_session():
     raise AssertionError("a missing session must raise SourceUnavailable")
 
 
+# The exact body claude.ai returned on 2026-08-25 for a session that had gone
+# stale, on /api/account, /api/organizations, and the invoice listing alike.
+SESSION_INVALID_BODY = (
+    b'{"type":"error","error":{"type":"permission_error",'
+    b'"message":"Invalid authorization","details":'
+    b'{"error_code":"account_session_invalid","error_visibility":"user_facing"}},'
+    b'"request_id":null}'
+)
+
+
+def test_403_carrying_account_session_invalid_is_reported_as_an_expired_session():
+    """claude.ai answers a dead session with 403, not 401. Reading the status
+    alone called that a permissions wall and told the user to go ask an org
+    owner for access they already had — while the fix was a fresh cookie."""
+    msg = _listing_error(status=403, body=SESSION_INVALID_BODY)
+    assert "expired" in msg.lower(), msg
+    assert "--set-session" in msg, "a fresh cookie is the remedy: " + msg
+    assert "admin" not in msg.lower(), (
+        "an expired session must not be reported as a permissions problem: " + msg
+    )
+    assert "cloudflare" not in msg.lower(), msg
+    assert SENTINEL not in msg
+    assert msg == _listing_error(status=401), (
+        "a 403 rejecting the session and a 401 are the same failure with the "
+        "same remedy, so they are deliberately one message, not two: " + msg
+    )
+
+
+def test_a_403_permission_error_without_that_code_still_reads_as_org_admin():
+    """The narrow fix must not swallow the genuine permissions case: only the
+    known error_code reroutes, anything else keeps the branch it had."""
+    msg = _listing_error(
+        status=403,
+        body=b'{"error":{"type":"permission_error","details":{"error_code":"other"}}}',
+    )
+    assert "admin" in msg.lower(), msg
+    assert "expired" not in msg.lower(), msg
+    assert SENTINEL not in msg
+
+
+def test_cloudflare_wins_over_the_session_invalid_code():
+    """A challenged request never reached claude.ai, so no body of its can be
+    trusted to describe the session. Cloudflare stays checked first."""
+    msg = _listing_error(
+        status=403,
+        headers={"cf-mitigated": "challenge"},
+        body=SESSION_INVALID_BODY,
+    )
+    assert "cloudflare" in msg.lower(), msg
+    assert SENTINEL not in msg
+
+
 def test_the_four_failure_modes_all_differ_from_one_another():
     msgs = [
         _listing_error(status=401),
@@ -1187,3 +1239,68 @@ if __name__ == "__main__":
         if n.startswith("test_"):
             f(); print(f"  ok {n}")
     print("\nAll anthropic session-cookie tests passed.")
+
+
+def _sequence(*responses):
+    """A fake `_open` that returns/raises each queued outcome in turn, so a
+    retry can be observed rather than assumed. Each entry is (status, body)."""
+    queue = list(responses)
+    calls = []
+
+    def fake(req, timeout=None):
+        calls.append(req)
+        status, body = queue.pop(0)
+        if status == 200:
+            return _FakeRaw(200, body, None, req.full_url)
+        raise urllib.error.HTTPError(
+            req.full_url, status, "error", _headers(None), io.BytesIO(body),
+        )
+
+    fake.calls = calls
+    fake.remaining = lambda: len(queue)
+    return fake
+
+
+CF_BODY = b"<html>Just a moment... cf-chl</html>"
+
+
+def test_an_intermittent_cloudflare_challenge_is_retried_then_succeeds():
+    """claude.ai challenges authenticated reads at random — measured 2026-08-26:
+    limit=1 was challenged while limit=25 and limit=100 succeeded seconds apart.
+    One challenge used to abort the entire source, so every Anthropic charge
+    became "no receipt found": a wrong answer produced by giving up on a
+    retryable condition."""
+    fake = _sequence((403, CF_BODY), (200, json.dumps(PAYLOAD).encode()))
+    with _sandbox(stored=SENTINEL):
+        with patch.object(anth, "_open", fake):
+            out = SOURCE._listing()
+    assert out.get("invoices"), out
+    assert len(fake.calls) == 2, f"expected one retry, saw {len(fake.calls)} call(s)"
+
+
+def test_a_persistent_challenge_still_reports_the_cloudflare_message():
+    fake = _sequence(*[(403, CF_BODY)] * anth._CF_RETRIES)
+    with _sandbox(stored=SENTINEL):
+        with patch.object(anth, "_open", fake):
+            try:
+                SOURCE._listing()
+            except SourceUnavailable as exc:
+                assert "cloudflare" in str(exc).lower(), exc
+                assert len(fake.calls) == anth._CF_RETRIES, len(fake.calls)
+                return
+    raise AssertionError("a persistent challenge must still raise")
+
+
+def test_an_expired_session_is_not_retried():
+    """Only a challenge is retryable. A session claude.ai actually rejected is
+    its own answer — retrying spends the user's time to print the same words."""
+    fake = _sequence((403, SESSION_INVALID_BODY))
+    with _sandbox(stored=SENTINEL):
+        with patch.object(anth, "_open", fake):
+            try:
+                SOURCE._listing()
+            except SourceUnavailable as exc:
+                assert "expired" in str(exc).lower(), exc
+    assert len(fake.calls) == 1, (
+        f"an expired session must not be retried (tried {len(fake.calls)}x)"
+    )

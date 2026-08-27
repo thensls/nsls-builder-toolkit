@@ -357,6 +357,13 @@ def main(argv: list[str]) -> int:
     if ledger_error is not None:
         _report_ledger_error()
         exit_code = exit_code or 1
+
+    # A send where Ramp refused a receipt is not a clean run. `upload()`
+    # handles a refusal without raising, so the loop's own exception branch
+    # never sees it and exit_code stayed 0 — which told cron, CI, and every
+    # wrapper script that a send attaching nothing had succeeded.
+    if args.send and any(v == "FAILED" for v in results.values()):
+        exit_code = exit_code or 1
     return exit_code
 
 
