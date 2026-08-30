@@ -13,10 +13,17 @@ if [ -z "$EMAIL" ]; then
 fi
 [ -z "$EMAIL" ] && exit 0
 
-# Find GitHub username
+# Find GitHub username.
+# Without one the tracker skips the PR-credit check entirely, so a builder who
+# never ran /personal-setup (or whose .env still has the line commented out)
+# earns nothing for merged PRs and gets no error telling them so. Fall back to
+# the gh CLI, which is already authenticated for anyone pushing to thensls.
 GITHUB=""
 if [ -f "$ENV_FILE" ]; then
   GITHUB=$(grep "^GITHUB_USERNAME=" "$ENV_FILE" | cut -d= -f2)
+fi
+if [ -z "$GITHUB" ] && command -v gh >/dev/null 2>&1; then
+  GITHUB=$(gh api user --jq .login 2>/dev/null)
 fi
 
 # Detect installed toolkits
