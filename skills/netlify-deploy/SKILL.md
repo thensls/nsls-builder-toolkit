@@ -29,20 +29,52 @@ Confirm: `netlify-cli/24.x.x` or higher.
 
 ### 2. Auth Token
 
-The Netlify auth token is stored at:
-```
-~/.netlify/config.json
-```
-
-Look under `.users[userId].auth.token`. Retrieve it with:
+**First: you usually don't need the token at all.** If the CLI is already
+logged in, `netlify deploy` and `netlify sites:list` authenticate themselves.
+Check before going hunting:
 
 ```bash
-node -e "const c=require(process.env.HOME+'/.netlify/config.json'); const uid=Object.keys(c.users)[0]; console.log(c.users[uid].auth.token)"
+netlify status
 ```
 
-Save to a variable for use in deploy commands:
+If that prints an account, skip to Site ID.
+
+**If you do need the raw token**, its location is platform- and version-
+dependent. `~/.netlify/config.json` is the *legacy* path and does not exist on
+current CLI versions — on macOS the file lives under `~/Library/Preferences/`.
+Probe the candidates rather than hardcoding one:
+
 ```bash
-export NETLIFY_AUTH_TOKEN=$(node -e "const c=require(process.env.HOME+'/.netlify/config.json'); const uid=Object.keys(c.users)[0]; console.log(c.users[uid].auth.token)")
+for f in "$HOME/Library/Preferences/netlify/config.json" \
+         "$HOME/.config/netlify/config.json" \
+         "$HOME/.netlify/config.json"; do
+  [ -f "$f" ] && echo "$f" && break
+done
+```
+
+| Platform | Path |
+|---|---|
+| macOS | `~/Library/Preferences/netlify/config.json` |
+| Linux | `~/.config/netlify/config.json` (respects `XDG_CONFIG_HOME`) |
+| Windows | `%APPDATA%\netlify\Config\config.json` |
+| Legacy (pre-20.x) | `~/.netlify/config.json` |
+
+Extract the token from whichever path exists:
+
+```bash
+export NETLIFY_AUTH_TOKEN=$(node -e '
+  const fs=require("fs"), path=require("path"), home=process.env.HOME||process.env.USERPROFILE;
+  const cands=[
+    path.join(home,"Library/Preferences/netlify/config.json"),
+    path.join(process.env.XDG_CONFIG_HOME||path.join(home,".config"),"netlify/config.json"),
+    path.join(home,".netlify/config.json"),
+  ];
+  const f=cands.find(fs.existsSync);
+  if(!f){console.error("No netlify config found; run: netlify login");process.exit(1);}
+  const c=JSON.parse(fs.readFileSync(f,"utf8"));
+  const uid=Object.keys(c.users)[0];
+  console.log(c.users[uid].auth.token);
+')
 ```
 
 ### 3. Site ID
@@ -225,7 +257,7 @@ After visual review:
 ## Environment
 
 - **CLI**: `netlify-cli` ≥ 24.x via `npm install -g netlify-cli@latest`
-- **Auth**: `~/.netlify/config.json` → `.users[uid].auth.token`
+- **Auth**: CLI is usually already logged in (`netlify status`). Raw token, if needed: `~/Library/Preferences/netlify/config.json` on macOS, `~/.config/netlify/config.json` on Linux → `.users[uid].auth.token`. `~/.netlify/config.json` is legacy and absent on CLI 20.x+.
 - **Site for SLT slides**: `slt-pipeline-slides.netlify.app` → NETLIFY_SITE_ID = `ea5aa7d1-dfa7-4048-8cae-b185b434ce1e`
 - **Deploy dir pattern**: `/tmp/[project]-deploy/index.html`
 - **Playwright MCP**: Available via `mcp__plugin_playwright_playwright__*` tools
