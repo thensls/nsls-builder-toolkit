@@ -60,6 +60,15 @@ touched, ROI, effort, and risks** explicitly, since the depth table marks them
 mandatory and none of those four questions asks for them. Skip the rest — a
 1-pager that actually gets written beats a template that doesn't.
 
+**At every depth, the "Must contain" column above is a checklist, not a
+description.** Before writing DESIGN.md, walk the selected depth's list and ask
+for anything the six questions didn't surface — Standard adds stack components,
+data flow, success criteria, failure modes, rollout and reviewers; Extensive
+adds mockups, edge cases, sandbox/allowlist, and monitoring + rollback. The
+bundled template carries only the shared skeleton; the depth-specific sections
+are yours to add per this list, and a DESIGN.md missing its depth's mandatory
+sections is not done.
+
 ### Then — the conversation
 
 Walk through it one question at a time:

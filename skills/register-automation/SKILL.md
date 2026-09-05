@@ -245,7 +245,14 @@ past `Idea`:
 | `Company-wide` (Tier 3) | Standard or Extensive | **Yes.** Registration must exist before code, and a reviewer must be assigned. |
 
 **Tier 2: offer, then honor the answer.** Suggest the 1-pager once; if they
-decline, record it (`guardrail-memory.py record design-doc`) and leave
+decline, record it —
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-memory.py" record design-doc --note "<their reason>"
+```
+
+(ships in part 3 of this set; recording it also emits the `guardrail_proceeded`
+event the declined count is built from) — and leave
 `Design Doc URL` empty and `Review Status` at `Not needed` — running
 `/product-design` anyway is exactly the soft-path violation the tier table
 forbids. **Tier 3: not optional.** Run `/product-design` in Generate Mode,
