@@ -175,7 +175,11 @@ def build_key(cwd=None):
     if not root:
         return os.path.abspath(cwd or os.getcwd())
     remote = origin_url(cwd=root)
-    m = (re.search(r"(?:@|://)([^/:@]+)[:/]([^/:]+/[^/]+?)(?:\.git)?/?$", remote)
+    # Host (port dropped) + FULL path: one-slash-only matching sent nested
+    # GitLab groups (group/subgroup/project) and ssh-port URLs to the
+    # checkout-root fallback, so two clones of the same repo stopped sharing an
+    # identity and deduped separately.
+    m = (re.search(r"(?:@|://)([^/:@]+)(?::\d+)?[:/]+(.+?)(?:\.git)?/?$", remote)
          if remote else None)
     return f"{m.group(1).lower()}/{m.group(2).lower()}" if m else root
 
@@ -188,22 +192,40 @@ def _load_seen():
         return {}
 
 
+CLAIM_TTL_S = 180  # a claim older than this with no delivery is a dead child
+
+
 def _seen_today(key, label):
     """Has this build already reported this label today?
 
-    Read-only on purpose. The marker is written only after the POST succeeds
-    (see _mark_seen) -- an earlier version recorded the attempt up front, so a
-    tracker timeout suppressed every retry for the rest of the day and the
-    event was lost outright rather than merely delayed.
+    Two mark shapes: today's date = DELIVERED (holds all day); "pending:<epoch>"
+    = a claim taken just before the POST. A pending claim only counts while
+    fresh — a child killed mid-POST could otherwise hold the slot for the rest
+    of the UTC day with nothing delivered. Stale claims expire and the next
+    attempt sends.
     """
-    return _load_seen().get(f"{key}|{label}") == _today()
+    val = _load_seen().get(f"{key}|{label}")
+    if val == _today():
+        return True
+    if isinstance(val, str) and val.startswith("pending:"):
+        try:
+            import time as _t
+            return _t.time() - float(val.split(":", 1)[1]) < CLAIM_TTL_S
+        except (TypeError, ValueError):
+            return False
+    return False
 
 
-def _mark_seen(key, label):
-    """Remember a delivered event. Never raises; a lost marker costs a
-    duplicate row, which is the harmless direction."""
+def _mark_seen(key, label, pending=False):
+    """Remember a delivered event (or take a short-TTL pending claim).
+    Never raises; a lost marker costs a duplicate row — the harmless
+    direction."""
     data = _load_seen()
-    data[f"{key}|{label}"] = _today()
+    if pending:
+        import time as _t
+        data[f"{key}|{label}"] = f"pending:{_t.time()}"
+    else:
+        data[f"{key}|{label}"] = _today()
     if len(data) > SEEN_MAX:
         for stale in sorted(data, key=lambda k: data.get(k) or "")[: len(data) - SEEN_MAX]:
             data.pop(stale, None)
@@ -325,9 +347,11 @@ def emit(event_type: str, description: str, automation: str = "", cwd=None,
             if _seen_today(key, label):
                 return f"{label} already recorded for this build today"
             # Claim the slot INSIDE the lock, before the POST: two concurrent
-            # children must not both pass the check. A failed POST releases
-            # the claim below so the retry survives.
-            _mark_seen(key, label)
+            # children must not both pass the check. The claim is PENDING with
+            # a short TTL — a failed POST releases it below, and a child killed
+            # mid-POST simply lets it expire — while confirmed delivery
+            # promotes it to a full-day mark.
+            _mark_seen(key, label, pending=True)
     try:
         import urllib.request
 
@@ -344,6 +368,8 @@ def emit(event_type: str, description: str, automation: str = "", cwd=None,
             headers={"Content-Type": "application/json"},
         )
         urllib.request.urlopen(req, timeout=EMIT_TIMEOUT).read()
+        with _seen_lock():
+            _mark_seen(key, label)  # promote the pending claim: delivered
         return f"recorded {label}"
     except Exception as e:
         # Release the pre-claimed dedupe slot: a failed send must cost a

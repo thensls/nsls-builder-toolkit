@@ -75,7 +75,7 @@ def build_key(cwd):
     remote = git(["remote", "get-url", "origin"], root)
     # Host included: a slug-only key made acme/service on two different hosts
     # the same build, so one repo's decline silenced the other's guardrails.
-    m = (re.search(r"(?:@|://)([^/:@]+)[:/]([^/:]+/[^/]+?)(?:\.git)?/?$", remote)
+    m = (re.search(r"(?:@|://)([^/:@]+)(?::\d+)?[:/]+(.+?)(?:\.git)?/?$", remote)
          if remote else None)
     return f"{m.group(1).lower()}/{m.group(2).lower()}" if m else root
 
