@@ -452,6 +452,7 @@ def gate_personal_repo(tool: str, ti: dict):
     """NSLS work in a personal repo. Fires on push, not on every edit —
     an edit is reversible, a push publishes the code to the wrong owner."""
     cwd = None
+    push_remote = ""
     if tool == "Bash":
         cmd = ti.get("command") or ""
         if not PUSH_RE.search(cmd):
@@ -471,6 +472,11 @@ def gate_personal_repo(tool: str, ti: dict):
                 if any(a in ("--dry-run", "--help", "-n") for a in args):
                     continue  # harmless — but only for THIS segment
                 found, push_cwd = True, (gitdir or seg_cwd)
+                # `git push <remote> …` names its destination; a second remote
+                # pointing at a personal account slipped past a check that only
+                # ever read origin.
+                after = args[args.index("push") + 1:]
+                push_remote = next((a for a in after if not a.startswith("-")), "")
                 break
             if not found:
                 return
@@ -484,6 +490,13 @@ def gate_personal_repo(tool: str, ti: dict):
     if not root:
         return
     url = origin_url(root)
+    if push_remote and push_remote != "origin" and not push_remote.startswith(
+            ("http://", "https://", "git@")):
+        named = git("remote", "get-url", push_remote, cwd=root)
+        if named:
+            url = named
+    elif push_remote.startswith(("http://", "https://", "git@")):
+        url = push_remote  # pushing straight to a URL names the destination itself
     if is_nsls_remote(url):
         return
     if not looks_like_nsls_work(root):
@@ -646,7 +659,7 @@ WRITE_VERB_RE = re.compile(
 # That's what makes "import" safe to keep: `.../customers/import` is a real bulk
 # endpoint, while `... && python import_data.py` sits outside any URL and no
 # longer matches. Codex review 2026-08-15 flagged the unscoped version.
-BATCH_RE = re.compile(r"https?://\S*\b(batch|bulk|backfill|import|/records)\b", re.I)
+BATCH_RE = re.compile(r"(https?://)?\S*\b(batch|bulk|backfill|import|/records)\b", re.I)
 DRYRUN_RE = re.compile(r"--dry[-_]?run|\bDRY_RUN=(1|true)\b", re.I)
 
 # Airtable base IDs are "app" + 14 chars and appear directly in the URL path.
@@ -725,7 +738,16 @@ def _segment_is_bulk_write(seg) -> bool:
     is actually part of. `echo --dry-run; curl -X POST …` was disabling the
     gate for the whole command line.
     """
-    url_toks = [t for t in seg if t.lower().startswith(("http://", "https://"))]
+    # curl accepts scheme-less URLs and sends the same request, so a token
+    # counts as a request URL if it carries a scheme OR is host-shaped for one
+    # of the gated systems. Quoted payloads stay excluded: a JSON token starts
+    # with '{', not a hostname.
+    url_toks = [
+        t for t in seg
+        if t.lower().startswith(("http://", "https://"))
+        or re.match(r"^(api\.airtable\.com|api\.hubapi\.com|track\.customer\.io"
+                    r"|api\.customer\.io)/", t, re.I)
+    ]
     if not url_toks:
         return False
     urls = " ".join(url_toks)

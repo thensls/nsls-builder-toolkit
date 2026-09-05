@@ -81,6 +81,8 @@ def make_repo(spec: dict) -> str:
     run("git", "init", "-q", ".")
     if spec.get("origin"):
         run("git", "remote", "add", "origin", spec["origin"])
+    for name, url in (spec.get("extra_remotes") or {}).items():
+        run("git", "remote", "add", name, url)
     (Path(d) / "README.md").write_text(spec.get("readme", "# scratch"))
     run("git", "add", "-A")
     run("git", "commit", "-qm", "init")
