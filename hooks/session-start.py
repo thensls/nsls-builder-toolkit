@@ -144,6 +144,68 @@ def _warn_if_frozen(plugin, plugin_dir, err):
     )
 
 
+def _git_out(plugin_dir, *args):
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(plugin_dir), *args],
+            capture_output=True, text=True, timeout=3,
+            stdin=subprocess.DEVNULL,
+        )
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def _warn_if_stale_by_configuration(plugin, plugin_dir):
+    """Catch the freeze that _warn_if_frozen structurally cannot see.
+
+    _warn_if_frozen only speaks when the pull FAILS. Two shapes of frozen
+    checkout produce a pull that does not fail, and both went unreported for
+    weeks on this machine:
+
+      1. **Tracking a feature branch.** The builder toolkit sat on
+         feat/builder-guardrails, whose upstream is that same branch on origin.
+         Every session pulled, every pull said "already up to date", and main
+         moved five commits ahead. Nothing was wrong with the pull; the pull was
+         aimed somewhere that never changes.
+      2. **A named branch with no upstream at all.** The personal toolkit sat on
+         feat/completion-sweep, nine commits BEHIND main with five of its own. A
+         bare pull exits non-zero with "no tracking information", which is not
+         in _FREEZE_SIGNS -- deliberately, so a pinned fork stays quiet -- and
+         so this said nothing either, forever.
+
+    A detached HEAD stays quiet: that is the deliberate pin the git_pull
+    docstring protects, and it is a different git state than a branch with
+    nowhere to pull from.
+
+    Costs no network. `git pull` fetches the whole remote by default, so
+    origin/main is already current by the time this runs, and everything here is
+    a local ref comparison.
+    """
+    branch = _git_out(plugin_dir, "rev-parse", "--abbrev-ref", "HEAD")
+    if not branch or branch == "HEAD":
+        return  # detached: pinned on purpose
+    behind = _git_out(plugin_dir, "rev-list", "--count", "HEAD..origin/main")
+    if not behind.isdigit() or int(behind) == 0:
+        return  # nothing on main this checkout is missing
+    has_upstream = bool(_git_out(plugin_dir, "rev-parse", "--abbrev-ref",
+                                "--symbolic-full-name", "@{u}"))
+    why = (f"it is on branch '{branch}', which tracks itself rather than main"
+           if has_upstream else
+           f"branch '{branch}' has no upstream, so there is nothing to pull from")
+    print(
+        f"WARNING - {plugin} is {behind} commit(s) behind main and NOT updating: "
+        f"{why}. The checkout at {plugin_dir} reports a clean pull every session "
+        f"while going stale, which is why this needs saying out loud. Tell the "
+        f"user at the first natural moment. The repair depends on what that "
+        f"branch is for: if the work on it is finished, merge or land it and put "
+        f"the checkout back on main; if it is still in progress, merging "
+        f"origin/main into it catches this checkout up without losing it. Do not "
+        f"switch branches on the user's behalf — a live plugin checkout is what "
+        f"their current session is running."
+    )
+
+
 def git_pull():
     """Pull latest changes for every toolkit in SYNC_PLUGINS.
 
@@ -195,6 +257,9 @@ def git_pull():
             )
             if r.returncode != 0:
                 _warn_if_frozen(plugin, plugin_dir, (r.stderr or "") + (r.stdout or ""))
+            # Runs whether the pull succeeded or not: a clean pull aimed at a
+            # branch that never moves is the freeze this catches.
+            _warn_if_stale_by_configuration(plugin, plugin_dir)
         except Exception:
             pass
 
@@ -874,6 +939,219 @@ def note_ping_failure(body):
         )
 
 
+def _http_probe(url, timeout=4, any_response=False):
+    """Probe url inside a TOTAL time budget. curl first, urllib with what's left.
+
+    any_response=False — True only on 2xx/3xx: "is this service healthy".
+    any_response=True  — True if the host answered AT ALL, error statuses
+    included: "is this machine online". api.github.com hands out unauthenticated
+    403s freely, and reading a 403 as "no internet" is exactly how a real
+    tracker outage could have stayed silent forever — the suppression branch
+    below only stays quiet when the control says we are offline.
+
+    Transport order and its reasoning are _http_post_json's: a stock Python can
+    carry a CA bundle that trusts nothing, so urllib alone would read a healthy
+    host as dead, and curl failing means "try the other transport".
+
+    The budget is TOTAL, not per transport. This runs on a path that may already
+    have spent ~70s on a replayed POST plus a live one against a 90s SessionStart
+    budget (install.sh), so two full-length probes would run the hook out of room.
+    """
+    deadline = time.monotonic() + timeout
+    if shutil.which("curl"):
+        args = ["curl", "-s", "--max-time", str(max(1, int(timeout))),
+                "-o", os.devnull, "-w", "%{http_code}", url]
+        if not any_response:
+            args.insert(1, "--fail")
+        try:
+            done = subprocess.run(args, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace",
+                                  timeout=timeout + 5)
+            if any_response:
+                code = (done.stdout or "").strip()
+                if code and code != "000":
+                    return True  # answered, whatever it said
+            elif done.returncode == 0:
+                return True
+        except Exception:
+            pass
+    left = deadline - time.monotonic()
+    if left < 1:
+        return False  # no headroom for a second transport; caller must not stall
+    try:
+        with urllib.request.urlopen(url, timeout=left) as resp:
+            return 200 <= getattr(resp, "status", 200) < 400
+    except urllib.error.HTTPError:
+        return any_response  # the host answered; the status is a health question
+    except Exception:
+        return False
+
+
+def _tracker_unreachable():
+    """Is the tracker actually gone, or was that one write just slow?
+
+    A /session-ping timeout is NOT evidence the tracker is unreachable.
+    Measured 2026-08-20 across 24h of Railway HTTP logs for the service:
+    293 pings, p50 9.0s, p90 22.2s, and 45 of them (15%) ran into the 35s
+    client ceiling and were logged 499 "client has closed the request" — while
+    the server went on to answer 200 and record the session. The slow part is
+    the announcement scan plus the Airtable writes, and concurrent session
+    starts queue behind each other, so opening three sessions at once is
+    enough to burn three pings inside six seconds.
+
+    GET / on the same host is a static health payload that answers in ~0.2s,
+    so it tells the two cases apart.
+    """
+    return not _http_probe(f"{PROXY_URL}/", timeout=4)
+
+
+def _internet_up():
+    """True if anything outside this machine answers — any status counts.
+
+    Without this, a laptop on a plane trips the "tracker is down" notice: the
+    tracker probe fails for the same reason every other request does.
+    api.github.com is the control because every builder already depends on
+    GitHub reachability for the toolkit to update at all.
+    """
+    return _http_probe("https://api.github.com/", timeout=3, any_response=True)
+
+
+def note_ping_failure(body):
+    """Stash a failed session-ping, and speak only when it means something.
+
+    Three rules, each of them paid for:
+
+    1. One failure per DAY, not per attempt. The old counter counted attempts,
+       so three sessions opened in the same minute read out as "your last 3
+       sessions" — which is exactly what fired the false alarm on 2026-08-20
+       (three 499s inside six seconds, server recorded all three, no points
+       lost, and it still told the builder to raise it in #builders).
+    2. Only speak when the builder is actually losing something. A slow write
+       is invisible to them: the payload replays at the next session start and
+       daily points dedupe per builder per day, so the day's credit lands from
+       whichever ping gets through.
+    3. Never go quiet while it IS broken. The old `failures == 3` fired once
+       and then never again for the life of an outage, which is the
+       silent-forever mode the original comment was trying to avoid. Both
+       notices below repeat once every 24h for as long as the condition holds.
+
+    Every value read back from the marker is treated as hostile. The file is
+    hand-editable, can be left half-written by a crash, and this function runs
+    inside session_ping()'s failure handler with nothing above it to catch a
+    raise — so a corrupt marker must not be what takes SessionStart down.
+    """
+    now = datetime.now(timezone.utc)
+    today = now.date().isoformat()
+
+    prior = None
+    try:
+        prior = json.loads(PING_FAIL_MARKER.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    if not isinstance(prior, dict):
+        prior = {}  # valid JSON is not the same as the shape we wrote
+
+    def is_day(value):
+        """A real YYYY-MM-DD, not merely a string. `["x","y"]` in a hand-edited
+        marker used to count toward the three-day threshold and fire the
+        missing-points notice after a single real failure."""
+        if not isinstance(value, str):
+            return False
+        try:
+            datetime.strptime(value, "%Y-%m-%d")
+        except ValueError:
+            return False
+        return True
+
+    raw_days = prior.get("failed_days")
+    days = ([d for d in raw_days if is_day(d)]
+            if isinstance(raw_days, list) else [])
+    if today not in days:
+        days.append(today)
+    days = sorted(set(days))[-14:]
+
+    try:
+        # Clamped: a negative value in the marker would hold `attempts >= 2`
+        # false through every future failure and silence Branch A for good.
+        attempts = max(0, int(prior.get("attempts", prior.get("failures", 0)) or 0)) + 1
+    except (TypeError, ValueError):
+        attempts = 1
+
+    last_notified = prior.get("last_notified_at")
+    if not isinstance(last_notified, str):
+        last_notified = None
+
+    def spoke_within_a_day():
+        if not last_notified:
+            return False
+        try:
+            when = datetime.fromisoformat(last_notified)
+        except (TypeError, ValueError):
+            return False
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        elapsed = (now - when).total_seconds()
+        if elapsed < 0:
+            return False  # clock rolled back, or hand-edited: don't let a
+            # timestamp from the future mute an outage for longer than a day
+        return elapsed < 86400
+
+    notice = None
+    # Probing costs a round trip, so only reach for it when a notice is in play.
+    if not spoke_within_a_day() and (attempts >= 2 or len(days) >= 3):
+        if _tracker_unreachable():
+            # Branch A — the host itself is gone. Two attempts, so one DNS
+            # hiccup stays quiet, and only when the rest of the internet
+            # answers.
+            if attempts >= 2 and _internet_up():
+                notice = (
+                    "The NSLS automation tracker can't be reached right now, "
+                    "so your builder points aren't recording. Your sessions "
+                    "are queued and replay on their own once it's back — "
+                    "nothing for you to fix. Say \"check the tracker\" if you "
+                    "want it looked "
+                    "into."
+                )
+        # Branch B — the host ANSWERS but the writes keep timing out. That is
+        # the only reading under which "too slow" is honest, which is why this
+        # hangs off the reachable branch rather than off falling through: three
+        # days offline used to land here and blame the tracker for a flight.
+        # Harmless for a day or two (see rule 2); past three separate days the
+        # daily dedupe is no longer covering it and credit is going missing.
+        elif len(days) >= 3:
+            notice = (
+                f"The NSLS automation tracker has been too slow to record "
+                f"your sessions on {len(days)} separate days, so some builder "
+                f"points are probably missing. Say \"check the tracker\" if "
+                f"you want it looked into."
+            )
+
+    if notice:
+        last_notified = now.isoformat()
+
+    try:
+        PING_FAIL_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        PING_FAIL_MARKER.write_text(
+            json.dumps({
+                "payload": body,
+                "attempted_at": now.isoformat(),
+                "attempts": attempts,
+                "failed_days": days,
+                "last_notified_at": last_notified,
+            }),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+    if notice:
+        print(
+            "[NSLS Builder Toolkit — surface the following to the user at the "
+            "start of your first reply, then proceed with their request:]\n\n"
+            + notice
+        )
+
+
 def session_ping(replayed=None):
     """Ping the automation tracker for points, PR credits, and announcements.
 
@@ -1001,11 +1279,75 @@ def session_ping(replayed=None):
         print(directive)
 
 
+def emit_guardrails_context():
+    """Print the Builder Guardrails section of the plugin's CLAUDE.md.
+
+    WHY THIS EXISTS. A plugin's root CLAUDE.md is not loaded into anyone's
+    session — plugin.json doesn't reference it, no hook injected it, and it
+    isn't on any path Claude Code reads as memory. It is documentation for
+    people browsing the repo. That was fine when the file held conventions,
+    and became a hole the moment it held the guardrail tiers: the four hard
+    gates fire (guardrail-gate.py is wired through hooks.json) but the entire
+    soft half — tiers, escalation triggers, the voice guide — reached Claude
+    only if a skill happened to trigger, which is description-matched, which
+    is the exact failure the hook exists to cover.
+
+    Found by the Phase 6 voice run, 2026-08-15. Stdout from a SessionStart
+    hook reaches Claude as context (same channel the announcement directive
+    below already uses), so printing the section is the whole fix.
+
+    Fails silent: a missing file, an unreadable one, or a renamed heading
+    prints nothing rather than breaking session start for every builder.
+    """
+    try:
+        text = (PLUGIN_DIR / "CLAUDE.md").read_text(errors="ignore")
+    except Exception:
+        return
+
+    start = text.find("## Builder Guardrails")
+    if start == -1:
+        return
+    nxt = text.find("\n## ", start + 1)
+    section = text[start:nxt if nxt != -1 else len(text)].strip()
+    if not section:
+        return
+
+    # The section ends by telling Claude to read the voice guide, but writes it
+    # as a repo-relative path. A builder's session has its own cwd
+    # (~/projects/whatever), so that path resolves to nothing and the guide --
+    # the half of this that governs *tone* -- silently never loads. Same failure
+    # as the section itself not loading, one level down. Resolve it against
+    # PLUGIN_DIR so the path is openable from wherever the builder is working.
+    voice_guide = PLUGIN_DIR / "_shared" / "references" / "guardrail-voice.md"
+    section = section.replace(
+        "`_shared/references/guardrail-voice.md`", f"`{voice_guide}`"
+    )
+
+    print(
+        "[NSLS Builder Toolkit — org guardrail policy, active this session]\n\n"
+        + section
+    )
+
+    # What this build has already refused. Without it, rule 6 ("take the first
+    # no gracefully, and remember it per BUILD") is unenforceable across
+    # sessions -- every new session re-raises guardrails the builder already
+    # declined, which is how a toolkit becomes nagware.
+    try:
+        out = subprocess.run(
+            [sys.executable, str(PLUGIN_DIR / "hooks" / "guardrail-memory.py"),
+             "list", "--cwd", os.getcwd()],
+            capture_output=True, text=True, timeout=3,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            print("\n" + out.stdout.strip())
+    except Exception:
+        pass  # no memory is the status quo, not a failure worth surfacing
 def main():
     git_pull()
     run_plugin_migration()
     ensure_plugin_fresh()
     sync_pointers()
+    emit_guardrails_context()
     replayed = replay_failed_ping()
     session_ping(replayed=replayed)
 
