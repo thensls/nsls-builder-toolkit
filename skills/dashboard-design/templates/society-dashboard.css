@@ -1,0 +1,152 @@
+/* Society dashboard starter tokens + primitives.
+   Source: skills/dashboard-design/references/society-visual-template.md
+   Values marked "approx" were sampled from the Society Admin pilot screenshots;
+   replace with exact tokens from the Society UI repo when available. */
+
+:root {
+  /* ground + ink */
+  --bg: #f7f5f0;            /* approx — warm cream page + sidebar */
+  --surface: #fdfcfa;       /* approx — card fill */
+  --surface-2: #efebe3;     /* approx — filled panels, table header, chips */
+  --line: #ded8cc;          /* hairlines only; NOT control borders (1.33:1) */
+  --ink: #1a1714;           /* approx — titles, hero numbers, black buttons */
+  --grey: #6b6460;          /* secondary text; 5.4:1 on white */
+  --grey-3: #a9a29a;        /* approx — disabled, inactive */
+
+  /* status — the only red/amber/green on the page */
+  --bad: #c8553d;           /* approx — terracotta */
+  --bad-bg: #f6e4df;        /* approx */
+  --watch: #d98e3a;         /* approx — amber */
+  --watch-bg: #f8ecdd;      /* approx */
+  --good: #8bc65a;          /* approx — leaf green; series-1 doubles as good */
+  --neutral-track: #e6e1d8; /* approx — unfilled progress, always grey */
+
+  /* series (≤ 4) */
+  --s1: #8bc65a;            /* approx */
+  --s2: #7b84e8;            /* approx — periwinkle */
+  --s3: #c8553d;            /* approx */
+  --s4: #d98e3a;            /* approx */
+
+  /* accents */
+  --accent-soft: #e9c7ec;   /* approx — lilac nav count badges */
+
+  /* type */
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* shape + space */
+  --r-card: 16px;
+  --r-panel: 20px;
+  --r-btn: 12px;
+  --gutter: 24px;
+  --band-gap: 32px;
+}
+
+html { color-scheme: light; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- type roles ---- */
+.eyebrow {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--grey);
+}
+.h1 { font-size: 42px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; margin: 4px 0 6px; }
+.subtitle { font-size: 17px; color: var(--grey); }
+.finding { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
+.label { font-size: 17px; font-weight: 600; }
+.mono { font-family: var(--font-mono); font-size: 14px; }
+.meta { font-family: var(--font-mono); font-size: 13px; color: var(--grey); }
+
+/* ---- layout ---- */
+.canvas { max-width: 1560px; margin: 0 auto; padding: 40px 48px; }
+.band { margin-top: var(--band-gap); }
+.grid { display: grid; gap: var(--gutter); grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.col-3 { grid-column: span 3; } .col-4 { grid-column: span 4; }
+.col-6 { grid-column: span 6; } .col-8 { grid-column: span 8; } .col-12 { grid-column: span 12; }
+@media (max-width: 1024px) { .col-3 { grid-column: span 6; } .col-4, .col-8 { grid-column: span 12; } }
+@media (max-width: 768px)  { .col-3, .col-6 { grid-column: span 12; } .canvas { padding: 24px 16px; } .h1 { font-size: 32px; } }
+
+/* ---- metric card ---- */
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-card); padding: 24px; min-width: 0;
+}
+.card.flagged { background: var(--bad-bg); border-color: var(--bad); }
+.card .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; background: var(--grey-3); }
+.hero { font-size: 38px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; margin: 14px 0 12px; }
+.hero .delta { font-size: 0.85em; margin-left: 6px; }
+.spark { display: block; width: 100%; height: 60px; }
+.card .row { display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+
+/* ---- chart panel ---- */
+.panel { background: var(--surface-2); border-radius: var(--r-panel); padding: 32px; min-width: 0; }
+.panel .legend { display: flex; gap: 20px; font-weight: 600; font-size: 15px; }
+.panel .legend .meta { margin-left: 6px; }
+.axis { font-family: var(--font-mono); font-size: 12px; fill: var(--grey); color: var(--grey); }
+.gridline { stroke: var(--line); stroke-dasharray: 2 4; }
+
+/* ---- pills + status ---- */
+.pill {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.02em; line-height: 1.4;
+}
+.pill.bad   { background: var(--bad);   color: #fff; }
+.pill.watch { background: var(--watch); color: #fff; }
+.pill.muted { background: var(--surface-2); color: var(--grey); }
+.pill.state { text-transform: uppercase; font-weight: 700; font-size: 11px; }
+.num.bad { color: var(--bad); font-weight: 600; } .num.watch { color: var(--watch); font-weight: 600; }
+
+/* mini progress bar: grey track, status fill */
+.bar { position: relative; width: 120px; height: 4px; border-radius: 2px; background: var(--neutral-track); display: inline-block; vertical-align: middle; margin-right: 10px; }
+.bar > i { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--grey-3); }
+.bar.bad > i { background: var(--bad); } .bar.watch > i { background: var(--watch); } .bar.good > i { background: var(--good); }
+
+/* ---- chips (filters) ---- */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px;
+  background: var(--surface-2); font-size: 15px; font-weight: 600;
+}
+.chip .v { font-weight: 400; }
+.chip.active { background: var(--ink); color: #fff; }
+.chip.bad { background: var(--bad-bg); color: var(--bad); }
+.chip.watch { background: var(--watch-bg); color: var(--watch); }
+.chip.add { background: transparent; border: 1px dashed var(--grey-3); color: var(--grey); font-weight: 500; }
+
+/* ---- buttons + dark bars ---- */
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border-radius: var(--r-btn); border: 0; font: 600 16px var(--font-ui); cursor: pointer; }
+.btn.primary { background: var(--ink); color: #fff; }
+.btn.ghost { background: var(--surface-2); color: var(--ink); }
+.btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.darkbar { background: var(--ink); color: #fff; border-radius: var(--r-card); padding: 20px 28px; display: flex; align-items: center; gap: 16px; }
+.darkbar .eyebrow, .darkbar .sub { color: var(--grey-3); }
+
+/* ---- table ---- */
+.table-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  background: var(--surface-2); text-align: left; padding: 18px 20px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.10em; text-transform: uppercase; color: var(--grey);
+}
+thead th.sorted { color: var(--ink); }
+tbody td { padding: 18px 20px; border-top: 1px solid var(--line); vertical-align: middle; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); }
+tr.inactive { opacity: 0.55; }
+
+/* ---- states ---- */
+.stale { color: var(--watch); font-family: var(--font-mono); font-size: 13px; }
+.nodata { color: var(--grey); font-family: var(--font-mono); font-size: 14px; }
+.skeleton { background: var(--surface-2); border-radius: 6px; min-height: 1em; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.55; } }
+
+/* reveal-on-hover without reflow */
+.reveal { visibility: hidden; } .row:hover .reveal, .card:hover .reveal { visibility: visible; }
