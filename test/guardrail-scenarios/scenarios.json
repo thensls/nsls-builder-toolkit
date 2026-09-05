@@ -652,6 +652,60 @@
       "input": {
         "command": "cd /nonexistent-dir-xyz; git push origin main"
       }
+    },
+    {
+      "id": "H70",
+      "expect": "allow",
+      "why": "heredoc bodies are data \u2014 a heredoc merely CONTAINING 'git push origin main' must not read as a push",
+      "tool": "Bash",
+      "repo": {
+        "origin": "https://github.com/bartholomew/mex-tools.git",
+        "readme": "# MEx tools \u2014 pulls member data from HubSpot into Airtable"
+      },
+      "input": {
+        "command": "cat > notes.md <<EOF\ngit push origin main\nEOF"
+      }
+    },
+    {
+      "id": "H71",
+      "expect": "block",
+      "why": "--git-dir/--work-tree name the repo the push actually targets; ignoring them walked an NSLS personal-repo push straight past gate 1",
+      "tool": "Bash",
+      "repo": {
+        "origin": "https://github.com/bartholomew/mex-tools.git",
+        "readme": "# MEx tools \u2014 pulls member data from HubSpot into Airtable"
+      },
+      "input": {
+        "command": "git --git-dir=./.git --work-tree=. push origin main"
+      }
+    },
+    {
+      "id": "H72",
+      "expect": "block",
+      "why": "an assignment prefix on cd (`MODE=prod cd /tmp`) must still register as a cd \u2014 but here the cd target doesn't exist, so the push is judged in the ORIGINAL repo",
+      "tool": "Bash",
+      "repo": {
+        "origin": "https://github.com/bartholomew/mex-tools.git",
+        "readme": "# MEx tools \u2014 pulls member data from HubSpot into Airtable"
+      },
+      "input": {
+        "command": "MODE=prod cd /nonexistent-xyz; git push origin main"
+      }
+    },
+    {
+      "id": "H73",
+      "expect": "allow",
+      "why": "a comment mentioning an off-platform import is a note, not an SDK choice",
+      "tool": "Write",
+      "tracker_stub": "empty",
+      "repo": {
+        "origin": "https://github.com/bartholomew/mex-tools.git",
+        "readme": "# MEx tools \u2014 pulls member data from HubSpot into Airtable"
+      },
+      "input": {
+        "file_path": "digest.py",
+        "content": "# TODO: migrate from openai import path later\nprint('hi')\n"
+      }
     }
   ],
   "voice": [

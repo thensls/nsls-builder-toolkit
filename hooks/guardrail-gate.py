@@ -315,7 +315,17 @@ def command_segments(cmd: str):
     # parse, and one failed line fails the whole command into the callers'
     # conservative whole-string fallback.
     segments = []
+    heredoc_end = None  # inside a heredoc: skip body lines until the delimiter
     for line in cmd.splitlines():
+        if heredoc_end is not None:
+            if line.strip() == heredoc_end:
+                heredoc_end = None
+            continue  # heredoc BODY is data — tokenizing it as commands made
+            # a heredoc that merely CONTAINED "git push origin main" block
+        m_here = re.search(r"<<-?\s*['\"]?(\w+)['\"]?", line)
+        if m_here:
+            heredoc_end = m_here.group(1)
+            line = line[:m_here.start()]  # the command part before << still counts
         if not line.strip():
             continue
         try:
@@ -335,37 +345,6 @@ def command_segments(cmd: str):
         if current:
             segments.append(current)
     return segments
-
-
-def walk_segments(cmd: str):
-    """Yield (effective_cwd, tokens) per segment, tracking `cd` between them.
-
-    effective_cwd is None until a cd is seen (meaning: the hook's own cwd).
-    Relative cd targets resolve against the previous effective cwd. `git -C
-    <dir> …` is handled by the caller, since it scopes one invocation only.
-    """
-    segs = command_segments(cmd)
-    if segs is None:
-        return None
-    out, cwd = [], None
-    for seg in segs:
-        if seg and seg[0] == "cd":
-            if len(seg) == 1:
-                cwd = str(Path.home())
-            else:
-                target = seg[1]
-                base = cwd or os.getcwd()
-                resolved = target if os.path.isabs(target) else os.path.normpath(
-                    os.path.join(base, target))
-                # A cd to a directory that doesn't exist FAILS in the shell —
-                # the next command runs in the OLD directory (`;`) or not at
-                # all (`&&`). Tracking the bogus target instead made
-                # repo_root("") come back empty and waved the push through.
-                if os.path.isdir(resolved):
-                    cwd = resolved
-            continue
-        out.append((cwd, seg))
-    return out
 
 
 _WRAPPERS = frozenset({"env", "command", "exec", "nohup", "nice", "time"})
@@ -393,6 +372,38 @@ def strip_wrappers(seg):
     return seg[i:]
 
 
+def walk_segments(cmd: str):
+    """Yield (effective_cwd, tokens) per segment, tracking `cd` between them.
+
+    effective_cwd is None until a cd is seen (meaning: the hook's own cwd).
+    Relative cd targets resolve against the previous effective cwd. `git -C
+    <dir> …` is handled by the caller, since it scopes one invocation only.
+    """
+    segs = command_segments(cmd)
+    if segs is None:
+        return None
+    out, cwd = [], None
+    for seg in segs:
+        seg = strip_wrappers(seg)  # `MODE=prod cd dir` is still a cd
+        if seg and seg[0] == "cd":
+            if len(seg) == 1:
+                cwd = str(Path.home())
+            else:
+                target = os.path.expanduser(seg[1])
+                base = cwd or os.getcwd()
+                resolved = target if os.path.isabs(target) else os.path.normpath(
+                    os.path.join(base, target))
+                # A cd to a directory that doesn't exist FAILS in the shell —
+                # the next command runs in the OLD directory (`;`) or not at
+                # all (`&&`). Tracking the bogus target instead made
+                # repo_root("") come back empty and waved the push through.
+                if os.path.isdir(resolved):
+                    cwd = resolved
+            continue
+        out.append((cwd, seg))
+    return out
+
+
 def _git_invocation(seg):
     """(is_git, effective_dir_flag, args_after_global_flags) for one segment."""
     seg = strip_wrappers(seg)
@@ -404,11 +415,25 @@ def _git_invocation(seg):
         if tok == "-C" and i + 1 < len(seg):
             gitdir = seg[i + 1]
             i += 2
+        elif tok.startswith("--work-tree="):
+            gitdir = tok.split("=", 1)[1]
+            i += 1
+        elif tok == "--work-tree" and i + 1 < len(seg):
+            gitdir = seg[i + 1]
+            i += 2
+        elif tok.startswith("--git-dir="):
+            # the repo is the .git dir's parent — pushing via --git-dir was a
+            # clean walk past a gate that only knew -C
+            gitdir = gitdir or os.path.dirname(tok.split("=", 1)[1].rstrip("/")) or "."
+            i += 1
+        elif tok == "--git-dir" and i + 1 < len(seg):
+            gitdir = gitdir or os.path.dirname(seg[i + 1].rstrip("/")) or "."
+            i += 2
         elif tok.startswith("-"):
             i += 1
         else:
             break
-    return True, gitdir, seg[i:]
+    return True, os.path.expanduser(gitdir) if gitdir else None, seg[i:]
 
 
 # ---------------------------------------------------------------- gate 1
@@ -804,6 +829,13 @@ def gate_off_platform(tool: str, ti: dict):
             or name.startswith(("readme", "changelog", "license", "contributing"))):
         return
     body = ti.get("content") or ti.get("new_string") or ""
+    # Drop comment lines before matching: "# migrate from openai import later"
+    # is a note, not an SDK. String literals stay matchable on purpose —
+    # imports inside strings are usually codegen writing real code.
+    body = "\n".join(
+        l for l in body.splitlines()
+        if not l.lstrip().startswith(("#", "//", "--", "*", "/*"))
+    )
     if not OFF_PLATFORM_RE.search(body):
         return
 
