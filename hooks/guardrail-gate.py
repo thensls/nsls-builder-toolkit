@@ -308,22 +308,32 @@ def command_segments(cmd: str):
     heredocs). Callers must then fall back to their old whole-string
     behaviour — degraded precision, never a crash.
     """
-    try:
-        lex = shlex.shlex(cmd, posix=True, punctuation_chars=";|&")
-        lex.whitespace_split = True
-        tokens = list(lex)
-    except ValueError:
-        return None
-    segments, current = [], []
-    for tok in tokens:
-        if tok and all(c in ";|&" for c in tok):
-            if current:
-                segments.append(current)
-                current = []
-        else:
-            current.append(tok)
-    if current:
-        segments.append(current)
+    # Newlines separate commands exactly like semicolons, but shlex eats them
+    # as whitespace — so a two-line command folded into ONE segment, and an
+    # `echo --dry-run` on line one excused the real write on line two.
+    # Tokenize per line; a quoted string that spans lines fails that line's
+    # parse, and one failed line fails the whole command into the callers'
+    # conservative whole-string fallback.
+    segments = []
+    for line in cmd.splitlines():
+        if not line.strip():
+            continue
+        try:
+            lex = shlex.shlex(line, posix=True, punctuation_chars=";|&")
+            lex.whitespace_split = True
+            tokens = list(lex)
+        except ValueError:
+            return None
+        current = []
+        for tok in tokens:
+            if tok and all(c in ";|&" for c in tok):
+                if current:
+                    segments.append(current)
+                    current = []
+            else:
+                current.append(tok)
+        if current:
+            segments.append(current)
     return segments
 
 
@@ -345,15 +355,47 @@ def walk_segments(cmd: str):
             else:
                 target = seg[1]
                 base = cwd or os.getcwd()
-                cwd = target if os.path.isabs(target) else os.path.normpath(
+                resolved = target if os.path.isabs(target) else os.path.normpath(
                     os.path.join(base, target))
+                # A cd to a directory that doesn't exist FAILS in the shell —
+                # the next command runs in the OLD directory (`;`) or not at
+                # all (`&&`). Tracking the bogus target instead made
+                # repo_root("") come back empty and waved the push through.
+                if os.path.isdir(resolved):
+                    cwd = resolved
             continue
         out.append((cwd, seg))
     return out
 
 
+_WRAPPERS = frozenset({"env", "command", "exec", "nohup", "nice", "time"})
+_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def strip_wrappers(seg):
+    """Drop leading VAR=… assignments and transparent wrappers.
+
+    `RAILWAY_TOKEN=$T railway up` and `command git push origin main` are the
+    same actions with the executable not at seg[0]; anchoring there let both
+    walk past the gates. `env -i` style flags after `env` are dropped too.
+    Fail-open by construction: stripping can only EXPOSE an executable to the
+    gates, never hide one.
+    """
+    i = 0
+    while i < len(seg) and _ASSIGN_RE.match(seg[i]):
+        i += 1
+    while i < len(seg) and seg[i] in _WRAPPERS:
+        i += 1
+        while i < len(seg) and seg[i].startswith("-"):
+            i += 1
+        while i < len(seg) and _ASSIGN_RE.match(seg[i]):
+            i += 1
+    return seg[i:]
+
+
 def _git_invocation(seg):
     """(is_git, effective_dir_flag, args_after_global_flags) for one segment."""
+    seg = strip_wrappers(seg)
     if not seg or seg[0] != "git":
         return False, None, []
     i, gitdir = 1, None
@@ -371,7 +413,10 @@ def _git_invocation(seg):
 
 # ---------------------------------------------------------------- gate 1
 
-PUSH_RE = re.compile(r"\bgit\s+push\b")
+# Loose on purpose: `git -C <dir> push` and `git -c k=v push` put options
+# between the words, and the old tight form returned before the tokenizer ever
+# saw them. Precision lives in _git_invocation; this only has to not miss.
+PUSH_RE = re.compile(r"\bgit\b[^|;&\n]*\bpush\b")
 # A push that publishes nothing isn't the moment we care about. Matched only
 # within the push invocation itself (not across ; | &&) so an unrelated later
 # command can't wave the gate through. Codex review 2026-08-15.
@@ -486,6 +531,7 @@ def gate_unregistered_ship(tool: str, ti: dict):
             # quoted token under echo — can never read as a deploy, and a
             # `railway --help` segment can't vouch for the real deploy after
             # the semicolon.
+            seg = strip_wrappers(seg)
             if not seg or seg[0] not in DEPLOY_BINARIES:
                 continue
             seg_str = " ".join(seg)
@@ -563,7 +609,14 @@ BULK_WRITE_RE = re.compile(
     r"(api\.hubapi\.com|track\.customer\.io|api\.customer\.io|api\.airtable\.com)",
     re.I,
 )
-WRITE_VERB_RE = re.compile(r"-X\s*(POST|PUT|PATCH|DELETE)\b", re.I)
+# -X, --request, and curl's data flags (which imply POST with no verb flag at
+# all) — the tight -X-only form let `--request DELETE` and `-d @rows.json`
+# bulk writes straight past the prefilter.
+WRITE_VERB_RE = re.compile(
+    r"(-X\s*|--request[\s=])(POST|PUT|PATCH|DELETE)\b"
+    r"|(^|\s)(-d|--data(-\w+)?|--json)([\s=]|$)",
+    re.I,
+)
 # The marker has to appear inside the URL, not anywhere in a compound command.
 # That's what makes "import" safe to keep: `.../customers/import` is a real bulk
 # endpoint, while `... && python import_data.py` sits outside any URL and no
@@ -661,6 +714,8 @@ def _segment_is_bulk_write(seg) -> bool:
         elif t in ("-X", "--request") and i + 1 < len(seg) and re.fullmatch(
                 r"POST|PUT|PATCH|DELETE", seg[i + 1], re.I):
             verb = True
+        elif re.fullmatch(r"-d|--data(-\w+)?|--json", t):
+            verb = True  # curl sends POST for data flags with no verb at all
     if not verb:
         return False
 
@@ -724,6 +779,7 @@ def gate_bulk_production_write(tool: str, ti: dict):
 
 OFF_PLATFORM_RE = re.compile(
     r"(from\s+openai\s+import|import\s+openai\b|require\(['\"]openai['\"]\)"
+    r"|import\s+(\{[^}]{0,120}\}\s+from\s+)?['\"]openai['\"]"
     r"|from\s+['\"]openai['\"]|api\.openai\.com"
     r"|generativelanguage\.googleapis\.com|from\s+mistralai|import\s+cohere\b)",
     re.I,

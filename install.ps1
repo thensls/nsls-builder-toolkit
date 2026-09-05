@@ -371,7 +371,7 @@ $pt += , @{ matcher = 'Skill'; hooks = @(@{ type = 'command'; command = $ptCmd; 
 # the hook — the gate fails open by absence, matching its own design rules.
 $gateCmd = 'py -3 "' + (Join-Path $ConfigDir 'local-plugins\nsls-builder-toolkit\hooks\guardrail-gate.py') + '"'
 $pt = @(Without-Matching $pt 'guardrail-gate.py')
-$pt += , @{ matcher = 'Bash|Write|Edit'; hooks = @(@{ type = 'command'; command = $gateCmd; timeout = 10; statusMessage = 'Checking builder guardrails...' }) }
+$pt += , @{ matcher = 'Bash|PowerShell|Write|Edit'; hooks = @(@{ type = 'command'; command = $gateCmd; timeout = 10; statusMessage = 'Checking builder guardrails...' }) }
 
 $cfg.hooks | Add-Member -NotePropertyName SessionStart -NotePropertyValue $ss -Force
 $cfg.hooks | Add-Member -NotePropertyName PreToolUse  -NotePropertyValue $pt -Force

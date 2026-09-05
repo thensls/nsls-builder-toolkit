@@ -207,11 +207,11 @@ GATE_MARKER = 'nsls-builder-toolkit/hooks/guardrail-gate.py'
 GATE_STATUS = 'Checking builder guardrails…'
 gate_entry = None
 for entry in pre_tool_use:
-    if entry.get('matcher') == 'Bash|Write|Edit':
+    if entry.get('matcher') == 'Bash|PowerShell|Write|Edit':
         gate_entry = entry
         break
 if gate_entry is None:
-    gate_entry = {'matcher': 'Bash|Write|Edit', 'hooks': []}
+    gate_entry = {'matcher': 'Bash|PowerShell|Write|Edit', 'hooks': []}
     pre_tool_use.append(gate_entry)
 gate_hooks = gate_entry.setdefault('hooks', [])
 if next((h for h in gate_hooks if GATE_MARKER in h.get('command', '')), None) is None:
