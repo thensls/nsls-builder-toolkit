@@ -144,6 +144,68 @@ def _warn_if_frozen(plugin, plugin_dir, err):
     )
 
 
+def _git_out(plugin_dir, *args):
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(plugin_dir), *args],
+            capture_output=True, text=True, timeout=3,
+            stdin=subprocess.DEVNULL,
+        )
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def _warn_if_stale_by_configuration(plugin, plugin_dir):
+    """Catch the freeze that _warn_if_frozen structurally cannot see.
+
+    _warn_if_frozen only speaks when the pull FAILS. Two shapes of frozen
+    checkout produce a pull that does not fail, and both went unreported for
+    weeks on this machine:
+
+      1. **Tracking a feature branch.** The builder toolkit sat on
+         feat/builder-guardrails, whose upstream is that same branch on origin.
+         Every session pulled, every pull said "already up to date", and main
+         moved five commits ahead. Nothing was wrong with the pull; the pull was
+         aimed somewhere that never changes.
+      2. **A named branch with no upstream at all.** The personal toolkit sat on
+         feat/completion-sweep, nine commits BEHIND main with five of its own. A
+         bare pull exits non-zero with "no tracking information", which is not
+         in _FREEZE_SIGNS -- deliberately, so a pinned fork stays quiet -- and
+         so this said nothing either, forever.
+
+    A detached HEAD stays quiet: that is the deliberate pin the git_pull
+    docstring protects, and it is a different git state than a branch with
+    nowhere to pull from.
+
+    Costs no network. `git pull` fetches the whole remote by default, so
+    origin/main is already current by the time this runs, and everything here is
+    a local ref comparison.
+    """
+    branch = _git_out(plugin_dir, "rev-parse", "--abbrev-ref", "HEAD")
+    if not branch or branch == "HEAD":
+        return  # detached: pinned on purpose
+    behind = _git_out(plugin_dir, "rev-list", "--count", "HEAD..origin/main")
+    if not behind.isdigit() or int(behind) == 0:
+        return  # nothing on main this checkout is missing
+    has_upstream = bool(_git_out(plugin_dir, "rev-parse", "--abbrev-ref",
+                                "--symbolic-full-name", "@{u}"))
+    why = (f"it is on branch '{branch}', which tracks itself rather than main"
+           if has_upstream else
+           f"branch '{branch}' has no upstream, so there is nothing to pull from")
+    print(
+        f"WARNING - {plugin} is {behind} commit(s) behind main and NOT updating: "
+        f"{why}. The checkout at {plugin_dir} reports a clean pull every session "
+        f"while going stale, which is why this needs saying out loud. Tell the "
+        f"user at the first natural moment. The repair depends on what that "
+        f"branch is for: if the work on it is finished, merge or land it and put "
+        f"the checkout back on main; if it is still in progress, merging "
+        f"origin/main into it catches this checkout up without losing it. Do not "
+        f"switch branches on the user's behalf — a live plugin checkout is what "
+        f"their current session is running."
+    )
+
+
 def git_pull():
     """Pull latest changes for every toolkit in SYNC_PLUGINS.
 
@@ -195,6 +257,9 @@ def git_pull():
             )
             if r.returncode != 0:
                 _warn_if_frozen(plugin, plugin_dir, (r.stderr or "") + (r.stdout or ""))
+            # Runs whether the pull succeeded or not: a clean pull aimed at a
+            # branch that never moves is the freeze this catches.
+            _warn_if_stale_by_configuration(plugin, plugin_dir)
         except Exception:
             pass
 
@@ -1001,11 +1066,83 @@ def session_ping(replayed=None):
         print(directive)
 
 
+def emit_guardrails_context():
+    """Print the Builder Guardrails section of the plugin's CLAUDE.md.
+
+    WHY THIS EXISTS. A plugin's root CLAUDE.md is not loaded into anyone's
+    session — plugin.json doesn't reference it, no hook injected it, and it
+    isn't on any path Claude Code reads as memory. It is documentation for
+    people browsing the repo. That was fine when the file held conventions,
+    and became a hole the moment it held the guardrail tiers: the four hard
+    gates fire (guardrail-gate.py is wired through hooks.json) but the entire
+    soft half — tiers, escalation triggers, the voice guide — reached Claude
+    only if a skill happened to trigger, which is description-matched, which
+    is the exact failure the hook exists to cover.
+
+    Found by the Phase 6 voice run, 2026-08-15. Stdout from a SessionStart
+    hook reaches Claude as context (same channel the announcement directive
+    below already uses), so printing the section is the whole fix.
+
+    Fails silent: a missing file, an unreadable one, or a renamed heading
+    prints nothing rather than breaking session start for every builder.
+    """
+    # Resolve from the RUNNING copy's own root, not the hardcoded
+    # local-plugins path: a marketplace or ${CLAUDE_PLUGIN_ROOT} install has no
+    # CONFIG_DIR/local-plugins checkout, so the hardcoded path silently emitted
+    # nothing and those machines got no guardrail policy at all. Legacy path
+    # kept as fallback for the settings-shim era, where this file runs from the
+    # clone.
+    own_root = Path(__file__).resolve().parent.parent
+    guardrail_root = own_root if (own_root / "CLAUDE.md").is_file() else PLUGIN_DIR
+    try:
+        text = (guardrail_root / "CLAUDE.md").read_text(errors="ignore")
+    except Exception:
+        return
+
+    start = text.find("## Builder Guardrails")
+    if start == -1:
+        return
+    nxt = text.find("\n## ", start + 1)
+    section = text[start:nxt if nxt != -1 else len(text)].strip()
+    if not section:
+        return
+
+    # The section ends by telling Claude to read the voice guide, but writes it
+    # as a repo-relative path. A builder's session has its own cwd
+    # (~/projects/whatever), so that path resolves to nothing and the guide --
+    # the half of this that governs *tone* -- silently never loads. Same failure
+    # as the section itself not loading, one level down. Resolve it against
+    # PLUGIN_DIR so the path is openable from wherever the builder is working.
+    voice_guide = guardrail_root / "_shared" / "references" / "guardrail-voice.md"
+    section = section.replace(
+        "`_shared/references/guardrail-voice.md`", f"`{voice_guide}`"
+    )
+
+    print(
+        "[NSLS Builder Toolkit — org guardrail policy, active this session]\n\n"
+        + section
+    )
+
+    # What this build has already refused. Without it, rule 6 ("take the first
+    # no gracefully, and remember it per BUILD") is unenforceable across
+    # sessions -- every new session re-raises guardrails the builder already
+    # declined, which is how a toolkit becomes nagware.
+    try:
+        out = subprocess.run(
+            [sys.executable, str(guardrail_root / "hooks" / "guardrail-memory.py"),
+             "list", "--cwd", os.getcwd()],
+            capture_output=True, text=True, timeout=3,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            print("\n" + out.stdout.strip())
+    except Exception:
+        pass  # no memory is the status quo, not a failure worth surfacing
 def main():
     git_pull()
     run_plugin_migration()
     ensure_plugin_fresh()
     sync_pointers()
+    emit_guardrails_context()
     replayed = replay_failed_ping()
     session_ping(replayed=replayed)
 
