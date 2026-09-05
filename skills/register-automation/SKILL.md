@@ -93,7 +93,10 @@ Ask the user only for fields you can't detect:
 ### Guardrail fields (set these alongside scope)
 
 `scope` doubles as the guardrail tier — `Personal` = Tier 1, `Department` =
-Tier 2, `Company-wide` = Tier 3. Four fields hang off it:
+Tier 2, `Company-wide` = Tier 3, and **both `Customer Facing` scopes
+(`Advisors`, `Members`) = Tier 3** — they exist in the tracker and are the most
+consequential builds there are; leaving them unmapped let member-facing work
+skip every Tier 3 requirement. Four fields hang off the tier:
 
 | Field | When to set |
 |---|---|
@@ -143,7 +146,7 @@ Straight after a successful registration, before presenting results:
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-event.py" registered \
-  "MEx Tools registered at Tier 2 — Claude raised it, builder registered the same session" \
+  "<automation name> registered at Tier <1|2|3> — <a guardrail raised it | volunteered>" \
   --automation "<repo or name>"
 ```
 
@@ -241,8 +244,12 @@ past `Idea`:
 | `Department` (Tier 2) | Light — 1-pager, 20–30 min | No. Strong suggestion; take the first no gracefully and log it. |
 | `Company-wide` (Tier 3) | Standard or Extensive | **Yes.** Registration must exist before code, and a reviewer must be assigned. |
 
-Run `/product-design` in Generate Mode to produce the doc, then write the URL to
-`Design Doc URL` and set `Review Status` to `Requested`.
+**Tier 2: offer, then honor the answer.** Suggest the 1-pager once; if they
+decline, record it (`guardrail-memory.py record design-doc`) and leave
+`Design Doc URL` empty and `Review Status` at `Not needed` — running
+`/product-design` anyway is exactly the soft-path violation the tier table
+forbids. **Tier 3: not optional.** Run `/product-design` in Generate Mode,
+write the URL to `Design Doc URL`, set `Review Status` to `Requested`.
 
 **Tier 3 hard gate.** A Company-wide or member-facing automation may not advance
 to a shipping stage without a tracker record and an assigned `Reviewer`. State

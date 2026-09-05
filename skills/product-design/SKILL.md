@@ -42,9 +42,12 @@ let them push back.
 
 | Depth | When | Time | Must contain |
 |---|---|---|---|
-| **Light** | Tier 2 (`Department`), or a Tier 1 build that escalated | 20–30 min | Purpose, who uses it, systems touched, ROI, effort, risks |
+| **Light** | Tier 2 (`Department`) with Small effort only, or a Tier 1 build that escalated | 20–30 min | Purpose, who uses it, systems touched, ROI, effort, risks |
 | **Standard** | Tier 2 with Medium/Large effort; Tier 3 internal-facing | 1–3 hrs | Light + stack components, data flow, success criteria, failure modes, rollout, reviewers |
-| **Extensive** | Tier 3 (`Company-wide`) member-facing, or central to org value | half day+ | Standard + UI/message mockups, edge cases, sandbox/allowlist, monitoring + rollback |
+| **Extensive** | Tier 3 (`Company-wide`) member-facing, **either `Customer Facing` scope (`Advisors`/`Members`)**, or central to org value | half day+ | Standard + UI/message mockups, edge cases, sandbox/allowlist, monitoring + rollback |
+
+The rows are exclusive top-down: the FIRST row a build matches from the bottom
+up wins, so Tier 2 Medium/Large is unambiguously Standard, never Light.
 
 Jenna's SSI design doc is the reference for **Extensive** — that's the bar when
 work is member-facing and central to the org.
@@ -52,7 +55,9 @@ work is member-facing and central to the org.
 **Tier 1 needs no design doc at all.** If the build is genuinely personal, say so
 and don't run this mode.
 
-At Light depth, answer questions 1, 2, 5 and 6 below and skip the rest — a
+At Light depth, answer questions 1, 2, 5 and 6 below — and capture **systems
+touched, ROI, effort, and risks** explicitly, since the depth table marks them
+mandatory and none of those four questions asks for them. Skip the rest — a
 1-pager that actually gets written beats a template that doesn't.
 
 ### Then — the conversation
