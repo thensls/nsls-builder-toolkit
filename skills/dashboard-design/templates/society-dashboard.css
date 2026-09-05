@@ -8,9 +8,9 @@
   --bg: #f7f5f0;            /* approx — warm cream page + sidebar */
   --surface: #fdfcfa;       /* approx — card fill */
   --surface-2: #efebe3;     /* approx — filled panels, table header, chips */
-  --line: #ded8cc;          /* hairlines only; NOT control borders (1.33:1) */
+  --line: #ded8cc;          /* hairlines only; NOT control borders (1.4:1 on white, 1.3:1 on cream) */
   --ink: #1a1714;           /* approx — titles, hero numbers, black buttons */
-  --grey: #6b6460;          /* secondary text; 5.4:1 on white */
+  --grey: #6b6460;          /* secondary text; 5.8:1 on white, 5.3:1 on cream */
   --grey-3: #a9a29a;        /* approx — disabled, inactive */
 
   /* status — the only red/amber/green on the page.
@@ -71,13 +71,15 @@ body {
 .meta { font-family: var(--font-mono); font-size: 13px; color: var(--grey); }
 
 /* ---- layout ---- */
-.canvas { max-width: 1560px; margin: 0 auto; padding: 40px 48px; }
+.canvas { box-sizing: border-box; max-width: 1440px; margin: 0 auto; padding: 40px 48px; }
 .band { margin-top: var(--band-gap); }
 .grid { display: grid; gap: var(--gutter); grid-template-columns: repeat(12, minmax(0, 1fr)); }
 .col-3 { grid-column: span 3; } .col-4 { grid-column: span 4; }
 .col-6 { grid-column: span 6; } .col-8 { grid-column: span 8; } .col-12 { grid-column: span 12; }
-@media (max-width: 1024px) { .col-3 { grid-column: span 6; } .col-4, .col-8 { grid-column: span 12; } }
-@media (max-width: 768px)  { .col-3, .col-6 { grid-column: span 12; } .canvas { padding: 24px 16px; } .h1 { font-size: 32px; } }
+/* matches references/layout-patterns.md: 4 cards / 2 charts at ≥1024; 2 cards / 1 chart at 768; 1 column at ≤480 */
+@media (max-width: 1024px) { .grid { gap: 20px; } .col-4, .col-8 { grid-column: span 12; } }
+@media (max-width: 768px)  { .col-3 { grid-column: span 6; } .col-6 { grid-column: span 12; } .canvas { padding: 24px 16px; } .h1 { font-size: 32px; } }
+@media (max-width: 480px)  { .col-3 { grid-column: span 12; } }
 
 /* ---- metric card ---- */
 .card {

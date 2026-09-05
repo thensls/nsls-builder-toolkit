@@ -53,7 +53,7 @@ Rules that make it read as Society:
 | `--surface-2` | ≈ `#EFEBE3` | Filled panels (chart card), table header row, filter chips, active nav, date picker |
 | `--line` | `#DED8CC` | Hairlines: card edges, table row rules, nav section rules. **Not** for control borders (fails 3:1) |
 | `--ink` | ≈ `#1A1714` | Titles, hero values, primary text, black buttons and bars |
-| `--grey` | `#6B6460` | Secondary text, eyebrows, meta, table headers, icon strokes; passes 5.4:1 on white |
+| `--grey` | `#6B6460` | Secondary text, eyebrows, meta, table headers, icon strokes; passes 5.8:1 on white, 5.3:1 on cream |
 | `--grey-3` | ≈ `#A9A29A` | Disabled nav, "coming soon", inactive rows |
 
 ### Status (the only place red/amber/green appear)
@@ -155,7 +155,7 @@ caps with hairline rules; `Settings` and `Sign Out` pinned bottom.
 
 - Grid gutter 24 px; card radius 16 px; panel radius 20 px; pill radius full; button radius 12 px.
 - One shadow policy: none. Depth comes from `--surface` on `--bg` and the hairline.
-- Content max-width ~1560 px inside the canvas; header block 120 px (eyebrow + H1 + subtitle) with the primary action right-aligned at the H1's vertical center.
+- Content max-width 1440 px including padding (`box-sizing: border-box`); header block 120 px (eyebrow + H1 + subtitle) with the primary action right-aligned at the H1's vertical center.
 - Empty ground between bands: 32 px. Between cards: 24 px.
 
 ## Do not

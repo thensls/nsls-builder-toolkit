@@ -34,7 +34,7 @@ shared Society design language used on gary.nsls.org and ignite-next.
 
 ## NSLS-specific lessons folded in
 
-- Reveal with `visibility`, not `display`; global `nowrap` in flex children; pale brand line fails 1.4.11 at 1.33:1; per-page `<title>` because execs print — from the gary.nsls.org build (Aug 2026)
+- Reveal with `visibility`, not `display`; global `nowrap` in flex children; pale brand line fails 1.4.11 at about 1.4:1; per-page `<title>` because execs print — from the gary.nsls.org build (Aug 2026)
 - "Silent failure is the recurring bug": a missing value rendered as `0` or a blank, a stale number shown as live, a carry-forward with no label — every one has produced a wrong decision somewhere in the org. Hence the four required states and the no-fabrication rule
 - `/squad-dashboard`'s pull-and-confirm gate: fail loud and keep the last confirmed value; never interpolate
 - Brand palettes and type: `/ux-audit` `references/brand-nsls.md`, `references/brand-society.md`

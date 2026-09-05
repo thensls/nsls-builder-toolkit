@@ -18,8 +18,8 @@ saw> · <fix>`.
 
 | # | Check |
 |---|---|
-| B1 | Someone who did not build it, shown the page for 5 s, can say whether things are on track |
-| B2 | …and can say which single tile needs attention (or that none does) |
+| B1 | Someone who did not build it, shown the page for 5 s, can answer the type's question — strategic: are we on track; operational: what needs attention; analytical: what question this page answers and where to start |
+| B2 | Strategic/operational only: …and can name which single tile needs attention (or that none does) |
 | B3 | The eye lands on the headline band first; nothing above or beside it competes (no hero image, no oversized filter bar, no logo wall) |
 
 Protocol: give a fresh subagent (or a colleague) a screenshot for five seconds
@@ -29,8 +29,8 @@ of reading, then ask B1 and B2 without the image. Record their verbatim answer.
 
 | # | Check |
 |---|---|
-| C1 | ≤ 6 tiles in the headline band |
-| C2 | Every headline value has a comparison: target, prior period, or normal range |
+| C1 | ≤ 6 tiles in the headline band, or the brief names an operational pattern that allows more (KPI grid 2×4, monitoring wall) and every tile is a flagged status |
+| C2 | Every headline value has a comparison: target, alert threshold, prior period, or normal range |
 | C3 | Targets and alert thresholds are not confused (a "goal" label is a goal, not a trigger) |
 | C4 | No metric appears as three tiles for three time frames; one card, cadence-matched hero |
 | C5 | No bare percent-change is colored good/bad without a target or range behind it |
@@ -137,7 +137,7 @@ P0 failures (block):
 
 P1 failures:
 - E2 · Gauge for YTD progress · bullet bar
-- F5 · Border #ded8cc on white = 1.33:1 · use #6b6460 (5.42:1)
+- F5 · Border #ded8cc on white = 1.42:1 · use #6b6460 (5.81:1)
 
 Passed: A1–A4, B1–B3, …
 Five-second answers (verbatim): "<…>"

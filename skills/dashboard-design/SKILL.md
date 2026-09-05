@@ -101,8 +101,8 @@ Detail if someone looks it up here. The spec names the home for every Cut
 metric so the squad can contest it.
 
 **Every headline metric carries a comparison.** A bare number is not a status.
-The comparison is one of: target/goal, prior period, or a normal range. Rules
-from Desbarats worth adopting verbatim:
+The comparison is one of: target/goal, alert threshold, prior period, or a
+normal range. Rules from Desbarats worth adopting verbatim:
 
 - A **target** (where we want to be) is not an **alert threshold** (when a human must act). Show the right one for the type: strategic → target; operational → threshold.
 - **Percent change vs last period, alone, is noise.** 1,710 → 1,842 is +7.7%, but is that normal week-to-week wobble or a real move? Prefer "vs goal pace" or "vs 12-week range" and reserve the delta as secondary context.
@@ -193,7 +193,7 @@ need.
 
 - Grey is the default. Color is spent, not sprinkled. The unfilled part of a progress bar is grey, not red; red is reserved for a status that fails its threshold.
 - Colorblind-safe: never red vs green as the only cue; test with a simulator.
-- Contrast: text 4.5:1, UI borders and status marks 3:1 (WCAG 1.4.11). **Measure it; do not eyeball it** — a pale brand line that looks fine has failed at 1.33:1 on an NSLS surface.
+- Contrast: text 4.5:1, UI borders and status marks 3:1 (WCAG 1.4.11). **Measure it; do not eyeball it** — a pale brand line that looks fine measures about 1.4:1 on white (1.3:1 on cream) on an NSLS surface.
 - Palette source: confirm the brand first.
   - **Society** (most staff/admin dashboards): follow `references/society-visual-template.md` — cream ground, near-black ink, hairlines, Inter + monospace for data, terracotta/amber/green status. Start from `templates/society-dashboard.css`.
   - **NSLS** (institutional, chapter- or partner-facing): Academic Blue `#18315A`, one secondary accent per artwork. Tokens in `/ux-audit`'s `references/brand-nsls.md`.
@@ -244,8 +244,11 @@ Keep the last confirmed value and say it is last-confirmed.
 Run `references/review-checklist.md`. The two tests that catch the most:
 
 **Five-second test.** Show the page to someone who did not build it for five
-seconds, hide it, ask: "Are we on track? What needs attention?" If they cannot
-answer both, the headline band is wrong. Do this with a real person once; do
+seconds, hide it, and ask the question the type owes an answer to. Strategic:
+"Are we on track?" Operational: "What needs attention?" Analytical: "What
+question does this page answer, and where would you start?" If they cannot
+answer, the headline band (or, for analytical pages, the title and filter
+row) is wrong. Do this with a real person once; do
 it with a fresh subagent every iteration.
 
 **Reflow and measure.** Test every page (not just the one that changed) at
@@ -299,7 +302,7 @@ first and feed the brief in.
 
 ## Red flags — STOP and go back to step 1
 
-- More than 6 tiles in the top band, or a second row of "small" tiles under it
+- More than 6 tiles in the top band, or a second row of "small" tiles under it — unless the brief names an operational pattern that allows more (KPI grid 2×4 for 7–8 metrics; monitoring wall for status scanning) and every tile is a flagged status, not a number to read
 - The same metric on more than one headline card (weekly / MTD / YTD)
 - A headline number with no target, prior, or range next to it
 - A green or red delta with no target or normal range behind it
