@@ -364,6 +364,15 @@ $ss += , @{ matcher = 'startup'; hooks = @(@{ type = 'command'; command = $ssCmd
 $pt = @(Without-Matching $cfg.hooks.PreToolUse 'skill-event.ps1')
 $pt += , @{ matcher = 'Skill'; hooks = @(@{ type = 'command'; command = $ptCmd; timeout = 5; statusMessage = 'Logging skill use so you get NSLS credit (nothing else)...' }) }
 
+# Guardrail gate — same registration reasoning as the skill-event hook: bundled
+# plugin hooks don't reliably load, so without this the four hard gates never
+# run. The gate is Python (shared with macOS); `py -3` is the Windows launcher
+# the toolkit already provisions. A machine with no Python simply never runs
+# the hook — the gate fails open by absence, matching its own design rules.
+$gateCmd = 'py -3 "' + (Join-Path $ConfigDir 'local-plugins\nsls-builder-toolkit\hooks\guardrail-gate.py') + '"'
+$pt = @(Without-Matching $pt 'guardrail-gate.py')
+$pt += , @{ matcher = 'Bash|Write|Edit'; hooks = @(@{ type = 'command'; command = $gateCmd; timeout = 10; statusMessage = 'Checking builder guardrails...' }) }
+
 $cfg.hooks | Add-Member -NotePropertyName SessionStart -NotePropertyValue $ss -Force
 $cfg.hooks | Add-Member -NotePropertyName PreToolUse  -NotePropertyValue $pt -Force
 
