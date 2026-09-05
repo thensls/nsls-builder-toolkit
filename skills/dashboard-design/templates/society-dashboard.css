@@ -13,19 +13,24 @@
   --grey: #6b6460;          /* secondary text; 5.4:1 on white */
   --grey-3: #a9a29a;        /* approx — disabled, inactive */
 
-  /* status — the only red/amber/green on the page */
-  --bad: #c8553d;           /* approx — terracotta */
+  /* status — the only red/amber/green on the page.
+     Two tokens per status: -text for text and pill backgrounds (≥ 4.5:1 on cream/white),
+     plain for marks — bars, lines, dots, chips' dots (≥ 3:1 on cream, WCAG 1.4.11). */
+  --bad: #c8553d;           /* approx — terracotta mark, 4.0:1 on cream */
+  --bad-text: #9a3823;      /* 6.5:1 on cream; white text on it 7.1:1 */
   --bad-bg: #f6e4df;        /* approx */
-  --watch: #d98e3a;         /* approx — amber */
+  --watch: #b06a18;         /* amber mark, ≥ 3:1 on cream */
+  --watch-text: #7f4d12;    /* 6.5:1 on cream; white text on it 7.1:1 */
   --watch-bg: #f8ecdd;      /* approx */
-  --good: #8bc65a;          /* approx — leaf green; series-1 doubles as good */
+  --good: #579630;          /* leaf-green mark, 3.3:1 on cream; series-1 doubles as good */
+  --good-text: #3a7327;     /* 5.3:1 on cream */
   --neutral-track: #e6e1d8; /* approx — unfilled progress, always grey */
 
-  /* series (≤ 4) */
-  --s1: #8bc65a;            /* approx */
-  --s2: #7b84e8;            /* approx — periwinkle */
-  --s3: #c8553d;            /* approx */
-  --s4: #d98e3a;            /* approx */
+  /* series (≤ 4) — marks only, never text */
+  --s1: #579630;            /* green */
+  --s2: #7b84e8;            /* approx — periwinkle, 3.1:1 on cream */
+  --s3: #c8553d;            /* terracotta */
+  --s4: #b06a18;            /* amber */
 
   /* accents */
   --accent-soft: #e9c7ec;   /* approx — lilac nav count badges */
@@ -99,11 +104,12 @@ body {
   display: inline-block; padding: 3px 10px; border-radius: 999px;
   font-size: 12px; font-weight: 600; letter-spacing: 0.02em; line-height: 1.4;
 }
-.pill.bad   { background: var(--bad);   color: #fff; }
-.pill.watch { background: var(--watch); color: #fff; }
+.pill.bad   { background: var(--bad-text);   color: #fff; }
+.pill.watch { background: var(--watch-text); color: #fff; }
 .pill.muted { background: var(--surface-2); color: var(--grey); }
 .pill.state { text-transform: uppercase; font-weight: 700; font-size: 11px; }
-.num.bad { color: var(--bad); font-weight: 600; } .num.watch { color: var(--watch); font-weight: 600; }
+.num.bad { color: var(--bad-text); font-weight: 600; } .num.watch { color: var(--watch-text); font-weight: 600; }
+.num.good { color: var(--good-text); font-weight: 600; }
 
 /* mini progress bar: grey track, status fill */
 .bar { position: relative; width: 120px; height: 4px; border-radius: 2px; background: var(--neutral-track); display: inline-block; vertical-align: middle; margin-right: 10px; }
@@ -117,9 +123,9 @@ body {
 }
 .chip .v { font-weight: 400; }
 .chip.active { background: var(--ink); color: #fff; }
-.chip.bad { background: var(--bad-bg); color: var(--bad); }
-.chip.watch { background: var(--watch-bg); color: var(--watch); }
-.chip.add { background: transparent; border: 1px dashed var(--grey-3); color: var(--grey); font-weight: 500; }
+.chip.bad { background: var(--bad-bg); color: var(--bad-text); }
+.chip.watch { background: var(--watch-bg); color: var(--watch-text); }
+.chip.add { background: transparent; border: 1px dashed var(--grey); color: var(--grey); font-weight: 500; }
 
 /* ---- buttons + dark bars ---- */
 .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border-radius: var(--r-btn); border: 0; font: 600 16px var(--font-ui); cursor: pointer; }
@@ -143,10 +149,12 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); }
 tr.inactive { opacity: 0.55; }
 
 /* ---- states ---- */
-.stale { color: var(--watch); font-family: var(--font-mono); font-size: 13px; }
+.stale { color: var(--watch-text); font-family: var(--font-mono); font-size: 13px; }
 .nodata { color: var(--grey); font-family: var(--font-mono); font-size: 14px; }
 .skeleton { background: var(--surface-2); border-radius: 6px; min-height: 1em; animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.55; } }
 
-/* reveal-on-hover without reflow */
-.reveal { visibility: hidden; } .row:hover .reveal, .card:hover .reveal { visibility: visible; }
+/* reveal-on-hover without reflow; focus-within keeps controls reachable by keyboard */
+.reveal { visibility: hidden; }
+.row:hover .reveal, .card:hover .reveal,
+.row:focus-within .reveal, .card:focus-within .reveal { visibility: visible; }

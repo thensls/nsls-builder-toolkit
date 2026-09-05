@@ -250,8 +250,9 @@ it with a fresh subagent every iteration.
 
 **Reflow and measure.** Test every page (not just the one that changed) at
 320 / 375 / 768 / 1024 / 1280. Reveal elements with `visibility`, not
-`display`, so hover states do not reflow the grid. Give each page its own
-`<title>`; execs print these.
+`display`, so hover states do not reflow the grid, and restore visibility on
+`:focus-within` as well as `:hover` so keyboard users can reach the control.
+Give each page its own `<title>`; execs print these.
 
 ## Hierarchy — where this sits
 

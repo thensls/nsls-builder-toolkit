@@ -58,14 +58,24 @@ Rules that make it read as Society:
 
 ### Status (the only place red/amber/green appear)
 
-| Token | Value | Meaning | Where seen |
-|---|---|---|---|
-| `--bad` | ≈ `#C8553D` (terracotta) | Failing threshold, needs help | `4 no-shows` pill, `NEEDS HELP`, attendance < 40 % bar, Cohort C line, red `4` count, `Today` badge |
-| `--bad-bg` | ≈ `#F6E4DF` | Tint for a flagged card or chip | Cohort C card, `Attendance · < 50%` chip |
-| `--watch` | ≈ `#D98E3A` (amber) | Approaching threshold | `3 no-shows` pill, 40–50 % bars, `No-shows · 3+` chip |
-| `--watch-bg` | ≈ `#F8ECDD` | Tint for a watch chip | |
-| `--good` | ≈ `#8BC65A` (leaf green) | On track / improving | Cohort A line and sparkline only — never on a neutral element |
-| `--neutral-track` | ≈ `#E6E1D8` | Unfilled part of any progress bar | Grey, never red |
+Each status has two tokens. The **mark** token colors bars, lines, dots, and
+sparklines and must clear 3:1 on the cream ground (WCAG 1.4.11). The
+**-text** token colors words, counts, and pill backgrounds and must clear
+4.5:1 (WCAG 1.4.3). The screenshot hues are the mark family; using them for
+text fails contrast (amber 2.5:1, green 1.9:1), so the text tokens are darker
+by design.
+
+| Token | Value | Contrast on cream | Meaning | Where seen |
+|---|---|---|---|---|
+| `--bad` | ≈ `#C8553D` (terracotta mark) | 4.0:1 | Failing threshold | attendance < 40 % bar fill, Cohort C line, chip dot |
+| `--bad-text` | `#9A3823` | 6.5:1 (white on it 7.1:1) | Same, as text or pill | `4 no-shows` pill, `NEEDS HELP`, red `4` count, `Today` badge |
+| `--bad-bg` | ≈ `#F6E4DF` | — | Tint for a flagged card or chip | Cohort C card, `Attendance · < 50%` chip |
+| `--watch` | `#B06A18` (amber mark) | ≥ 3:1 | Approaching threshold | 40–50 % bar fill, Cohort D line, chip dot |
+| `--watch-text` | `#7F4D12` | 6.5:1 (white on it 7.1:1) | Same, as text or pill | `3 no-shows` pill, amber `3` count |
+| `--watch-bg` | ≈ `#F8ECDD` | — | Tint for a watch chip | |
+| `--good` | `#579630` (leaf-green mark) | 3.3:1 | On track / improving | Cohort A line and sparkline only — never on a neutral element |
+| `--good-text` | `#3A7327` | 5.3:1 | Same, as a verdict word | `Ahead of pace` |
+| `--neutral-track` | ≈ `#E6E1D8` | — | Unfilled part of any progress bar | Grey, never red |
 
 Status rules, as seen on the reference screens:
 - A **flagged row or card gets three cues at once**: the pill (`NEEDS HELP`), the tinted background, and the colored number. Never color alone.
@@ -77,10 +87,14 @@ Status rules, as seen on the reference screens:
 
 | Token | Value | Note |
 |---|---|---|
-| `--s1` | ≈ `#8BC65A` green | Doubles as `--good` when the series is the one doing well |
-| `--s2` | ≈ `#7B84E8` periwinkle | |
+| `--s1` | `#579630` green | Doubles as `--good` when the series is the one doing well |
+| `--s2` | ≈ `#7B84E8` periwinkle | 3.1:1 on cream |
 | `--s3` | ≈ `#C8553D` terracotta | Doubles as `--bad` when that series is the problem |
-| `--s4` | ≈ `#D98E3A` amber | |
+| `--s4` | `#B06A18` amber | |
+
+Series tokens are marks only (lines, dots, sparklines, legend dots). Legend
+labels and values stay in `--ink` / `--grey`; never set text in a series
+color.
 
 Series color appears in exactly four places for one entity: the legend dot,
 the line, the card's leading dot, and the card's sparkline. Nothing else on

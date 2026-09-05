@@ -52,7 +52,7 @@ Phone-first ............................... 12
 | 320 | 1 | 1 | No horizontal scroll anywhere except inside a table's own container |
 
 - Test **every** page at all five widths, not just the one you touched. A shared stylesheet change reflows pages you did not open.
-- Reveal-on-hover elements use `visibility`, never `display`; a pencil icon appearing mid-sentence reflows the whole grid.
+- Reveal-on-hover elements use `visibility`, never `display`; a pencil icon appearing mid-sentence reflows the whole grid. Restore visibility on `:focus-within` as well as `:hover`, or keyboard users cannot reach the control.
 - Flex children that hold long text need `min-width: 0` and `white-space: normal`; a global `nowrap` will push the page wider at every breakpoint.
 - Wide tables scroll inside their own `overflow-x: auto` container; the page body never scrolls horizontally.
 - Each page gets its own `<title>`; readers print dashboards and the title becomes the printout header.

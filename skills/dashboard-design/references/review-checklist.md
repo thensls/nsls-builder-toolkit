@@ -133,7 +133,7 @@ Type: <operational|strategic|analytical>  Reader: <role>  Brand: <NSLS|Society>
 
 P0 failures (block):
 - C1 · 9 tiles in the headline band · demote refund rate, AOV, NPS, tickets, visitors to Detail/Cut
-- H3 · Revenue card renders "$0" when the Sheet range is empty · show "No data · source unreachable"
+- H3 · Revenue card renders "$0" when the Sheet range returns no rows · show "No data · no rows in range" (reserve "source unreachable" for a failed fetch)
 
 P1 failures:
 - E2 · Gauge for YTD progress · bullet bar
