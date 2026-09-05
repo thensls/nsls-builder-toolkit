@@ -471,6 +471,12 @@ def gate_personal_repo(tool: str, ti: dict):
                     continue  # `echo 'git push …'` is one quoted token, not git
                 if any(a in ("--dry-run", "--help", "-n") for a in args):
                     continue  # harmless — but only for THIS segment
+                # A relative -C/--work-tree resolves against the shell's
+                # tracked cd, not the hook's own directory — `cd /x && git -C
+                # service push` targets /x/service.
+                if gitdir and not os.path.isabs(gitdir):
+                    gitdir = os.path.normpath(
+                        os.path.join(seg_cwd or os.getcwd(), gitdir))
                 found, push_cwd = True, (gitdir or seg_cwd)
                 # `git push <remote> …` names its destination; a second remote
                 # pointing at a personal account slipped past a check that only
