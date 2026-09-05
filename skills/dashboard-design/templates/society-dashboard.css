@@ -136,7 +136,9 @@ body {
 .btn.primary { background: var(--ink); color: #fff; }
 .btn.ghost { background: var(--surface-2); color: var(--ink); }
 .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.darkbar { background: var(--ink); color: #fff; border-radius: var(--r-card); padding: 20px 28px; display: flex; align-items: center; gap: 16px; }
+.darkbar { background: var(--ink); color: #fff; border-radius: var(--r-card); padding: 20px 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.darkbar > * { min-width: 0; overflow-wrap: anywhere; }
+.darkbar .grow { flex: 1 1 240px; }
 .darkbar .eyebrow, .darkbar .sub { color: var(--grey-3); }
 
 /* ---- table ---- */

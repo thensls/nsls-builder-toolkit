@@ -133,8 +133,9 @@ opacity, which pushes text below 4.5:1).
 
 **Filter chips** — pill, `--surface-2`, 600 label `·` 400 value `⌄`. Active
 chip inverts to `--ink` with white text and `×`. Status chips tint
-(`--bad-bg` + `--bad` dot + `--bad` text). "Add filter" is a dashed `--line`
-pill. Chips sit on one row; more than fits → sidebar filters.
+(`--bad-bg` + `--bad` dot + `--bad-text` text). "Add filter" is a dashed
+pill with a `--grey` border (`--line` is below 3:1 and is not allowed on
+controls). Chips sit on one row; more than fits → sidebar filters.
 
 **Bulk-action bar** — full-width `--ink` bar, radius 12 px, white 600 text,
 white icons, selection count left, actions center, `Clear selection` right in
