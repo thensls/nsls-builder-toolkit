@@ -73,8 +73,11 @@ def build_key(cwd):
     if not root:
         return None
     remote = git(["remote", "get-url", "origin"], root)
-    m = re.search(r"[:/]([^/:]+/[^/]+?)(?:\.git)?$", remote) if remote else None
-    return m.group(1).lower() if m else root
+    # Host included: a slug-only key made acme/service on two different hosts
+    # the same build, so one repo's decline silenced the other's guardrails.
+    m = (re.search(r"(?:@|://)([^/:@]+)[:/]([^/:]+/[^/]+?)(?:\.git)?/?$", remote)
+         if remote else None)
+    return f"{m.group(1).lower()}/{m.group(2).lower()}" if m else root
 
 
 def load():
@@ -87,11 +90,37 @@ def load():
 def save(data):
     try:
         STORE.parent.mkdir(parents=True, exist_ok=True)
-        tmp = STORE.with_suffix(".tmp")
+        # Per-process tmp name: two concurrent `record`s sharing one .tmp could
+        # interleave a write and a rename and publish a torn file.
+        tmp = STORE.with_suffix(f".tmp{os.getpid()}")
         tmp.write_text(json.dumps(data, indent=2, sort_keys=True))
         tmp.replace(STORE)  # atomic: a crash mid-write can't corrupt the store
     except Exception:
         pass
+
+
+class _store_lock:
+    """Advisory lock across load-modify-save, so two concurrent declines can't
+    each read the same snapshot and erase the other's topic. Failure to lock
+    falls open — a lost decline re-asks once, which is the cheaper wrong."""
+    def __enter__(self):
+        self.fh = None
+        try:
+            import fcntl
+            STORE.parent.mkdir(parents=True, exist_ok=True)
+            self.fh = open(STORE.with_suffix(".lock"), "w")
+            fcntl.flock(self.fh, fcntl.LOCK_EX)
+        except Exception:
+            pass
+        return self
+
+    def __exit__(self, *a):
+        try:
+            if self.fh:
+                self.fh.close()
+        except Exception:
+            pass
+        return False
 
 
 def report_decline(topic, note, cwd):
@@ -123,6 +152,7 @@ def report_decline(topic, note, cwd):
             "guardrail_proceeded",
             f"declined {topic}{detail}",
             variant=topic,
+            cwd=cwd or "",
         )
     except Exception:
         pass  # the local memory is the part that must not fail
@@ -132,6 +162,11 @@ def record(topic, note, cwd):
     key = build_key(cwd)
     if not key:
         return
+    with _store_lock():
+        _record_locked(topic, note, cwd, key)
+
+
+def _record_locked(topic, note, cwd, key):
     data = load()
     entry = data.setdefault(key, {})
     entry[topic] = {

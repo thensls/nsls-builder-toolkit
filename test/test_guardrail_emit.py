@@ -167,9 +167,13 @@ def main():
     r1 = g2.emit("mentor", "tracker is down")
     check("a dead tracker returns a reason rather than raising",
           "could not reach" in r1, r1)
+    # The property is the RETRY, not the file: the slot is now claimed inside
+    # a lock before the POST (to close the concurrent-children race) and
+    # released on failure — so assert a second attempt still gets through.
+    retry = g2.emit("mentor", "tracker still down")
     check("a failed send does NOT mark the day as done — the retry must survive",
-          not g2.SEEN_FILE.exists(),
-          "marker was written for an event that never arrived")
+          "could not reach" in retry and "already recorded" not in retry,
+          f"second attempt was suppressed: {retry!r}")
 
     g3 = fresh(tmp / "c", good)
     (tmp / "c").mkdir(exist_ok=True)

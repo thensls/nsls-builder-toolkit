@@ -165,13 +165,19 @@ def normalize(label: str) -> str:
 
 
 def build_key(cwd=None):
-    """Same identity guardrail-memory.py uses: remote slug, else repo root."""
+    """Same identity guardrail-memory.py uses: host + remote slug, else root.
+
+    The host is part of the identity: acme/service on github.com and
+    acme/service on a GitLab are unrelated projects, and a slug-only key let
+    one build's decline silence guardrails on the other.
+    """
     root = _git(["rev-parse", "--show-toplevel"], cwd=cwd)
     if not root:
         return os.path.abspath(cwd or os.getcwd())
     remote = origin_url(cwd=root)
-    m = re.search(r"[:/]([^/:]+/[^/]+?)(?:\.git)?$", remote) if remote else None
-    return m.group(1).lower() if m else root
+    m = (re.search(r"(?:@|://)([^/:@]+)[:/]([^/:]+/[^/]+?)(?:\.git)?/?$", remote)
+         if remote else None)
+    return f"{m.group(1).lower()}/{m.group(2).lower()}" if m else root
 
 
 def _load_seen():
@@ -203,19 +209,59 @@ def _mark_seen(key, label):
             data.pop(stale, None)
     try:
         SEEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-        tmp = SEEN_FILE.with_suffix(".tmp")
+        tmp = SEEN_FILE.with_suffix(f".tmp{os.getpid()}")
         tmp.write_text(json.dumps(data, sort_keys=True))
         tmp.replace(SEEN_FILE)
     except Exception:
         pass
 
 
+def _unmark_seen(key, label):
+    """Withdraw a claim after a failed send. Never raises."""
+    data = _load_seen()
+    if data.pop(f"{key}|{label}", None) is not None:
+        try:
+            tmp = SEEN_FILE.with_suffix(f".tmp{os.getpid()}")
+            tmp.write_text(json.dumps(data, sort_keys=True))
+            tmp.replace(SEEN_FILE)
+        except Exception:
+            pass
+
+
 def _today():
     return datetime.now(timezone.utc).date().isoformat()
 
 
+class _seen_lock:
+    """Advisory lock around the check-then-record window.
+
+    Two detached children emitting the same (build, label) could both pass
+    _seen_today before either wrote the marker — the exact duplicate the
+    dedupe promises to prevent. Held only for the file round-trip; any locking
+    failure falls open to the harmless direction (a duplicate row).
+    """
+    def __enter__(self):
+        self.fh = None
+        try:
+            import fcntl
+            SEEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+            self.fh = open(SEEN_FILE.with_suffix(".lock"), "w")
+            fcntl.flock(self.fh, fcntl.LOCK_EX)
+        except Exception:
+            pass
+        return self
+
+    def __exit__(self, *a):
+        try:
+            if self.fh:
+                self.fh.close()
+        except Exception:
+            pass
+        return False
+
+
 def emit_detached(event_type: str, description: str, automation: str = "",
-                  dedupe: bool = True, variant: str = ""):
+                  dedupe: bool = True, variant: str = "", cwd: str = ""):
     """Hand the POST to a child process and return immediately.
 
     For callers on a budget -- the PreToolUse gate has 10s total for a repo
@@ -237,6 +283,11 @@ def emit_detached(event_type: str, description: str, automation: str = "",
             args += ["--automation", automation]
         if variant:
             args += ["--variant", variant]
+        if cwd:
+            # Without this the child derives build_key and repo_url from the
+            # PARENT's directory — a decline recorded with --cwd for another
+            # build got its guardrail_proceeded pinned to the wrong repo.
+            args += ["--cwd", cwd]
         if not dedupe:
             args.append("--no-dedupe")
         subprocess.Popen(
@@ -269,8 +320,14 @@ def emit(event_type: str, description: str, automation: str = "", cwd=None,
     # are both `guardrail_proceeded`, and collapsing them would leave the page
     # saying a nudge was declined without saying which.
     key = build_key(cwd) + (f"#{variant}" if variant else "")
-    if dedupe and _seen_today(key, label):
-        return f"{label} already recorded for this build today"
+    if dedupe:
+        with _seen_lock():
+            if _seen_today(key, label):
+                return f"{label} already recorded for this build today"
+            # Claim the slot INSIDE the lock, before the POST: two concurrent
+            # children must not both pass the check. A failed POST releases
+            # the claim below so the retry survives.
+            _mark_seen(key, label)
     try:
         import urllib.request
 
@@ -287,9 +344,13 @@ def emit(event_type: str, description: str, automation: str = "", cwd=None,
             headers={"Content-Type": "application/json"},
         )
         urllib.request.urlopen(req, timeout=EMIT_TIMEOUT).read()
-        _mark_seen(key, label)
         return f"recorded {label}"
     except Exception as e:
+        # Release the pre-claimed dedupe slot: a failed send must cost a
+        # retry-able gap, never a silently suppressed event.
+        if dedupe:
+            with _seen_lock():
+                _unmark_seen(key, label)
         # Reporting is never worth failing or delaying a decision over. The
         # tracker being slow must not be something a builder ever notices.
         return f"could not reach the tracker ({type(e).__name__})"
