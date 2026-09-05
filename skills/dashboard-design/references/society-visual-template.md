@@ -26,7 +26,7 @@ something.
 | Page subtitle | Inter | 17 px | 400 | muted (`112 members across 14 cohorts`) |
 | Chart / card title (the finding) | Inter | 26–28 px | 700 | −0.01 em (`Cohort A is pulling ahead. Cohort C is eroding.`) |
 | Card eyebrow | Inter | 12 px | 600 | +0.12 em, ALL CAPS, muted (`ATTENDANCE RATE · WEEKLY`) |
-| Hero value on a metric card | Inter | 36–40 px | 700 | −0.02 em; delta rides inline at same size (`86%↑ 9pt`) |
+| Hero value on a metric card | Inter (the one numeric exception — see rule below) | 36–40 px | 700 | −0.02 em; delta rides inline at same size (`86%↑ 9pt`) |
 | Card label / entity name | Inter | 17–18 px | 600 | (`Cohort A`, `Devon Carr`) |
 | Nav item | Inter | 17 px | 600 | sentence case |
 | Body / table cell text | Inter | 15–16 px | 400 | |
@@ -36,7 +36,7 @@ something.
 | Badge / pill text | Inter | 11–12 px | 600–700 | +0.02 em; ALL CAPS for state pills (`NEEDS HELP`, `ADMIN`) |
 
 Rules that make it read as Society:
-- **Numbers that are data go monospace.** Tenure, last-seen, axis labels, legend percentages, member counts. Prose stays in Inter. This one move does most of the "dashboard, not brochure" work.
+- **Supporting numbers go monospace; the hero number stays Inter.** Tenure, last-seen, axis labels, legend percentages, member counts, table numerics, context lines: monospace. The one hero value on a metric card (and its inline delta) is Inter 700, as on the reference screens, so it reads as the headline rather than as a data cell. Prose stays in Inter. This split does most of the "dashboard, not brochure" work.
 - **Titles state the finding**, not the metric name. Weight 700, ink color, no color in the title itself.
 - Two weights carry the page: 700 for titles and hero numbers, 600 for labels and nav, 400 for everything else. No 500, no 800.
 - Tight tracking on anything ≥ 26 px; loose tracking only on ALL-CAPS eyebrows.
@@ -127,7 +127,9 @@ with dots and mono values → chart. Gridlines dotted `--line`; ticks mono
 `--surface-2`, caps 600 12 px `--grey`; sorted column in `--ink` with `↓`.
 Rows 80 px tall with avatar 44 px; name 600 + email mono `--grey` beneath;
 inline mini-bar 120 × 4 px (`--neutral-track` + status fill) followed by
-mono value; status pill after the name; inactive rows at 55 % opacity.
+mono value; status pill after the name; inactive rows keep full-contrast
+text in `--grey` with a greyscale avatar and a muted pill (never ancestor
+opacity, which pushes text below 4.5:1).
 
 **Filter chips** — pill, `--surface-2`, 600 label `·` 400 value `⌄`. Active
 chip inverts to `--ink` with white text and `×`. Status chips tint

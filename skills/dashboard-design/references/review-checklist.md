@@ -73,7 +73,7 @@ of reading, then ask B1 and B2 without the image. Record their verbatim answer.
 | F6 | Categorical hues ≤ 5 |
 | F7 | Brand confirmed (NSLS vs Society) and palette matches its reference |
 | F8 | Society pages: cream ground, hairline `--line` edges, black CTA, status only in terracotta / amber / green; unfilled tracks grey |
-| F9 | Society pages: Inter in 700 / 600 / 400 only; every data value (emails, dates, durations, ticks, legend values) in monospace |
+| F9 | Society pages: Inter in 700 / 600 / 400 only; every supporting data value (emails, dates, durations, ticks, legend values, table numerics) in monospace; the metric card's hero value is Inter 700 |
 
 ## G. Help and labels (P2)
 

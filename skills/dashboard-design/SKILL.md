@@ -201,9 +201,10 @@ need.
 ### Fonts and weights (Society)
 
 Inter carries the page in three weights: 700 for the title, the finding, and
-the hero number; 600 for labels, nav, and pills; 400 for body. **Anything that
-is data — emails, dates, durations, counts, axis ticks, legend values — is
-set in monospace.** Tight tracking (−0.02 em) on anything ≥ 26 px; loose
+the hero number; 600 for labels, nav, and pills; 400 for body. **Every
+supporting data value — emails, dates, durations, counts, axis ticks, legend
+values, table numerics — is set in monospace; the one hero number on a metric
+card stays Inter 700.** Tight tracking (−0.02 em) on anything ≥ 26 px; loose
 tracking on ALL-CAPS eyebrows only. Full scale and component recipes in the
 Society template.
 

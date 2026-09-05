@@ -77,9 +77,10 @@ body {
 .col-3 { grid-column: span 3; } .col-4 { grid-column: span 4; }
 .col-6 { grid-column: span 6; } .col-8 { grid-column: span 8; } .col-12 { grid-column: span 12; }
 /* matches references/layout-patterns.md: 4 cards / 2 charts at ≥1024; 2 cards / 1 chart at 768; 1 column at ≤480 */
-@media (max-width: 1024px) { .grid { gap: 20px; } .col-4, .col-8 { grid-column: span 12; } }
-@media (max-width: 768px)  { .col-3 { grid-column: span 6; } .col-6 { grid-column: span 12; } .canvas { padding: 24px 16px; } .h1 { font-size: 32px; } }
-@media (max-width: 480px)  { .col-3 { grid-column: span 12; } }
+@media (max-width: 1279px) { .grid { gap: 20px; } }
+@media (max-width: 1023px) { .col-4, .col-8 { grid-column: span 12; } }
+@media (max-width: 767px)  { .col-3 { grid-column: span 6; } .col-6 { grid-column: span 12; } .canvas { padding: 24px 16px; } .h1 { font-size: 32px; } }
+@media (max-width: 479px)  { .col-3 { grid-column: span 12; } }
 
 /* ---- metric card ---- */
 .card {
@@ -88,6 +89,7 @@ body {
 }
 .card.flagged { background: var(--bad-bg); border-color: var(--bad); }
 .card .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.card .head > *, .card .row > * { min-width: 0; overflow-wrap: anywhere; }
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; background: var(--grey-3); }
 .hero { font-size: 38px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; margin: 14px 0 12px; }
 .hero .delta { font-size: 0.85em; margin-left: 6px; }
@@ -148,7 +150,10 @@ thead th {
 thead th.sorted { color: var(--ink); }
 tbody td { padding: 18px 20px; border-top: 1px solid var(--line); vertical-align: middle; }
 td.num, th.num { text-align: right; font-family: var(--font-mono); }
-tr.inactive { opacity: 0.55; }
+/* inactive rows: keep text at ≥ 4.5:1 (no ancestor opacity); signal state with color + pill instead */
+tr.inactive td { color: var(--grey); }
+tr.inactive img, tr.inactive .avatar { filter: grayscale(1); }
+tr.inactive .bar > i { background: var(--grey-3); }
 
 /* ---- states ---- */
 .stale { color: var(--watch-text); font-family: var(--font-mono); font-size: 13px; }
