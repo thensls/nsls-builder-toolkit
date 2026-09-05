@@ -40,6 +40,7 @@ Then open Claude Code and say `/setup` to connect your tools and optionally inst
 | **/setup** | Onboarding — connect tools, install personal skills |
 | **/register-automation** | Track your work in the NSLS Automation Tracker |
 | **/product-design** | UX guardrail — DESIGN.md, reviews, focus groups |
+| **/dashboard-design** | Design a dashboard before building it — one purpose, ≤ 6 headline metrics with comparisons, right chart per data shape, color with meaning, honest stale/missing states. Brief template, chart chooser, 12 layout patterns, review checklist |
 | **/nsls-focus-group** | Test ideas with simulated employee panels |
 | **/nsls-slides** | Branded NSLS/Society presentations |
 | **/frontend-slides** | Build HTML presentations |
@@ -216,6 +217,7 @@ They form a cycle: `/data-model-discovery` explores a new system → maps it aga
 |-------|-------------|
 | **register-automation** | Track your work in the NSLS Automation Tracker |
 | **product-design** | UX guardrail — generate DESIGN.md, review changes, run focus groups |
+| **dashboard-design** | Dashboard purpose, metric triage, layout, chart choice, color roles, and review checklist — run before /squad-dashboard picks sections |
 | **nsls-focus-group** | Test ideas with simulated employee panels |
 | **nsls-slides** | Create branded NSLS/Society presentations |
 | **frontend-slides** | Build HTML presentations |

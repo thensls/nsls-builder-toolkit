@@ -102,6 +102,11 @@ needs first:
 Resist sprawl: more than ~6 sections or >4 headline KPIs buries the signal. Every section ties to
 an L3 goal or it probably doesn't belong.
 
+**When the squad hands you more than ~6 metrics, or cannot say which 2–4 go on top, run
+`/dashboard-design` steps 1–2 first** (type, decisions, metric triage into Headline / Explain /
+Detail / Cut, each with its comparison). Its brief feeds the interview below; its review checklist
+runs before the pre-publish list.
+
 ## Classification schemes (optional, per-type vocabulary)
 
 The squad defines schemes whose vocabulary fits the *type*: experiments → Won/Lost/Mixed;
@@ -248,7 +253,8 @@ TRY → OBSERVE → DIAGNOSE → ADAPT → TRY AGAIN.
 
 ## Service awareness
 Connections missing → `/connect`. Cross-system data questions → `/data-intel`. Source depth →
-`/posthog` `/hubspot` `/airtable` `/slack` `/gws`. Quality gate → `/ux-audit`. Recurring refresh →
+`/posthog` `/hubspot` `/airtable` `/slack` `/gws`. What goes on the page and why →
+`/dashboard-design`. Quality gate → `/ux-audit`. Recurring refresh →
 `/schedule` (not auto-publish). Optional SSO → `/nsls-auth`. This skill owns *assembling and
 deploying a squad's dashboard*, not the analytics behind it.
 

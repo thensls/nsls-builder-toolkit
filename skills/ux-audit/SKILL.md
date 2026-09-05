@@ -233,6 +233,7 @@ Reactions are grounded in retrieved quotes — never fabricate. If you cannot fi
 - If the target surface has a `DESIGN.md` in its repo, evaluate the change against the numbered UX principles in that file. This reuses `/product-design` Mode 2 — invoke that skill if it's not already loaded.
 - If no `DESIGN.md` exists at a **Department+ scope** surface, flag this as a gap in the report and link to `/product-design` for remediation.
 - Skip this sub-step entirely if the surface is **Personal scope**.
+- If the target is a **dashboard, KPI page, or metrics wall**, also run `/dashboard-design`'s `references/review-checklist.md` (purpose, five-second test, metric triage, chart choice, states) and fold its P0/P1 rows into the findings.
 
 #### Sub-step 6.6 — Brand + a11y check
 
