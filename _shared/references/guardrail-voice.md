@@ -111,8 +111,14 @@ never find out. Offer it without defensiveness, and mean it.
 > ✓ "If this block looks wrong, say so — I'll log it as a disputed guardrail
 >    and it goes straight to Davo."
 
-When they take you up on it: emit `guardrail_disputed` with what they were
-doing and why they think it misfired. Never argue the point first. Log it, then
+When they take you up on it, record it — before replying, in their own words:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-event.py" disputed "<what they were doing, which gate fired, their reason>"
+```
+
+(The command ships with the reporting half of the toolkit — part 3 of this
+set.) Never argue the point first. Log it, then
 help them get where they were going — including via the authorization route.
 
 **9. Keep it short, and never lecture.**
