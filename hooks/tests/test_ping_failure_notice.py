@@ -25,6 +25,18 @@ spec = importlib.util.spec_from_file_location("session_start_hook", HOOK)
 hook = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(hook)
 
+import pytest
+
+
+@pytest.fixture
+def tmp(tmp_path):
+    """A scratch DIRECTORY (every test places marker files inside it). This
+    fixture was referenced throughout but never defined — no conftest was
+    committed — so the whole file has errored at collection since it landed:
+    the suite that guards the ping-failure notice has never actually run."""
+    return tmp_path
+
+
 PAYLOAD = {"builder_email": "builder@nsls.org", "toolkit": "both"}
 
 
@@ -556,3 +568,44 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# ── behavioural pins for the two load-bearing recovery properties ────────────
+
+def test_payload_survives_a_probe_that_kills_the_hook(tmp):
+    """Persist-first: the probes run at the tail of a 90s budget and the
+    harness can kill the hook mid-probe. The payload must already be on disk
+    by then — the notice is a nicety, the payload is the credit."""
+    hook.PING_FAIL_MARKER = tmp / "marker"
+
+    def boom():
+        raise SystemExit(1)  # stand-in for the harness killing the hook
+
+    hook._tracker_unreachable = boom
+    hook._internet_up = lambda: True
+    try:
+        hook.note_ping_failure(PAYLOAD)
+    except SystemExit:
+        pass
+    state = json.loads((tmp / "marker").read_text(encoding="utf-8"))
+    assert state["payload"] == PAYLOAD
+    assert state["failed_days"]
+
+
+def test_successful_replay_keeps_the_failed_day_ledger(tmp):
+    """Recovery clears the RETRY, never the HISTORY: shedding failed_days on
+    every good day meant intermittent failures could never accumulate to the
+    three-day notice, and a genuinely lost day went unmentioned forever."""
+    hook.PING_FAIL_MARKER = tmp / "marker"
+    (tmp / "marker").write_text(json.dumps({
+        "payload": PAYLOAD,
+        "failed_days": [days_ago(2), days_ago(1)],
+        "attempts": 3,
+        "last_notified_at": None,
+    }), encoding="utf-8")
+    hook._post_session_ping = lambda body: {"ok": True}
+    body = hook.replay_failed_ping()
+    assert body == PAYLOAD
+    state = json.loads((tmp / "marker").read_text(encoding="utf-8"))
+    assert sorted(state["failed_days"]) == sorted([days_ago(2), days_ago(1)])
+    assert not state.get("payload")  # the retry itself is done
