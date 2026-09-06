@@ -46,7 +46,8 @@ Probe the candidates rather than hardcoding one:
 
 ```bash
 for f in "$HOME/Library/Preferences/netlify/config.json" \
-         "$HOME/.config/netlify/config.json" \
+         "${XDG_CONFIG_HOME:-$HOME/.config}/netlify/config.json" \
+         "${APPDATA:+${APPDATA//\\//}/netlify/Config/config.json}" \
          "$HOME/.netlify/config.json"; do
   [ -f "$f" ] && echo "$f" && break
 done
@@ -62,19 +63,24 @@ done
 Extract the token from whichever path exists:
 
 ```bash
-export NETLIFY_AUTH_TOKEN=$(node -e '
+NETLIFY_AUTH_TOKEN=$(node -e '
   const fs=require("fs"), path=require("path"), home=process.env.HOME||process.env.USERPROFILE;
   const cands=[
     path.join(home,"Library/Preferences/netlify/config.json"),
     path.join(process.env.XDG_CONFIG_HOME||path.join(home,".config"),"netlify/config.json"),
+    process.env.APPDATA ? path.join(process.env.APPDATA,"netlify","Config","config.json") : "",
     path.join(home,".netlify/config.json"),
-  ];
+  ].filter(Boolean);
   const f=cands.find(fs.existsSync);
   if(!f){console.error("No netlify config found; run: netlify login");process.exit(1);}
   const c=JSON.parse(fs.readFileSync(f,"utf8"));
   const uid=Object.keys(c.users)[0];
   console.log(c.users[uid].auth.token);
 ')
+# The assignment carries node's exit status, so `set -e` stops here when no config
+# was found. Export only after it succeeded — never `export X=$(...)` in one step,
+# which masks the failure and hands an empty token to `netlify deploy`.
+[ -n "$NETLIFY_AUTH_TOKEN" ] && export NETLIFY_AUTH_TOKEN
 ```
 
 ### 3. Site ID
