@@ -265,9 +265,14 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir):
         return  # nothing on main this checkout is missing
     has_upstream = bool(_git_out(plugin_dir, "rev-parse", "--abbrev-ref",
                                 "--symbolic-full-name", "@{u}"))
-    why = (f"it is on branch '{branch}', which tracks itself rather than main"
+    # Everything printed here lands in the model's context, and a branch name
+    # is text someone else can choose — a clone can arrive carrying one. Same
+    # reasoning as PR #161's refusal to echo git's raw output: carry the
+    # diagnostic value, not the injection surface. Conservative charset, capped.
+    safe = re.sub(r"[^A-Za-z0-9._/-]", "", branch)[:60] or "(unnamed)"
+    why = (f"it is on branch '{safe}', which tracks itself rather than main"
            if has_upstream else
-           f"branch '{branch}' has no upstream, so there is nothing to pull from")
+           f"branch '{safe}' has no upstream, so there is nothing to pull from")
     print(
         f"WARNING - {plugin} is {behind} commit(s) behind main and NOT updating: "
         f"{why}. The checkout at {plugin_dir} reports a clean pull every session "
@@ -1167,7 +1172,12 @@ def emit_guardrails_context():
     # nothing and those machines got no guardrail policy at all. Legacy path
     # kept as fallback for the settings-shim era, where this file runs from the
     # clone.
-    own_root = Path(__file__).resolve().parent.parent
+    # The legacy settings-shim path executes this file via `python3 -c`, where
+    # __file__ is undefined — an unguarded reference aborted main() with a
+    # NameError before the ping replay ever ran. Shim installs run from the
+    # clone at PLUGIN_DIR anyway, so that IS their own root.
+    own_root = (Path(__file__).resolve().parent.parent
+                if "__file__" in globals() else PLUGIN_DIR)
     guardrail_root = own_root if (own_root / "CLAUDE.md").is_file() else PLUGIN_DIR
     try:
         text = (guardrail_root / "CLAUDE.md").read_text(errors="ignore")
