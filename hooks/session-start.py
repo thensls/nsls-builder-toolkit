@@ -126,21 +126,96 @@ _FREEZE_SIGNS = (
 )
 
 
+def _checkout_blocks_update(plugin_dir):
+    """Why this checkout itself blocks a fast-forward, or None if it doesn't.
+
+    Asked BEFORE claiming a toolkit is frozen, because "local commits or edits"
+    is a diagnosis and `_FREEZE_SIGNS` is only a substring match on git's
+    output. The two came apart in practice: clean, up-to-date checkouts (0
+    dirty files, 0 ahead of upstream, `pull --ff-only` returning 0 on the very
+    next attempt) were reported as FROZEN every session, sending builders to
+    back up local changes that did not exist.
+
+    Returns a human phrase naming the real blocker so the warning can say which
+    of the two it is, since the repair differs: commits need a backup branch,
+    a dirty tree needs a stash or a commit.
+
+    Unable to tell (git failed, no upstream configured, anything unexpected) is
+    reported as None — NOT as frozen. A guess is what this function exists to
+    stop, and staying quiet costs at most one session's update, which the next
+    session's pull picks up anyway."""
+    def git(*args):
+        r = subprocess.run(
+            ["git", "-C", str(plugin_dir), *args],
+            capture_output=True, text=True, timeout=5,
+            stdin=subprocess.DEVNULL,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
+        return r.returncode, (r.stdout or "").strip()
+
+    try:
+        code, dirty = git("status", "--porcelain")
+        if code != 0:
+            return None
+        # `@{u}` rather than a hardcoded origin/main: a supported fork checkout
+        # (NSLS_PERSONAL_REPO / NSLS_PERSONAL_BRANCH) tracks something else, and
+        # the pull this diagnoses follows the same upstream.
+        code, ahead = git("rev-list", "--count", "@{u}..HEAD")
+        if code != 0:
+            # No upstream to compare against. A dirty tree still blocks a pull,
+            # so that much is safe to report; divergence is unknowable here.
+            return "uncommitted local edits" if dirty else None
+        commits = int(ahead or 0)
+        if commits and dirty:
+            return f"{commits} local commit(s) and uncommitted edits"
+        if commits:
+            return f"{commits} local commit(s) not in its upstream"
+        if dirty:
+            return "uncommitted local edits"
+        return None
+    except Exception:
+        return None
+
+
 def _warn_if_frozen(plugin, plugin_dir, err):
     """Announce a self-update blocked by the checkout's own state. stdout of a
     SessionStart hook lands in the model's context, so Claude can tell the
     user and offer the repair — a frozen toolkit must never be silent.
     Network/offline failures stay quiet (a laptop on a plane is not an
-    incident)."""
-    if not any(s in err for s in _FREEZE_SIGNS):
+    incident).
+
+    Two gates, not one. `_FREEZE_SIGNS` says git's complaint LOOKS like a
+    checkout-local refusal; `_checkout_blocks_update` then checks whether it
+    actually is. Only the substring matched before, and it cried wolf every
+    session on clean checkouts — which trains builders to ignore the one
+    message that must never be ignored (the real incident this guards: a single
+    local commit froze a toolkit for a month with zero signal).
+
+    Which _FREEZE_SIGNS phrase matched is reported, but git's raw text is NOT.
+    Everything this prints lands in the model's context, and git echoes content
+    an attacker controls — `remote:` lines are printed verbatim from the server,
+    and branch, ref and URL names appear in error text. Passing that through
+    would let a hostile upstream write instructions straight into Claude's
+    context wearing the toolkit's voice. The matched phrase is one of four of
+    OUR OWN literals, so it carries the diagnostic value with none of the
+    surface; the raw text stays in git's own output where a human can read it."""
+    matched = next((s for s in _FREEZE_SIGNS if s in err), None)
+    if matched is None:
+        return
+    blocker = _checkout_blocks_update(plugin_dir)
+    if blocker is None:
+        # Verified clean and level with upstream: the pull failed for some other
+        # reason and this is not a frozen toolkit. Nothing to repair, so say
+        # nothing rather than send Claude after a backup with no target.
         return
     print(
         f"WARNING - {plugin} could not self-update: the checkout at {plugin_dir} "
-        f"has local commits or edits, so automatic updates are FROZEN and this "
+        f"has {blocker}, so automatic updates are FROZEN and this "
         f"toolkit is going stale. Tell the user at the first natural moment and "
         f"offer the fix: preserve their local changes on a backup branch, then "
         f"fast-forward the checkout to its upstream. (Skills in ~/.claude/skills "
-        f"are the right place for personal edits and are unaffected.)"
+        f"are the right place for personal edits and are unaffected.) "
+        f"git refused with: {matched!r}"
     )
 
 
