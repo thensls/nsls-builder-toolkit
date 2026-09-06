@@ -39,6 +39,13 @@ VERBOSE = "-v" in sys.argv
 STUB_MODES = {
     "empty": (200, {"automations": []}),        # well-formed "no such automation"
     "malformed": (200, {"status": "ok"}),       # 200, unrecognised shape
+    # A registered, Department-scoped build. Gate 4 needs a scope to decide at
+    # all, so without this mode every off-platform scenario returned early and
+    # "passed" while testing nothing — the vacuous-green trap.
+    # The record's name must equal the repo directory's name, and fixtures get
+    # a random temp dir — so this mode is built per-request from the ?name=
+    # query rather than hardcoded (see _Stub.do_GET).
+    "scoped_department": (200, None),
 }
 _stub_mode = {"mode": "empty"}
 
@@ -46,6 +53,12 @@ _stub_mode = {"mode": "empty"}
 class _Stub(BaseHTTPRequestHandler):
     def do_GET(self):
         code, body = STUB_MODES[_stub_mode["mode"]]
+        if body is None:  # scope-bearing record echoing the requested name
+            import urllib.parse as _up
+            q = _up.parse_qs(_up.urlparse(self.path).query)
+            body = {"automations": [{"name": (q.get("name") or [""])[0],
+                                     "scope": "Department",
+                                     "platform": "Anthropic"}]}
         raw = json.dumps(body).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")

@@ -893,7 +893,8 @@ def gate_off_platform(tool: str, ti: dict):
         f"NSLS's default is Anthropic; it isn't dogma, it's that security review, "
         f"spend tracking and support all point one direction, and splitting them "
         f"for something a whole team depends on costs more than it looks. Going "
-        f"off-platform at this scope needs a short written why plus Kevin's OK.\n\n"
+        f"off-platform at this scope needs a short written why, which Kevin "
+        f"then authorizes — the same authorization route as any other flag.\n\n"
         f"If there's a real reason it's the right call here — and sometimes there "
         f"is — tell me and I'll draft the memo with you now. It's a paragraph, "
         f"not a process.",

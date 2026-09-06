@@ -734,6 +734,36 @@
       "input": {
         "command": "git push personal main"
       }
+    },
+    {
+      "id": "H76",
+      "expect": "allow",
+      "why": "a COMMENT mentioning the OpenAI SDK is talk about the platform, not a platform choice \u2014 with a real Department record present, so this actually exercises gate 4",
+      "tool": "Write",
+      "repo": {
+        "origin": "https://github.com/thensls/digest-tool.git",
+        "readme": "# NSLS digest tool"
+      },
+      "tracker_stub": "scoped_department",
+      "input": {
+        "file_path": "digest.py",
+        "content": "# TODO: migrate from openai import OpenAI over to Anthropic\nimport anthropic\n"
+      }
+    },
+    {
+      "id": "H77",
+      "expect": "block",
+      "why": "the control for H76 \u2014 same file, same build, SDK on a real code line: gate 4 must still fire, or H76 proves nothing",
+      "tool": "Write",
+      "repo": {
+        "origin": "https://github.com/thensls/digest-tool.git",
+        "readme": "# NSLS digest tool"
+      },
+      "tracker_stub": "scoped_department",
+      "input": {
+        "file_path": "digest.py",
+        "content": "from openai import OpenAI\nclient = OpenAI()\n"
+      }
     }
   ],
   "voice": [
