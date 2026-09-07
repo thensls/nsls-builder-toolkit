@@ -764,6 +764,31 @@
         "file_path": "digest.py",
         "content": "from openai import OpenAI\nclient = OpenAI()\n"
       }
+    },
+    {
+      "id": "H78",
+      "expect": "block",
+      "why": "a heredoc delimiter with a hyphen (END-1) used to truncate to END, so heredoc mode never exited and EVERY later command skipped its gate \u2014 a gate switched off by a hyphen is not a gate",
+      "tool": "Bash",
+      "repo": {
+        "origin": "https://github.com/bartholomew/mex-tools.git",
+        "readme": "# MEx tools \u2014 pulls member data from HubSpot into Airtable"
+      },
+      "input": {
+        "command": "cat <<END-1 > note.txt\nsome text\nEND-1\ngit push origin main"
+      }
+    },
+    {
+      "id": "H79",
+      "expect": "block",
+      "why": "--dry-run after curl's `--` marker is a URL, not an option; the POST still runs",
+      "tool": "Bash",
+      "setup_test_bases": [
+        "appSANDBOX1234567"
+      ],
+      "input": {
+        "command": "curl -X POST -d @rows.json -- https://api.airtable.com/v0/appPRODBASE123456/records/batch --dry-run"
+      }
     }
   ],
   "voice": [

@@ -322,9 +322,14 @@ def command_segments(cmd: str):
                 heredoc_end = None
             continue  # heredoc BODY is data — tokenizing it as commands made
             # a heredoc that merely CONTAINED "git push origin main" block
-        m_here = re.search(r"<<-?\s*['\"]?(\w+)['\"]?", line)
+        # The delimiter is a WORD, and bash words include -, ., + and more.
+        # `\w+` truncated `END-1` to `END`, so the terminator line never
+        # matched, heredoc mode never exited, and every command after it was
+        # skipped — silently disabling all four gates for the rest of the
+        # command. A gate that can be switched off by a hyphen is not a gate.
+        m_here = re.search(r"""<<-?\s*(?:'([^']+)'|"([^"]+)"|([A-Za-z0-9_.+-]+))""", line)
         if m_here:
-            heredoc_end = m_here.group(1)
+            heredoc_end = m_here.group(1) or m_here.group(2) or m_here.group(3)
             line = line[:m_here.start()]  # the command part before << still counts
         if not line.strip():
             continue
@@ -772,8 +777,12 @@ def _segment_is_bulk_write(seg) -> bool:
     if not verb:
         return False
 
+    # Everything after curl's `--` marker is a URL, not an option — so a
+    # `--dry-run` sitting there does not make the POST a rehearsal, it just
+    # names a path. Only tokens BEFORE the marker can excuse the write.
+    option_tokens = seg[:seg.index("--")] if "--" in seg else seg
     if any(DRYRUN_RE.fullmatch(t) or DRYRUN_RE.search(t) and t.startswith("--")
-           or re.fullmatch(r"DRY_RUN=(1|true)", t, re.I) for t in seg):
+           or re.fullmatch(r"DRY_RUN=(1|true)", t, re.I) for t in option_tokens):
         return False
 
     # Sandbox rehearsal: every base named in this segment's request URLs is a
