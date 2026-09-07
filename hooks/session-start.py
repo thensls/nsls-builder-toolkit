@@ -1232,5 +1232,14 @@ def main():
     session_ping(replayed=replayed)
 
 
+# Entry point for the PowerShell hook, which needs ONLY the guardrails context
+# (its own script already handles pulls, pointers and the ping). Keeping this in
+# the Python emitter means the section extraction and path resolution exist once.
+if __name__ == "__guardrails__":
+    try:
+        emit_guardrails_context()
+    except Exception:
+        pass
+
 if __name__ == "__main__":
     main()

@@ -213,3 +213,24 @@ if (Test-Path $pingScript) {
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $pingScript
     ) | Out-Null
 }
+
+# --- 4. Builder Guardrails context ---
+# Windows parity with session-start.py's emit_guardrails_context(). Without
+# this, Windows builders got the four hard gates (the hook is registered for
+# them) but none of the conversational half — tiers, escalation triggers, the
+# voice guide, remembered declines — which is the same
+# configuration-present-but-not-loaded failure this project has hit three times.
+# Delegated to the Python emitter rather than reimplemented: one copy of the
+# section-extraction and path-resolution logic, not two that can drift.
+$py = Get-Command py -ErrorAction SilentlyContinue
+$pyExe = if ($py) { 'py' } else { 'python3' }
+$startPy = Join-Path $PSScriptRoot 'session-start.py'
+if (Test-Path $startPy) {
+    try {
+        & $pyExe -c @"
+import runpy, sys
+sys.argv = ['session-start.py', '--guardrails-context-only']
+runpy.run_path(r'$startPy', run_name='__guardrails__')
+"@ 2>$null
+    } catch { }
+}
