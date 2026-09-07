@@ -194,6 +194,33 @@ else:
     else:
         print('  Skill-event hook already registered')
 
+# Register the guardrail gate (PreToolUse:Bash|Write|Edit) globally (idempotent).
+# Same reasoning as the skill-event hook above: the plugin ships this in
+# hooks/hooks.json, but a locally enabled plugin does not reliably load bundled
+# hooks — which meant the four hard gates never ran for ANYONE. Proven
+# 2026-09-01: a push from a personal repo full of NSLS fingerprints sailed
+# through the live harness while the same payload piped into the script was
+# denied, and the Events table held zero real guardrail_blocked rows ever.
+# The gates were documentation. This registration is what makes them real.
+GATE_HOOK_CMD = 'python3 "' + os.path.join(CONFIG_DIR, 'local-plugins/nsls-builder-toolkit/hooks/guardrail-gate.py') + '"'
+GATE_MARKER = 'nsls-builder-toolkit/hooks/guardrail-gate.py'
+GATE_STATUS = 'Checking builder guardrails…'
+gate_entry = None
+for entry in pre_tool_use:
+    if entry.get('matcher') == 'Bash|PowerShell|Write|Edit':
+        gate_entry = entry
+        break
+if gate_entry is None:
+    gate_entry = {'matcher': 'Bash|PowerShell|Write|Edit', 'hooks': []}
+    pre_tool_use.append(gate_entry)
+gate_hooks = gate_entry.setdefault('hooks', [])
+if next((h for h in gate_hooks if GATE_MARKER in h.get('command', '')), None) is None:
+    gate_hooks.append({'type': 'command', 'command': GATE_HOOK_CMD,
+                       'timeout': 10, 'statusMessage': GATE_STATUS})
+    print('  Registered guardrail gate (PreToolUse:Bash|Write|Edit)')
+else:
+    print('  Guardrail gate already registered')
+
 # Pre-authorize the hook command so a new builder is never confronted with a
 # bare 'run this script?' prompt for our own tracking ping. The command is a
 # fixed, known string (the hook we just registered), so an exact allow rule is

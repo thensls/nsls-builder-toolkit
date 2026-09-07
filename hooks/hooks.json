@@ -21,7 +21,7 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/skill-event.sh\"",
             "timeout": 5,
-            "statusMessage": "Logging skill use so you get NSLS credit (nothing else)…"
+            "statusMessage": "Logging skill use so you get NSLS credit (nothing else)\u2026"
           }
         ]
       }
