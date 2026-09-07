@@ -222,15 +222,29 @@ if (Test-Path $pingScript) {
 # configuration-present-but-not-loaded failure this project has hit three times.
 # Delegated to the Python emitter rather than reimplemented: one copy of the
 # section-extraction and path-resolution logic, not two that can drift.
-$py = Get-Command py -ErrorAction SilentlyContinue
-$pyExe = if ($py) { 'py' } else { 'python3' }
+# Interpreter: the stock Windows `python3` is a Store alias that exits without
+# running anything, so falling back to it emitted nothing at all — worse than
+# failing loudly. Prefer the launcher, then the toolkit-provisioned runtime,
+# and give up quietly only when there is genuinely no Python.
+$pyExe = $null
+if (Get-Command py -ErrorAction SilentlyContinue) { $pyExe = 'py' }
+elseif (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe')) {
+    $pyExe = Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'
+}
+elseif (Get-Command python -ErrorAction SilentlyContinue) { $pyExe = 'python' }
+
 $startPy = Join-Path $PSScriptRoot 'session-start.py'
-if (Test-Path $startPy) {
-    try {
-        & $pyExe -c @"
+if ($pyExe -and (Test-Path $startPy)) {
+    # The path goes in as an ARGUMENT, never interpolated into Python source:
+    # a Windows profile containing an apostrophe (O'Brien) made the inline
+    # program a SyntaxError, and the empty catch swallowed it — the guardrail
+    # context just silently vanished for that person.
+    $emitter = @'
 import runpy, sys
-sys.argv = ['session-start.py', '--guardrails-context-only']
-runpy.run_path(r'$startPy', run_name='__guardrails__')
-"@ 2>$null
+runpy.run_path(sys.argv[1], run_name="__guardrails__")
+'@
+    try {
+        if ($pyExe -eq 'py') { & $pyExe -3 -c $emitter $startPy 2>$null }
+        else { & $pyExe -c $emitter $startPy 2>$null }
     } catch { }
 }

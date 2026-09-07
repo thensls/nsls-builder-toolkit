@@ -260,11 +260,22 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir):
     branch = _git_out(plugin_dir, "rev-parse", "--abbrev-ref", "HEAD")
     if not branch or branch == "HEAD":
         return  # detached: pinned on purpose
+    # A checkout tracking a FORK is supported (NSLS_PERSONAL_REPO), and its
+    # branch legitimately trails thensls/main. Judging it against origin/main
+    # produced a permanent false freeze warning — the same cry-wolf failure
+    # PR #161 fixed in the other direction, and false alarms here are what
+    # train people to ignore the one warning that matters.
+    upstream = _git_out(plugin_dir, "rev-parse", "--abbrev-ref",
+                        "--symbolic-full-name", "@{u}")
+    has_upstream = bool(upstream)
+    if has_upstream:
+        ahead_of_upstream = _git_out(plugin_dir, "rev-list", "--count",
+                                     f"{upstream}..HEAD")
+        if ahead_of_upstream.isdigit() and int(ahead_of_upstream) == 0:
+            return  # in step with whatever it actually tracks: not frozen
     behind = _git_out(plugin_dir, "rev-list", "--count", "HEAD..origin/main")
     if not behind.isdigit() or int(behind) == 0:
         return  # nothing on main this checkout is missing
-    has_upstream = bool(_git_out(plugin_dir, "rev-parse", "--abbrev-ref",
-                                "--symbolic-full-name", "@{u}"))
     # Everything printed here lands in the model's context, and a branch name
     # is text someone else can choose — a clone can arrive carrying one. Same
     # reasoning as PR #161's refusal to echo git's raw output: carry the
