@@ -29,27 +29,72 @@ Confirm: `netlify-cli/24.x.x` or higher.
 
 ### 2. Auth Token
 
-The Netlify auth token is stored at:
-```
-~/.netlify/config.json
-```
+**Do not run `netlify status` (or any other Netlify CLI command) to check
+auth.** In a non-interactive session the CLI blocks on a prompt that never
+renders, so the flow hangs before it ever reaches the token lookup or the
+deploy. Go straight to the stored token and pass it explicitly as
+`NETLIFY_AUTH_TOKEN`; with the token in the environment the CLI never prompts.
 
-Look under `.users[userId].auth.token`. Retrieve it with:
+The token's location is platform- and version-dependent. `~/.netlify/config.json` is the *legacy* path and does not exist on
+current CLI versions — on macOS the file lives under `~/Library/Preferences/`.
+Probe the candidates rather than hardcoding one:
 
 ```bash
-node -e "const c=require(process.env.HOME+'/.netlify/config.json'); const uid=Object.keys(c.users)[0]; console.log(c.users[uid].auth.token)"
+for f in "$HOME/Library/Preferences/netlify/config.json" \
+         "${XDG_CONFIG_HOME:-$HOME/.config}/netlify/config.json" \
+         "${APPDATA:+${APPDATA//\\//}/netlify/Config/config.json}" \
+         "$HOME/.netlify/config.json"; do
+  [ -f "$f" ] && echo "$f" && break
+done
 ```
 
-Save to a variable for use in deploy commands:
+| Platform | Path |
+|---|---|
+| macOS | `~/Library/Preferences/netlify/config.json` |
+| Linux | `~/.config/netlify/config.json` (respects `XDG_CONFIG_HOME`) |
+| Windows | `%APPDATA%\netlify\Config\config.json` |
+| Legacy (pre-20.x) | `~/.netlify/config.json` |
+
+Extract the token from whichever path exists. The file holds one entry **per
+identity** — a builder may have personal or former-employer accounts alongside
+the NSLS one — so never take the first user. Set `NETLIFY_EMAIL` to your work
+email to pin the identity; otherwise the snippet uses the account the CLI is
+currently logged in as (`userId`) and prints which email it picked:
+
 ```bash
-export NETLIFY_AUTH_TOKEN=$(node -e "const c=require(process.env.HOME+'/.netlify/config.json'); const uid=Object.keys(c.users)[0]; console.log(c.users[uid].auth.token)")
+NETLIFY_AUTH_TOKEN=$(node -e '
+  const fs=require("fs"), path=require("path"), home=process.env.HOME||process.env.USERPROFILE;
+  const cands=[
+    path.join(home,"Library/Preferences/netlify/config.json"),
+    path.join(process.env.XDG_CONFIG_HOME||path.join(home,".config"),"netlify/config.json"),
+    process.env.APPDATA ? path.join(process.env.APPDATA,"netlify","Config","config.json") : "",
+    path.join(home,".netlify/config.json"),
+  ].filter(Boolean);
+  const f=cands.find(fs.existsSync);
+  if(!f){console.error("No netlify config found; run: netlify login");process.exit(1);}
+  const c=JSON.parse(fs.readFileSync(f,"utf8")), users=c.users||{};
+  const want=process.env.NETLIFY_EMAIL;
+  const u=want ? Object.values(users).find(x=>x.email===want) : users[c.userId];
+  if(!u||!u.auth||!u.auth.token){
+    console.error(want ? "No Netlify identity for "+want : "No active Netlify identity (userId) in "+f);
+    console.error("Identities in this config: "+Object.values(users).map(x=>x.email).join(", ")+"; set NETLIFY_EMAIL or run: netlify login");
+    process.exit(1);
+  }
+  console.error("Using Netlify identity: "+u.email);
+  console.log(u.auth.token);
+')
+# The assignment carries node's exit status, so `set -e` stops here when no config
+# was found. Export only after it succeeded — never `export X=$(...)` in one step,
+# which masks the failure and hands an empty token to `netlify deploy`.
+[ -n "$NETLIFY_AUTH_TOKEN" ] && export NETLIFY_AUTH_TOKEN
 ```
 
 ### 3. Site ID
 
 You need `NETLIFY_SITE_ID` — the UUID of the target Netlify site. Find it at:
 - Netlify dashboard → Site settings → General → Site ID
-- Or via: `netlify sites:list` (once CLI is authenticated)
+- Or via the API with the token from step 2 (not `netlify sites:list` — the CLI can hang non-interactively):
+  `curl -s -H "Authorization: Bearer $NETLIFY_AUTH_TOKEN" https://api.netlify.com/api/v1/sites | python3 -c "import json,sys; [print(s['id'], s['name'], s['ssl_url']) for s in json.load(sys.stdin)]"`
 
 ---
 
@@ -225,7 +270,7 @@ After visual review:
 ## Environment
 
 - **CLI**: `netlify-cli` ≥ 24.x via `npm install -g netlify-cli@latest`
-- **Auth**: `~/.netlify/config.json` → `.users[uid].auth.token`
+- **Auth**: never probe with `netlify status` (hangs non-interactively). Read the stored token: `~/Library/Preferences/netlify/config.json` on macOS, `${XDG_CONFIG_HOME:-~/.config}/netlify/config.json` on Linux, `%APPDATA%\netlify\Config\config.json` on Windows → the `users` entry matching your work email (or `userId`) → `.auth.token`. `~/.netlify/config.json` is legacy and absent on CLI 20.x+.
 - **Site for SLT slides**: `slt-pipeline-slides.netlify.app` → NETLIFY_SITE_ID = `ea5aa7d1-dfa7-4048-8cae-b185b434ce1e`
 - **Deploy dir pattern**: `/tmp/[project]-deploy/index.html`
 - **Playwright MCP**: Available via `mcp__plugin_playwright_playwright__*` tools

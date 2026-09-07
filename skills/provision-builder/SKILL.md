@@ -104,8 +104,8 @@ already stored and ask the API instead:
 # ~/.config/netlify (that directory exists but is empty, which is the trap).
 case "$(uname -s)" in
   Darwin)               NF_CFG=~/Library/Preferences/netlify/config.json ;;
-  Linux)                NF_CFG=~/.config/netlify/config.json ;;
-  MINGW*|MSYS*|CYGWIN*) NF_CFG="${APPDATA//\\//}/netlify/config.json" ;;
+  Linux)                NF_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/netlify/config.json" ;;
+  MINGW*|MSYS*|CYGWIN*) NF_CFG="${APPDATA//\\//}/netlify/Config/config.json" ;;
   *) echo "Unsupported OS for Netlify config lookup" >&2 ;;
 esac
 NF_TOKEN=$(python3 -c "
