@@ -265,14 +265,16 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir):
     # produced a permanent false freeze warning — the same cry-wolf failure
     # PR #161 fixed in the other direction, and false alarms here are what
     # train people to ignore the one warning that matters.
+    # A deliberately pinned fork branch and an accidentally-stranded feature
+    # branch are STRUCTURALLY IDENTICAL in git: both track their own upstream,
+    # both pull cleanly, both trail main. There is no state that separates
+    # them, only intent — so an early return for "in step with its upstream"
+    # silenced the exact case this function was written for
+    # (feat/builder-guardrails tracked its own branch while main moved 5 ahead).
+    # Both get told; the WORDING carries the ambiguity instead of the logic.
     upstream = _git_out(plugin_dir, "rev-parse", "--abbrev-ref",
                         "--symbolic-full-name", "@{u}")
     has_upstream = bool(upstream)
-    if has_upstream:
-        ahead_of_upstream = _git_out(plugin_dir, "rev-list", "--count",
-                                     f"{upstream}..HEAD")
-        if ahead_of_upstream.isdigit() and int(ahead_of_upstream) == 0:
-            return  # in step with whatever it actually tracks: not frozen
     behind = _git_out(plugin_dir, "rev-list", "--count", "HEAD..origin/main")
     if not behind.isdigit() or int(behind) == 0:
         return  # nothing on main this checkout is missing
@@ -281,14 +283,17 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir):
     # reasoning as PR #161's refusal to echo git's raw output: carry the
     # diagnostic value, not the injection surface. Conservative charset, capped.
     safe = re.sub(r"[^A-Za-z0-9._/-]", "", branch)[:60] or "(unnamed)"
-    why = (f"it is on branch '{safe}', which tracks itself rather than main"
+    why = (f"it is on branch '{safe}', which tracks its own upstream rather "
+           f"than main — so its pulls succeed while main moves on"
            if has_upstream else
            f"branch '{safe}' has no upstream, so there is nothing to pull from")
     print(
-        f"WARNING - {plugin} is {behind} commit(s) behind main and NOT updating: "
+        f"NOTE - {plugin} is {behind} commit(s) behind main: "
         f"{why}. The checkout at {plugin_dir} reports a clean pull every session "
         f"while going stale, which is why this needs saying out loud. Tell the "
-        f"user at the first natural moment. The repair depends on what that "
+        f"user at the first natural moment — and say plainly that if this "
+        f"branch is a deliberate choice, nothing is wrong and they can ignore "
+        f"it. The repair, if they want one, depends on what that "
         f"branch is for: if the work on it is finished, merge or land it and put "
         f"the checkout back on main; if it is still in progress, merging "
         f"origin/main into it catches this checkout up without losing it. Do not "
@@ -1249,6 +1254,17 @@ def main():
 if __name__ == "__guardrails__":
     try:
         emit_guardrails_context()
+    except Exception:
+        pass
+    # Windows's .ps1 does its own pull, so it never reached git_pull's call to
+    # the stale-configuration check — Windows checkouts on a stranded branch
+    # stayed silently frozen, which is the whole failure this adds. Cheap to
+    # run here: local ref arithmetic, no network.
+    try:
+        for _plugin in SYNC_PLUGINS:
+            _dir = CONFIG_DIR / "local-plugins" / _plugin
+            if (_dir / ".git").exists():
+                _warn_if_stale_by_configuration(_plugin, _dir)
     except Exception:
         pass
 
