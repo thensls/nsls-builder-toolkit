@@ -695,7 +695,8 @@ AIRTABLE_BASE_RE = re.compile(r"\bapp[A-Za-z0-9]{14}\b")
 # through on their machine.
 TEST_BASES_FILE = Path(
     os.environ.get("NSLS_AIRTABLE_TEST_BASES_FILE")
-    or (Path.home() / ".claude" / ".nsls-airtable-test-bases")
+    or (Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
+        / ".nsls-airtable-test-bases")
 )
 
 

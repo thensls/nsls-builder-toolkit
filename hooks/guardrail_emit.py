@@ -108,7 +108,21 @@ GIT_TIMEOUT = 2
 # are boolean per build so duplicates barely move them, but the activity list
 # is read by a human and a page of the same line eight times is a page nobody
 # reads. One row per build per label per day.
-SEEN_FILE = Path.home() / ".claude" / ".nsls-guardrail-emitted.json"
+def _config_dir():
+    """The Claude config directory this session is actually using.
+
+    `CLAUDE_CONFIG_DIR` is how an isolated session — a test run, the
+    `nslstest` account, a throwaway profile — gets its own state. Every store
+    below honoured `Path.home()/".claude"` instead, so an isolated session read
+    and WROTE the real user's files: test runs saw a builder's genuine decline
+    notes (and could surface them in a transcript), and a test's declines
+    leaked back into the real store. guardrail-gate.py already resolved the
+    builder email this way; the state files simply never caught up.
+    """
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
+
+
+SEEN_FILE = _config_dir() / ".nsls-guardrail-emitted.json"
 SEEN_MAX = 400
 
 
