@@ -1230,6 +1230,17 @@ def emit_guardrails_context():
         "`_shared/references/guardrail-voice.md`", f"`{voice_guide}`"
     )
 
+    # Same class of bug, one variable along. CLAUDE.md writes the decline- and
+    # event-recording commands as "${CLAUDE_PLUGIN_ROOT}/hooks/...", which is
+    # right for the file -- a marketplace install has no fixed path, and hook
+    # subprocesses do get that variable. But Claude runs these through the Bash
+    # tool, which is NOT a hook subprocess and has no CLAUDE_PLUGIN_ROOT, so the
+    # path expands to "/hooks/guardrail-memory.py" and the command dies on a
+    # missing file. Nothing surfaces: the decline is simply never recorded, and
+    # rule 6 ("take the first no gracefully, and remember it") quietly becomes
+    # unenforceable -- the nagware failure the block below is meant to prevent.
+    section = section.replace("${CLAUDE_PLUGIN_ROOT}", str(guardrail_root))
+
     print(
         "[NSLS Builder Toolkit — org guardrail policy, active this session]\n\n"
         + section
