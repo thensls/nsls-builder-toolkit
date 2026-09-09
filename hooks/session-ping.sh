@@ -23,7 +23,7 @@ if [ -f "$ENV_FILE" ]; then
   GITHUB=$(grep "^GITHUB_USERNAME=" "$ENV_FILE" | cut -d= -f2)
 fi
 if [ -z "$GITHUB" ] && command -v gh >/dev/null 2>&1; then
-  GITHUB=$(gh api user --jq .login 2>/dev/null)
+  GITHUB=$(gh api --hostname github.com user --jq .login 2>/dev/null)
 fi
 
 # Detect installed toolkits
