@@ -213,3 +213,38 @@ if (Test-Path $pingScript) {
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $pingScript
     ) | Out-Null
 }
+
+# --- 4. Builder Guardrails context ---
+# Windows parity with session-start.py's emit_guardrails_context(). Without
+# this, Windows builders got the four hard gates (the hook is registered for
+# them) but none of the conversational half — tiers, escalation triggers, the
+# voice guide, remembered declines — which is the same
+# configuration-present-but-not-loaded failure this project has hit three times.
+# Delegated to the Python emitter rather than reimplemented: one copy of the
+# section-extraction and path-resolution logic, not two that can drift.
+# Interpreter: the stock Windows `python3` is a Store alias that exits without
+# running anything, so falling back to it emitted nothing at all — worse than
+# failing loudly. Prefer the launcher, then the toolkit-provisioned runtime,
+# and give up quietly only when there is genuinely no Python.
+$pyExe = $null
+if (Get-Command py -ErrorAction SilentlyContinue) { $pyExe = 'py' }
+elseif (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe')) {
+    $pyExe = Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'
+}
+elseif (Get-Command python -ErrorAction SilentlyContinue) { $pyExe = 'python' }
+
+$startPy = Join-Path $PSScriptRoot 'session-start.py'
+if ($pyExe -and (Test-Path $startPy)) {
+    # The path goes in as an ARGUMENT, never interpolated into Python source:
+    # a Windows profile containing an apostrophe (O'Brien) made the inline
+    # program a SyntaxError, and the empty catch swallowed it — the guardrail
+    # context just silently vanished for that person.
+    $emitter = @'
+import runpy, sys
+runpy.run_path(sys.argv[1], run_name="__guardrails__")
+'@
+    try {
+        if ($pyExe -eq 'py') { & $pyExe -3 -c $emitter $startPy 2>$null }
+        else { & $pyExe -c $emitter $startPy 2>$null }
+    } catch { }
+}
