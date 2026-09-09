@@ -230,6 +230,9 @@ def main():
               received[-1][1].get("event_type") == "guardrail_flagged",
               str(received[-1][1].get("event_type")))
 
+    print("\nAn isolated session gets its own state")
+    check_config_dir_isolation()
+
     print()
     print("-" * 62)
     if failures:
@@ -238,6 +241,37 @@ def main():
         print("  all green — the reporting contract holds at both seams")
     print("-" * 62 + "\n")
     return 1 if failures else 0
+
+
+# ── CLAUDE_CONFIG_DIR isolation ────────────────────────────────────────────
+# An isolated session (a test run, the nslstest account, a throwaway profile)
+# sets CLAUDE_CONFIG_DIR to get its own state. Every guardrail store used
+# Path.home()/".claude" regardless, so an isolated session read and WROTE the
+# real user's files — a test run could surface a builder's genuine decline
+# notes in a transcript, and a test's declines leaked back into real state.
+def check_config_dir_isolation():
+    import importlib
+    import os as _os
+    import tempfile
+
+    iso = tempfile.mkdtemp()
+    prior = _os.environ.get("CLAUDE_CONFIG_DIR")
+    _os.environ["CLAUDE_CONFIG_DIR"] = iso
+    try:
+        sys.modules.pop("guardrail_emit", None)
+        import guardrail_emit as fresh
+        check("SEEN_FILE follows CLAUDE_CONFIG_DIR",
+              str(fresh.SEEN_FILE).startswith(iso),
+              f"still {fresh.SEEN_FILE}")
+        check("and never the real home when isolated",
+              str(Path.home() / ".claude") not in str(fresh.SEEN_FILE),
+              str(fresh.SEEN_FILE))
+    finally:
+        if prior is None:
+            _os.environ.pop("CLAUDE_CONFIG_DIR", None)
+        else:
+            _os.environ["CLAUDE_CONFIG_DIR"] = prior
+        sys.modules.pop("guardrail_emit", None)
 
 
 if __name__ == "__main__":

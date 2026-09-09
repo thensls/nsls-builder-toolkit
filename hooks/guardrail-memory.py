@@ -46,7 +46,21 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-STORE = Path.home() / ".claude" / ".nsls-guardrail-declines.json"
+def _config_dir():
+    """The Claude config directory this session is actually using.
+
+    `CLAUDE_CONFIG_DIR` is how an isolated session — a test run, the
+    `nslstest` account, a throwaway profile — gets its own state. Every store
+    below honoured `Path.home()/".claude"` instead, so an isolated session read
+    and WROTE the real user's files: test runs saw a builder's genuine decline
+    notes (and could surface them in a transcript), and a test's declines
+    leaked back into the real store. guardrail-gate.py already resolved the
+    builder email this way; the state files simply never caught up.
+    """
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
+
+
+STORE = _config_dir() / ".nsls-guardrail-declines.json"
 
 # Keep the file from growing without bound on a long-lived machine. Well above
 # any realistic number of distinct builds one person has on the go.
@@ -208,7 +222,7 @@ def describe(cwd):
 # Same override the gate honours, so tests and the writer agree on one path.
 TEST_BASES_FILE = Path(
     os.environ.get("NSLS_AIRTABLE_TEST_BASES_FILE")
-    or (Path.home() / ".claude" / ".nsls-airtable-test-bases")
+    or (_config_dir() / ".nsls-airtable-test-bases")
 )
 
 # Airtable base IDs are "app" + exactly 14 alphanumerics. Validated rather than
