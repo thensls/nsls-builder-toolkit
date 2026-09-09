@@ -231,7 +231,7 @@ def _git_out(plugin_dir, *args):
         return ""
 
 
-def _warn_if_stale_by_configuration(plugin, plugin_dir):
+def _warn_if_stale_by_configuration(plugin, plugin_dir, deadline=None):
     """Catch the freeze that _warn_if_frozen structurally cannot see.
 
     _warn_if_frozen only speaks when the pull FAILS. Two shapes of frozen
@@ -257,6 +257,12 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir):
     origin/main is already current by the time this runs, and everything here is
     a local ref comparison.
     """
+    # Four git calls at up to GIT_TIMEOUT each, twice over (two toolkits),
+    # running AFTER git_pull's 15s and before two 35s ping attempts inside a
+    # 90s hook budget. Overrunning kills the hook mid-flight and costs the
+    # builder their session credit — a stale-branch NOTE is never worth that.
+    if deadline is not None and time.monotonic() >= deadline:
+        return
     branch = _git_out(plugin_dir, "rev-parse", "--abbrev-ref", "HEAD")
     if not branch or branch == "HEAD":
         return  # detached: pinned on purpose
@@ -274,6 +280,11 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir):
     # Both get told; the WORDING carries the ambiguity instead of the logic.
     upstream = _git_out(plugin_dir, "rev-parse", "--abbrev-ref",
                         "--symbolic-full-name", "@{u}")
+    if upstream == "origin/main":
+        return  # tracking main IS the healthy shape. A checkout on main that
+        # has diverged locally is _warn_if_frozen's business (its ff-only pull
+        # genuinely fails); saying "it tracks its own upstream rather than
+        # main" about main itself is contradictory advice.
     has_upstream = bool(upstream)
     behind = _git_out(plugin_dir, "rev-list", "--count", "HEAD..origin/main")
     if not behind.isdigit() or int(behind) == 0:
@@ -355,7 +366,7 @@ def git_pull():
                 _warn_if_frozen(plugin, plugin_dir, (r.stderr or "") + (r.stdout or ""))
             # Runs whether the pull succeeded or not: a clean pull aimed at a
             # branch that never moves is the freeze this catches.
-            _warn_if_stale_by_configuration(plugin, plugin_dir)
+            _warn_if_stale_by_configuration(plugin, plugin_dir, deadline=deadline)
         except Exception:
             pass
 
@@ -1264,7 +1275,8 @@ if __name__ == "__guardrails__":
         for _plugin in SYNC_PLUGINS:
             _dir = CONFIG_DIR / "local-plugins" / _plugin
             if (_dir / ".git").exists():
-                _warn_if_stale_by_configuration(_plugin, _dir)
+                _warn_if_stale_by_configuration(
+                    _plugin, _dir, deadline=time.monotonic() + 10)
     except Exception:
         pass
 
