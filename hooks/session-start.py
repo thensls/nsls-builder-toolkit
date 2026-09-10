@@ -450,6 +450,10 @@ def run_plugin_migration():
 ORG_PLUGIN_KEY = "nsls-builder-toolkit@nsls-toolkit"
 ORG_MARKETPLACE = "nsls-toolkit"
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
+# What plugin.json may carry: X.Y.Z with an optional short pre-release/build tag.
+# The registry is a CLI-owned file on disk, and its "version" is echoed into the
+# model's context on drift — so only a value that looks like a version gets out.
+_PLUGIN_VERSION = re.compile(r"^\d{1,5}\.\d{1,5}\.\d{1,5}(?:[-+][0-9A-Za-z.]{1,32})?$")
 
 
 def _installed_plugin_record():
@@ -478,8 +482,11 @@ def _installed_plugin_record():
             if e.get("scope", "user") != "user":
                 continue
             sha = e.get("gitCommitSha")
+            version = e.get("version")
+            if not (isinstance(version, str) and _PLUGIN_VERSION.match(version)):
+                version = "?"  # anything else is not a version and never reaches stdout
             return {
-                "version": str(e.get("version") or "?"),
+                "version": version,
                 "installPath": e.get("installPath") or "",
                 "sha": sha if isinstance(sha, str) and _SHA40.match(sha) else None,
             }
@@ -501,6 +508,51 @@ def _marketplace_head():
 
 def _plugin_cache_root():
     return (CONFIG_DIR / "plugins" / "cache").resolve()
+
+
+HEAL_LOCK_STALE_S = 180  # longer than any heal can run (45s budget) with margin
+
+
+def _acquire_heal_lock():
+    """Exclusive, cross-process, cross-platform (no fcntl on Windows): create
+    the lock file with O_EXCL. Returns the path on success, None if another
+    session holds it. A lock older than HEAL_LOCK_STALE_S is a crashed holder
+    and is broken once.
+
+    Why: two sessions starting within the same second both pass the daily
+    marker check before either touches it, and both see drift. Without this,
+    session B can uninstall the plugin session A just reinstalled, then fail
+    its own installs, and leave the machine with no toolkit.
+    """
+    lock = CONFIG_DIR / ".nsls-plugin-heal.lock"
+    for attempt in range(2):
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            return lock
+        except FileExistsError:
+            try:
+                age = time.time() - lock.stat().st_mtime
+            except FileNotFoundError:
+                continue  # holder released between our open and stat: retry
+            if attempt == 0 and age > HEAL_LOCK_STALE_S:
+                try:
+                    lock.unlink()
+                except Exception:
+                    return None
+                continue
+            return None
+        except Exception:
+            return None
+    return None
+
+
+def _release_heal_lock(lock):
+    try:
+        lock.unlink()
+    except Exception:
+        pass
 
 
 def _heal_plugin_drift(claude, record, head, deadline):
@@ -612,39 +664,54 @@ def ensure_plugin_fresh():
         if not record or not record["sha"] or not head or record["sha"] == head:
             return  # level, or not enough evidence to act on
 
-        old7, new7, version = record["sha"][:7], head[:7], record["version"]
-        if _heal_plugin_drift(claude, record, head, deadline):
-            print(
-                f"NOTICE - nsls-builder-toolkit was refreshed in place: the installed "
-                f"copy (version {version}, commit {old7}) had fallen behind the "
-                f"published main (commit {new7}) under the same version number, so "
-                f"`claude plugin update` could not see the gap. The reinstall "
-                f"succeeded; the updated skills and hooks load on the next session. "
-                f"Mention it to the user at a natural moment - no action needed."
-            )
-            return
-
-        # The heal failed. The plugin may now be uninstalled: say so, hand over
-        # the manual steps, and clear the daily marker so the next session
-        # retries instead of waiting a day with no toolkit.
+        lock = _acquire_heal_lock()
+        if lock is None:
+            return  # another session is healing right now; it will announce
         try:
-            marker.unlink()
-        except Exception:
-            pass
-        after = _installed_plugin_record()
-        state = ("is currently NOT installed on this machine"
-                 if after is None else f"is still on commit {after['sha'][:7] if after['sha'] else '?'}")
-        print(
-            f"WARNING - nsls-builder-toolkit was stale (version {version}, commit "
-            f"{old7}; published main is {new7}) and the automatic refresh failed, so "
-            f"the plugin {state}. Tell the user now and offer the repair: run "
-            f"`claude plugin install {ORG_PLUGIN_KEY}` (if it reports already "
-            f"installed, run `claude plugin uninstall {ORG_PLUGIN_KEY}` first and "
-            f"delete the cache directory under ~/.claude/plugins/cache/{ORG_MARKETPLACE}/), "
-            f"then start a new session. The hook will retry on the next session."
-        )
+            # Re-read under the lock: the other session may have just finished.
+            record = _installed_plugin_record()
+            if not record or not record["sha"] or record["sha"] == head:
+                return
+            _heal_and_announce(claude, record, head, deadline, marker)
+        finally:
+            _release_heal_lock(lock)
     except Exception:
         pass
+
+
+def _heal_and_announce(claude, record, head, deadline, marker):
+    """Run the heal and put exactly one line in the model's context about it."""
+    old7, new7, version = record["sha"][:7], head[:7], record["version"]
+    if _heal_plugin_drift(claude, record, head, deadline):
+        print(
+            f"NOTICE - nsls-builder-toolkit was refreshed in place: the installed "
+            f"copy (version {version}, commit {old7}) had fallen behind the "
+            f"published main (commit {new7}) under the same version number, so "
+            f"`claude plugin update` could not see the gap. The reinstall "
+            f"succeeded; the updated skills and hooks load on the next session. "
+            f"Mention it to the user at a natural moment - no action needed."
+        )
+        return
+
+    # The heal failed. The plugin may now be uninstalled: say so, hand over
+    # the manual steps, and clear the daily marker so the next session
+    # retries instead of waiting a day with no toolkit.
+    try:
+        marker.unlink()
+    except Exception:
+        pass
+    after = _installed_plugin_record()
+    state = ("is currently NOT installed on this machine"
+             if after is None else f"is still on commit {after['sha'][:7] if after['sha'] else '?'}")
+    print(
+        f"WARNING - nsls-builder-toolkit was stale (version {version}, commit "
+        f"{old7}; published main is {new7}) and the automatic refresh failed, so "
+        f"the plugin {state}. Tell the user now and offer the repair: run "
+        f"`claude plugin install {ORG_PLUGIN_KEY}` (if it reports already "
+        f"installed, run `claude plugin uninstall {ORG_PLUGIN_KEY}` first and "
+        f"delete the cache directory under ~/.claude/plugins/cache/{ORG_MARKETPLACE}/), "
+        f"then start a new session. The hook will retry on the next session."
+    )
 
 
 def sync_pointers():
