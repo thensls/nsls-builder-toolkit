@@ -1,0 +1,36 @@
+name: Plugin version bump
+
+# Builders run this toolkit from a VERSION-PINNED plugin cache. The daily
+# `claude plugin update` on their machines compares version strings and
+# nothing else, so a PR that merges without bumping .claude-plugin/plugin.json
+# is a PR nobody receives — the CLI keeps reporting "already at the latest
+# version" over a cache that is weeks behind main. Eight PRs shipped that way
+# in September 2026. This check is a required status on main.
+#
+# `pull_request_target`, not `pull_request`: the workflow definition and the
+# checker script then come from the BASE branch, so a PR cannot edit either
+# to wave itself through. The PR is never checked out and nothing from it is
+# executed — its manifest is read with `git show` from the fetched commit and
+# JSON-parsed. That is what makes `pull_request_target` safe here; keep it
+# that way (no `actions/checkout` of the PR ref, no scripts from it).
+#
+# The job name below is the status-check context registered in branch
+# protection. Renaming it silently un-requires the gate.
+
+on:
+  pull_request_target:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  plugin-version-bump:
+    name: plugin-version-bump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4   # base branch (the default for pull_request_target)
+      - name: Fetch the PR head commit (read-only; never executed)
+        run: git fetch --no-tags --depth=1 origin "+refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/pr/head"
+      - name: Version on PR head must exceed version on base
+        run: python3 .github/scripts/check_plugin_version.py HEAD "${{ github.event.pull_request.head.sha }}"

@@ -44,6 +44,19 @@ The install script sets up three things:
 - `verification-before-completion` — always verify before claiming done
 - `finishing-a-development-branch` — merge/PR decision guide
 
+## Every PR to main bumps the plugin version
+
+Builders run this toolkit from a **version-pinned plugin cache**. Their daily
+`claude plugin update` compares the version string in `.claude-plugin/plugin.json`
+and nothing else — a merge that leaves it alone is a merge nobody receives. The
+`plugin-version-bump` check (required on `main`) refuses a PR whose version is not
+strictly greater than main's. Patch for fixes, minor for a new skill or behavior,
+major for breaking changes to how builders install or use the toolkit.
+
+If two open PRs bump to the same number, the second lands unversioned; the
+session hook catches that by comparing the installed commit with the marketplace
+HEAD and reinstalls in place (`ensure_plugin_fresh` in `hooks/session-start.py`).
+
 ## PR Review — Macroscope
 
 Macroscope is a code review tool — it pays off when the PR contains claims about APIs, SDKs, query syntax, data system behavior, or other technical facts it can verify against documentation patterns. It has a per-review cost. Use it where it earns its keep.

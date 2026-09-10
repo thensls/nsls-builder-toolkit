@@ -447,13 +447,201 @@ def run_plugin_migration():
         pass
 
 
+ORG_PLUGIN_KEY = "nsls-builder-toolkit@nsls-toolkit"
+ORG_MARKETPLACE = "nsls-toolkit"
+# \Z, not $: $ also matches before a trailing newline, and a registry sha with a
+# stray newline must read as "unknown", never as "different from HEAD".
+_SHA40 = re.compile(r"^[0-9a-f]{40}\Z")
+# What plugin.json may carry: X.Y.Z with an optional short pre-release/build tag.
+# The registry is a CLI-owned file on disk, and its "version" is echoed into the
+# model's context on drift — so only a value that looks like a version gets out.
+_PLUGIN_VERSION = re.compile(r"^\d{1,5}\.\d{1,5}\.\d{1,5}(?:[-+][0-9A-Za-z.]{1,32})?\Z")
+
+
+def _installed_plugin_record():
+    """The user-scope registry entry for the org plugin, or None.
+
+    Shape (installed_plugins.json, CLI-owned): {"plugins": {"<name>@<market>":
+    [{"scope", "version", "installPath", "gitCommitSha", ...}]}}. Older CLIs
+    wrote a bare dict instead of a list; both are read. Only a validated
+    40-hex sha is returned — anything else is treated as unknown, never as
+    "different", so a corrupt registry cannot trigger a reinstall.
+    """
+    try:
+        registry = json.loads(
+            (CONFIG_DIR / "plugins" / "installed_plugins.json").read_text(
+                encoding="utf-8-sig"
+            )
+        )
+        entries = registry.get("plugins", {}).get(ORG_PLUGIN_KEY)
+        if entries is None:
+            return None
+        if isinstance(entries, dict):
+            entries = [entries]
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            if e.get("scope", "user") != "user":
+                continue
+            sha = e.get("gitCommitSha")
+            version = e.get("version")
+            if not (isinstance(version, str) and _PLUGIN_VERSION.match(version)):
+                version = "?"  # anything else is not a version and never reaches stdout
+            return {
+                "version": version,
+                "installPath": e.get("installPath") or "",
+                "sha": sha if isinstance(sha, str) and _SHA40.match(sha) else None,
+            }
+    except Exception:
+        pass
+    return None
+
+
+def _marketplace_head():
+    """HEAD of the marketplace clone the CLI keeps (and refreshes on every
+    `plugin update`) — i.e. what an install right now would contain. None if
+    the clone is missing or rev-parse does not yield a 40-hex sha."""
+    clone = CONFIG_DIR / "plugins" / "marketplaces" / ORG_MARKETPLACE
+    if not (clone / ".git").exists():
+        return None
+    sha = _git_out(clone, "rev-parse", "HEAD")
+    return sha if _SHA40.match(sha) else None
+
+
+def _plugin_cache_root():
+    return (CONFIG_DIR / "plugins" / "cache").resolve()
+
+
+HEAL_LOCK_STALE_S = 180  # longer than any heal can run (45s budget) with margin
+
+
+def _acquire_heal_lock():
+    """Exclusive, cross-process, cross-platform (no fcntl on Windows): create
+    the lock file with O_EXCL. Returns the path on success, None if another
+    session holds it. A lock older than HEAL_LOCK_STALE_S is a crashed holder
+    and is broken once.
+
+    Why: two sessions starting within the same second both pass the daily
+    marker check before either touches it, and both see drift. Without this,
+    session B can uninstall the plugin session A just reinstalled, then fail
+    its own installs, and leave the machine with no toolkit.
+    """
+    lock = CONFIG_DIR / ".nsls-plugin-heal.lock"
+    for attempt in range(2):
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            return lock
+        except FileExistsError:
+            try:
+                age = time.time() - lock.stat().st_mtime
+            except FileNotFoundError:
+                continue  # holder released between our open and stat: retry
+            # Negative age = a lock stamped in the future (clock correction);
+            # treating it as held would disable healing until wall time caught up.
+            if attempt == 0 and (age > HEAL_LOCK_STALE_S or age < 0):
+                # Claim the stale lock ATOMICALLY by renaming it: rename
+                # succeeds for exactly one process, and the loser sees
+                # FileNotFoundError. A plain unlink here could remove a NEW lock
+                # another session had just created after breaking the same
+                # stale one, and then two sessions would heal at once.
+                claimed = lock.with_name(f"{lock.name}.stale.{os.getpid()}")
+                try:
+                    os.rename(str(lock), str(claimed))
+                except FileNotFoundError:
+                    continue  # someone else claimed it; retry the create
+                except Exception:
+                    return None
+                try:
+                    claimed.unlink()
+                except Exception:
+                    pass
+                continue
+            return None
+        except Exception:
+            return None
+    return None
+
+
+def _release_heal_lock(lock):
+    try:
+        lock.unlink()
+    except Exception:
+        pass
+
+
+def _heal_plugin_drift(claude, record, head, deadline):
+    """Uninstall, drop the stale cache dir, reinstall. Returns True on success.
+
+    The CLI's uninstall leaves the cache directory in place, and its install
+    reuses a directory that already exists for the version — so without the
+    rmtree in the middle the reinstall is a no-op and the drift survives
+    (verified 2026-09-10). The rmtree is fenced to paths under plugins/cache:
+    the registry is CLI-owned but still a file on disk, and a path that points
+    anywhere else is not ours to delete.
+
+    Two install attempts, not one: between uninstall and a successful install
+    the plugin is GONE from this machine, so a transient failure (network
+    blip, CLI lock) is worth one immediate retry before we give up and say so.
+    """
+    def remaining():
+        return deadline - time.monotonic()
+
+    def cli(*args):
+        # A timed-out or failed CLI call is a failed step, never an exception:
+        # after the uninstall the plugin is GONE, and letting TimeoutExpired
+        # escape would skip the warning below and leave the daily marker set,
+        # so the machine would sit without a toolkit until tomorrow, silently.
+        timeout = remaining()
+        if timeout <= 0:
+            return False
+        try:
+            return subprocess.run(
+                [claude, "plugin", *args, ORG_PLUGIN_KEY],
+                capture_output=True, timeout=timeout,
+            ).returncode == 0
+        except Exception:
+            return False
+
+    if remaining() <= 0 or not cli("uninstall"):
+        return False
+    try:
+        path = Path(record["installPath"]).resolve()
+        if record["installPath"] and path != _plugin_cache_root() and \
+                _plugin_cache_root() in path.parents:
+            shutil.rmtree(path, ignore_errors=True)
+    except Exception:
+        pass
+    for _ in range(2):
+        if cli("install"):
+            after = _installed_plugin_record()
+            if after and after["sha"] == head:
+                return True
+    return False
+
+
 def ensure_plugin_fresh():
-    """At most once a day, ask the CLI to sync the installed plugin.
+    """At most once a day, sync the installed plugin — by version AND by commit.
 
     Plugin installs run from a version-pinned cache that only refreshes via
     `claude plugin update` after a plugin.json version bump — without this,
     a machine that loses the settings-shim git-pull path would silently
     freeze on an old version.
+
+    `plugin update` compares version strings and nothing else. On 2026-09-10
+    it reported "already at the latest version (3.6.0)" over a cache 37
+    commits behind main, because eight PRs had merged without a bump. So
+    after the update, the installed COMMIT is compared with HEAD of the
+    marketplace clone the update just refreshed; same version but a different
+    commit is drift, and the fix is a reinstall through the CLI (see
+    _heal_plugin_drift). The CI gate .github/workflows/plugin-version.yml
+    makes drift rare; this makes it self-correcting when two PRs bump to the
+    same number and the second lands unversioned.
+
+    Everything printed here lands in the model's context. Only our own
+    literals and validated 40-hex shas are echoed — never CLI or git output,
+    which a hostile marketplace could shape.
     """
     if not org_plugin_active():
         return
@@ -468,16 +656,82 @@ def ensure_plugin_fresh():
         if not claude:
             return
         marker.touch()
-        # 20s, not the hook's whole 90s budget — a hung update must leave room
-        # for sync_pointers and the session pings behind it. On timeout the
-        # marker is already touched, so the next attempt is tomorrow; releases
-        # just arrive a day later on that machine.
-        subprocess.run(
-            [claude, "plugin", "update", "nsls-builder-toolkit@nsls-toolkit"],
-            capture_output=True, timeout=20,
-        )
+        # Budget: 20s for the update (the common path — a hung update must leave
+        # room for sync_pointers and the session pings behind it), and up to 25s
+        # more for a heal, which only runs when drift is actually detected. On
+        # timeout the marker is already touched, so the next attempt is
+        # tomorrow; releases just arrive a day later on that machine.
+        deadline = time.monotonic() + 45
+        try:
+            updated = subprocess.run(
+                [claude, "plugin", "update", ORG_PLUGIN_KEY],
+                capture_output=True, timeout=20,
+            ).returncode == 0
+        except subprocess.TimeoutExpired:
+            return
+        if not updated:
+            # Offline, CLI lock, marketplace unreachable: whatever stopped the
+            # update would stop the reinstall too, and the reinstall starts by
+            # uninstalling. Never trade a stale toolkit for no toolkit.
+            return
+
+        record = _installed_plugin_record()
+        head = _marketplace_head()
+        if not record or not record["sha"] or not head or record["sha"] == head:
+            return  # level, or not enough evidence to act on
+
+        lock = _acquire_heal_lock()
+        if lock is None:
+            return  # another session is healing right now; it will announce
+        try:
+            # Re-read BOTH sides under the lock: the other session may have just
+            # finished healing, and its `plugin update` may have advanced the
+            # marketplace clone while we waited, so a head read before the lock
+            # would misjudge the reinstall as failed (or succeeded).
+            record = _installed_plugin_record()
+            head = _marketplace_head()
+            if not record or not record["sha"] or not head or record["sha"] == head:
+                return
+            _heal_and_announce(claude, record, head, deadline, marker)
+        finally:
+            _release_heal_lock(lock)
     except Exception:
         pass
+
+
+def _heal_and_announce(claude, record, head, deadline, marker):
+    """Run the heal and put exactly one line in the model's context about it."""
+    old7, new7, version = record["sha"][:7], head[:7], record["version"]
+    if _heal_plugin_drift(claude, record, head, deadline):
+        print(
+            f"NOTICE - nsls-builder-toolkit was refreshed in place: the installed "
+            f"copy (version {version}, commit {old7}) had fallen behind the "
+            f"published main (commit {new7}) under the same version number, so "
+            f"`claude plugin update` could not see the gap. The reinstall "
+            f"succeeded; the updated skills and hooks load on the next session. "
+            f"Mention it to the user at a natural moment - no action needed."
+        )
+        return
+
+    # The heal failed. The plugin may now be uninstalled: say so, hand over
+    # the manual steps, and clear the daily marker so the next session
+    # retries instead of waiting a day with no toolkit.
+    try:
+        marker.unlink()
+    except Exception:
+        pass
+    after = _installed_plugin_record()
+    state = ("is currently NOT installed on this machine"
+             if after is None else f"is still on commit {after['sha'][:7] if after['sha'] else '?'}")
+    print(
+        f"WARNING - nsls-builder-toolkit was stale (version {version}, commit "
+        f"{old7}; published main is {new7}) and the automatic refresh failed, so "
+        f"the plugin {state}. Tell the user now and offer the repair: run "
+        f"`claude plugin install {ORG_PLUGIN_KEY}` (if it reports already "
+        f"installed, run `claude plugin uninstall {ORG_PLUGIN_KEY}` first and "
+        f"delete the cache directory under ~/.claude/plugins/cache/{ORG_MARKETPLACE}/), "
+        f"then start a new session. The hook will retry on the next session."
+    )
 
 
 def sync_pointers():

@@ -8,3 +8,6 @@ __pycache__/
 .last-ping-failed
 .pending-announcements
 .install-identity
+
+# Session worktrees created under the checkout (see superpowers:using-git-worktrees).
+.claude/worktrees/
