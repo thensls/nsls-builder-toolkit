@@ -538,11 +538,25 @@ def _acquire_heal_lock():
                 age = time.time() - lock.stat().st_mtime
             except FileNotFoundError:
                 continue  # holder released between our open and stat: retry
-            if attempt == 0 and age > HEAL_LOCK_STALE_S:
+            # Negative age = a lock stamped in the future (clock correction);
+            # treating it as held would disable healing until wall time caught up.
+            if attempt == 0 and (age > HEAL_LOCK_STALE_S or age < 0):
+                # Claim the stale lock ATOMICALLY by renaming it: rename
+                # succeeds for exactly one process, and the loser sees
+                # FileNotFoundError. A plain unlink here could remove a NEW lock
+                # another session had just created after breaking the same
+                # stale one, and then two sessions would heal at once.
+                claimed = lock.with_name(f"{lock.name}.stale.{os.getpid()}")
                 try:
-                    lock.unlink()
+                    os.rename(str(lock), str(claimed))
+                except FileNotFoundError:
+                    continue  # someone else claimed it; retry the create
                 except Exception:
                     return None
+                try:
+                    claimed.unlink()
+                except Exception:
+                    pass
                 continue
             return None
         except Exception:
@@ -670,9 +684,13 @@ def ensure_plugin_fresh():
         if lock is None:
             return  # another session is healing right now; it will announce
         try:
-            # Re-read under the lock: the other session may have just finished.
+            # Re-read BOTH sides under the lock: the other session may have just
+            # finished healing, and its `plugin update` may have advanced the
+            # marketplace clone while we waited, so a head read before the lock
+            # would misjudge the reinstall as failed (or succeeded).
             record = _installed_plugin_record()
-            if not record or not record["sha"] or record["sha"] == head:
+            head = _marketplace_head()
+            if not record or not record["sha"] or not head or record["sha"] == head:
                 return
             _heal_and_announce(claude, record, head, deadline, marker)
         finally:

@@ -287,6 +287,17 @@ with tempfile.TemporaryDirectory() as tmp:
 
 with tempfile.TemporaryDirectory() as tmp:
     m = Machine(tmp)
+    lock = m.config / ".nsls-plugin-heal.lock"
+    lock.write_text("12345")
+    future = time.time() + 3600  # clock stepped backwards after the holder wrote it
+    os.utime(lock, (future, future))
+    out = run_hook(m)
+    check("future-dated lock (clock correction): treated as stale, heal proceeds", m.registry_sha() == m.head)
+    check("future-dated lock: no leftover claimed-lock files",
+          not any(p.name.startswith(".nsls-plugin-heal.lock") for p in m.config.iterdir()))
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
     out = run_hook(m)
     check("normal heal: lock released afterwards", not (m.config / ".nsls-plugin-heal.lock").exists())
 
