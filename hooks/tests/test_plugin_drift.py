@@ -317,6 +317,13 @@ with tempfile.TemporaryDirectory() as tmp:
     check("fresh daily marker: nothing runs", m.calls() == [] and out.strip() == "")
 
 with tempfile.TemporaryDirectory() as tmp:
+    # `$` would accept this; a corrupt value must read as unknown, not as drift.
+    m = Machine(tmp, installed_sha=OLD + "\n")
+    out = run_hook(m)
+    check("sha with trailing newline: unknown, so no reinstall",
+          not any("uninstall" in c for c in m.calls()) and out.strip() == "")
+
+with tempfile.TemporaryDirectory() as tmp:
     m = Machine(tmp, installed_sha="not-a-sha")
     out = run_hook(m)
     check("unparseable registry sha: no reinstall on a guess",

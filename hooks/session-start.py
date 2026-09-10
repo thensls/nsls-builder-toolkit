@@ -449,11 +449,13 @@ def run_plugin_migration():
 
 ORG_PLUGIN_KEY = "nsls-builder-toolkit@nsls-toolkit"
 ORG_MARKETPLACE = "nsls-toolkit"
-_SHA40 = re.compile(r"^[0-9a-f]{40}$")
+# \Z, not $: $ also matches before a trailing newline, and a registry sha with a
+# stray newline must read as "unknown", never as "different from HEAD".
+_SHA40 = re.compile(r"^[0-9a-f]{40}\Z")
 # What plugin.json may carry: X.Y.Z with an optional short pre-release/build tag.
 # The registry is a CLI-owned file on disk, and its "version" is echoed into the
 # model's context on drift — so only a value that looks like a version gets out.
-_PLUGIN_VERSION = re.compile(r"^\d{1,5}\.\d{1,5}\.\d{1,5}(?:[-+][0-9A-Za-z.]{1,32})?$")
+_PLUGIN_VERSION = re.compile(r"^\d{1,5}\.\d{1,5}\.\d{1,5}(?:[-+][0-9A-Za-z.]{1,32})?\Z")
 
 
 def _installed_plugin_record():
