@@ -74,11 +74,9 @@ def make_repo(tmp, base_version, head_version=None, head_raw=None):
     return repo
 
 
-def run(repo, base="main"):
-    r = subprocess.run(
-        [sys.executable, str(SCRIPT), base],
-        cwd=str(repo), capture_output=True, text=True,
-    )
+def run(repo, base="main", head=None):
+    argv = [sys.executable, str(SCRIPT), base] + ([head] if head else [])
+    r = subprocess.run(argv, cwd=str(repo), capture_output=True, text=True)
     return r.returncode, r.stdout + r.stderr
 
 
@@ -130,6 +128,27 @@ with tempfile.TemporaryDirectory() as tmp:
     code, out = run(make_repo(tmp, "3.6.0", "3.7.0"), base="refs/heads/does-not-exist")
     check("an unresolvable base ref fails loudly", code != 0)
     check("unresolvable base is explained", "does-not-exist" in out)
+
+# --- two-argument form: what the workflow runs under pull_request_target ------
+with tempfile.TemporaryDirectory() as tmp:
+    # Base checked out, PR head only as a ref. The working tree is the BASE
+    # (unbumped) — with an explicit head ref it must be ignored.
+    repo = make_repo(tmp, "3.6.0", "3.7.0")
+    git(repo, "checkout", "-q", "main")
+    code, out = run(repo, base="HEAD", head="feature")
+    check("head-ref form: reads the manifest from the ref, not the working tree", code == 0)
+    check("head-ref form: reports both versions", "3.6.0" in out and "3.7.0" in out)
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo = make_repo(tmp, "3.6.0", "3.6.0")
+    git(repo, "checkout", "-q", "main")
+    code, out = run(repo, base="HEAD", head="feature")
+    check("head-ref form: unbumped head is refused", code != 0)
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo = make_repo(tmp, "3.6.0", "3.7.0")
+    code, out = run(repo, base="main", head="refs/remotes/pr/nope")
+    check("head-ref form: unresolvable head fails loudly", code != 0 and "nope" in out)
 
 print()
 if failures:

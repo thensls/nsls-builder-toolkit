@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Refuse a PR to main that does not bump `.claude-plugin/plugin.json`.
 
-Usage: python3 .github/scripts/check_plugin_version.py <base-ref>
+Usage: python3 .github/scripts/check_plugin_version.py <base-ref> [<head-ref>]
+
+With one argument the PR head is the working tree. With two, the head
+manifest is read from <head-ref> via `git show` — the shape the workflow
+uses under `pull_request_target`, where this script and the workflow come
+from the BASE branch and nothing from the PR is ever executed, only read.
 
 Why this gate exists: builders run the toolkit from a VERSION-PINNED plugin
 cache. `claude plugin update` compares version strings and nothing else, so a
@@ -50,15 +55,31 @@ def parse_version(raw, where):
 
 
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 3):
         print(__doc__)
         sys.exit(2)
     base_ref = sys.argv[1]
+    head_ref = sys.argv[2] if len(sys.argv) == 3 else None
 
-    head_path = Path(MANIFEST)
-    if not head_path.exists():
-        fail(f"{MANIFEST} is missing from the PR head.")
-    head_tuple, head_str = parse_version(head_path.read_text(encoding="utf-8-sig"), "PR head")
+    if head_ref is None:
+        head_path = Path(MANIFEST)
+        if not head_path.exists():
+            fail(f"{MANIFEST} is missing from the PR head.")
+        head_raw = head_path.read_text(encoding="utf-8-sig")
+    else:
+        resolve_head = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{head_ref}^{{commit}}"],
+            capture_output=True, text=True,
+        )
+        if resolve_head.returncode != 0:
+            fail(f"head ref {head_ref!r} does not resolve to a commit — was it fetched?")
+        show_head = subprocess.run(
+            ["git", "show", f"{head_ref}:{MANIFEST}"], capture_output=True, text=True,
+        )
+        if show_head.returncode != 0:
+            fail(f"{MANIFEST} is missing from the PR head ({head_ref}).")
+        head_raw = show_head.stdout
+    head_tuple, head_str = parse_version(head_raw, "PR head")
 
     # Does the base ref resolve at all? A typo'd or unfetched ref must not
     # read as "no manifest on base" and wave the PR through.

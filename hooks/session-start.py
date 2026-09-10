@@ -518,15 +518,25 @@ def _heal_plugin_drift(claude, record, head, deadline):
     blip, CLI lock) is worth one immediate retry before we give up and say so.
     """
     def remaining():
-        return max(5, int(deadline - time.monotonic()))
+        return deadline - time.monotonic()
 
     def cli(*args):
-        return subprocess.run(
-            [claude, "plugin", *args, ORG_PLUGIN_KEY],
-            capture_output=True, timeout=remaining(),
-        ).returncode == 0
+        # A timed-out or failed CLI call is a failed step, never an exception:
+        # after the uninstall the plugin is GONE, and letting TimeoutExpired
+        # escape would skip the warning below and leave the daily marker set,
+        # so the machine would sit without a toolkit until tomorrow, silently.
+        timeout = remaining()
+        if timeout <= 0:
+            return False
+        try:
+            return subprocess.run(
+                [claude, "plugin", *args, ORG_PLUGIN_KEY],
+                capture_output=True, timeout=timeout,
+            ).returncode == 0
+        except Exception:
+            return False
 
-    if not cli("uninstall"):
+    if remaining() <= 0 or not cli("uninstall"):
         return False
     try:
         path = Path(record["installPath"]).resolve()
@@ -536,8 +546,6 @@ def _heal_plugin_drift(claude, record, head, deadline):
     except Exception:
         pass
     for _ in range(2):
-        if time.monotonic() > deadline:
-            break
         if cli("install"):
             after = _installed_plugin_record()
             if after and after["sha"] == head:
@@ -587,11 +595,16 @@ def ensure_plugin_fresh():
         # tomorrow; releases just arrive a day later on that machine.
         deadline = time.monotonic() + 45
         try:
-            subprocess.run(
+            updated = subprocess.run(
                 [claude, "plugin", "update", ORG_PLUGIN_KEY],
                 capture_output=True, timeout=20,
-            )
+            ).returncode == 0
         except subprocess.TimeoutExpired:
+            return
+        if not updated:
+            # Offline, CLI lock, marketplace unreachable: whatever stopped the
+            # update would stop the reinstall too, and the reinstall starts by
+            # uninstalling. Never trade a stale toolkit for no toolkit.
             return
 
         record = _installed_plugin_record()

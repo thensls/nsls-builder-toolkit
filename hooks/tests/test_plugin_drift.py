@@ -63,6 +63,8 @@ FAKE_CLAUDE = textwrap.dedent('''\
     args = sys.argv[1:]
     Path(os.environ["FAKE_LOG"]).open("a").write(" ".join(args) + "\\n")
     reg = Path(os.environ["FAKE_REGISTRY"])
+    if args[:2] == ["plugin", "update"]:
+        sys.exit(int(os.environ.get("FAKE_UPDATE_FAILS", "0")))
     if args[:2] == ["plugin", "uninstall"]:
         d = json.loads(reg.read_text()); d["plugins"].pop("nsls-builder-toolkit@nsls-toolkit", None)
         reg.write_text(json.dumps(d))
@@ -227,6 +229,40 @@ with tempfile.TemporaryDirectory() as tmp:
     check("failed: marker removed so next session retries", not m.marker.exists())
     check("failed: gave up after a bounded number of attempts",
           sum(c == f"plugin install {PLUGIN_KEY}" for c in m.calls()) <= 3)
+
+# --- update itself failed (offline, CLI lock): never trade stale for gone ----
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.env["FAKE_UPDATE_FAILS"] = "1"
+    out = run_hook(m)
+    calls = m.calls()
+    check("update failed: no uninstall", not any("uninstall" in c for c in calls))
+    check("update failed: no install", not any(c.startswith("plugin install") for c in calls))
+    check("update failed: still installed at the old commit", m.registry_sha() == OLD)
+    check("update failed: silent (offline is not an incident)", out.strip() == "")
+
+# --- no time left: the heal must not start (an uninstall it cannot finish) --
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    saved = {k: os.environ.get(k) for k in m.env}
+    os.environ.update(m.env)
+    try:
+        spec = importlib.util.spec_from_file_location("session_start_hook_drift2", HOOK)
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+        import time as _time
+        record = {"version": "3.6.0", "installPath": str(m.install_path), "sha": OLD}
+        ok = hook._heal_plugin_drift(str(m.root / "bin" / "claude"), record, m.head,
+                                     deadline=_time.monotonic() - 1)
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    check("deadline passed: heal reports failure", ok is False)
+    check("deadline passed: no CLI call was made at all", m.calls() == [])
+    check("deadline passed: plugin left installed", m.registry_sha() == OLD)
 
 # --- guard rails --------------------------------------------------------------
 with tempfile.TemporaryDirectory() as tmp:
