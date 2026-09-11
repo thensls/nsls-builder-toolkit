@@ -253,7 +253,7 @@ with tempfile.TemporaryDirectory() as tmp:
         spec.loader.exec_module(hook)
         import time as _time
         record = {"version": "3.6.0", "installPath": str(m.install_path), "sha": OLD}
-        ok = hook._heal_plugin_drift(str(m.root / "bin" / "claude"), record, m.head,
+        ok = hook._heal_plugin_drift([str(m.root / "bin" / "claude")], record, m.head,
                                      deadline=_time.monotonic() - 1)
     finally:
         for k, v in saved.items():
@@ -364,26 +364,42 @@ with tempfile.TemporaryDirectory() as tmp:
             (d / "claude.exe").write_text("")
         found = hook._find_claude()
         check("find_claude: desktop bundle, highest version wins numerically",
-              found is not None and "1.0.12" in found)
+              found is not None and "1.0.12" in found[-1] and len(found) == 1)
 
         # A standalone install beats the desktop bundle (installer order).
         p = root / "profile" / ".local" / "bin"
         p.mkdir(parents=True)
         (p / "claude.exe").write_text("")
         check("find_claude: ~/.local/bin/claude.exe preferred over the bundle",
-              hook._find_claude() == str(p / "claude.exe"))
+              hook._find_claude() == [str(p / "claude.exe")])
+
+        # npm shim that exists only as a .ps1: must come back runnable, i.e.
+        # wrapped in powershell -File, never as a bare path CreateProcess rejects.
+        (p / "claude.exe").unlink()
+        npm = root / "appdata" / "npm"
+        npm.mkdir(parents=True)
+        (npm / "claude.ps1").write_text("")
+        argv = hook._find_claude()
+        check("find_claude: npm claude.ps1 is wrapped in powershell -File",
+              argv is not None and argv[0] == "powershell" and "-File" in argv
+              and argv[-1] == str(npm / "claude.ps1"))
+        (npm / "claude.cmd").write_text("")
+        check("find_claude: npm claude.cmd preferred over claude.ps1",
+              hook._find_claude() == [str(npm / "claude.cmd")])
+        (npm / "claude.cmd").unlink(); (npm / "claude.ps1").unlink()
+        (p / "claude.exe").write_text("")
 
         # Mac/Linux fallback (no extension) when PATH lacks it.
         (p / "claude.exe").unlink()
         (p / "claude").write_text("")
         check("find_claude: ~/.local/bin/claude (no extension) found",
-              hook._find_claude() == str(p / "claude"))
+              hook._find_claude() == [str(p / "claude")])
 
         # PATH still wins when it has one.
         (root / "empty-bin" / "claude").write_text("#!/bin/sh\n")
         (root / "empty-bin" / "claude").chmod(0o755)
         check("find_claude: PATH entry wins over every fallback",
-              hook._find_claude() == str(root / "empty-bin" / "claude"))
+              hook._find_claude() == [str(root / "empty-bin" / "claude")])
     finally:
         for k, v in saved.items():
             if v is None:

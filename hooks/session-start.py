@@ -598,7 +598,7 @@ def _heal_plugin_drift(claude, record, head, deadline):
             return False
         try:
             return subprocess.run(
-                [claude, "plugin", *args, ORG_PLUGIN_KEY],
+                [*claude, "plugin", *args, ORG_PLUGIN_KEY],
                 capture_output=True, timeout=timeout,
             ).returncode == 0
         except Exception:
@@ -622,7 +622,11 @@ def _heal_plugin_drift(claude, record, head, deadline):
 
 
 def _find_claude():
-    """Path to the `claude` CLI, or None.
+    """argv prefix that runs the `claude` CLI (usually a one-element list), or None.
+
+    A list, not a path: the npm shim `claude.ps1` cannot be executed directly
+    by CreateProcess, so it comes back as
+    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", <path>].
 
     PATH first. Then the same places install.ps1 probes, because on Windows the
     CLI is routinely NOT on the PATH a hook inherits: the npm shim, the
@@ -635,7 +639,7 @@ def _find_claude():
     """
     found = shutil.which("claude")
     if found:
-        return found
+        return [found]
     home = Path.home()
     candidates = [
         home / ".local" / "bin" / "claude",
@@ -646,7 +650,10 @@ def _find_claude():
     localappdata = os.environ.get("LOCALAPPDATA")
     profile = os.environ.get("USERPROFILE")
     if appdata:
-        candidates.append(Path(appdata) / "npm" / "claude.cmd")
+        candidates += [
+            Path(appdata) / "npm" / "claude.cmd",
+            Path(appdata) / "npm" / "claude.ps1",
+        ]
     if profile:
         candidates += [
             Path(profile) / ".local" / "bin" / "claude.exe",
@@ -657,7 +664,7 @@ def _find_claude():
     for c in candidates:
         try:
             if c.is_file():
-                return str(c)
+                return _claude_argv(c)
         except Exception:
             continue
     if appdata:
@@ -674,8 +681,15 @@ def _find_claude():
             except Exception:
                 best = None
             if best:
-                return str(best[1])
+                return _claude_argv(best[1])
     return None
+
+
+def _claude_argv(path):
+    if path.suffix.lower() == ".ps1":
+        return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", str(path)]
+    return [str(path)]
 
 
 def ensure_plugin_fresh():
@@ -720,7 +734,7 @@ def ensure_plugin_fresh():
         deadline = time.monotonic() + 45
         try:
             updated = subprocess.run(
-                [claude, "plugin", "update", ORG_PLUGIN_KEY],
+                [*claude, "plugin", "update", ORG_PLUGIN_KEY],
                 capture_output=True, timeout=20,
             ).returncode == 0
         except subprocess.TimeoutExpired:
