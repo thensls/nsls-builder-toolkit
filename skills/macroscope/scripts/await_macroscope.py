@@ -8,7 +8,14 @@ whoever was driving. Both halves produce a wrong "all clear", and on 2026-08-24 
 repeatedly, across four PRs in one afternoon:
 
   1. `gh pr checks` renders a `neutral` conclusion as the word **"skipping"**, and Macroscope
-     returns `neutral` WHENEVER IT HAS FINDINGS. A review that found six real bugs printed
+     "skipping" covers FOUR different states, distinguishable only by `.conclusion` plus
+     `.output.title`:
+       neutral + "6 issues identified …"          -> HAS FINDINGS
+       neutral + "Macroscope encountered an error" -> CRASHED, unreviewed
+       skipped + "No code objects were reviewed."  -> nothing in scope (ignore patterns
+                                                      exclude test files)
+       (no check run)                              -> never ran
+     A review that found six real bugs printed
      "skipping", which reads as "didn't run" or "passed". The real title was
      "6 issues identified (10 code objects reviewed)".
 
@@ -31,7 +38,10 @@ Usage:
 
 Exit codes:
     0  settled, success, zero findings                  — clean
+    0  ALSO: conclusion `skipped` with no unresolved threads — nothing was in
+       scope, verdict "NOT REVIEWED". No review happened; retrying will not change it
     1  settled with findings (conclusion `neutral`)     — act on them
+       a `neutral` whose title says Macroscope ERRORED exits 3 instead — unreviewed
     2  timed out before the check settled               — NOT a pass
     3  check concluded failure/cancelled/etc            — infrastructure, not a verdict
     4  usage error, query error, or unknown state       — never confused with "not ready"
@@ -78,10 +88,12 @@ def find_macroscope_run(payload):
     return None
 
 
-def classify(conclusion, findings, unresolved):
+def classify(conclusion, findings, unresolved, title=""):
     """Map a settled conclusion + counts onto (exit_code, verdict, detail).
 
-    `findings` and `unresolved` are ints, or None when undeterminable.
+    `findings` and `unresolved` are ints, or None when undeterminable. `title` is the
+    check run's `output.title`, which is the ONLY thing that separates a `neutral` that
+    carries findings from a `neutral` whose review crashed — see below.
 
     On `success`, the actionable signal is UNRESOLVED THREADS — not the raw comment count.
     GitHub re-anchors an already-resolved comment to the new head whenever the line it points
@@ -117,7 +129,66 @@ def classify(conclusion, findings, unresolved):
             f"this run found nothing new, but {unresolved} thread(s) are still unresolved",
         )
 
+    if conclusion == "skipped":
+        # NOTHING WAS IN SCOPE — a fourth thing `gh pr checks` renders as the
+        # word "skipping". Macroscope's default ignore patterns exclude test
+        # files, so a PR that changes only tests settles `skipped` with title
+        # "No code objects were reviewed." Verified 2026-09-11 on
+        # system-of-record#1014, and across the previous 40 PRs Macroscope has
+        # commented on 13 distinct files, none of them a test.
+        #
+        # Exit 0, because there is nothing to act on and a tool that fails every
+        # test-only PR stops being read. But the verdict must NEVER read as
+        # "CLEAN": the danger here is not the exit code, it is a reader
+        # believing a review happened. It did not, and re-running will not
+        # change that.
+        #
+        # ⚠️ Unresolved threads still fail, exactly as under `success`. A PR can
+        # draw findings on a source commit and then push a test-only commit —
+        # the head is `skipped`, the earlier findings are still outstanding, and
+        # exiting 0 on that would bury them.
+        if unresolved is None:
+            return (
+                QUERY_ERROR,
+                "UNKNOWN",
+                "could not determine the unresolved-thread count — query error, NOT clean",
+            )
+        if unresolved:
+            return (
+                FINDINGS,
+                "UNRESOLVED THREADS",
+                f"nothing was in scope this run, but {unresolved} thread(s) are still unresolved",
+            )
+        return (
+            CLEAN,
+            "NOT REVIEWED",
+            f"nothing in scope ({title or 'no title'}) — Macroscope's ignore patterns, which "
+            "exclude test files, matched every changed file. No review happened; re-running "
+            "will not produce one",
+        )
+
     if conclusion == "neutral":
+        # `neutral` is OVERLOADED, with at least three meanings: the review has
+        # findings, the review never ran, and the review CRASHED. Observed
+        # 2026-09-11 on system-of-record#1013 and invitation-dashboard#711 —
+        # both settled `neutral` with title "Macroscope encountered an error
+        # while reviewing `<sha>`." and zero comments. Reporting that as
+        # "FINDINGS PRESENT" sends a reader hunting for findings that were never
+        # produced and, worse, lets an UNREVIEWED PR read as a reviewed one.
+        #
+        # Keyed on the TITLE, not on a zero comment count: comments can land
+        # seconds after the check settles, so `findings == 0` is not proof the
+        # run found nothing. The title is authoritative at settle time.
+        #
+        # Narrow matcher on purpose. If Macroscope rewords this we fall back to
+        # FINDINGS — still non-zero, so the dangerous direction (a false exit 0)
+        # is unreachable from either branch.
+        if "encountered an error" in (title or "").lower():
+            return (
+                CHECK_ERROR,
+                "REVIEW ERRORED",
+                f"Macroscope produced no verdict ({title!r}) — UNREVIEWED, not clean",
+            )
         return (
             FINDINGS,
             "FINDINGS PRESENT",
@@ -438,7 +509,7 @@ def main(argv=None):
     findings = count_bot_comments(repo, pr, sha)
     unresolved = count_unresolved_threads(repo, pr)
 
-    code, verdict, detail = classify(conclusion, findings, unresolved)
+    code, verdict, detail = classify(conclusion, findings, unresolved, title)
 
     print()
     print(f"Macroscope: conclusion={conclusion or 'none'}")
