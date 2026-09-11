@@ -366,6 +366,11 @@ with tempfile.TemporaryDirectory() as tmp:
         found = hook._find_claude()
         check("find_claude: desktop bundle, highest version wins numerically",
               found is not None and "1.0.12" in found[-1] and len(found) == 1)
+        # A DIRECTORY named claude.exe in an even higher version is not a CLI.
+        (root / "appdata" / "Claude" / "claude-code" / "2.0.0" / "claude.exe").mkdir(parents=True)
+        found = hook._find_claude()
+        check("find_claude: desktop bundle skips a directory named claude.exe",
+              found is not None and "1.0.12" in found[-1])
 
         # A standalone install beats the desktop bundle (installer order).
         def fake_exe(path):

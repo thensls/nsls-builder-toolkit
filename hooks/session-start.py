@@ -677,6 +677,8 @@ def _find_claude():
             best = None
             try:
                 for exe in (Path(appdata) / "Claude" / sub).glob("*/claude.exe"):
+                    if not exe.is_file():
+                        continue
                     try:
                         ver = tuple(int(x) for x in exe.parent.name.split("."))
                     except ValueError:
