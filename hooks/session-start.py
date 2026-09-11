@@ -639,7 +639,9 @@ def _find_claude():
     """
     found = shutil.which("claude")
     if found:
-        return [found]
+        # PATHEXT can resolve `claude` to the npm claude.ps1 shim on Windows;
+        # route it through the same wrapper as the fallbacks.
+        return _claude_argv(Path(found))
     home = Path.home()
     candidates = [
         home / ".local" / "bin" / "claude",

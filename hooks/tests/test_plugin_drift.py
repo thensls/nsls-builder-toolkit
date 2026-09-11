@@ -412,6 +412,10 @@ with tempfile.TemporaryDirectory() as tmp:
         (root / "empty-bin" / "claude").chmod(0o755)
         check("find_claude: PATH entry wins over every fallback",
               hook._find_claude() == [str(root / "empty-bin" / "claude")])
+        # PATHEXT on Windows can resolve `claude` to claude.ps1: the PATH result
+        # must go through the same wrapper as the fallbacks.
+        check("find_claude: a PATH hit that is a .ps1 is wrapped too",
+              hook._claude_argv(Path(root / "empty-bin" / "claude.ps1"))[0] == "powershell")
     finally:
         for k, v in saved.items():
             if v is None:
