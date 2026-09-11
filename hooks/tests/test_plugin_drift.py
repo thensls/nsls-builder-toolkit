@@ -310,6 +310,87 @@ with tempfile.TemporaryDirectory() as tmp:
     check("junk version is shown as ?", "version ?" in out)
     check("junk version still heals", m.registry_sha() == m.head)
 
+# --- Windows entry point: the .ps1 delegates to run_name "__guardrails__" -----
+# On Windows the plugin's own hooks.json hook invokes `python3`, a Store alias
+# that exits without running, so session-start.ps1 is the hook that reliably
+# fires there and it reaches Python only through this run_name. If freshness
+# is not wired in here, Windows plugin installs never see `plugin update`.
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    saved = {k: os.environ.get(k) for k in m.env}
+    os.environ.update(m.env)
+    try:
+        import runpy
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            try:
+                runpy.run_path(str(HOOK), run_name="__guardrails__")
+            except SystemExit:
+                pass
+        out = buf.getvalue()
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    check("windows entry: drift healed", m.registry_sha() == m.head)
+    check("windows entry: refresh announced", "refreshed" in out.lower())
+    check("windows entry: daily marker touched", m.marker.exists())
+
+# --- locating `claude` where the installer looks, not only on PATH ------------
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    env = {
+        "PATH": str(root / "empty-bin"),  # nothing on PATH
+        "HOME": str(root / "profile"), "USERPROFILE": str(root / "profile"),
+        "APPDATA": str(root / "appdata"), "LOCALAPPDATA": str(root / "localappdata"),
+        "CLAUDE_CONFIG_DIR": str(root / "cfg"),
+    }
+    (root / "empty-bin").mkdir()
+    saved = {k: os.environ.get(k) for k in env}
+    os.environ.update(env)
+    try:
+        spec = importlib.util.spec_from_file_location("session_start_hook_find", HOOK)
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+
+        check("find_claude: nothing anywhere -> None", hook._find_claude() is None)
+
+        # Desktop-app bundle: pick the HIGHEST version numerically (1.0.12 > 1.0.5).
+        for ver in ("1.0.5", "1.0.12"):
+            d = root / "appdata" / "Claude" / "claude-code" / ver
+            d.mkdir(parents=True)
+            (d / "claude.exe").write_text("")
+        found = hook._find_claude()
+        check("find_claude: desktop bundle, highest version wins numerically",
+              found is not None and "1.0.12" in found)
+
+        # A standalone install beats the desktop bundle (installer order).
+        p = root / "profile" / ".local" / "bin"
+        p.mkdir(parents=True)
+        (p / "claude.exe").write_text("")
+        check("find_claude: ~/.local/bin/claude.exe preferred over the bundle",
+              hook._find_claude() == str(p / "claude.exe"))
+
+        # Mac/Linux fallback (no extension) when PATH lacks it.
+        (p / "claude.exe").unlink()
+        (p / "claude").write_text("")
+        check("find_claude: ~/.local/bin/claude (no extension) found",
+              hook._find_claude() == str(p / "claude"))
+
+        # PATH still wins when it has one.
+        (root / "empty-bin" / "claude").write_text("#!/bin/sh\n")
+        (root / "empty-bin" / "claude").chmod(0o755)
+        check("find_claude: PATH entry wins over every fallback",
+              hook._find_claude() == str(root / "empty-bin" / "claude"))
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
 # --- guard rails --------------------------------------------------------------
 with tempfile.TemporaryDirectory() as tmp:
     m = Machine(tmp, with_marketplace=False)

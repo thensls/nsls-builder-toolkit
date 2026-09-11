@@ -20,14 +20,14 @@ $Marker      = 'local-plugins\nsls-'
 #        upstream, so a customized fork (NSLS_PERSONAL_REPO/BRANCH) or a pinned
 #        checkout is never fast-forwarded onto a branch it doesn't track.
 #        A pull refused by the checkout's own state (divergence, dirty tree) is
-#        announced on stdout — SessionStart stdout reaches the model's context —
+#        announced on stdout - SessionStart stdout reaches the model's context -
 #        so a frozen toolkit is never silent. Offline failures stay quiet. ---
 $env:GIT_TERMINAL_PROMPT = '0'   # credentialed remotes fail fast, never prompt-hang the hook
 foreach ($dir in @($BuilderDir, $PersonalDir)) {
     if (-not (Test-Path $dir)) { continue }
     $pullOut = (& git -C $dir pull --ff-only --quiet 2>&1 | Out-String)
     if ($LASTEXITCODE -ne 0 -and $pullOut -match 'fast-forward|would be overwritten|unmerged|not concluded') {
-        # Two gates, not one — matching session-start.py's `_checkout_blocks_update`.
+        # Two gates, not one - matching session-start.py's `_checkout_blocks_update`.
         # The regex says git's complaint LOOKS checkout-local; this checks whether it
         # IS. Clean, up-to-date checkouts were reported FROZEN every session, sending
         # builders to back up local changes that did not exist.
@@ -41,7 +41,7 @@ foreach ($dir in @($BuilderDir, $PersonalDir)) {
         if ($commits -gt 0 -and $dirty) { $blocker = "$commits local commit(s) and uncommitted edits" }
         elseif ($commits -gt 0)         { $blocker = "$commits local commit(s) not in its upstream" }
         elseif ($dirty)                 { $blocker = 'uncommitted local edits' }
-        # $null means verified clean and level, or unknowable — either way NOT frozen.
+        # $null means verified clean and level, or unknowable - either way NOT frozen.
         # Staying quiet costs one session's update; the next pull picks it up.
         if ($blocker) {
             # Which phrase matched, never git's raw text: everything written here
@@ -214,16 +214,22 @@ if (Test-Path $pingScript) {
     ) | Out-Null
 }
 
-# --- 4. Builder Guardrails context ---
+# --- 4. Builder Guardrails context + plugin freshness ---
 # Windows parity with session-start.py's emit_guardrails_context(). Without
 # this, Windows builders got the four hard gates (the hook is registered for
-# them) but none of the conversational half — tiers, escalation triggers, the
-# voice guide, remembered declines — which is the same
+# them) but none of the conversational half - tiers, escalation triggers, the
+# voice guide, remembered declines - which is the same
 # configuration-present-but-not-loaded failure this project has hit three times.
 # Delegated to the Python emitter rather than reimplemented: one copy of the
 # section-extraction and path-resolution logic, not two that can drift.
+# The same Python entry point also runs ensure_plugin_fresh(): the daily
+# `claude plugin update` plus the commit-level drift check and self-heal. The
+# plugin's own hooks.json hook invokes `python3`, which on stock Windows is a
+# Store alias that exits without running, so THIS script is the only place the
+# freshness step reliably fires on Windows. It is a no-op unless the plugin is
+# installed and enabled; clone-only machines stay fresh via the git pull above.
 # Interpreter: the stock Windows `python3` is a Store alias that exits without
-# running anything, so falling back to it emitted nothing at all — worse than
+# running anything, so falling back to it emitted nothing at all - worse than
 # failing loudly. Prefer the launcher, then the toolkit-provisioned runtime,
 # and give up quietly only when there is genuinely no Python.
 $pyExe = $null
@@ -237,7 +243,7 @@ $startPy = Join-Path $PSScriptRoot 'session-start.py'
 if ($pyExe -and (Test-Path $startPy)) {
     # The path goes in as an ARGUMENT, never interpolated into Python source:
     # a Windows profile containing an apostrophe (O'Brien) made the inline
-    # program a SyntaxError, and the empty catch swallowed it — the guardrail
+    # program a SyntaxError, and the empty catch swallowed it - the guardrail
     # context just silently vanished for that person.
     $emitter = @'
 import runpy, sys
