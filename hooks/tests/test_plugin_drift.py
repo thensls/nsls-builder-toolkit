@@ -253,7 +253,7 @@ with tempfile.TemporaryDirectory() as tmp:
         spec.loader.exec_module(hook)
         import time as _time
         record = {"version": "3.6.0", "installPath": str(m.install_path), "sha": OLD}
-        ok = hook._heal_plugin_drift(str(m.root / "bin" / "claude"), record, m.head,
+        ok = hook._heal_plugin_drift([str(m.root / "bin" / "claude")], record, m.head,
                                      deadline=_time.monotonic() - 1)
     finally:
         for k, v in saved.items():
@@ -309,6 +309,124 @@ with tempfile.TemporaryDirectory() as tmp:
     check("junk version never reaches stdout", "IGNORE" not in out and "evil" not in out)
     check("junk version is shown as ?", "version ?" in out)
     check("junk version still heals", m.registry_sha() == m.head)
+
+# --- Windows entry point: the .ps1 delegates to run_name "__guardrails__" -----
+# On Windows the plugin's own hooks.json hook invokes `python3`, a Store alias
+# that exits without running, so session-start.ps1 is the hook that reliably
+# fires there and it reaches Python only through this run_name. If freshness
+# is not wired in here, Windows plugin installs never see `plugin update`.
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    saved = {k: os.environ.get(k) for k in m.env}
+    os.environ.update(m.env)
+    try:
+        import runpy
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            try:
+                runpy.run_path(str(HOOK), run_name="__guardrails__")
+            except SystemExit:
+                pass
+        out = buf.getvalue()
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    check("windows entry: drift healed", m.registry_sha() == m.head)
+    check("windows entry: refresh announced", "refreshed" in out.lower())
+    check("windows entry: daily marker touched", m.marker.exists())
+
+# --- locating `claude` where the installer looks, not only on PATH ------------
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    env = {
+        "PATH": str(root / "empty-bin"),  # nothing on PATH
+        "HOME": str(root / "profile"), "USERPROFILE": str(root / "profile"),
+        "APPDATA": str(root / "appdata"), "LOCALAPPDATA": str(root / "localappdata"),
+        "CLAUDE_CONFIG_DIR": str(root / "cfg"),
+    }
+    (root / "empty-bin").mkdir()
+    saved = {k: os.environ.get(k) for k in env}
+    os.environ.update(env)
+    try:
+        spec = importlib.util.spec_from_file_location("session_start_hook_find", HOOK)
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+
+        check("find_claude: nothing anywhere -> None", hook._find_claude() is None)
+
+        # Desktop-app bundle: pick the HIGHEST version numerically (1.0.12 > 1.0.5).
+        for ver in ("1.0.5", "1.0.12"):
+            d = root / "appdata" / "Claude" / "claude-code" / ver
+            d.mkdir(parents=True)
+            (d / "claude.exe").write_text("")
+            (d / "claude.exe").chmod(0o755)
+        found = hook._find_claude()
+        check("find_claude: desktop bundle, highest version wins numerically",
+              found is not None and "1.0.12" in found[-1] and len(found) == 1)
+        # A DIRECTORY named claude.exe in an even higher version is not a CLI.
+        (root / "appdata" / "Claude" / "claude-code" / "2.0.0" / "claude.exe").mkdir(parents=True)
+        found = hook._find_claude()
+        check("find_claude: desktop bundle skips a directory named claude.exe",
+              found is not None and "1.0.12" in found[-1])
+
+        # A standalone install beats the desktop bundle (installer order).
+        def fake_exe(path):
+            path.write_text("")
+            path.chmod(0o755)
+
+        p = root / "profile" / ".local" / "bin"
+        p.mkdir(parents=True)
+        # A stale leftover that is not executable must be skipped, not returned
+        # (the desktop bundle below it is still the right answer).
+        (p / "claude.exe").write_text("")
+        (p / "claude.exe").chmod(0o644)
+        stale = hook._find_claude()
+        check("find_claude: non-executable leftover is skipped on Unix",
+              os.name == "nt" or (stale is not None and "1.0.12" in stale[-1]))
+        fake_exe(p / "claude.exe")
+        check("find_claude: ~/.local/bin/claude.exe preferred over the bundle",
+              hook._find_claude() == [str(p / "claude.exe")])
+
+        # npm shim that exists only as a .ps1: must come back runnable, i.e.
+        # wrapped in powershell -File, never as a bare path CreateProcess rejects.
+        (p / "claude.exe").unlink()
+        npm = root / "appdata" / "npm"
+        npm.mkdir(parents=True)
+        fake_exe(npm / "claude.ps1")
+        argv = hook._find_claude()
+        check("find_claude: npm claude.ps1 is wrapped in powershell -File",
+              argv is not None and argv[0] == "powershell" and "-File" in argv
+              and argv[-1] == str(npm / "claude.ps1"))
+        fake_exe(npm / "claude.cmd")
+        check("find_claude: npm claude.cmd preferred over claude.ps1",
+              hook._find_claude() == [str(npm / "claude.cmd")])
+        (npm / "claude.cmd").unlink(); (npm / "claude.ps1").unlink()
+        fake_exe(p / "claude.exe")
+
+        # Mac/Linux fallback (no extension) when PATH lacks it.
+        (p / "claude.exe").unlink()
+        fake_exe(p / "claude")
+        check("find_claude: ~/.local/bin/claude (no extension) found",
+              hook._find_claude() == [str(p / "claude")])
+
+        # PATH still wins when it has one.
+        (root / "empty-bin" / "claude").write_text("#!/bin/sh\n")
+        (root / "empty-bin" / "claude").chmod(0o755)
+        check("find_claude: PATH entry wins over every fallback",
+              hook._find_claude() == [str(root / "empty-bin" / "claude")])
+        # PATHEXT on Windows can resolve `claude` to claude.ps1: the PATH result
+        # must go through the same wrapper as the fallbacks.
+        check("find_claude: a PATH hit that is a .ps1 is wrapped too",
+              hook._claude_argv(Path(root / "empty-bin" / "claude.ps1"))[0] == "powershell")
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 # --- guard rails --------------------------------------------------------------
 with tempfile.TemporaryDirectory() as tmp:

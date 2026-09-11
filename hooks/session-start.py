@@ -598,7 +598,7 @@ def _heal_plugin_drift(claude, record, head, deadline):
             return False
         try:
             return subprocess.run(
-                [claude, "plugin", *args, ORG_PLUGIN_KEY],
+                [*claude, "plugin", *args, ORG_PLUGIN_KEY],
                 capture_output=True, timeout=timeout,
             ).returncode == 0
         except Exception:
@@ -619,6 +619,84 @@ def _heal_plugin_drift(claude, record, head, deadline):
             if after and after["sha"] == head:
                 return True
     return False
+
+
+def _find_claude():
+    """argv prefix that runs the `claude` CLI (usually a one-element list), or None.
+
+    A list, not a path: the npm shim `claude.ps1` cannot be executed directly
+    by CreateProcess, so it comes back as
+    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", <path>].
+
+    PATH first. Then the same places install.ps1 probes, because on Windows the
+    CLI is routinely NOT on the PATH a hook inherits: the npm shim, the
+    standalone installs under the profile, and the desktop app's bundled CLI at
+    %APPDATA%\\Claude\\claude-code\\<version>\\claude.exe (highest version wins,
+    compared numerically). Plus the two Mac/Linux install locations a curl|bash
+    shell may not have on PATH yet. Without this the daily update silently did
+    nothing on most Windows machines — the exact silent failure this file exists
+    to prevent.
+    """
+    found = shutil.which("claude")
+    if found:
+        # PATHEXT can resolve `claude` to the npm claude.ps1 shim on Windows;
+        # route it through the same wrapper as the fallbacks.
+        return _claude_argv(Path(found))
+    home = Path.home()
+    candidates = [
+        home / ".local" / "bin" / "claude",
+        home / ".claude" / "bin" / "claude",
+        CONFIG_DIR / "bin" / "claude",
+    ]
+    appdata = os.environ.get("APPDATA")
+    localappdata = os.environ.get("LOCALAPPDATA")
+    profile = os.environ.get("USERPROFILE")
+    if appdata:
+        candidates += [
+            Path(appdata) / "npm" / "claude.cmd",
+            Path(appdata) / "npm" / "claude.ps1",
+        ]
+    if profile:
+        candidates += [
+            Path(profile) / ".local" / "bin" / "claude.exe",
+            Path(profile) / ".claude" / "bin" / "claude.exe",
+        ]
+    if localappdata:
+        candidates.append(Path(localappdata) / "Programs" / "claude" / "claude.exe")
+    for c in candidates:
+        try:
+            # Executable on Unix, or the daily marker gets touched and a stale
+            # non-executable leftover costs a day of freshness. Windows has no
+            # executable bit; PATHEXT decides there.
+            if c.is_file() and (os.name == "nt" or os.access(c, os.X_OK)):
+                return _claude_argv(c)
+        except Exception:
+            continue
+    if appdata:
+        for sub in ("claude-code", "claude-code-vm"):
+            best = None
+            try:
+                for exe in (Path(appdata) / "Claude" / sub).glob("*/claude.exe"):
+                    if not exe.is_file():
+                        continue
+                    try:
+                        ver = tuple(int(x) for x in exe.parent.name.split("."))
+                    except ValueError:
+                        ver = (0,)
+                    if best is None or ver > best[0]:
+                        best = (ver, exe)
+            except Exception:
+                best = None
+            if best:
+                return _claude_argv(best[1])
+    return None
+
+
+def _claude_argv(path):
+    if path.suffix.lower() == ".ps1":
+        return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", str(path)]
+    return [str(path)]
 
 
 def ensure_plugin_fresh():
@@ -651,8 +729,7 @@ def ensure_plugin_fresh():
             datetime.now(timezone.utc).timestamp() - marker.stat().st_mtime < 86400
         ):
             return
-        import shutil as _shutil
-        claude = _shutil.which("claude")
+        claude = _find_claude()
         if not claude:
             return
         marker.touch()
@@ -664,7 +741,7 @@ def ensure_plugin_fresh():
         deadline = time.monotonic() + 45
         try:
             updated = subprocess.run(
-                [claude, "plugin", "update", ORG_PLUGIN_KEY],
+                [*claude, "plugin", "update", ORG_PLUGIN_KEY],
                 capture_output=True, timeout=20,
             ).returncode == 0
         except subprocess.TimeoutExpired:
@@ -1542,6 +1619,19 @@ if __name__ == "__guardrails__":
             if (_dir / ".git").exists():
                 _warn_if_stale_by_configuration(
                     _plugin, _dir, deadline=time.monotonic() + 10)
+    except Exception:
+        pass
+    # Plugin freshness — Windows parity with main(). session-start.ps1 is the
+    # hook that reliably fires on Windows (the plugin's own hooks.json invokes
+    # `python3`, a Store alias there that exits without running), and this
+    # run_name is its only path into Python. Without this call a Windows
+    # plugin install never ran `plugin update` and its version-pinned cache
+    # rotted while the clone beside it stayed current. ensure_plugin_fresh
+    # gates on the plugin being installed and enabled, so a clone-only
+    # machine is a designed no-op; where both hook paths fire, the daily
+    # marker and the heal lock make the second run harmless.
+    try:
+        ensure_plugin_fresh()
     except Exception:
         pass
 
