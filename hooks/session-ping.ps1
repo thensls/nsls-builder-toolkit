@@ -22,7 +22,14 @@ $email = Read-EnvValue -EnvPath $envFile -Key 'BUILDER_EMAIL'
 if (-not $email) { try { $email = (& git config user.email) } catch {} }
 $email = "$email".Trim()
 if ([string]::IsNullOrWhiteSpace($email)) { exit 0 }
+# Without a GitHub username the tracker skips the PR-credit check entirely, so a
+# builder who never ran /personal-setup earns nothing for merged PRs and gets no
+# error saying so. Fall back to the gh CLI when it's available and authenticated.
 $github = Read-EnvValue -EnvPath $envFile -Key 'GITHUB_USERNAME'
+if ([string]::IsNullOrWhiteSpace($github)) {
+    try { $github = (& gh api user --jq .login 2>$null) } catch {}
+}
+$github = "$github".Trim()
 $builderDir = Join-Path $env:USERPROFILE '.claude\local-plugins\nsls-builder-toolkit'
 $toolkit = if (Test-Path $builderDir) { 'both' } else { 'personal' }
 
