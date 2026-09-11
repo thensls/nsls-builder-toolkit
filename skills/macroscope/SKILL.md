@@ -121,12 +121,19 @@ thread count.
 unrecognized conclusion. A timeout exits `2` and says it is not a pass. Tests:
 `skills/macroscope/tests/test_await_macroscope.py`.
 
-**Two traps it exists to close — both have produced a wrong "all clear":**
+**Three traps it exists to close — each has produced a wrong "all clear":**
 
-- 🔴 **`gh pr checks` prints a `neutral` conclusion as the word "skipping"**, and Macroscope
-  returns `neutral` *whenever it has findings*. A review that found six real bugs shows as
-  `skipping`, which reads as "didn't run" or "passed". Never take that column as a verdict —
-  read `.conclusion` and `.output.title` (`"6 issues identified (10 code objects reviewed)"`).
+- 🔴 **`gh pr checks` prints a `neutral` conclusion as the word "skipping"**, and `neutral`
+  is **overloaded — it has at least three meanings**. Never take that column as a verdict;
+  read `.conclusion` AND `.output.title`, which is the only thing that separates them:
+    - *has findings* — `"6 issues identified (10 code objects reviewed)"`. A review that
+      found six real bugs shows as `skipping`, which reads as "didn't run" or "passed".
+    - *never ran* — no check run on the SHA at all.
+    - *the review CRASHED* — `"Macroscope encountered an error while reviewing `<sha>`."`
+      with **zero comments**. Seen 2026-09-11 on system-of-record#1013 and
+      invitation-dashboard#711. ⚠️ This one is the nastiest: the PR is **UNREVIEWED**, and a
+      reader who trusts "skipping" merges something no bot ever looked at. Re-run the check;
+      an errored review is not a pass and not a finding.
 - 🔴 **The check-run payload contains raw control characters** (Macroscope embeds diffs and
   code), so strict JSON parsing of it raises `Invalid control character`. Every hand-rolled
   loop that piped it into `python -c 'json.load(...)'` with a `|| echo '{}'` fallback reported

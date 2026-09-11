@@ -288,3 +288,49 @@ def test_missing_git_is_an_empty_answer_not_a_crash(monkeypatch):
         raise FileNotFoundError(2, "No such file or directory: 'git'")
     monkeypatch.setattr(am.subprocess, "run", boom)
     assert am.git("rev-parse", "HEAD") == ""
+
+
+def test_neutral_that_errored_is_unreviewed_not_findings():
+    """`neutral` also means THE REVIEW CRASHED, and that is not a verdict.
+
+    Observed 2026-09-11 on system-of-record#1013 and invitation-dashboard#711: both settled
+    `neutral` with title "Macroscope encountered an error while reviewing `<sha>`." and zero
+    comments. The tool printed "=> FINDINGS PRESENT", which sent a reader hunting for findings
+    that were never produced — and let an UNREVIEWED PR read as a reviewed one.
+    """
+    code, verdict, detail = am.classify(
+        "neutral", 0, 0, "Macroscope encountered an error while reviewing `1f3f331`."
+    )
+    assert code == am.CHECK_ERROR
+    assert verdict == "REVIEW ERRORED"
+    assert "UNREVIEWED" in detail, "the reader must be told the PR was not reviewed"
+
+
+def test_errored_neutral_is_detected_by_title_not_by_a_zero_count():
+    """Comments can land seconds AFTER the check settles.
+
+    So `findings == 0` is not proof the run found nothing, and keying the error branch on the
+    count would misreport a real findings run that merely reported its counts early. The title
+    is authoritative at settle time; this pins that a genuine findings run with counts not yet
+    visible still reads as FINDINGS.
+    """
+    assert am.classify("neutral", 0, 0, "6 issues identified (10 code objects reviewed)")[0] == (
+        am.FINDINGS
+    )
+
+
+def test_a_reworded_macroscope_error_still_fails_loudly():
+    """The matcher is narrow, so the fallback has to be safe rather than clean.
+
+    If Macroscope rewords its error title we land in the FINDINGS branch — annoying, but still
+    NON-ZERO. The dangerous direction is a false exit 0, and it must be unreachable from either
+    branch of this decision.
+    """
+    for title in ["Macroscope hit a snag", "internal failure", ""]:
+        assert am.classify("neutral", 0, 0, title)[0] != am.CLEAN
+
+
+def test_classify_title_is_optional_for_existing_callers():
+    """Three-argument calls keep working; the new argument only adds a branch."""
+    assert am.classify("neutral", 6, 6)[0] == am.FINDINGS
+    assert am.classify("success", 0, 0)[0] == am.CLEAN
