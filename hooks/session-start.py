@@ -663,7 +663,10 @@ def _find_claude():
         candidates.append(Path(localappdata) / "Programs" / "claude" / "claude.exe")
     for c in candidates:
         try:
-            if c.is_file():
+            # Executable on Unix, or the daily marker gets touched and a stale
+            # non-executable leftover costs a day of freshness. Windows has no
+            # executable bit; PATHEXT decides there.
+            if c.is_file() and (os.name == "nt" or os.access(c, os.X_OK)):
                 return _claude_argv(c)
         except Exception:
             continue

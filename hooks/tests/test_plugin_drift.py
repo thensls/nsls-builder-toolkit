@@ -362,14 +362,26 @@ with tempfile.TemporaryDirectory() as tmp:
             d = root / "appdata" / "Claude" / "claude-code" / ver
             d.mkdir(parents=True)
             (d / "claude.exe").write_text("")
+            (d / "claude.exe").chmod(0o755)
         found = hook._find_claude()
         check("find_claude: desktop bundle, highest version wins numerically",
               found is not None and "1.0.12" in found[-1] and len(found) == 1)
 
         # A standalone install beats the desktop bundle (installer order).
+        def fake_exe(path):
+            path.write_text("")
+            path.chmod(0o755)
+
         p = root / "profile" / ".local" / "bin"
         p.mkdir(parents=True)
+        # A stale leftover that is not executable must be skipped, not returned
+        # (the desktop bundle below it is still the right answer).
         (p / "claude.exe").write_text("")
+        (p / "claude.exe").chmod(0o644)
+        stale = hook._find_claude()
+        check("find_claude: non-executable leftover is skipped on Unix",
+              os.name == "nt" or (stale is not None and "1.0.12" in stale[-1]))
+        fake_exe(p / "claude.exe")
         check("find_claude: ~/.local/bin/claude.exe preferred over the bundle",
               hook._find_claude() == [str(p / "claude.exe")])
 
@@ -378,20 +390,20 @@ with tempfile.TemporaryDirectory() as tmp:
         (p / "claude.exe").unlink()
         npm = root / "appdata" / "npm"
         npm.mkdir(parents=True)
-        (npm / "claude.ps1").write_text("")
+        fake_exe(npm / "claude.ps1")
         argv = hook._find_claude()
         check("find_claude: npm claude.ps1 is wrapped in powershell -File",
               argv is not None and argv[0] == "powershell" and "-File" in argv
               and argv[-1] == str(npm / "claude.ps1"))
-        (npm / "claude.cmd").write_text("")
+        fake_exe(npm / "claude.cmd")
         check("find_claude: npm claude.cmd preferred over claude.ps1",
               hook._find_claude() == [str(npm / "claude.cmd")])
         (npm / "claude.cmd").unlink(); (npm / "claude.ps1").unlink()
-        (p / "claude.exe").write_text("")
+        fake_exe(p / "claude.exe")
 
         # Mac/Linux fallback (no extension) when PATH lacks it.
         (p / "claude.exe").unlink()
-        (p / "claude").write_text("")
+        fake_exe(p / "claude")
         check("find_claude: ~/.local/bin/claude (no extension) found",
               hook._find_claude() == [str(p / "claude")])
 
