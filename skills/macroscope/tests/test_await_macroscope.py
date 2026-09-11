@@ -334,3 +334,36 @@ def test_classify_title_is_optional_for_existing_callers():
     """Three-argument calls keep working; the new argument only adds a branch."""
     assert am.classify("neutral", 6, 6)[0] == am.FINDINGS
     assert am.classify("success", 0, 0)[0] == am.CLEAN
+
+
+def test_skipped_is_not_reviewed_and_must_not_read_as_clean():
+    """`skipped` = nothing was in scope. Exit 0, but never the word CLEAN.
+
+    Macroscope's default ignore patterns exclude test files, so a test-only PR settles
+    `skipped` / "No code objects were reviewed." (system-of-record#1014). Exit 0 because
+    there is nothing to act on and failing every test-only PR would make this tool noise.
+
+    The verdict is the whole point: the danger is a reader believing a review happened.
+    """
+    code, verdict, detail = am.classify("skipped", 0, 0, "No code objects were reviewed.")
+    assert code == am.CLEAN
+    assert verdict == "NOT REVIEWED"
+    assert "CLEAN" not in verdict
+    assert "re-running will not produce one" in detail, "say that retrying is pointless"
+
+
+def test_skipped_still_fails_on_unresolved_threads():
+    """The case that makes this more than a rename.
+
+    A PR draws findings on a source commit, then pushes a TEST-ONLY commit. The head is
+    `skipped` while the earlier findings are still open — exiting 0 there would bury them.
+    """
+    code, verdict, detail = am.classify("skipped", 0, 3, "No code objects were reviewed.")
+    assert code == am.FINDINGS
+    assert verdict == "UNRESOLVED THREADS"
+    assert "3" in detail
+
+
+def test_skipped_with_an_unknown_thread_count_is_not_clean():
+    """Same rule as everywhere else: an unknown answer is never a clean one."""
+    assert am.classify("skipped", 0, None, "No code objects were reviewed.")[0] == am.QUERY_ERROR

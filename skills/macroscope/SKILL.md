@@ -128,6 +128,11 @@ unrecognized conclusion. A timeout exits `2` and says it is not a pass. Tests:
   read `.conclusion` AND `.output.title`, which is the only thing that separates them:
     - *has findings* — `"6 issues identified (10 code objects reviewed)"`. A review that
       found six real bugs shows as `skipping`, which reads as "didn't run" or "passed".
+    - *nothing in scope* — `skipped` + `"No code objects were reviewed."`. Macroscope's
+      default ignore patterns exclude TEST FILES, so a test-only PR is never reviewed at
+      all. ⚠️ Test code is still code: system-of-record#1014's test file held a parser
+      with a real bug (it silently skipped 10 of 65 routes) that no bot would ever see.
+      Re-running does not help; only a human review does.
     - *never ran* — no check run on the SHA at all.
     - *the review CRASHED* — `"Macroscope encountered an error while reviewing `<sha>`."`
       with **zero comments**. Seen 2026-09-11 on system-of-record#1013 and
