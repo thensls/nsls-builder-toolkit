@@ -62,14 +62,19 @@ foreach ($dir in @($BuilderDir, $PersonalDir)) {
 # own GitHub fork was reported healthy every session while nothing NSLS shipped
 # ever reached them (196 commits behind on a real machine, 2026-09-09).
 # Windows parity with session-start.py's report_personal_fork_drift(): same
-# remote name, same stamp, same wording. Python is not guaranteed on a PC, so
-# this is the ONLY place the check runs on Windows - and this script self-updates
-# from NSLS on every machine, which is what lets it reach a fork at all (the
-# fork's own hook is a file inside the fork, so the fork can never receive it).
-$PersonalUpstreamUrl    = 'https://github.com/thensls/nsls-personal-toolkit.git'
-$PersonalUpstreamRemote = 'nsls-upstream'   # a name WE own - never 'upstream', which may already be theirs
-$PersonalUpstreamStamp  = Join-Path $ClaudeDir '.nsls-personal-upstream-check'
-$PersonalCheckEveryH    = 12
+# private ref, same stamp, same lock, same wording. NSLS is fetched by URL, so
+# a fork's own remotes - whatever they are named or aimed at - are neither read
+# nor changed. Python is not guaranteed on a PC, so this is the ONLY place the
+# check runs on Windows - and this script self-updates from NSLS on every
+# machine, which is what lets it reach a fork at all (the fork's own hook is a
+# file inside the fork, so the fork can never receive it).
+$PersonalUpstreamUrl     = 'https://github.com/thensls/nsls-personal-toolkit.git'
+$PersonalUpstreamRef     = 'refs/nsls/upstream-main'   # a private ref of our own; this hook creates and touches NO remote
+$PersonalUpstreamRefspec = "+refs/heads/main:$PersonalUpstreamRef"
+$PersonalUpstreamStamp   = Join-Path $ClaudeDir '.nsls-personal-upstream-check'
+$PersonalUpstreamLock    = Join-Path $ClaudeDir '.nsls-personal-upstream-check.lock'
+$PersonalCheckEveryH     = 12
+$PersonalLockStaleS      = 120   # a lock this old belongs to a hook that died
 
 function Test-CanonicalOrigin {
     param([string]$Url)
@@ -77,14 +82,15 @@ function Test-CanonicalOrigin {
     # accepts (https, ssh://, scp-like; user info, port, www., trailing slash,
     # .git, any case). Host and path are compared exactly - a substring test
     # called a mirror on another host, or a longer-named repo under the same
-    # owner, canonical, and skipped the check for it.
+    # owner, canonical, and skipped the check for it. Schemes are an allow-list.
     $u = if ($Url) { $Url.Trim() } else { '' }
     $hostName = $null
     $repoPath = $null
-    $m = [regex]::Match($u, '^[A-Za-z][A-Za-z0-9+.-]*://(?:[^@/]*@)?([^/:]+)(?::\d+)?/(.*)$')
+    $m = [regex]::Match($u, '^([A-Za-z][A-Za-z0-9+.-]*)://(?:[^@/]*@)?([^/:]+)(?::\d+)?/(.*)$')
     if ($m.Success) {
-        $hostName = $m.Groups[1].Value
-        $repoPath = $m.Groups[2].Value
+        if (@('https', 'http', 'ssh', 'git', 'git+ssh', 'ssh+git') -notcontains $m.Groups[1].Value.ToLowerInvariant()) { return $false }
+        $hostName = $m.Groups[2].Value
+        $repoPath = $m.Groups[3].Value
     } else {
         $m = [regex]::Match($u, '^(?:[^@/:]+@)?([^/:]+):(?!//)/?(.*)$')
         if ($m.Success) {
@@ -98,6 +104,61 @@ function Test-CanonicalOrigin {
     if ($repoPath -match '\.git$') { $repoPath = $repoPath.Substring(0, $repoPath.Length - 4) }
     # -eq and -match are case-insensitive in PowerShell, which is what GitHub names need.
     return (($hostName -eq 'github.com') -and ($repoPath.TrimEnd('/') -eq 'thensls/nsls-personal-toolkit'))
+}
+
+function Get-PullSourceUrl {
+    param([string]$Dir)
+    # The remote this checkout's branch actually pulls from - the same source a
+    # bare `git pull` uses - falling back to origin. A canonical origin beside a
+    # branch that tracks a personal fork is a fork in every way that matters; a
+    # fork whose remote is not called origin is still a fork. Empty when neither
+    # resolves. ('@{u}' is quoted: bare, PowerShell reads it as a hashtable.)
+    $tracking = (& git -C $Dir rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null | Out-String).Trim()
+    $remote = 'origin'
+    if ($LASTEXITCODE -eq 0 -and $tracking -match '^([^/]+)/.+$') { $remote = $Matches[1] }
+    $url = (& git -C $Dir remote get-url $remote 2>$null | Out-String).Trim()
+    if (($LASTEXITCODE -ne 0 -or -not $url) -and $remote -ne 'origin') {
+        $url = (& git -C $Dir remote get-url origin 2>$null | Out-String).Trim()
+    }
+    if ($LASTEXITCODE -ne 0) { return '' }
+    return $url
+}
+
+function Test-StampFresh {
+    # Bounded at BOTH ends: a stamp dated in the future (clock skew, a restored
+    # backup) would otherwise read as fresh forever.
+    $ageH = $null
+    try {
+        if (Test-Path $PersonalUpstreamStamp) {
+            $ageH = ((Get-Date) - (Get-Item $PersonalUpstreamStamp).LastWriteTime).TotalHours
+        }
+    } catch { }
+    return ($null -ne $ageH -and $ageH -ge 0 -and $ageH -lt $PersonalCheckEveryH)
+}
+
+function Claim-Lock {
+    param([string]$Path)
+    # Exclusive create: $null when another hook holds it. The stamp is only a
+    # throttle - two hooks can both read it as stale before either writes it -
+    # so this is the claim. A lock older than $PersonalLockStaleS was left by a
+    # hook that died and is broken once.
+    foreach ($attempt in 1, 2) {
+        try {
+            $fs = [System.IO.File]::Open($Path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+            $fs.Close()
+            return $Path
+        } catch {
+            $stale = $false
+            try {
+                if ($attempt -eq 1 -and (Test-Path $Path)) {
+                    $stale = (((Get-Date) - (Get-Item $Path).LastWriteTime).TotalSeconds -gt $PersonalLockStaleS)
+                    if ($stale) { Remove-Item $Path -Force }
+                }
+            } catch { $stale = $false }
+            if (-not $stale) { return $null }
+        }
+    }
+    return $null
 }
 
 function Invoke-GitQuiet {
@@ -136,44 +197,32 @@ function Invoke-GitQuiet {
 function Report-PersonalForkDrift {
     param([string]$Dir)
     if (-not (Test-Path (Join-Path $Dir '.git'))) { return }
-    $origin = (& git -C $Dir remote get-url origin 2>$null | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or -not $origin) { return }   # no origin: nothing to measure against
-    if (Test-CanonicalOrigin $origin) { return }            # NSLS's own repo: the freeze check above owns it
-
-    # One fetch per 12h, bounded at BOTH ends: a stamp dated in the future
-    # (clock skew, a restored backup) would otherwise read as fresh forever.
-    $ageH = $null
+    $url = Get-PullSourceUrl -Dir $Dir
+    if (-not $url) { return }                        # nothing to measure against
+    if (Test-CanonicalOrigin $url) { return }        # NSLS's own repo: the freeze check above owns it
+    if (Test-StampFresh) { return }
+    $lock = Claim-Lock -Path $PersonalUpstreamLock
+    if ($null -eq $lock) { return }                  # another hook is mid-check this very second; it will speak
     try {
-        if (Test-Path $PersonalUpstreamStamp) {
-            $ageH = ((Get-Date) - (Get-Item $PersonalUpstreamStamp).LastWriteTime).TotalHours
-        }
-    } catch { }
-    if ($null -ne $ageH -and $ageH -ge 0 -and $ageH -lt $PersonalCheckEveryH) { return }
-
-    # Claim the slot BEFORE fetching: the Python hook, where present, keys on this
-    # same stamp, and SessionStart hooks start concurrently.
-    try { [System.IO.File]::WriteAllText($PersonalUpstreamStamp, '') } catch { }
-
-    $remotes = @((& git -C $Dir remote 2>$null | Out-String) -split '\r?\n' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    if ($LASTEXITCODE -ne 0) { return }
-    if ($remotes -contains $PersonalUpstreamRemote) {
-        # We own this name, so we may enforce its URL - that also repairs a
-        # checkout left pointing at a moved or mistyped repo.
-        $null = Invoke-GitQuiet -Dir $Dir -GitArgs @('remote', 'set-url', $PersonalUpstreamRemote, $PersonalUpstreamUrl)
-    } else {
-        $null = Invoke-GitQuiet -Dir $Dir -GitArgs @('remote', 'add', $PersonalUpstreamRemote, $PersonalUpstreamUrl)
+        if (Test-StampFresh) { return }              # it finished between our two looks
+        try { [System.IO.File]::WriteAllText($PersonalUpstreamStamp, '') } catch { }
+        # Bounded, best-effort: offline, blocked or slow all mean "say nothing this
+        # session". '+' so our own ref always follows NSLS's main, even across a
+        # force-push there; refs/heads/main so a tag called main cannot stand in.
+        if ((Invoke-GitQuiet -Dir $Dir -GitArgs @('fetch', '--quiet', $PersonalUpstreamUrl, $PersonalUpstreamRefspec) -TimeoutMs 8000) -ne 0) { return }
+        $count = (& git -C $Dir rev-list --count "HEAD..$PersonalUpstreamRef" 2>$null | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or $count -notmatch '^\d+$') { return }
+        $behind = [int]$count
+        if ($behind -eq 0) { return }
+        # The path is text someone else can choose: printable ASCII only, bounded.
+        $safeDir = ($Dir -replace '[^\x20-\x7e]', '?')
+        if ($safeDir.Length -gt 200) { $safeDir = $safeDir.Substring(0, 200) }
+        # Same prefix and wording as the personal toolkit's own hook, so Claude
+        # sees one identical line whichever of the two spoke first.
+        Write-Output ("[NSLS Personal Toolkit] This builder's toolkit is their OWN FORK and is $behind commit(s) behind NSLS - nothing shipped upstream has reached them, and their auto-update never will, because it follows their fork. Tell them in ONE plain sentence at the start of your first reply - e.g. `"Your toolkit is your own copy, so NSLS updates haven't been reaching you - want me to catch it up?`" - and if they agree: run /update-personal-productivity if this machine has it; otherwise, in $safeDir, merge $PersonalUpstreamRef (NSLS's main, fetched from $PersonalUpstreamUrl moments ago) yourself, preserving their own commits and setting aside any uncommitted edits first, then read and follow skills/update-personal-productivity/SKILL.md from the freshly merged checkout to walk them through what's new (the slash command itself appears after their next restart). NEVER hand them a git command.")
+    } finally {
+        try { Remove-Item $PersonalUpstreamLock -Force -ErrorAction SilentlyContinue } catch { }
     }
-
-    # Bounded, best-effort: offline, blocked or slow all mean "say nothing this session".
-    if ((Invoke-GitQuiet -Dir $Dir -GitArgs @('fetch', $PersonalUpstreamRemote, 'main', '--quiet') -TimeoutMs 8000) -ne 0) { return }
-    $count = (& git -C $Dir rev-list --count "HEAD..$PersonalUpstreamRemote/main" 2>$null | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or $count -notmatch '^\d+$') { return }
-    $behind = [int]$count
-    if ($behind -eq 0) { return }
-
-    # Same prefix and wording as the personal toolkit's own hook, so Claude sees
-    # one identical line whichever of the two spoke first.
-    Write-Output ("[NSLS Personal Toolkit] This builder's toolkit is their OWN FORK and is $behind commit(s) behind NSLS - nothing shipped upstream has reached them, and their auto-update never will, because it follows their fork. Tell them in ONE plain sentence at the start of your first reply - e.g. `"Your toolkit is your own copy, so NSLS updates haven't been reaching you - want me to catch it up?`" - and if they agree: run /update-personal-productivity if this machine has it; otherwise merge $PersonalUpstreamRemote/main into the checkout at $Dir yourself, preserving their own commits, then read and follow skills/update-personal-productivity/SKILL.md from the freshly merged checkout to walk them through what's new (the slash command itself appears after their next restart). NEVER hand them a git command.")
 }
 Report-PersonalForkDrift -Dir $PersonalDir
 

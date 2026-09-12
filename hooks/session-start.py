@@ -324,26 +324,38 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir, deadline=None):
 # hook is a file INSIDE the fork, so no fork can ever receive it. This hook
 # self-updates from NSLS on every machine, which makes it the one channel that
 # reaches a fork at all — which is why the check lives here too. The two are
-# deliberately interchangeable: same remote name, same stamp, same wording, so
-# whichever fires first speaks and the other stays quiet.
+# deliberately interchangeable: same private ref, same stamp, same lock, same
+# wording, so whichever fires first speaks and the other stays quiet.
 PERSONAL_PLUGIN = "nsls-personal-toolkit"
 PERSONAL_UPSTREAM_URL = "https://github.com/thensls/nsls-personal-toolkit.git"
-# A remote name WE own — never "upstream", which a fork may already point at
-# something else entirely. Fetching that and calling its commits "behind NSLS"
-# would tell Claude to merge a stranger's project into the builder's toolkit.
-PERSONAL_UPSTREAM_REMOTE = "nsls-upstream"
+# Where the fetch lands: a private ref, not a remote. A fork may already have an
+# `upstream` — or any other name — aimed at something else entirely; fetching
+# that reported a stranger's commits as NSLS's, and re-pointing it was found to
+# be its own small vandalism. Fetching NSLS by URL into a ref of our own touches
+# neither, and gives the notice a stable name to merge. (FETCH_HEAD would do,
+# but the concurrent pulls in this same hook can overwrite it mid-check.) The
+# refspec names refs/heads/main explicitly so a tag called main cannot stand in.
+PERSONAL_UPSTREAM_REF = "refs/nsls/upstream-main"
+PERSONAL_UPSTREAM_REFSPEC = f"+refs/heads/main:{PERSONAL_UPSTREAM_REF}"
 PERSONAL_UPSTREAM_STAMP = CONFIG_DIR / ".nsls-personal-upstream-check"
+# The stamp is a throttle, not a claim: two hooks can both read it as stale
+# before either writes it. The lock is the claim — created exclusively, so
+# exactly one of them fetches and speaks.
+PERSONAL_UPSTREAM_LOCK = CONFIG_DIR / ".nsls-personal-upstream-check.lock"
 PERSONAL_UPSTREAM_CHECK_EVERY_H = 12
 PERSONAL_FETCH_TIMEOUT = 6
+PERSONAL_LOCK_STALE_S = 120  # a lock this old belongs to a hook that died
 
 # NSLS's own repository, in any spelling git accepts — compared as host + path,
 # never as a substring: a mirror on another host, or a longer-named repo under
-# the same owner, both CONTAIN the canonical path.
+# the same owner, both CONTAIN the canonical path. Schemes are an allow-list:
+# `file://github.com/...` or `evil://github.com/...` need never touch GitHub.
 _CANONICAL_HOST = "github.com"
 _CANONICAL_PATH = "thensls/nsls-personal-toolkit"
+_CANONICAL_SCHEMES = ("https", "http", "ssh", "git", "git+ssh", "ssh+git")
 _URL_FORMS = (
     # scheme://[user[:secret]@]host[:port]/path
-    re.compile(r"^[a-z][a-z0-9+.-]*://(?:[^@/]*@)?([^/:]+)(?::\d+)?/(.*)$", re.IGNORECASE),
+    re.compile(r"^([a-z][a-z0-9+.-]*)://(?:[^@/]*@)?([^/:]+)(?::\d+)?/(.*)$", re.IGNORECASE),
     # scp-like [user@]host:path — no scheme, and `host://...` is not this form
     re.compile(r"^(?:[^@/:]+@)?([^/:]+):(?!//)/?(.*)$"),
 )
@@ -355,21 +367,31 @@ def _is_canonical_origin(url):
     Accepts https, ssh://, and scp-like spellings, optional user info and port,
     `www.`, a trailing slash, `.git`, and any letter case (GitHub owner and repo
     names are case-insensitive). Anything else — another host, another owner,
-    a longer repo name, a local path — is not canonical and gets the fork check.
+    a longer repo name, a local path, an unexpected scheme — is not canonical.
     """
-    for form in _URL_FORMS:
-        m = form.match((url or "").strip())
-        if m:
-            host, path = m.group(1).lower(), m.group(2)
-            break
+    u = (url or "").strip()
+    m = _URL_FORMS[0].match(u)
+    if m:
+        if m.group(1).lower() not in _CANONICAL_SCHEMES:
+            return False
+        host, path = m.group(2).lower(), m.group(3)
     else:
-        return False
+        m = _URL_FORMS[1].match(u)
+        if not m:
+            return False
+        host, path = m.group(1).lower(), m.group(2)
     if host.startswith("www."):
         host = host[4:]
     path = path.strip("/")
     if path.lower().endswith(".git"):
         path = path[:-4]
     return host == _CANONICAL_HOST and path.rstrip("/").lower() == _CANONICAL_PATH
+
+
+def _safe_text(value, limit=200):
+    """A path for the notice: printable ASCII only, bounded. Everything printed
+    here is model context, and a path is text someone else can choose."""
+    return re.sub(r"[^\x20-\x7e]", "?", str(value))[:limit]
 
 
 def _git_rc(plugin_dir, *args, timeout=3):
@@ -386,82 +408,68 @@ def _git_rc(plugin_dir, *args, timeout=3):
         return -1, ""
 
 
-def report_personal_fork_drift(deadline=None):
-    """Say so when a personal-toolkit FORK has fallen behind NSLS.
+def _pull_source_url(git):
+    """URL of the remote this checkout's branch actually pulls from — the same
+    source a bare `git pull` uses — falling back to origin. A canonical `origin`
+    beside a branch that tracks a personal fork is a fork in every way that
+    matters; a fork whose remote is not called origin is still a fork. Empty
+    when neither resolves."""
+    rc, tracking = git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+    remote = tracking.split("/", 1)[0] if rc == 0 and "/" in tracking else "origin"
+    rc, url = git("remote", "get-url", remote)
+    if (rc != 0 or not url) and remote != "origin":
+        rc, url = git("remote", "get-url", "origin")
+    return url if rc == 0 else ""
 
-    One network fetch, throttled to once per PERSONAL_UPSTREAM_CHECK_EVERY_H and
-    bounded by the caller's deadline, so the 90s hook budget is untouched.
-    Nothing git prints is surfaced — only our own literal and a verified
-    integer — because SessionStart stdout is the model's context and git echoes
-    server-controlled text.
-    """
-    plugin_dir = CONFIG_DIR / "local-plugins" / PERSONAL_PLUGIN
-    if not (plugin_dir / ".git").exists():
-        return
-    rc, origin = _git_rc(plugin_dir, "remote", "get-url", "origin")
-    if rc != 0 or not origin:
-        return  # no origin at all: nothing to measure against, and not our call
-    if _is_canonical_origin(origin):
-        return  # NSLS's own repo: the freeze and stale-branch checks above own it
 
-    # Throttle, bounded at BOTH ends: a stamp dated in the future (clock skew,
-    # a restored backup, a synced home directory) yields a negative age, which a
-    # bare `<` would read as freshly checked and could silence this for days.
+def _stamp_is_fresh(stamp):
+    """Bounded at BOTH ends: a stamp dated in the future (clock skew, a restored
+    backup, a synced home directory) yields a negative age, which a bare `<`
+    would read as freshly checked and could silence the check for days."""
     try:
-        if PERSONAL_UPSTREAM_STAMP.exists():
-            age_h = (time.time() - PERSONAL_UPSTREAM_STAMP.stat().st_mtime) / 3600
-            if 0 <= age_h < PERSONAL_UPSTREAM_CHECK_EVERY_H:
-                return
-    except Exception:
+        if stamp.exists():
+            age_h = (time.time() - stamp.stat().st_mtime) / 3600
+            return 0 <= age_h < PERSONAL_UPSTREAM_CHECK_EVERY_H
+    except OSError:
+        pass
+    return False
+
+
+def _claim_lock(path):
+    """Create `path` exclusively; None when another hook holds it. A lock older
+    than PERSONAL_LOCK_STALE_S was left by a hook that died — broken once."""
+    for attempt in (1, 2):
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            os.close(os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            return path
+        except FileExistsError:
+            try:
+                if attempt == 1 and time.time() - path.stat().st_mtime > PERSONAL_LOCK_STALE_S:
+                    path.unlink()
+                    continue
+            except OSError:
+                pass
+            return None
+        except OSError:
+            return None
+    return None
+
+
+def _release_lock(path):
+    try:
+        path.unlink()
+    except OSError:
         pass
 
-    # Budget check BEFORE claiming the slot: claiming and then finding no time
-    # left to fetch would silence the check for 12 hours for nothing.
-    budget = PERSONAL_FETCH_TIMEOUT
-    if deadline is not None:
-        budget = min(budget, deadline - time.monotonic())
-    if budget < 1:
-        return
 
-    # Claim the slot BEFORE fetching. The personal toolkit's own hook keys on
-    # this same stamp, and SessionStart hooks start concurrently — stamping
-    # after the fetch left a seconds-wide window for both to fetch and speak.
-    try:
-        PERSONAL_UPSTREAM_STAMP.parent.mkdir(parents=True, exist_ok=True)
-        PERSONAL_UPSTREAM_STAMP.touch()
-    except Exception:
-        pass
-
-    rc, remotes = _git_rc(plugin_dir, "remote")
-    if rc != 0:
-        return
-    if PERSONAL_UPSTREAM_REMOTE in remotes.split():
-        # We own this name, so we may enforce its URL — that also repairs a
-        # checkout left pointing at a moved or mistyped repo.
-        _git_rc(plugin_dir, "remote", "set-url", PERSONAL_UPSTREAM_REMOTE, PERSONAL_UPSTREAM_URL)
-    else:
-        _git_rc(plugin_dir, "remote", "add", PERSONAL_UPSTREAM_REMOTE, PERSONAL_UPSTREAM_URL)
-
-    # Bounded and best-effort: offline, blocked, or slow all mean "say nothing
-    # this session" — never delay a session start over a nicety.
-    rc, _ = _git_rc(plugin_dir, "fetch", PERSONAL_UPSTREAM_REMOTE, "main", "--quiet",
-                    timeout=budget)
-    if rc != 0:
-        return
-    rc, count = _git_rc(plugin_dir, "rev-list", "--count",
-                        f"HEAD..{PERSONAL_UPSTREAM_REMOTE}/main")
-    if rc != 0 or not count.isdigit():
-        return
-    behind = int(count)
-    if behind == 0:
-        return
-
-    # Same prefix and wording as the personal toolkit's own hook, so Claude
-    # sees one identical line whichever of the two spoke first. Names OUR
-    # remote and the checkout path, and points at the update skill's file:
-    # the merged checkout contains it, but the slash command will not exist
-    # until the next restart, and without the file the release walk is skipped.
-    print(
+def _fork_notice(behind, plugin_dir):
+    # Same prefix and wording as the personal toolkit's own hook, so Claude sees
+    # one identical line whichever of the two spoke first. Names the ref we just
+    # fetched and the checkout path, and points at the update skill's file: the
+    # merged checkout contains it, but the slash command will not exist until
+    # the next restart, and without the file the release walk is skipped.
+    return (
         f"[NSLS Personal Toolkit] This builder's toolkit is their OWN FORK and "
         f"is {behind} commit(s) behind NSLS — nothing shipped upstream has "
         f"reached them, and their auto-update never will, because it follows "
@@ -469,13 +477,78 @@ def report_personal_fork_drift(deadline=None):
         f"first reply — e.g. \"Your toolkit is your own copy, so NSLS updates "
         f"haven't been reaching you — want me to catch it up?\" — and if they "
         f"agree: run /update-personal-productivity if this machine has it; "
-        f"otherwise merge {PERSONAL_UPSTREAM_REMOTE}/main into the checkout at "
-        f"{plugin_dir} yourself, preserving their own commits, then read and "
-        f"follow skills/update-personal-productivity/SKILL.md from the freshly "
-        f"merged checkout to walk them through what's new (the slash command "
-        f"itself appears after their next restart). NEVER hand them a git "
-        f"command."
+        f"otherwise, in {_safe_text(plugin_dir)}, merge {PERSONAL_UPSTREAM_REF} "
+        f"(NSLS's main, fetched from {PERSONAL_UPSTREAM_URL} moments ago) "
+        f"yourself, preserving their own commits and setting aside any "
+        f"uncommitted edits first, then read and follow "
+        f"skills/update-personal-productivity/SKILL.md from the freshly merged "
+        f"checkout to walk them through what's new (the slash command itself "
+        f"appears after their next restart). NEVER hand them a git command."
     )
+
+
+def report_personal_fork_drift(deadline=None):
+    """Say so when a personal-toolkit FORK has fallen behind NSLS.
+
+    One network fetch, throttled to once per PERSONAL_UPSTREAM_CHECK_EVERY_H,
+    claimed under an exclusive lock, and with EVERY git call charged against the
+    caller's deadline so the 90s hook budget is untouched. Nothing git prints is
+    surfaced — only our own literal and a verified integer — because
+    SessionStart stdout is the model's context and git echoes server-controlled
+    text. Reads and writes no remote: NSLS is fetched by URL into
+    PERSONAL_UPSTREAM_REF; the update skill owns the named remote it needs.
+    """
+    plugin_dir = CONFIG_DIR / "local-plugins" / PERSONAL_PLUGIN
+    if not (plugin_dir / ".git").exists():
+        return
+
+    def remaining():
+        return None if deadline is None else deadline - time.monotonic()
+
+    def git(*args, cap=3):
+        # Never start a git command with no time left, and never let one run
+        # past the deadline — the fetch was bounded before, the rest were not.
+        left = remaining()
+        if left is not None:
+            if left < 0.5:
+                raise TimeoutError
+            cap = min(cap, left)
+        return _git_rc(plugin_dir, *args, timeout=cap)
+
+    try:
+        url = _pull_source_url(git)
+        if not url or _is_canonical_origin(url):
+            return  # NSLS itself, or unknowable: the freeze and stale-branch checks own it
+        if _stamp_is_fresh(PERSONAL_UPSTREAM_STAMP):
+            return
+        left = remaining()
+        budget = PERSONAL_FETCH_TIMEOUT if left is None else min(PERSONAL_FETCH_TIMEOUT, left - 1)
+        if budget < 1:
+            return  # no time to fetch: leave the stamp alone so the next session gets a real check
+        lock = _claim_lock(PERSONAL_UPSTREAM_LOCK)
+        if lock is None:
+            return  # another hook is mid-check this very second; it will speak
+        try:
+            if _stamp_is_fresh(PERSONAL_UPSTREAM_STAMP):
+                return  # it finished between our two looks
+            try:
+                PERSONAL_UPSTREAM_STAMP.parent.mkdir(parents=True, exist_ok=True)
+                PERSONAL_UPSTREAM_STAMP.touch()
+            except OSError:
+                pass
+            # Bounded and best-effort: offline, blocked, or slow all mean "say
+            # nothing this session" — never delay a session start over a nicety.
+            rc, _ = git("fetch", "--quiet", PERSONAL_UPSTREAM_URL, PERSONAL_UPSTREAM_REFSPEC, cap=budget)
+            if rc != 0:
+                return
+            rc, count = git("rev-list", "--count", f"HEAD..{PERSONAL_UPSTREAM_REF}")
+            if rc != 0 or not count.isdigit() or int(count) == 0:
+                return
+            print(_fork_notice(int(count), plugin_dir))
+        finally:
+            _release_lock(lock)
+    except TimeoutError:
+        return
 
 
 def git_pull():
