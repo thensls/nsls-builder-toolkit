@@ -414,8 +414,15 @@ def _pull_source_url(git):
     beside a branch that tracks a personal fork is a fork in every way that
     matters; a fork whose remote is not called origin is still a fork. Empty
     when neither resolves."""
-    rc, tracking = git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
-    remote = tracking.split("/", 1)[0] if rc == 0 and "/" in tracking else "origin"
+    # From config, not by splitting `@{u}` on "/": a remote may itself be
+    # named with a slash (`personal/fork`), and the split kept only `personal`.
+    remote = ""
+    rc, branch = git("symbolic-ref", "--short", "HEAD")  # fails when detached
+    if rc == 0 and branch:
+        rc, configured = git("config", "--get", f"branch.{branch}.remote")
+        if rc == 0 and configured and configured != ".":  # "." tracks a local branch
+            remote = configured
+    remote = remote or "origin"
     rc, url = git("remote", "get-url", remote)
     if (rc != 0 or not url) and remote != "origin":
         rc, url = git("remote", "get-url", "origin")

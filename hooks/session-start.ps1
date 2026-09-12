@@ -112,10 +112,15 @@ function Get-PullSourceUrl {
     # bare `git pull` uses - falling back to origin. A canonical origin beside a
     # branch that tracks a personal fork is a fork in every way that matters; a
     # fork whose remote is not called origin is still a fork. Empty when neither
-    # resolves. ('@{u}' is quoted: bare, PowerShell reads it as a hashtable.)
-    $tracking = (& git -C $Dir rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null | Out-String).Trim()
+    # resolves. Read from config rather than by splitting the tracking ref on
+    # "/": a remote may itself be named with a slash (personal/fork).
     $remote = 'origin'
-    if ($LASTEXITCODE -eq 0 -and $tracking -match '^([^/]+)/.+$') { $remote = $Matches[1] }
+    $branch = (& git -C $Dir symbolic-ref --short HEAD 2>$null | Out-String).Trim()
+    if ($LASTEXITCODE -eq 0 -and $branch) {
+        # $($branch) - a bare "$branch.remote" would read .remote as a property.
+        $configured = (& git -C $Dir config --get "branch.$($branch).remote" 2>$null | Out-String).Trim()
+        if ($LASTEXITCODE -eq 0 -and $configured -and $configured -ne '.') { $remote = $configured }
+    }
     $url = (& git -C $Dir remote get-url $remote 2>$null | Out-String).Trim()
     if (($LASTEXITCODE -ne 0 -or -not $url) -and $remote -ne 'origin') {
         $url = (& git -C $Dir remote get-url origin 2>$null | Out-String).Trim()

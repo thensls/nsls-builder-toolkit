@@ -259,6 +259,21 @@ with tempfile.TemporaryDirectory() as tmp:
           "is 5 commit(s) behind NSLS" in run())
     git(plugin_dir, "remote", "rename", "nsls", "origin")
 
+    # A remote whose NAME contains a slash: read from config, not split on "/".
+    git(plugin_dir, "remote", "rename", "origin", "personal/fork")
+    rearm()
+    check("a fork whose remote is named with a slash (personal/fork) is still detected",
+          "is 5 commit(s) behind NSLS" in run())
+    git(plugin_dir, "remote", "rename", "personal/fork", "origin")
+
+    # Detached HEAD (a deliberate pin): no branch config, so origin decides.
+    head = git(plugin_dir, "rev-parse", "HEAD")
+    git(plugin_dir, "checkout", "--quiet", "--detach", head)
+    rearm()
+    check("a detached HEAD on a fork falls back to origin and is still detected",
+          "is 5 commit(s) behind NSLS" in run())
+    git(plugin_dir, "checkout", "--quiet", "main")
+
     # Fork caught up: silent.
     git(plugin_dir, "merge", "--quiet", "--no-edit", "refs/nsls/upstream-main")
     rearm()
