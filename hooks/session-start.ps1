@@ -56,6 +56,127 @@ foreach ($dir in @($BuilderDir, $PersonalDir)) {
     }
 }
 
+# --- 1b. personal-toolkit forks: measured against NSLS, not against their own copy ---
+# The block above speaks only when a pull FAILS. A fork's pull succeeds - the
+# fork genuinely has nothing new - so a builder whose personal toolkit is their
+# own GitHub fork was reported healthy every session while nothing NSLS shipped
+# ever reached them (196 commits behind on a real machine, 2026-09-09).
+# Windows parity with session-start.py's report_personal_fork_drift(): same
+# remote name, same stamp, same wording. Python is not guaranteed on a PC, so
+# this is the ONLY place the check runs on Windows - and this script self-updates
+# from NSLS on every machine, which is what lets it reach a fork at all (the
+# fork's own hook is a file inside the fork, so the fork can never receive it).
+$PersonalUpstreamUrl    = 'https://github.com/thensls/nsls-personal-toolkit.git'
+$PersonalUpstreamRemote = 'nsls-upstream'   # a name WE own - never 'upstream', which may already be theirs
+$PersonalUpstreamStamp  = Join-Path $ClaudeDir '.nsls-personal-upstream-check'
+$PersonalCheckEveryH    = 12
+
+function Test-CanonicalOrigin {
+    param([string]$Url)
+    # True only for NSLS's own repository on github.com, in any spelling git
+    # accepts (https, ssh://, scp-like; user info, port, www., trailing slash,
+    # .git, any case). Host and path are compared exactly - a substring test
+    # called a mirror on another host, or a longer-named repo under the same
+    # owner, canonical, and skipped the check for it.
+    $u = if ($Url) { $Url.Trim() } else { '' }
+    $hostName = $null
+    $repoPath = $null
+    $m = [regex]::Match($u, '^[A-Za-z][A-Za-z0-9+.-]*://(?:[^@/]*@)?([^/:]+)(?::\d+)?/(.*)$')
+    if ($m.Success) {
+        $hostName = $m.Groups[1].Value
+        $repoPath = $m.Groups[2].Value
+    } else {
+        $m = [regex]::Match($u, '^(?:[^@/:]+@)?([^/:]+):(?!//)/?(.*)$')
+        if ($m.Success) {
+            $hostName = $m.Groups[1].Value
+            $repoPath = $m.Groups[2].Value
+        }
+    }
+    if ($null -eq $hostName) { return $false }
+    if ($hostName -match '^www\.') { $hostName = $hostName.Substring(4) }
+    $repoPath = $repoPath.Trim('/')
+    if ($repoPath -match '\.git$') { $repoPath = $repoPath.Substring(0, $repoPath.Length - 4) }
+    # -eq and -match are case-insensitive in PowerShell, which is what GitHub names need.
+    return (($hostName -eq 'github.com') -and ($repoPath.TrimEnd('/') -eq 'thensls/nsls-personal-toolkit'))
+}
+
+function Invoke-GitQuiet {
+    param([string]$Dir, [string[]]$GitArgs, [int]$TimeoutMs = 3000)
+    # git with its output DISCARDED and a hard time limit; returns the exit code,
+    # or -1 when git timed out or could not start. Everything this hook prints
+    # is the model's context and git echoes server-controlled text, so none of
+    # git's own output is ever surfaced from here - only our literals and a
+    # verified integer. The direct `& git` form has no time limit, and a fetch
+    # can hang for a minute on a captive portal or a firewall that drops packets.
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = 'git'
+        $parts = @('-C', $Dir) + $GitArgs
+        $psi.Arguments = (($parts | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' ')
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $psi.EnvironmentVariables['GIT_TERMINAL_PROMPT'] = '0'
+        $p = [System.Diagnostics.Process]::Start($psi)
+        # Drain both pipes asynchronously (no handlers needed: unsubscribed output
+        # is discarded) - a chatty child deadlocks on a full pipe otherwise.
+        $p.BeginOutputReadLine()
+        $p.BeginErrorReadLine()
+        if (-not $p.WaitForExit($TimeoutMs)) {
+            try { $p.Kill() } catch { }
+            return -1
+        }
+        return $p.ExitCode
+    } catch {
+        return -1
+    }
+}
+
+function Report-PersonalForkDrift {
+    param([string]$Dir)
+    if (-not (Test-Path (Join-Path $Dir '.git'))) { return }
+    $origin = (& git -C $Dir remote get-url origin 2>$null | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $origin) { return }   # no origin: nothing to measure against
+    if (Test-CanonicalOrigin $origin) { return }            # NSLS's own repo: the freeze check above owns it
+
+    # One fetch per 12h, bounded at BOTH ends: a stamp dated in the future
+    # (clock skew, a restored backup) would otherwise read as fresh forever.
+    $ageH = $null
+    try {
+        if (Test-Path $PersonalUpstreamStamp) {
+            $ageH = ((Get-Date) - (Get-Item $PersonalUpstreamStamp).LastWriteTime).TotalHours
+        }
+    } catch { }
+    if ($null -ne $ageH -and $ageH -ge 0 -and $ageH -lt $PersonalCheckEveryH) { return }
+
+    # Claim the slot BEFORE fetching: the Python hook, where present, keys on this
+    # same stamp, and SessionStart hooks start concurrently.
+    try { [System.IO.File]::WriteAllText($PersonalUpstreamStamp, '') } catch { }
+
+    $remotes = @((& git -C $Dir remote 2>$null | Out-String) -split '\r?\n' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($LASTEXITCODE -ne 0) { return }
+    if ($remotes -contains $PersonalUpstreamRemote) {
+        # We own this name, so we may enforce its URL - that also repairs a
+        # checkout left pointing at a moved or mistyped repo.
+        $null = Invoke-GitQuiet -Dir $Dir -GitArgs @('remote', 'set-url', $PersonalUpstreamRemote, $PersonalUpstreamUrl)
+    } else {
+        $null = Invoke-GitQuiet -Dir $Dir -GitArgs @('remote', 'add', $PersonalUpstreamRemote, $PersonalUpstreamUrl)
+    }
+
+    # Bounded, best-effort: offline, blocked or slow all mean "say nothing this session".
+    if ((Invoke-GitQuiet -Dir $Dir -GitArgs @('fetch', $PersonalUpstreamRemote, 'main', '--quiet') -TimeoutMs 8000) -ne 0) { return }
+    $count = (& git -C $Dir rev-list --count "HEAD..$PersonalUpstreamRemote/main" 2>$null | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $count -notmatch '^\d+$') { return }
+    $behind = [int]$count
+    if ($behind -eq 0) { return }
+
+    # Same prefix and wording as the personal toolkit's own hook, so Claude sees
+    # one identical line whichever of the two spoke first.
+    Write-Output ("[NSLS Personal Toolkit] This builder's toolkit is their OWN FORK and is $behind commit(s) behind NSLS - nothing shipped upstream has reached them, and their auto-update never will, because it follows their fork. Tell them in ONE plain sentence at the start of your first reply - e.g. `"Your toolkit is your own copy, so NSLS updates haven't been reaching you - want me to catch it up?`" - and if they agree: run /update-personal-productivity if this machine has it; otherwise merge $PersonalUpstreamRemote/main into the checkout at $Dir yourself, preserving their own commits, then read and follow skills/update-personal-productivity/SKILL.md from the freshly merged checkout to walk them through what's new (the slash command itself appears after their next restart). NEVER hand them a git command.")
+}
+Report-PersonalForkDrift -Dir $PersonalDir
+
 function Parse-Frontmatter {
     param([string]$Path)
     $content = Get-Content $Path -Raw -Encoding UTF8
