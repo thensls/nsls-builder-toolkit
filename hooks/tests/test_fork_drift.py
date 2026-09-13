@@ -324,6 +324,17 @@ with tempfile.TemporaryDirectory() as tmp:
     rearm()
     check("a fork that has been caught up is silent", run() == "")
 
+    # An UNRELATED repository at the personal-toolkit path: not a fork, no shared
+    # history with NSLS — say nothing rather than tell Claude to merge NSLS into it.
+    import shutil
+    shutil.rmtree(plugin_dir)
+    stranger = seed_repo(plugin_dir)
+    commit(stranger, "README.md", "something else entirely\n")
+    git(stranger, "remote", "add", "origin", "https://github.com/someone/other-project.git")
+    rearm()
+    check("an unrelated repository at the path is not called a fork and gets no merge instruction",
+          run() == "")
+
     # No checkout at all: silent, no crash.
     hook.CONFIG_DIR = Path(tmp) / "nowhere"
     check("no personal toolkit installed: silent", run() == "")

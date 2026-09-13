@@ -271,6 +271,12 @@ function Report-PersonalForkDrift {
         # --no-tags so NSLS's tags are not written into the builder's checkout.
         $r = Invoke-GitBounded -Dir $Dir -GitArgs @('fetch', '--quiet', '--no-tags', $PersonalUpstreamUrl, $PersonalUpstreamRefspec) -TimeoutMs 8000
         if ($r.Code -ne 0) { return }
+        # A fork shares history with NSLS. A repository that does not - some
+        # unrelated project sitting at this path - is not a fork, and telling
+        # Claude to merge NSLS's main into it would be an instruction to merge two
+        # unrelated histories. Nothing to say about such a checkout.
+        $r = Invoke-GitBounded -Dir $Dir -GitArgs @('merge-base', 'HEAD', $PersonalUpstreamRef)
+        if ($r.Code -ne 0) { return }
         $r = Invoke-GitBounded -Dir $Dir -GitArgs @('rev-list', '--count', "HEAD..$PersonalUpstreamRef")
         if ($r.Code -ne 0 -or $r.Out -notmatch '^\d+$') { return }
         $behind = [int]$r.Out

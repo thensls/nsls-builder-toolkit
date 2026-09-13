@@ -643,6 +643,13 @@ def report_personal_fork_drift(deadline=None):
                         PERSONAL_UPSTREAM_REFSPEC, cap=budget)
             if rc != 0:
                 return
+            # A fork shares history with NSLS. A repository that does not — some
+            # unrelated project sitting at this path — is not a fork, and telling
+            # Claude to merge NSLS's main into it would be an instruction to merge
+            # two unrelated histories. Nothing to say about such a checkout.
+            rc, _ = git("merge-base", "HEAD", PERSONAL_UPSTREAM_REF)
+            if rc != 0:
+                return
             rc, count = git("rev-list", "--count", f"HEAD..{PERSONAL_UPSTREAM_REF}")
             if rc != 0 or not count.isdigit() or int(count) == 0:
                 return
