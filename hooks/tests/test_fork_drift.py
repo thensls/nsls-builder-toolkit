@@ -205,6 +205,8 @@ with tempfile.TemporaryDirectory() as tmp:
     os.utime(hook.PERSONAL_UPSTREAM_LOCK, (old, old))
     check("a stale lock from a dead hook is broken and the check proceeds", "OWN FORK" in run())
     check("...and no lock is left behind", not hook.PERSONAL_UPSTREAM_LOCK.exists())
+    check("...and the reclaimed stale file was cleaned up too, not left as a grave",
+          not list(hook.PERSONAL_UPSTREAM_LOCK.parent.glob("*.stale-*")))
 
     # A lock dated in the FUTURE must not read as held until that moment arrives.
     rearm()

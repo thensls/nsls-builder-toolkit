@@ -199,7 +199,11 @@ function Claim-Lock {
     # lock, $null when another hook does. The stamp is only a throttle - two hooks
     # can both read it as stale before either writes it - so this is the claim.
     # A lock whose age is outside 0..$PersonalLockStaleS was left by a hook that
-    # died (or is dated in the future) and is broken once.
+    # died (or is dated in the future) and is reclaimed ATOMICALLY: the stale file
+    # is moved away rather than deleted by name. Only one of two racing hooks can
+    # win the move; the loser's move throws (source gone) and it simply retries
+    # the exclusive create, which then fails on the winner's fresh lock. Deleting
+    # by name let the loser remove the winner's new lock and both proceed.
     $token = "$PID-$([DateTime]::UtcNow.Ticks)-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     foreach ($attempt in 1, 2) {
         try {
@@ -212,15 +216,28 @@ function Claim-Lock {
             }
             return $token
         } catch {
-            $stale = $false
+            if ($attempt -ne 1) { return $null }
             try {
-                if ($attempt -eq 1 -and (Test-Path $Path)) {
-                    $ageS = ((Get-Date) - (Get-Item $Path).LastWriteTime).TotalSeconds
-                    $stale = ($ageS -lt 0 -or $ageS -gt $PersonalLockStaleS)
-                    if ($stale) { Remove-Item $Path -Force }
+                if (-not (Test-Path $Path)) { continue }   # vanished under us: retry the create once
+                # Negative age counts as stale too: a lock dated in the FUTURE
+                # (clock skew, a restored backup) would otherwise read as held
+                # until that moment arrives, silencing every check until then.
+                $ageS = ((Get-Date) - (Get-Item $Path).LastWriteTime).TotalSeconds
+                if ($ageS -ge 0 -and $ageS -le $PersonalLockStaleS) { return $null }   # live: someone is mid-check
+                $grave = "$Path.stale-$token"
+                [System.IO.File]::Move($Path, $grave)
+                $gAge = ((Get-Date) - (Get-Item $grave).LastWriteTime).TotalSeconds
+                if ($gAge -ge 0 -and $gAge -le $PersonalLockStaleS) {
+                    # We moved a LIVE lock created between our look and our move:
+                    # put it back if the name is still free, and do not claim.
+                    try { [System.IO.File]::Move($grave, $Path) } catch { Remove-Item $grave -Force -ErrorAction SilentlyContinue }
+                    return $null
                 }
-            } catch { $stale = $false }
-            if (-not $stale) { return $null }
+                Remove-Item $grave -Force -ErrorAction SilentlyContinue
+                continue
+            } catch {
+                continue   # the other racer won the move: retry the create once
+            }
         }
     }
     return $null

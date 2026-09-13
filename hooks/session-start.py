@@ -483,9 +483,14 @@ def _stamp_is_fresh(stamp):
 
 def _claim_lock(path):
     """Create `path` exclusively and write a token into it; the token (truthy)
-    when we hold the lock, None when another hook does. A lock whose age is
-    outside 0..PERSONAL_LOCK_STALE_S was left by a hook that died (or is dated
-    in the future) and is broken once."""
+    when we hold the lock, None when another hook does.
+
+    A lock whose age is outside 0..PERSONAL_LOCK_STALE_S was left by a hook
+    that died (or is dated in the future) and is reclaimed ATOMICALLY: the
+    stale inode is renamed away rather than deleted by name. Only one of two
+    racing hooks can win that rename; the loser sees ENOENT and simply retries
+    the exclusive create, which then fails on the winner's fresh lock. Deleting
+    by name let the loser remove the winner's new lock and both proceed."""
     token = f"{os.getpid()}-{time.time_ns()}-{os.urandom(4).hex()}"
     for attempt in (1, 2):
         try:
@@ -497,17 +502,49 @@ def _claim_lock(path):
                 os.close(fd)
             return token
         except FileExistsError:
+            if attempt != 1:
+                return None
             try:
-                # Negative age counts as stale too: a lock dated in the FUTURE
-                # (clock skew, a restored backup) would otherwise read as held
-                # until that moment arrives, silencing every check until then.
-                age_s = time.time() - path.stat().st_mtime
-                if attempt == 1 and not (0 <= age_s <= PERSONAL_LOCK_STALE_S):
-                    path.unlink()
-                    continue
+                st = path.stat()
+            except FileNotFoundError:
+                continue  # vanished under us: retry the create once
+            except OSError:
+                return None
+            # Negative age counts as stale too: a lock dated in the FUTURE
+            # (clock skew, a restored backup) would otherwise read as held
+            # until that moment arrives, silencing every check until then.
+            age_s = time.time() - st.st_mtime
+            if 0 <= age_s <= PERSONAL_LOCK_STALE_S:
+                return None  # live: someone is mid-check right now
+            grave = path.with_name(f"{path.name}.stale-{token}")
+            try:
+                os.rename(path, grave)
+            except FileNotFoundError:
+                continue  # the other racer won the rename: retry the create once
+            except OSError:
+                return None
+            try:
+                same = grave.stat().st_ino == st.st_ino
+            except OSError:
+                same = True
+            if not same:
+                # We moved a LIVE lock created between our look and our rename.
+                # Put it back if the name is still free (link is atomic and
+                # refuses an existing path), and do not claim.
+                try:
+                    os.link(str(grave), str(path))
+                except OSError:
+                    pass
+                try:
+                    grave.unlink()
+                except OSError:
+                    pass
+                return None
+            try:
+                grave.unlink()
             except OSError:
                 pass
-            return None
+            continue
         except OSError:
             return None
     return None
