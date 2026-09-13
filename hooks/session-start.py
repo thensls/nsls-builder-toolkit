@@ -465,7 +465,11 @@ def _claim_lock(path):
             return path
         except FileExistsError:
             try:
-                if attempt == 1 and time.time() - path.stat().st_mtime > PERSONAL_LOCK_STALE_S:
+                # Negative age counts as stale too: a lock dated in the FUTURE
+                # (clock skew, a restored backup) would otherwise read as held
+                # until that moment arrives, silencing every check until then.
+                age_s = time.time() - path.stat().st_mtime
+                if attempt == 1 and not (0 <= age_s <= PERSONAL_LOCK_STALE_S):
                     path.unlink()
                     continue
             except OSError:

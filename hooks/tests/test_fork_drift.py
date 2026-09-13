@@ -203,6 +203,14 @@ with tempfile.TemporaryDirectory() as tmp:
     check("a stale lock from a dead hook is broken and the check proceeds", "OWN FORK" in run())
     check("...and no lock is left behind", not hook.PERSONAL_UPSTREAM_LOCK.exists())
 
+    # A lock dated in the FUTURE must not read as held until that moment arrives.
+    rearm()
+    hook.PERSONAL_UPSTREAM_LOCK.write_text("")
+    ahead = time.time() + 3 * 3600
+    os.utime(hook.PERSONAL_UPSTREAM_LOCK, (ahead, ahead))
+    check("a future-dated lock is broken like a stale one and the check proceeds", "OWN FORK" in run())
+    check("...and no lock is left behind afterwards", not hook.PERSONAL_UPSTREAM_LOCK.exists())
+
     # Her own `upstream` pointing at something unrelated: left alone, not counted.
     other = seed_repo(Path(tmp) / "other")
     for i in range(40):

@@ -166,7 +166,11 @@ function Claim-Lock {
             $stale = $false
             try {
                 if ($attempt -eq 1 -and (Test-Path $Path)) {
-                    $stale = (((Get-Date) - (Get-Item $Path).LastWriteTime).TotalSeconds -gt $PersonalLockStaleS)
+                    # Negative age counts as stale too: a lock dated in the FUTURE
+                    # (clock skew, a restored backup) would otherwise read as held
+                    # until that moment arrives, silencing every check until then.
+                    $ageS = ((Get-Date) - (Get-Item $Path).LastWriteTime).TotalSeconds
+                    $stale = ($ageS -lt 0 -or $ageS -gt $PersonalLockStaleS)
                     if ($stale) { Remove-Item $Path -Force }
                 }
             } catch { $stale = $false }
