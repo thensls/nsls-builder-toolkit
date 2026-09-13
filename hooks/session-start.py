@@ -14,6 +14,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -395,16 +396,41 @@ def _safe_text(value, limit=200):
 
 
 def _git_rc(plugin_dir, *args, timeout=3):
-    """(returncode, stdout) — never raises; -1 when git timed out or could not run."""
+    """(returncode, stdout) — never raises; -1 when git timed out or could not run.
+
+    git runs in its own session so a timeout kills the whole process TREE — a
+    fetch's HTTPS remote helper is a child that killing git alone would leave
+    running the network operation after we had released the lock."""
     try:
-        r = subprocess.run(
+        proc = subprocess.Popen(
             ["git", "-C", str(plugin_dir), *args],
-            capture_output=True, text=True, timeout=timeout,
-            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
+            text=True, start_new_session=True,
             env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
         )
-        return r.returncode, (r.stdout or "").strip()
     except Exception:
+        return -1, ""
+    try:
+        out, _ = proc.communicate(timeout=timeout)
+        return proc.returncode, (out or "").strip()
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        try:
+            proc.communicate(timeout=2)
+        except Exception:
+            pass
+        return -1, ""
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
         return -1, ""
 
 
@@ -418,23 +444,23 @@ def _pull_source_url(git):
     # named with a slash (`personal/fork`), and the split kept only `personal`.
     remote = ""
     rc, branch = git("symbolic-ref", "--short", "HEAD")  # fails when detached
-    hops = 0
-    while rc == 0 and branch and hops < 2:
+    seen = set()
+    while rc == 0 and branch and branch not in seen:
+        seen.add(branch)  # stop only on a cycle, not at an arbitrary hop count
         rc, configured = git("config", "--get", f"branch.{branch}.remote")
         if rc != 0 or not configured:
             break
         if configured != ".":
             remote = configured
             break
-        # "." means the branch pulls from a LOCAL branch, not a remote. Follow it
-        # one hop to the remote that branch tracks, rather than pretending it is
+        # "." means the branch pulls from a LOCAL branch, not a remote. Follow
+        # that chain to the remote it ends at, rather than pretending it is
         # origin — but never give up on the checkout: its remote of record is
         # still the honest fallback, and silence on a fork is the failure here.
         rc, merge = git("config", "--get", f"branch.{branch}.merge")
         if rc != 0 or not merge.startswith("refs/heads/"):
             break
         branch = merge[len("refs/heads/"):]
-        hops += 1
     remote = remote or "origin"
     rc, url = git("remote", "get-url", remote)
     if (rc != 0 or not url) and remote != "origin":
@@ -456,13 +482,20 @@ def _stamp_is_fresh(stamp):
 
 
 def _claim_lock(path):
-    """Create `path` exclusively; None when another hook holds it. A lock older
-    than PERSONAL_LOCK_STALE_S was left by a hook that died — broken once."""
+    """Create `path` exclusively and write a token into it; the token (truthy)
+    when we hold the lock, None when another hook does. A lock whose age is
+    outside 0..PERSONAL_LOCK_STALE_S was left by a hook that died (or is dated
+    in the future) and is broken once."""
+    token = f"{os.getpid()}-{time.time_ns()}-{os.urandom(4).hex()}"
     for attempt in (1, 2):
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            os.close(os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
-            return path
+            fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            try:
+                os.write(fd, token.encode("ascii"))
+            finally:
+                os.close(fd)
+            return token
         except FileExistsError:
             try:
                 # Negative age counts as stale too: a lock dated in the FUTURE
@@ -480,9 +513,13 @@ def _claim_lock(path):
     return None
 
 
-def _release_lock(path):
+def _release_lock(path, token):
+    """Delete the lock only if it still carries OUR token. A hook paused past the
+    stale threshold (a laptop asleep mid-check) would otherwise delete the lock
+    a newer hook created after breaking ours, letting a third one in."""
     try:
-        path.unlink()
+        if path.read_text(encoding="ascii", errors="replace") == token:
+            path.unlink()
     except OSError:
         pass
 
@@ -562,7 +599,11 @@ def report_personal_fork_drift(deadline=None):
                 pass
             # Bounded and best-effort: offline, blocked, or slow all mean "say
             # nothing this session" — never delay a session start over a nicety.
-            rc, _ = git("fetch", "--quiet", PERSONAL_UPSTREAM_URL, PERSONAL_UPSTREAM_REFSPEC, cap=budget)
+            # --no-tags: a plain fetch also auto-follows tags reachable from main,
+            # writing NSLS's tags into the builder's checkout — or failing when
+            # one collides with a tag of theirs. Only our ref should move.
+            rc, _ = git("fetch", "--quiet", "--no-tags", PERSONAL_UPSTREAM_URL,
+                        PERSONAL_UPSTREAM_REFSPEC, cap=budget)
             if rc != 0:
                 return
             rc, count = git("rev-list", "--count", f"HEAD..{PERSONAL_UPSTREAM_REF}")
@@ -570,7 +611,7 @@ def report_personal_fork_drift(deadline=None):
                 return
             print(_fork_notice(int(count), plugin_dir))
         finally:
-            _release_lock(lock)
+            _release_lock(PERSONAL_UPSTREAM_LOCK, lock)
     except TimeoutError:
         return
 

@@ -106,6 +106,47 @@ function Test-CanonicalOrigin {
     return (($hostName -eq 'github.com') -and ($repoPath.TrimEnd('/') -eq 'thensls/nsls-personal-toolkit'))
 }
 
+function Invoke-GitBounded {
+    param([string]$Dir, [string[]]$GitArgs, [int]$TimeoutMs = 3000)
+    # EVERY git call in this block runs through here: a hard time limit (the
+    # direct `& git` form has none, and a fetch can hang for a minute on a captive
+    # portal; a rev-list walk has no natural bound either), the whole process
+    # TREE killed on timeout (git's HTTPS remote helper is a child that
+    # Process.Kill() alone leaves running the fetch after we release the lock),
+    # and output captured only for our own parsing. Everything this hook prints
+    # is the model's context and git echoes server-controlled text, so nothing
+    # captured here is ever surfaced - only our literals and a verified integer.
+    # Returns @{ Code = exit code (-1 on timeout or failure to start); Out = stdout }.
+    $result = @{ Code = -1; Out = '' }
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = 'git'
+        $parts = @('-C', $Dir) + $GitArgs
+        $psi.Arguments = (($parts | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' ')
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $psi.EnvironmentVariables['GIT_TERMINAL_PROMPT'] = '0'
+        $p = [System.Diagnostics.Process]::Start($psi)
+        # Drain both pipes while waiting - a chatty child deadlocks on a full pipe
+        # otherwise. stdout is kept (for the count); stderr is discarded.
+        $outTask = $p.StandardOutput.ReadToEndAsync()
+        $p.BeginErrorReadLine()
+        if (-not $p.WaitForExit($TimeoutMs)) {
+            try { & taskkill /T /F /PID $p.Id 2>$null | Out-Null } catch { }
+            try { $p.WaitForExit(3000) | Out-Null } catch { }
+            return $result
+        }
+        $p.WaitForExit()   # lets the async readers finish after a timed wait
+        $result.Code = $p.ExitCode
+        $result.Out = $outTask.Result.Trim()
+        return $result
+    } catch {
+        return $result
+    }
+}
+
 function Get-PullSourceUrl {
     param([string]$Dir)
     # The remote this checkout's branch actually pulls from - the same source a
@@ -115,28 +156,29 @@ function Get-PullSourceUrl {
     # resolves. Read from config rather than by splitting the tracking ref on
     # "/": a remote may itself be named with a slash (personal/fork).
     $remote = 'origin'
-    $branch = (& git -C $Dir symbolic-ref --short HEAD 2>$null | Out-String).Trim()
-    $hops = 0
-    while ($LASTEXITCODE -eq 0 -and $branch -and $hops -lt 2) {
+    $r = Invoke-GitBounded -Dir $Dir -GitArgs @('symbolic-ref', '--short', 'HEAD')   # fails when detached
+    $branch = if ($r.Code -eq 0) { $r.Out } else { '' }
+    $seen = @()
+    while ($branch -and ($seen -cnotcontains $branch)) {
+        $seen += $branch   # stop only on a cycle, not at an arbitrary hop count
         # $($branch) - a bare "$branch.remote" would read .remote as a property.
-        $configured = (& git -C $Dir config --get "branch.$($branch).remote" 2>$null | Out-String).Trim()
-        if ($LASTEXITCODE -ne 0 -or -not $configured) { break }
-        if ($configured -ne '.') { $remote = $configured; break }
-        # '.' means the branch pulls from a LOCAL branch, not a remote. Follow it
-        # one hop to the remote that branch tracks, rather than pretending it is
-        # origin - but never give up on the checkout: its remote of record is
-        # still the honest fallback, and silence on a fork is the failure here.
-        $merge = (& git -C $Dir config --get "branch.$($branch).merge" 2>$null | Out-String).Trim()
-        if ($LASTEXITCODE -ne 0 -or $merge -notlike 'refs/heads/*') { break }
-        $branch = $merge.Substring(11)
-        $hops++
+        $r = Invoke-GitBounded -Dir $Dir -GitArgs @('config', '--get', "branch.$($branch).remote")
+        if ($r.Code -ne 0 -or -not $r.Out) { break }
+        if ($r.Out -ne '.') { $remote = $r.Out; break }
+        # '.' means the branch pulls from a LOCAL branch, not a remote. Follow that
+        # chain to the remote it ends at, rather than pretending it is origin - but
+        # never give up on the checkout: its remote of record is still the honest
+        # fallback, and silence on a fork is the failure here.
+        $r = Invoke-GitBounded -Dir $Dir -GitArgs @('config', '--get', "branch.$($branch).merge")
+        if ($r.Code -ne 0 -or $r.Out -notlike 'refs/heads/*') { break }
+        $branch = $r.Out.Substring(11)
     }
-    $url = (& git -C $Dir remote get-url $remote 2>$null | Out-String).Trim()
-    if (($LASTEXITCODE -ne 0 -or -not $url) -and $remote -ne 'origin') {
-        $url = (& git -C $Dir remote get-url origin 2>$null | Out-String).Trim()
+    $r = Invoke-GitBounded -Dir $Dir -GitArgs @('remote', 'get-url', $remote)
+    if (($r.Code -ne 0 -or -not $r.Out) -and $remote -ne 'origin') {
+        $r = Invoke-GitBounded -Dir $Dir -GitArgs @('remote', 'get-url', 'origin')
     }
-    if ($LASTEXITCODE -ne 0) { return '' }
-    return $url
+    if ($r.Code -ne 0) { return '' }
+    return $r.Out
 }
 
 function Test-StampFresh {
@@ -153,22 +195,26 @@ function Test-StampFresh {
 
 function Claim-Lock {
     param([string]$Path)
-    # Exclusive create: $null when another hook holds it. The stamp is only a
-    # throttle - two hooks can both read it as stale before either writes it -
-    # so this is the claim. A lock older than $PersonalLockStaleS was left by a
-    # hook that died and is broken once.
+    # Exclusive create with OUR token written inside: the token when we hold the
+    # lock, $null when another hook does. The stamp is only a throttle - two hooks
+    # can both read it as stale before either writes it - so this is the claim.
+    # A lock whose age is outside 0..$PersonalLockStaleS was left by a hook that
+    # died (or is dated in the future) and is broken once.
+    $token = "$PID-$([DateTime]::UtcNow.Ticks)-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     foreach ($attempt in 1, 2) {
         try {
             $fs = [System.IO.File]::Open($Path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
-            $fs.Close()
-            return $Path
+            try {
+                $bytes = [System.Text.Encoding]::ASCII.GetBytes($token)
+                $fs.Write($bytes, 0, $bytes.Length)
+            } finally {
+                $fs.Close()
+            }
+            return $token
         } catch {
             $stale = $false
             try {
                 if ($attempt -eq 1 -and (Test-Path $Path)) {
-                    # Negative age counts as stale too: a lock dated in the FUTURE
-                    # (clock skew, a restored backup) would otherwise read as held
-                    # until that moment arrives, silencing every check until then.
                     $ageS = ((Get-Date) - (Get-Item $Path).LastWriteTime).TotalSeconds
                     $stale = ($ageS -lt 0 -or $ageS -gt $PersonalLockStaleS)
                     if ($stale) { Remove-Item $Path -Force }
@@ -180,37 +226,14 @@ function Claim-Lock {
     return $null
 }
 
-function Invoke-GitQuiet {
-    param([string]$Dir, [string[]]$GitArgs, [int]$TimeoutMs = 3000)
-    # git with its output DISCARDED and a hard time limit; returns the exit code,
-    # or -1 when git timed out or could not start. Everything this hook prints
-    # is the model's context and git echoes server-controlled text, so none of
-    # git's own output is ever surfaced from here - only our literals and a
-    # verified integer. The direct `& git` form has no time limit, and a fetch
-    # can hang for a minute on a captive portal or a firewall that drops packets.
+function Release-Lock {
+    param([string]$Path, [string]$Token)
+    # Delete the lock only if it still carries OUR token. A hook paused past the
+    # stale threshold (a laptop asleep mid-check) would otherwise delete the lock
+    # a newer hook created after breaking ours, letting a third one in.
     try {
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = 'git'
-        $parts = @('-C', $Dir) + $GitArgs
-        $psi.Arguments = (($parts | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' ')
-        $psi.UseShellExecute = $false
-        $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError = $true
-        $psi.CreateNoWindow = $true
-        $psi.EnvironmentVariables['GIT_TERMINAL_PROMPT'] = '0'
-        $p = [System.Diagnostics.Process]::Start($psi)
-        # Drain both pipes asynchronously (no handlers needed: unsubscribed output
-        # is discarded) - a chatty child deadlocks on a full pipe otherwise.
-        $p.BeginOutputReadLine()
-        $p.BeginErrorReadLine()
-        if (-not $p.WaitForExit($TimeoutMs)) {
-            try { $p.Kill() } catch { }
-            return -1
-        }
-        return $p.ExitCode
-    } catch {
-        return -1
-    }
+        if ((Test-Path $Path) -and ([System.IO.File]::ReadAllText($Path) -eq $Token)) { Remove-Item $Path -Force }
+    } catch { }
 }
 
 function Report-PersonalForkDrift {
@@ -227,11 +250,13 @@ function Report-PersonalForkDrift {
         try { [System.IO.File]::WriteAllText($PersonalUpstreamStamp, '') } catch { }
         # Bounded, best-effort: offline, blocked or slow all mean "say nothing this
         # session". '+' so our own ref always follows NSLS's main, even across a
-        # force-push there; refs/heads/main so a tag called main cannot stand in.
-        if ((Invoke-GitQuiet -Dir $Dir -GitArgs @('fetch', '--quiet', $PersonalUpstreamUrl, $PersonalUpstreamRefspec) -TimeoutMs 8000) -ne 0) { return }
-        $count = (& git -C $Dir rev-list --count "HEAD..$PersonalUpstreamRef" 2>$null | Out-String).Trim()
-        if ($LASTEXITCODE -ne 0 -or $count -notmatch '^\d+$') { return }
-        $behind = [int]$count
+        # force-push there; refs/heads/main so a tag called main cannot stand in;
+        # --no-tags so NSLS's tags are not written into the builder's checkout.
+        $r = Invoke-GitBounded -Dir $Dir -GitArgs @('fetch', '--quiet', '--no-tags', $PersonalUpstreamUrl, $PersonalUpstreamRefspec) -TimeoutMs 8000
+        if ($r.Code -ne 0) { return }
+        $r = Invoke-GitBounded -Dir $Dir -GitArgs @('rev-list', '--count', "HEAD..$PersonalUpstreamRef")
+        if ($r.Code -ne 0 -or $r.Out -notmatch '^\d+$') { return }
+        $behind = [int]$r.Out
         if ($behind -eq 0) { return }
         # The path is text someone else can choose: printable ASCII only, bounded.
         $safeDir = ($Dir -replace '[^\x20-\x7e]', '?')
@@ -240,7 +265,7 @@ function Report-PersonalForkDrift {
         # sees one identical line whichever of the two spoke first.
         Write-Output ("[NSLS Personal Toolkit] This builder's toolkit is their OWN FORK and is $behind commit(s) behind NSLS - nothing shipped upstream has reached them, and their auto-update never will, because it follows their fork. Tell them in ONE plain sentence at the start of your first reply - e.g. `"Your toolkit is your own copy, so NSLS updates haven't been reaching you - want me to catch it up?`" - and if they agree: run /update-personal-productivity if this machine has it; otherwise, in $safeDir, merge $PersonalUpstreamRef (NSLS's main, fetched from $PersonalUpstreamUrl moments ago) yourself, preserving their own commits and setting aside any uncommitted edits first, then read and follow skills/update-personal-productivity/SKILL.md from the freshly merged checkout to walk them through what's new (the slash command itself appears after their next restart). NEVER hand them a git command.")
     } finally {
-        try { Remove-Item $PersonalUpstreamLock -Force -ErrorAction SilentlyContinue } catch { }
+        Release-Lock -Path $PersonalUpstreamLock -Token $lock
     }
 }
 Report-PersonalForkDrift -Dir $PersonalDir

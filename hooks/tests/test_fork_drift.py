@@ -91,7 +91,8 @@ def make_world(tmp, nsls_ahead=5):
     git(work, "clone", "--quiet", "--bare", str(nsls), str(fork))
     for i in range(nsls_ahead):
         commit(work, f"skill{i}.md", f"v{i}\n")
-    git(work, "push", "--quiet", str(nsls), "main")
+    git(work, "tag", "nsls-release-tag")  # a tag the fork does not have
+    git(work, "push", "--quiet", str(nsls), "main", "nsls-release-tag")
 
     config_dir = tmp / ".claude"
     plugin_dir = config_dir / "local-plugins" / "nsls-personal-toolkit"
@@ -169,6 +170,8 @@ with tempfile.TemporaryDirectory() as tmp:
           git(plugin_dir, "rev-parse", "refs/nsls/upstream-main") == git(nsls, "rev-parse", "main"))
     check("no remote was created — her remote list is exactly as it was",
           git(plugin_dir, "remote") == "origin")
+    check("NSLS's tags were not written into her checkout (--no-tags)",
+          "nsls-release-tag" not in git(plugin_dir, "tag", "-l"))
     check("her own commit is untouched and the tree is clean (we only fetched)",
           (plugin_dir / "mine.md").exists() and git(plugin_dir, "status", "--porcelain") == "")
     check("the stamp was written", hook.PERSONAL_UPSTREAM_STAMP.exists())
@@ -289,6 +292,30 @@ with tempfile.TemporaryDirectory() as tmp:
           git(plugin_dir, "config", "--get", "branch.work.remote") == "." and "is 5 commit(s) behind NSLS" in (rearm() or run()))
     git(plugin_dir, "checkout", "--quiet", "main")
     git(plugin_dir, "branch", "--quiet", "-D", "work")
+
+    # A chain of local-tracking branches longer than two hops still resolves.
+    git(plugin_dir, "checkout", "--quiet", "-b", "l1", "--track", "main")
+    git(plugin_dir, "checkout", "--quiet", "-b", "l2", "--track", "l1")
+    git(plugin_dir, "checkout", "--quiet", "-b", "l3", "--track", "l2")
+    rearm()
+    check("a three-hop chain of local-tracking branches is followed to the fork",
+          "is 5 commit(s) behind NSLS" in run())
+    git(plugin_dir, "checkout", "--quiet", "main")
+    for b in ("l3", "l2", "l1"):
+        git(plugin_dir, "branch", "--quiet", "-D", b)
+
+    # The lock is released only if it is still ours.
+    rearm()
+    tok = hook._claim_lock(hook.PERSONAL_UPSTREAM_LOCK)
+    check("claiming the lock returns our token and writes it into the file",
+          bool(tok) and hook.PERSONAL_UPSTREAM_LOCK.read_text() == tok)
+    hook.PERSONAL_UPSTREAM_LOCK.write_text("someone-else")
+    hook._release_lock(hook.PERSONAL_UPSTREAM_LOCK, tok)
+    check("a lock now held by another hook is NOT deleted by our release",
+          hook.PERSONAL_UPSTREAM_LOCK.exists())
+    hook.PERSONAL_UPSTREAM_LOCK.write_text(tok)
+    hook._release_lock(hook.PERSONAL_UPSTREAM_LOCK, tok)
+    check("...but our own lock is", not hook.PERSONAL_UPSTREAM_LOCK.exists())
 
     # Fork caught up: silent.
     git(plugin_dir, "merge", "--quiet", "--no-edit", "refs/nsls/upstream-main")
