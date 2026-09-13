@@ -116,10 +116,20 @@ function Get-PullSourceUrl {
     # "/": a remote may itself be named with a slash (personal/fork).
     $remote = 'origin'
     $branch = (& git -C $Dir symbolic-ref --short HEAD 2>$null | Out-String).Trim()
-    if ($LASTEXITCODE -eq 0 -and $branch) {
+    $hops = 0
+    while ($LASTEXITCODE -eq 0 -and $branch -and $hops -lt 2) {
         # $($branch) - a bare "$branch.remote" would read .remote as a property.
         $configured = (& git -C $Dir config --get "branch.$($branch).remote" 2>$null | Out-String).Trim()
-        if ($LASTEXITCODE -eq 0 -and $configured -and $configured -ne '.') { $remote = $configured }
+        if ($LASTEXITCODE -ne 0 -or -not $configured) { break }
+        if ($configured -ne '.') { $remote = $configured; break }
+        # '.' means the branch pulls from a LOCAL branch, not a remote. Follow it
+        # one hop to the remote that branch tracks, rather than pretending it is
+        # origin - but never give up on the checkout: its remote of record is
+        # still the honest fallback, and silence on a fork is the failure here.
+        $merge = (& git -C $Dir config --get "branch.$($branch).merge" 2>$null | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or $merge -notlike 'refs/heads/*') { break }
+        $branch = $merge.Substring(11)
+        $hops++
     }
     $url = (& git -C $Dir remote get-url $remote 2>$null | Out-String).Trim()
     if (($LASTEXITCODE -ne 0 -or -not $url) -and $remote -ne 'origin') {

@@ -274,6 +274,14 @@ with tempfile.TemporaryDirectory() as tmp:
           "is 5 commit(s) behind NSLS" in run())
     git(plugin_dir, "checkout", "--quiet", "main")
 
+    # A branch that pulls from a LOCAL branch (remote "."): followed one hop to
+    # the remote that branch tracks, not mistaken for origin and not skipped.
+    git(plugin_dir, "checkout", "--quiet", "-b", "work", "--track", "main")
+    check("branch tracking a local branch (remote '.') is followed to the fork it really pulls from",
+          git(plugin_dir, "config", "--get", "branch.work.remote") == "." and "is 5 commit(s) behind NSLS" in (rearm() or run()))
+    git(plugin_dir, "checkout", "--quiet", "main")
+    git(plugin_dir, "branch", "--quiet", "-D", "work")
+
     # Fork caught up: silent.
     git(plugin_dir, "merge", "--quiet", "--no-edit", "refs/nsls/upstream-main")
     rearm()

@@ -418,10 +418,23 @@ def _pull_source_url(git):
     # named with a slash (`personal/fork`), and the split kept only `personal`.
     remote = ""
     rc, branch = git("symbolic-ref", "--short", "HEAD")  # fails when detached
-    if rc == 0 and branch:
+    hops = 0
+    while rc == 0 and branch and hops < 2:
         rc, configured = git("config", "--get", f"branch.{branch}.remote")
-        if rc == 0 and configured and configured != ".":  # "." tracks a local branch
+        if rc != 0 or not configured:
+            break
+        if configured != ".":
             remote = configured
+            break
+        # "." means the branch pulls from a LOCAL branch, not a remote. Follow it
+        # one hop to the remote that branch tracks, rather than pretending it is
+        # origin — but never give up on the checkout: its remote of record is
+        # still the honest fallback, and silence on a fork is the failure here.
+        rc, merge = git("config", "--get", f"branch.{branch}.merge")
+        if rc != 0 or not merge.startswith("refs/heads/"):
+            break
+        branch = merge[len("refs/heads/"):]
+        hops += 1
     remote = remote or "origin"
     rc, url = git("remote", "get-url", remote)
     if (rc != 0 or not url) and remote != "origin":
