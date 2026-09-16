@@ -17,6 +17,8 @@ Actions (CLI surface preserved from the webhook era so existing docs still apply
   insert-top   --doc ID --title STR (--text STR | --text-file PATH)
   insert-after --doc ID --anchor STR [--title STR] (--text STR | --text-file PATH)
   append       --doc ID (--text STR | --text-file PATH)
+  append-rich  --doc ID --md PATH [--verify STR ...]           # headings, bullets, bold, links,
+                                                               #   tables, callouts — at the end
   remove       --doc ID --anchor STR [--anchor STR ...]        # delete whole paragraphs
   batch        --doc ID --file edits.json                      # apply a list of edits + verify
 
@@ -38,8 +40,9 @@ batch edits.json shape (unchanged from before):
 Index model: the Docs API works on character indices. This helper reads the doc's
 structure to map paragraph text -> indices, so anchor/insert/remove all resolve
 against live text. Deletes within a batch are ordered high->low so indices don't shift.
-Anchor/insert/remove target TOP-LEVEL paragraphs (not text inside tables); build
-rich tables with /gdoc-build.
+Anchor/insert/remove target TOP-LEVEL paragraphs (not text inside tables).
+append-rich can ADD a new section with tables, hyperlinks, real bullets and shaded
+callouts at the end of a doc; editing an EXISTING table still needs /gdoc-build.
 """
 import argparse, json, os, re, subprocess, sys
 
@@ -318,6 +321,178 @@ def read_text(a):
     return ""
 
 
+# ---------- rich append (markdown subset, appended at the end of the doc) ----------
+
+RICH_BULLET_PRESET = "BULLET_DISC_CIRCLE_SQUARE"
+_RICH_INLINE = re.compile(r'\[([^\]]+)\]\(([^)\s]+)\)|\*\*(.+?)\*\*')
+
+
+def rich_parse_inline(s):
+    """'[text](url)' -> link run, '**text**' -> bold run.
+
+    Returns (plain, spans); each span is (start, end, textStyle, fields) with
+    offsets in UTF-16 units relative to the start of `plain`, which is the unit
+    the Docs API indexes by."""
+    out, spans, pos = "", [], 0
+    for m in _RICH_INLINE.finditer(s):
+        out += s[pos:m.start()]
+        if m.group(1) is not None:
+            a = _u16len(out); out += m.group(1)
+            spans.append((a, _u16len(out), {"link": {"url": m.group(2)}}, "link"))
+        else:
+            a = _u16len(out); out += m.group(3)
+            spans.append((a, _u16len(out), {"bold": True}, "bold"))
+        pos = m.end()
+    out += s[pos:]
+    return out, spans
+
+
+def rich_parse_blocks(md):
+    """Markdown subset -> ordered blocks.
+
+    Line grammar:  '# '..'#### ' heading (HEADING_1..4) | '- ' bullet | '> ' callout
+    (one shaded table cell) | '| a | b |' table row (first row is the header;
+    '|---|' separator rows are ignored) | anything else a normal paragraph.
+    Blank lines are skipped. Consecutive non-table lines form one text block so
+    they go to the API as a single insertText.
+
+    Inline markup is deliberately small: '**bold**' and '[text](url)', NOT nested
+    (bold inside a link or a link inside bold renders as literal markup), and a
+    link URL may not contain whitespace or ')'. Anything else is plain text."""
+    blocks, chunk, table = [], [], []
+
+    def flush_chunk():
+        nonlocal chunk
+        if chunk:
+            blocks.append(("text", chunk)); chunk = []
+
+    def flush_table():
+        nonlocal table
+        if table:
+            blocks.append(("table", table)); table = []
+
+    for raw in md.splitlines():
+        line = raw.rstrip()
+        if not line.strip():
+            continue
+        if line.startswith("|"):
+            flush_chunk()
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if all(re.fullmatch(r"[-:\s]*", c) for c in cells):
+                continue
+            table.append(cells); continue
+        flush_table()
+        if line.startswith("> "):
+            flush_chunk(); blocks.append(("callout", [[line[2:].strip()]])); continue
+        m = re.match(r"^(#{1,4})\s+(.*)$", line)
+        if m:
+            chunk.append({"kind": "HEADING_%d" % len(m.group(1)), "src": m.group(2)}); continue
+        if line.startswith("- "):
+            chunk.append({"kind": "bullet", "src": line[2:]}); continue
+        chunk.append({"kind": "NORMAL_TEXT", "src": line})
+    flush_chunk(); flush_table()
+    return blocks
+
+
+def _rich_style_reqs(base, spans):
+    return [{"updateTextStyle": {"range": {"startIndex": base + a, "endIndex": base + b},
+                                 "textStyle": st, "fields": fields}}
+            for a, b, st, fields in spans]
+
+
+def _rich_append_text(doc, paras):
+    """Append heading/bullet/normal paragraphs in ONE insertText, then pin each
+    paragraph's named style and bullet state explicitly (inserted text otherwise
+    inherits whatever the last paragraph had)."""
+    d = get_doc(doc)
+    idx = body_end_index(d) - 1
+    plist = paragraphs(d)
+    prefix = "\n" if (plist and plist[-1]["text"].strip()) else ""
+    parsed = [(p["kind"],) + rich_parse_inline(p["src"]) for p in paras]
+    chunk = prefix + "\n".join(plain for _, plain, _ in parsed)
+    reqs = [{"insertText": {"location": {"index": idx}, "text": chunk}}]
+    cur = idx + _u16len(prefix)
+    for kind, plain, spans in parsed:
+        n = _u16len(plain)
+        rng = {"startIndex": cur, "endIndex": cur + n + 1}
+        reqs.append({"updateParagraphStyle": {
+            "range": rng, "fields": "namedStyleType",
+            "paragraphStyle": {"namedStyleType": "NORMAL_TEXT" if kind == "bullet" else kind}}})
+        if kind == "bullet":
+            reqs.append({"createParagraphBullets": {"range": rng, "bulletPreset": RICH_BULLET_PRESET}})
+        else:
+            reqs.append({"deleteParagraphBullets": {"range": rng}})
+        reqs += _rich_style_reqs(cur, spans)
+        cur += n + 1
+    batch_update(doc, reqs)
+
+
+def _rich_append_table(doc, rows, callout=False):
+    """Insert an empty table at the end, re-read to learn the cell indices, then
+    fill cells from the LAST cell backwards so earlier indices never shift.
+    Header row (row 0) is bolded; a callout is a single shaded cell."""
+    cols = max(len(r) for r in rows)
+    rows = [r + [""] * (cols - len(r)) for r in rows]
+    batch_update(doc, [{"insertTable": {"rows": len(rows), "columns": cols,
+                                        "endOfSegmentLocation": {"segmentId": ""}}}])
+    d = get_doc(doc)
+    t = [el for el in d["body"]["content"] if "table" in el][-1]
+    cells = [(r, c, cell["content"][0]["startIndex"])
+             for r, row in enumerate(t["table"]["tableRows"])
+             for c, cell in enumerate(row["tableCells"])]
+    reqs = []
+    for r, c, start in sorted(cells, key=lambda x: -x[2]):
+        plain, spans = rich_parse_inline(rows[r][c])
+        if not plain:
+            continue
+        reqs.append({"insertText": {"location": {"index": start}, "text": plain}})
+        if r == 0 and not callout:
+            reqs.append({"updateTextStyle": {"range": {"startIndex": start, "endIndex": start + _u16len(plain)},
+                                              "textStyle": {"bold": True}, "fields": "bold"}})
+        reqs += _rich_style_reqs(start, spans)
+    if callout:
+        reqs.append({"updateTableCellStyle": {
+            "tableRange": {"tableCellLocation": {"tableStartLocation": {"index": t["startIndex"]},
+                                                 "rowIndex": 0, "columnIndex": 0},
+                           "rowSpan": 1, "columnSpan": 1},
+            "tableCellStyle": {"backgroundColor": {"color": {"rgbColor": {"red": 0.95, "green": 0.95, "blue": 0.95}}}},
+            "fields": "backgroundColor"}})
+    batch_update(doc, reqs)
+    # Docs creates a paragraph after every table, and it inherits the bullet of
+    # the paragraph above the table — clear it so the next block starts clean.
+    last = paragraphs(get_doc(doc))[-1]
+    rng = {"startIndex": last["start"], "endIndex": last["end"]}
+    batch_update(doc, [{"deleteParagraphBullets": {"range": rng}},
+                       {"updateParagraphStyle": {"range": rng, "fields": "namedStyleType",
+                                                 "paragraphStyle": {"namedStyleType": "NORMAL_TEXT"}}}])
+
+
+def rich_missing_markers(before, after, verify):
+    """A --verify phrase counts only if the append ADDED an occurrence: a phrase
+    that was already in the doc must not make an accidental no-op look verified."""
+    return [v for v in verify if after.count(v) <= before.count(v)]
+
+
+def do_append_rich(doc, md, verify=()):
+    """Append a markdown-subset section to the end of `doc`; returns (blocks, missing_markers).
+
+    Exits if the markdown parses to zero blocks (an empty or whitespace-only file
+    must fail loudly, not report "blocks applied: 0")."""
+    blocks = rich_parse_blocks(md)
+    if not blocks:
+        sys.exit("append-rich: the --md file parsed to zero blocks (empty or whitespace-only?)")
+    before = full_text(get_doc(doc))
+    for kind, payload in blocks:
+        if kind == "text":
+            _rich_append_text(doc, payload)
+        elif kind == "table":
+            _rich_append_table(doc, payload)
+        else:
+            _rich_append_table(doc, payload, callout=True)
+    after = full_text(get_doc(doc))
+    return len(blocks), rich_missing_markers(before, after, verify)
+
+
 # ---------- CLI ----------
 
 def main():
@@ -328,7 +503,7 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="Read, edit, and create Google Docs via gws.")
     ap.add_argument("action", choices=["read", "comments", "create", "replace", "insert-top",
-                                       "insert-after", "append", "remove", "batch"])
+                                       "insert-after", "append", "append-rich", "remove", "batch"])
     ap.add_argument("--doc", help="Google Doc ID (required for all actions except create)")
     ap.add_argument("--find")
     ap.add_argument("--replace")
@@ -338,6 +513,9 @@ def main():
     ap.add_argument("--text")
     ap.add_argument("--text-file", dest="text_file")
     ap.add_argument("--file", help="batch edits JSON")
+    ap.add_argument("--md", help="append-rich: markdown-subset file to append at the end")
+    ap.add_argument("--verify", action="append", default=[],
+                    help="append-rich: phrase that must be present after the append (repeatable)")
     ap.add_argument("--level", type=int, choices=[1, 2, 3, 4],
                     help="heading level for the inserted --title "
                          "(default: 2 for insert-top, 3 for insert-after)")
@@ -384,6 +562,16 @@ def main():
     elif a.action == "append":
         do_append(a.doc, read_text(a))
         print("ok")
+
+    elif a.action == "append-rich":
+        if not a.md:
+            sys.exit("append-rich needs --md")
+        n, missing = do_append_rich(a.doc, open(a.md, encoding="utf-8-sig").read(), a.verify)
+        print("blocks applied: %d" % n)
+        print("verify: " + ("all newly present ✓" if not missing
+                            else "MISSING or not newly added: " + "; ".join(missing)))
+        if missing:
+            sys.exit(1)
 
     elif a.action == "remove":
         if not a.anchor:
