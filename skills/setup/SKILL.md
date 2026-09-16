@@ -477,8 +477,14 @@ Do you work on Society tracks — the learning series members walk through?
 Run the registration yourself:
 
 ```bash
-claude mcp add --transport http society-studio https://studio.nsls.org/api/mcp
+claude mcp add --transport http --scope user society-studio https://studio.nsls.org/api/mcp
 ```
+
+**`--scope user` is not optional.** `claude mcp add` defaults to `local`, which
+binds the server to whatever directory it was run in. A track author who
+registers it here and then works from a different repo finds the Studio tools
+simply absent, and the track skills quietly fall back to the Airtable PAT path —
+no error, just worse behaviour. User scope follows them everywhere.
 
 Then hand them the sign-in, because it opens a browser and must be theirs:
 

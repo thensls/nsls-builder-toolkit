@@ -51,9 +51,13 @@ tracks; this skill is the *doer*.)
    two commands and no token to paste — offer it before falling back:
 
    ```bash
-   claude mcp add --transport http society-studio https://studio.nsls.org/api/mcp
+   claude mcp add --transport http --scope user society-studio https://studio.nsls.org/api/mcp
    claude mcp login society-studio
    ```
+
+   `--scope user` matters: `claude mcp add` defaults to `local`, which would bind
+   the server to this directory alone and leave the Studio tools missing the next
+   time they work from a different repo.
 
    The script below is the fallback for anyone who hasn't connected:
 
