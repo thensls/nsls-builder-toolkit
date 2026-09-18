@@ -451,20 +451,20 @@ def unresolved(v):
 
 new = 0
 skipped = []
+needs_login = []
 for name, cfg in servers.items():
     stype = cfg.get("type", "stdio")
 
     if stype == "http":
-        # http servers (society-studio, strategy-studio) take a URL + auth
-        # header, NOT a command. The old code built `claude mcp add <name> --`
-        # with an empty command, which the CLI rejects ("Command is required").
-        # Correct form: `claude mcp add --transport http <name> <url> --header`.
+        # http servers take a URL, NOT a command. The old code built
+        # `claude mcp add <name> --` with an empty command, which the CLI
+        # rejects ("Command is required"). Correct form:
+        # `claude mcp add --transport http <name> <url> [--header ...]`.
         url = sub(cfg.get("url", ""))
         headers = {k: sub(val) for k, val in cfg.get("headers", {}).items()}
-        # The bearer tokens (${STUDIO_MCP_TOKEN}, ${STRATEGY_MCP_TOKEN}) don't
-        # exist on a fresh machine. Registering with an unexpanded token yields
-        # a server that 401s silently — worse than not registering. Defer to
-        # /signal-setup, which owns the studio token flow.
+        # A config MAY still pin a bearer token via ${SOME_TOKEN}, and those
+        # don't exist on a fresh machine. Registering with an unexpanded token
+        # yields a server that 401s silently — worse than not registering.
         if unresolved(url) or any(unresolved(h) for h in headers.values()):
             skipped.append(name)
             continue
@@ -472,6 +472,14 @@ for name, cfg in servers.items():
                "--scope", "user"]
         for hk, hv in headers.items():
             cmd += ["--header", f"{hk}: {hv}"]
+        # No auth header means the server authenticates by OAuth. Registration
+        # succeeds either way, so nothing here fails — but until the person runs
+        # `claude mcp login`, the server sits at "Needs authentication" and its
+        # tools are simply absent. That reads as "the toolkit didn't install
+        # anything", so say the next step out loud rather than leaving them to
+        # notice a missing server.
+        if not headers:
+            needs_login.append(name)
     else:
         command = sub(cfg.get("command", ""))
         args = [sub(a) for a in cfg.get("args", [])]
@@ -494,6 +502,8 @@ for name, cfg in servers.items():
 print(f"  {new} MCP server(s) newly registered (restart Claude Code to load)")
 if skipped:
     print(f"  Deferred (needs an access token): {', '.join(skipped)} — run /signal-setup to connect these.")
+for name in needs_login:
+    print(f"  {name}: sign in with  claude mcp login {name}  (opens your browser; no token to copy)")
 PYEOF
 else
   if [ -z "$CLAUDE_BIN" ]; then
