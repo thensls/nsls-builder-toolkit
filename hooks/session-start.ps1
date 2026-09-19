@@ -62,7 +62,7 @@ foreach ($dir in @($BuilderDir, $PersonalDir)) {
 # own GitHub fork was reported healthy every session while nothing NSLS shipped
 # ever reached them (196 commits behind on a real machine, 2026-09-09).
 # Windows parity with session-start.py's report_personal_fork_drift(): same
-# private ref, same stamp, same lock, same wording. NSLS is fetched by URL, so
+# private ref, same stamp, same lock file, same wording. NSLS is fetched by URL, so
 # a fork's own remotes - whatever they are named or aimed at - are neither read
 # nor changed. Python is not guaranteed on a PC, so this is the ONLY place the
 # check runs on Windows - and this script self-updates from NSLS on every
@@ -74,7 +74,6 @@ $PersonalUpstreamRefspec = "+refs/heads/main:$PersonalUpstreamRef"
 $PersonalUpstreamStamp   = Join-Path $ClaudeDir '.nsls-personal-upstream-check'
 $PersonalUpstreamLock    = Join-Path $ClaudeDir '.nsls-personal-upstream-check.lock'
 $PersonalCheckEveryH     = 12
-$PersonalLockStaleS      = 120   # a lock this old belongs to a hook that died
 
 function Test-CanonicalOrigin {
     param([string]$Url)
@@ -195,62 +194,45 @@ function Test-StampFresh {
 
 function Claim-Lock {
     param([string]$Path)
-    # Exclusive create with OUR token written inside: the token when we hold the
-    # lock, $null when another hook does. The stamp is only a throttle - two hooks
-    # can both read it as stale before either writes it - so this is the claim.
-    # A lock whose age is outside 0..$PersonalLockStaleS was left by a hook that
-    # died (or is dated in the future) and is reclaimed ATOMICALLY: the stale file
-    # is moved away rather than deleted by name. Only one of two racing hooks can
-    # win the move; the loser's move throws (source gone) and it simply retries
-    # the exclusive create, which then fails on the winner's fresh lock. Deleting
-    # by name let the loser remove the winner's new lock and both proceed.
-    $token = "$PID-$([DateTime]::UtcNow.Ticks)-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-    foreach ($attempt in 1, 2) {
-        try {
-            $fs = [System.IO.File]::Open($Path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
-            try {
-                $bytes = [System.Text.Encoding]::ASCII.GetBytes($token)
-                $fs.Write($bytes, 0, $bytes.Length)
-            } finally {
-                $fs.Close()
-            }
-            return $token
-        } catch {
-            if ($attempt -ne 1) { return $null }
-            try {
-                if (-not (Test-Path $Path)) { continue }   # vanished under us: retry the create once
-                # Negative age counts as stale too: a lock dated in the FUTURE
-                # (clock skew, a restored backup) would otherwise read as held
-                # until that moment arrives, silencing every check until then.
-                $ageS = ((Get-Date) - (Get-Item $Path).LastWriteTime).TotalSeconds
-                if ($ageS -ge 0 -and $ageS -le $PersonalLockStaleS) { return $null }   # live: someone is mid-check
-                $grave = "$Path.stale-$token"
-                [System.IO.File]::Move($Path, $grave)
-                $gAge = ((Get-Date) - (Get-Item $grave).LastWriteTime).TotalSeconds
-                if ($gAge -ge 0 -and $gAge -le $PersonalLockStaleS) {
-                    # We moved a LIVE lock created between our look and our move:
-                    # put it back if the name is still free, and do not claim.
-                    try { [System.IO.File]::Move($grave, $Path) } catch { Remove-Item $grave -Force -ErrorAction SilentlyContinue }
-                    return $null
-                }
-                Remove-Item $grave -Force -ErrorAction SilentlyContinue
-                continue
-            } catch {
-                continue   # the other racer won the move: retry the create once
-            }
-        }
+    # An exclusive OS-level open on a file that is never deleted: the open handle
+    # when we hold the lock, $null when another hook does. The stamp is only a
+    # throttle - two hooks can both read it as stale before either writes it - so
+    # this is the claim. FileShare.None makes every other open of the file fail
+    # while ours is live (session-start.py's copy of this check, when a PC runs
+    # it, opens this same file with the default share mode, so whichever opens
+    # first holds it), and Windows drops the handle the instant the process
+    # exits - so a hook that dies mid-check leaves nothing to reclaim: no stale
+    # threshold, no token, no move-aside, and no step at which a third hook could
+    # be handed a lock still in use.
+    try {
+        $fs = [System.IO.File]::Open($Path, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    } catch {
+        return $null
     }
-    return $null
+    # Compatibility with the lock this replaces (created exclusively with a token
+    # inside, stale after 120 s), for the day a machine may run one old copy of
+    # this check beside one new: an old hook mid-check right now has written its
+    # token into this same file within the last two minutes - yield to it. Then
+    # leave the file empty with a fresh write time, so an old hook that looks
+    # while we hold the lock sees a live lock, not a stale one to break.
+    try {
+        $ageS = ((Get-Date) - (Get-Item $Path).LastWriteTime).TotalSeconds
+        if ($fs.Length -gt 0 -and $ageS -ge 0 -and $ageS -le 120) {
+            $fs.Dispose()
+            return $null
+        }
+        $fs.WriteByte(0)
+        $fs.Flush()
+        $fs.SetLength(0)
+        $fs.Flush()
+    } catch { }
+    return $fs
 }
 
 function Release-Lock {
-    param([string]$Path, [string]$Token)
-    # Delete the lock only if it still carries OUR token. A hook paused past the
-    # stale threshold (a laptop asleep mid-check) would otherwise delete the lock
-    # a newer hook created after breaking ours, letting a third one in.
-    try {
-        if ((Test-Path $Path) -and ([System.IO.File]::ReadAllText($Path) -eq $Token)) { Remove-Item $Path -Force }
-    } catch { }
+    param($Handle)
+    # Closing the handle drops the lock; the file itself stays.
+    try { if ($null -ne $Handle) { $Handle.Dispose() } } catch { }
 }
 
 function Report-PersonalForkDrift {
@@ -288,7 +270,7 @@ function Report-PersonalForkDrift {
         # sees one identical line whichever of the two spoke first.
         Write-Output ("[NSLS Personal Toolkit] This builder's toolkit is their OWN FORK and is $behind commit(s) behind NSLS - nothing shipped upstream has reached them, and their auto-update never will, because it follows their fork. Tell them in ONE plain sentence at the start of your first reply - e.g. `"Your toolkit is your own copy, so NSLS updates haven't been reaching you - want me to catch it up?`" - and if they agree: run /update-personal-productivity if this machine has it; otherwise, in $safeDir, merge $PersonalUpstreamRef (NSLS's main, fetched from $PersonalUpstreamUrl moments ago) yourself, preserving their own commits and setting aside any uncommitted edits first, then read and follow skills/update-personal-productivity/SKILL.md from the freshly merged checkout to walk them through what's new (the slash command itself appears after their next restart). NEVER hand them a git command.")
     } finally {
-        Release-Lock -Path $PersonalUpstreamLock -Token $lock
+        Release-Lock -Handle $lock
     }
 }
 Report-PersonalForkDrift -Dir $PersonalDir
