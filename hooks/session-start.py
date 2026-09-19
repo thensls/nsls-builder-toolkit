@@ -14,6 +14,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -313,6 +314,352 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir, deadline=None):
     )
 
 
+# --- personal-toolkit forks: measured against NSLS, not against their own copy ---
+# Everything above judges a checkout against ITS OWN upstream, and for a GitHub
+# fork that upstream is the fork — which the builder is usually perfectly in
+# sync with. So a fork pulled cleanly every session, passed every check, and
+# received nothing NSLS shipped: a real builder's copy sat 196 commits behind
+# (verified 2026-09-09) with every session reporting healthy.
+#
+# The personal toolkit's own hook carries this same check (its PR #72), but that
+# hook is a file INSIDE the fork, so no fork can ever receive it. This hook
+# self-updates from NSLS on every machine, which makes it the one channel that
+# reaches a fork at all — which is why the check lives here too. The two are
+# deliberately interchangeable: same private ref, same stamp, same lock, same
+# wording, so whichever fires first speaks and the other stays quiet.
+PERSONAL_PLUGIN = "nsls-personal-toolkit"
+PERSONAL_UPSTREAM_URL = "https://github.com/thensls/nsls-personal-toolkit.git"
+# Where the fetch lands: a private ref, not a remote. A fork may already have an
+# `upstream` — or any other name — aimed at something else entirely; fetching
+# that reported a stranger's commits as NSLS's, and re-pointing it was found to
+# be its own small vandalism. Fetching NSLS by URL into a ref of our own touches
+# neither, and gives the notice a stable name to merge. (FETCH_HEAD would do,
+# but the concurrent pulls in this same hook can overwrite it mid-check.) The
+# refspec names refs/heads/main explicitly so a tag called main cannot stand in.
+PERSONAL_UPSTREAM_REF = "refs/nsls/upstream-main"
+PERSONAL_UPSTREAM_REFSPEC = f"+refs/heads/main:{PERSONAL_UPSTREAM_REF}"
+PERSONAL_UPSTREAM_STAMP = CONFIG_DIR / ".nsls-personal-upstream-check"
+# The stamp is a throttle, not a claim: two hooks can both read it as stale
+# before either writes it. The lock is the claim — created exclusively, so
+# exactly one of them fetches and speaks.
+PERSONAL_UPSTREAM_LOCK = CONFIG_DIR / ".nsls-personal-upstream-check.lock"
+PERSONAL_UPSTREAM_CHECK_EVERY_H = 12
+PERSONAL_FETCH_TIMEOUT = 6
+PERSONAL_LOCK_STALE_S = 120  # a lock this old belongs to a hook that died
+
+# NSLS's own repository, in any spelling git accepts — compared as host + path,
+# never as a substring: a mirror on another host, or a longer-named repo under
+# the same owner, both CONTAIN the canonical path. Schemes are an allow-list:
+# `file://github.com/...` or `evil://github.com/...` need never touch GitHub.
+_CANONICAL_HOST = "github.com"
+_CANONICAL_PATH = "thensls/nsls-personal-toolkit"
+_CANONICAL_SCHEMES = ("https", "http", "ssh", "git", "git+ssh", "ssh+git")
+_URL_FORMS = (
+    # scheme://[user[:secret]@]host[:port]/path
+    re.compile(r"^([a-z][a-z0-9+.-]*)://(?:[^@/]*@)?([^/:]+)(?::\d+)?/(.*)$", re.IGNORECASE),
+    # scp-like [user@]host:path — no scheme, and `host://...` is not this form
+    re.compile(r"^(?:[^@/:]+@)?([^/:]+):(?!//)/?(.*)$"),
+)
+
+
+def _is_canonical_origin(url):
+    """True only for NSLS's own repository on github.com.
+
+    Accepts https, ssh://, and scp-like spellings, optional user info and port,
+    `www.`, a trailing slash, `.git`, and any letter case (GitHub owner and repo
+    names are case-insensitive). Anything else — another host, another owner,
+    a longer repo name, a local path, an unexpected scheme — is not canonical.
+    """
+    u = (url or "").strip()
+    m = _URL_FORMS[0].match(u)
+    if m:
+        if m.group(1).lower() not in _CANONICAL_SCHEMES:
+            return False
+        host, path = m.group(2).lower(), m.group(3)
+    else:
+        m = _URL_FORMS[1].match(u)
+        if not m:
+            return False
+        host, path = m.group(1).lower(), m.group(2)
+    if host.startswith("www."):
+        host = host[4:]
+    path = path.strip("/")
+    if path.lower().endswith(".git"):
+        path = path[:-4]
+    return host == _CANONICAL_HOST and path.rstrip("/").lower() == _CANONICAL_PATH
+
+
+def _safe_text(value, limit=200):
+    """A path for the notice: printable ASCII only, bounded. Everything printed
+    here is model context, and a path is text someone else can choose."""
+    return re.sub(r"[^\x20-\x7e]", "?", str(value))[:limit]
+
+
+def _git_rc(plugin_dir, *args, timeout=3):
+    """(returncode, stdout) — never raises; -1 when git timed out or could not run.
+
+    git runs in its own session so a timeout kills the whole process TREE — a
+    fetch's HTTPS remote helper is a child that killing git alone would leave
+    running the network operation after we had released the lock."""
+    try:
+        proc = subprocess.Popen(
+            ["git", "-C", str(plugin_dir), *args],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
+            text=True, start_new_session=True,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
+    except Exception:
+        return -1, ""
+    try:
+        out, _ = proc.communicate(timeout=timeout)
+        return proc.returncode, (out or "").strip()
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        try:
+            proc.communicate(timeout=2)
+        except Exception:
+            pass
+        return -1, ""
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        return -1, ""
+
+
+def _pull_source_url(git):
+    """URL of the remote this checkout's branch actually pulls from — the same
+    source a bare `git pull` uses — falling back to origin. A canonical `origin`
+    beside a branch that tracks a personal fork is a fork in every way that
+    matters; a fork whose remote is not called origin is still a fork. Empty
+    when neither resolves."""
+    # From config, not by splitting `@{u}` on "/": a remote may itself be
+    # named with a slash (`personal/fork`), and the split kept only `personal`.
+    remote = ""
+    rc, branch = git("symbolic-ref", "--short", "HEAD")  # fails when detached
+    seen = set()
+    while rc == 0 and branch and branch not in seen:
+        seen.add(branch)  # stop only on a cycle, not at an arbitrary hop count
+        rc, configured = git("config", "--get", f"branch.{branch}.remote")
+        if rc != 0 or not configured:
+            break
+        if configured != ".":
+            remote = configured
+            break
+        # "." means the branch pulls from a LOCAL branch, not a remote. Follow
+        # that chain to the remote it ends at, rather than pretending it is
+        # origin — but never give up on the checkout: its remote of record is
+        # still the honest fallback, and silence on a fork is the failure here.
+        rc, merge = git("config", "--get", f"branch.{branch}.merge")
+        if rc != 0 or not merge.startswith("refs/heads/"):
+            break
+        branch = merge[len("refs/heads/"):]
+    remote = remote or "origin"
+    rc, url = git("remote", "get-url", remote)
+    if (rc != 0 or not url) and remote != "origin":
+        rc, url = git("remote", "get-url", "origin")
+    return url if rc == 0 else ""
+
+
+def _stamp_is_fresh(stamp):
+    """Bounded at BOTH ends: a stamp dated in the future (clock skew, a restored
+    backup, a synced home directory) yields a negative age, which a bare `<`
+    would read as freshly checked and could silence the check for days."""
+    try:
+        if stamp.exists():
+            age_h = (time.time() - stamp.stat().st_mtime) / 3600
+            return 0 <= age_h < PERSONAL_UPSTREAM_CHECK_EVERY_H
+    except OSError:
+        pass
+    return False
+
+
+def _claim_lock(path):
+    """Create `path` exclusively and write a token into it; the token (truthy)
+    when we hold the lock, None when another hook does.
+
+    A lock whose age is outside 0..PERSONAL_LOCK_STALE_S was left by a hook
+    that died (or is dated in the future) and is reclaimed ATOMICALLY: the
+    stale inode is renamed away rather than deleted by name. Only one of two
+    racing hooks can win that rename; the loser sees ENOENT and simply retries
+    the exclusive create, which then fails on the winner's fresh lock. Deleting
+    by name let the loser remove the winner's new lock and both proceed."""
+    token = f"{os.getpid()}-{time.time_ns()}-{os.urandom(4).hex()}"
+    for attempt in (1, 2):
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            try:
+                os.write(fd, token.encode("ascii"))
+            finally:
+                os.close(fd)
+            return token
+        except FileExistsError:
+            if attempt != 1:
+                return None
+            try:
+                st = path.stat()
+            except FileNotFoundError:
+                continue  # vanished under us: retry the create once
+            except OSError:
+                return None
+            # Negative age counts as stale too: a lock dated in the FUTURE
+            # (clock skew, a restored backup) would otherwise read as held
+            # until that moment arrives, silencing every check until then.
+            age_s = time.time() - st.st_mtime
+            if 0 <= age_s <= PERSONAL_LOCK_STALE_S:
+                return None  # live: someone is mid-check right now
+            grave = path.with_name(f"{path.name}.stale-{token}")
+            try:
+                os.rename(path, grave)
+            except FileNotFoundError:
+                continue  # the other racer won the rename: retry the create once
+            except OSError:
+                return None
+            try:
+                same = grave.stat().st_ino == st.st_ino
+            except OSError:
+                same = True
+            if not same:
+                # We moved a LIVE lock created between our look and our rename.
+                # Put it back if the name is still free (link is atomic and
+                # refuses an existing path), and do not claim.
+                try:
+                    os.link(str(grave), str(path))
+                except OSError:
+                    pass
+                try:
+                    grave.unlink()
+                except OSError:
+                    pass
+                return None
+            try:
+                grave.unlink()
+            except OSError:
+                pass
+            continue
+        except OSError:
+            return None
+    return None
+
+
+def _release_lock(path, token):
+    """Delete the lock only if it still carries OUR token. A hook paused past the
+    stale threshold (a laptop asleep mid-check) would otherwise delete the lock
+    a newer hook created after breaking ours, letting a third one in."""
+    try:
+        if path.read_text(encoding="ascii", errors="replace") == token:
+            path.unlink()
+    except OSError:
+        pass
+
+
+def _fork_notice(behind, plugin_dir):
+    # Same prefix and wording as the personal toolkit's own hook, so Claude sees
+    # one identical line whichever of the two spoke first. Names the ref we just
+    # fetched and the checkout path, and points at the update skill's file: the
+    # merged checkout contains it, but the slash command will not exist until
+    # the next restart, and without the file the release walk is skipped.
+    return (
+        f"[NSLS Personal Toolkit] This builder's toolkit is their OWN FORK and "
+        f"is {behind} commit(s) behind NSLS — nothing shipped upstream has "
+        f"reached them, and their auto-update never will, because it follows "
+        f"their fork. Tell them in ONE plain sentence at the start of your "
+        f"first reply — e.g. \"Your toolkit is your own copy, so NSLS updates "
+        f"haven't been reaching you — want me to catch it up?\" — and if they "
+        f"agree: run /update-personal-productivity if this machine has it; "
+        f"otherwise, in {_safe_text(plugin_dir)}, merge {PERSONAL_UPSTREAM_REF} "
+        f"(NSLS's main, fetched from {PERSONAL_UPSTREAM_URL} moments ago) "
+        f"yourself, preserving their own commits and setting aside any "
+        f"uncommitted edits first, then read and follow "
+        f"skills/update-personal-productivity/SKILL.md from the freshly merged "
+        f"checkout to walk them through what's new (the slash command itself "
+        f"appears after their next restart). NEVER hand them a git command."
+    )
+
+
+def report_personal_fork_drift(deadline=None):
+    """Say so when a personal-toolkit FORK has fallen behind NSLS.
+
+    One network fetch, throttled to once per PERSONAL_UPSTREAM_CHECK_EVERY_H,
+    claimed under an exclusive lock, and with EVERY git call charged against the
+    caller's deadline so the 90s hook budget is untouched. Nothing git prints is
+    surfaced — only our own literal and a verified integer — because
+    SessionStart stdout is the model's context and git echoes server-controlled
+    text. Reads and writes no remote: NSLS is fetched by URL into
+    PERSONAL_UPSTREAM_REF; the update skill owns the named remote it needs.
+    """
+    plugin_dir = CONFIG_DIR / "local-plugins" / PERSONAL_PLUGIN
+    if not (plugin_dir / ".git").exists():
+        return
+
+    def remaining():
+        return None if deadline is None else deadline - time.monotonic()
+
+    def git(*args, cap=3):
+        # Never start a git command with no time left, and never let one run
+        # past the deadline — the fetch was bounded before, the rest were not.
+        left = remaining()
+        if left is not None:
+            if left < 0.5:
+                raise TimeoutError
+            cap = min(cap, left)
+        return _git_rc(plugin_dir, *args, timeout=cap)
+
+    try:
+        url = _pull_source_url(git)
+        if not url or _is_canonical_origin(url):
+            return  # NSLS itself, or unknowable: the freeze and stale-branch checks own it
+        if _stamp_is_fresh(PERSONAL_UPSTREAM_STAMP):
+            return
+        left = remaining()
+        budget = PERSONAL_FETCH_TIMEOUT if left is None else min(PERSONAL_FETCH_TIMEOUT, left - 1)
+        if budget < 1:
+            return  # no time to fetch: leave the stamp alone so the next session gets a real check
+        lock = _claim_lock(PERSONAL_UPSTREAM_LOCK)
+        if lock is None:
+            return  # another hook is mid-check this very second; it will speak
+        try:
+            if _stamp_is_fresh(PERSONAL_UPSTREAM_STAMP):
+                return  # it finished between our two looks
+            try:
+                PERSONAL_UPSTREAM_STAMP.parent.mkdir(parents=True, exist_ok=True)
+                PERSONAL_UPSTREAM_STAMP.touch()
+            except OSError:
+                pass
+            # Bounded and best-effort: offline, blocked, or slow all mean "say
+            # nothing this session" — never delay a session start over a nicety.
+            # --no-tags: a plain fetch also auto-follows tags reachable from main,
+            # writing NSLS's tags into the builder's checkout — or failing when
+            # one collides with a tag of theirs. Only our ref should move.
+            rc, _ = git("fetch", "--quiet", "--no-tags", PERSONAL_UPSTREAM_URL,
+                        PERSONAL_UPSTREAM_REFSPEC, cap=budget)
+            if rc != 0:
+                return
+            # A fork shares history with NSLS. A repository that does not — some
+            # unrelated project sitting at this path — is not a fork, and telling
+            # Claude to merge NSLS's main into it would be an instruction to merge
+            # two unrelated histories. Nothing to say about such a checkout.
+            rc, _ = git("merge-base", "HEAD", PERSONAL_UPSTREAM_REF)
+            if rc != 0:
+                return
+            rc, count = git("rev-list", "--count", f"HEAD..{PERSONAL_UPSTREAM_REF}")
+            if rc != 0 or not count.isdigit() or int(count) == 0:
+                return
+            print(_fork_notice(int(count), plugin_dir))
+        finally:
+            _release_lock(PERSONAL_UPSTREAM_LOCK, lock)
+    except TimeoutError:
+        return
+
+
 def git_pull():
     """Pull latest changes for every toolkit in SYNC_PLUGINS.
 
@@ -369,6 +716,13 @@ def git_pull():
             _warn_if_stale_by_configuration(plugin, plugin_dir, deadline=deadline)
         except Exception:
             pass
+    # A fork of the personal toolkit pulls cleanly from its fork, so nothing in
+    # the loop above can see it fall behind NSLS. Runs inside this function's
+    # 15s envelope, so the 90s hook budget arithmetic is unchanged.
+    try:
+        report_personal_fork_drift(deadline=deadline)
+    except Exception:
+        pass
 
 
 def org_plugin_installed():
@@ -1609,6 +1963,10 @@ if __name__ == "__guardrails__":
         emit_guardrails_context()
     except Exception:
         pass
+    # The personal-fork drift check is deliberately NOT run from here:
+    # session-start.ps1 carries its own copy for Windows (Python is not
+    # guaranteed there), keyed on the same stamp, so running it twice from one
+    # session would be at best redundant.
     # Windows's .ps1 does its own pull, so it never reached git_pull's call to
     # the stale-configuration check — Windows checkouts on a stranded branch
     # stayed silently frozen, which is the whole failure this adds. Cheap to
