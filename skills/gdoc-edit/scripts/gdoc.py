@@ -388,7 +388,9 @@ def rich_parse_blocks(md):
         if m:
             chunk.append({"kind": "HEADING_%d" % len(m.group(1)), "src": m.group(2)}); continue
         if line.startswith("- "):
-            chunk.append({"kind": "bullet", "src": line[2:]}); continue
+            # createParagraphBullets strips leading tabs (it reads them as nesting), which
+            # would leave every later offset stale — strip them before measuring anything.
+            chunk.append({"kind": "bullet", "src": line[2:].lstrip("\t")}); continue
         chunk.append({"kind": "NORMAL_TEXT", "src": line})
     flush_chunk(); flush_table()
     return blocks
@@ -411,6 +413,13 @@ def _rich_append_text(doc, paras):
     parsed = [(p["kind"],) + rich_parse_inline(p["src"]) for p in paras]
     chunk = prefix + "\n".join(plain for _, plain, _ in parsed)
     reqs = [{"insertText": {"location": {"index": idx}, "text": chunk}}]
+    # Inserted text inherits the style of the character before it: a doc that ends in a
+    # bold link would make the whole appendix bold and linked. Reset to baseline first;
+    # listing "link" in fields without a link value clears any inherited link.
+    reqs.append({"updateTextStyle": {
+        "range": {"startIndex": idx, "endIndex": idx + _u16len(chunk)},
+        "textStyle": {"bold": False, "italic": False, "underline": False, "strikethrough": False},
+        "fields": "bold,italic,underline,strikethrough,link"}})
     cur = idx + _u16len(prefix)
     for kind, plain, spans in parsed:
         n = _u16len(plain)
