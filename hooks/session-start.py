@@ -232,6 +232,14 @@ def _git_out(plugin_dir, *args):
         return ""
 
 
+REPAIR_FALLBACK = (
+    " The repair, if they want one, depends on what that branch is for: if the "
+    "work on it is finished, merge or land it and put the checkout back on "
+    "main; if it is still in progress, merging origin/main into it catches this "
+    "checkout up without losing it."
+)
+
+
 def _warn_if_stale_by_configuration(plugin, plugin_dir, deadline=None):
     """Catch the freeze that _warn_if_frozen structurally cannot see.
 
@@ -299,16 +307,39 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir, deadline=None):
            f"than main — so its pulls succeed while main moves on"
            if has_upstream else
            f"branch '{safe}' has no upstream, so there is nothing to pull from")
+    # Reporting a problem without naming its fix is how this notice got ignored
+    # for weeks: the builder is told they are stale and left to work out what to
+    # do about it. Name the specific repair for the shape actually in front of
+    # us. The two extra git calls are bought only now that we know we are going
+    # to speak, and only if the budget allows -- running out of time costs the
+    # ready-made offer, never the notice itself.
+    offer = ""
+    if deadline is None or time.monotonic() < deadline:
+        ahead = _git_out(plugin_dir, "rev-list", "--count", "origin/main..HEAD")
+        dirty = bool(_git_out(plugin_dir, "status", "--porcelain"))
+        if dirty and not (ahead.isdigit() and int(ahead) > 0):
+            offer = (" There are uncommitted edits in this checkout, so nothing "
+                     "should move until those are dealt with — say that is what "
+                     "is in the way.")
+        elif ahead == "0":
+            offer = (" This is the safe shape: the branch carries nothing main "
+                     "does not already have, and the tree is clean, so putting "
+                     "the checkout back on main loses nothing. Offer exactly "
+                     "that, and act only if they say yes.")
+        elif ahead.isdigit() and int(ahead) > 0:
+            edits = " plus uncommitted edits" if dirty else ""
+            offer = (f" This branch carries {ahead} commit(s) of its own{edits}, "
+                     f"so the repair that risks nothing is to merge origin/main "
+                     f"into the branch — it catches the checkout up without "
+                     f"losing their work. Offer exactly that, and act only if "
+                     f"they say yes.")
     print(
         f"NOTE - {plugin} is {behind} commit(s) behind main: "
         f"{why}. The checkout at {plugin_dir} reports a clean pull every session "
         f"while going stale, which is why this needs saying out loud. Tell the "
         f"user at the first natural moment — and say plainly that if this "
         f"branch is a deliberate choice, nothing is wrong and they can ignore "
-        f"it. The repair, if they want one, depends on what that "
-        f"branch is for: if the work on it is finished, merge or land it and put "
-        f"the checkout back on main; if it is still in progress, merging "
-        f"origin/main into it catches this checkout up without losing it. Do not "
+        f"it.{offer or REPAIR_FALLBACK} Do not "
         f"switch branches on the user's behalf — a live plugin checkout is what "
         f"their current session is running."
     )
