@@ -416,10 +416,13 @@ def _rich_append_text(doc, paras):
     # Inserted text inherits the style of the character before it: a doc that ends in a
     # bold link would make the whole appendix bold and linked. Reset to baseline first;
     # listing "link" in fields without a link value clears any inherited link.
+    # Listing a field with no value clears the explicit override, so the paragraph's named
+    # style (a heading's bold, its size) shows through instead of being forced off.
     reqs.append({"updateTextStyle": {
         "range": {"startIndex": idx, "endIndex": idx + _u16len(chunk)},
-        "textStyle": {"bold": False, "italic": False, "underline": False, "strikethrough": False},
-        "fields": "bold,italic,underline,strikethrough,link"}})
+        "textStyle": {},
+        "fields": "bold,italic,underline,strikethrough,link,foregroundColor,backgroundColor,"
+                  "fontSize,weightedFontFamily,smallCaps,baselineOffset"}})
     cur = idx + _u16len(prefix)
     for kind, plain, spans in parsed:
         n = _u16len(plain)
@@ -442,10 +445,13 @@ def _rich_append_table(doc, rows, callout=False):
     Header row (row 0) is bolded; a callout is a single shaded cell."""
     cols = max(len(r) for r in rows)
     rows = [r + [""] * (cols - len(r)) for r in rows]
+    # Anchor to where we insert: a collaborator's concurrent table elsewhere must never be
+    # mistaken for ours, so pick the first table at or after the end index we inserted at.
+    at = body_end_index(get_doc(doc)) - 1
     batch_update(doc, [{"insertTable": {"rows": len(rows), "columns": cols,
                                         "endOfSegmentLocation": {"segmentId": ""}}}])
     d = get_doc(doc)
-    t = [el for el in d["body"]["content"] if "table" in el][-1]
+    t = next(el for el in d["body"]["content"] if "table" in el and el["startIndex"] >= at)
     cells = [(r, c, cell["content"][0]["startIndex"])
              for r, row in enumerate(t["table"]["tableRows"])
              for c, cell in enumerate(row["tableCells"])]
@@ -469,11 +475,17 @@ def _rich_append_table(doc, rows, callout=False):
     batch_update(doc, reqs)
     # Docs creates a paragraph after every table, and it inherits the bullet of
     # the paragraph above the table — clear it so the next block starts clean.
-    last = paragraphs(get_doc(doc))[-1]
-    rng = {"startIndex": last["start"], "endIndex": last["end"]}
+    d = get_doc(doc)
+    t = next(el for el in d["body"]["content"] if "table" in el and el["startIndex"] >= at)
+    after = next(p for p in paragraphs(d) if p["start"] is not None and p["start"] >= t["endIndex"])
+    rng = {"startIndex": after["start"], "endIndex": after["end"]}
+    # deleteParagraphBullets keeps the list's indent as indentStart; clear that too, or the
+    # next heading or paragraph sits indented like the list above the table.
     batch_update(doc, [{"deleteParagraphBullets": {"range": rng}},
-                       {"updateParagraphStyle": {"range": rng, "fields": "namedStyleType",
-                                                 "paragraphStyle": {"namedStyleType": "NORMAL_TEXT"}}}])
+                       {"updateParagraphStyle": {"range": rng, "fields": "namedStyleType,indentStart,indentFirstLine",
+                                                 "paragraphStyle": {"namedStyleType": "NORMAL_TEXT",
+                                                                    "indentStart": {"magnitude": 0, "unit": "PT"},
+                                                                    "indentFirstLine": {"magnitude": 0, "unit": "PT"}}}}])
 
 
 def rich_missing_markers(before, after, verify):
