@@ -72,7 +72,8 @@ $PersonalUpstreamUrl     = 'https://github.com/thensls/nsls-personal-toolkit.git
 $PersonalUpstreamRef     = 'refs/nsls/upstream-main'   # a private ref of our own; this hook creates and touches NO remote
 $PersonalUpstreamRefspec = "+refs/heads/main:$PersonalUpstreamRef"
 $PersonalUpstreamStamp   = Join-Path $ClaudeDir '.nsls-personal-upstream-check'
-$PersonalUpstreamLock    = Join-Path $ClaudeDir '.nsls-personal-upstream-check.lock'
+$PersonalUpstreamLock    = Join-Path $ClaudeDir '.nsls-personal-upstream-check.flock'
+$PersonalLegacyLock      = Join-Path $ClaudeDir '.nsls-personal-upstream-check.lock'   # the previous protocol's file: read, never written
 $PersonalCheckEveryH     = 12
 
 function Test-CanonicalOrigin {
@@ -193,7 +194,7 @@ function Test-StampFresh {
 }
 
 function Claim-Lock {
-    param([string]$Path)
+    param([string]$Path, [string]$LegacyPath = '')
     # An exclusive OS-level open on a file that is never deleted: the open handle
     # when we hold the lock, $null when another hook does. The stamp is only a
     # throttle - two hooks can both read it as stale before either writes it - so
@@ -209,22 +210,22 @@ function Claim-Lock {
     } catch {
         return $null
     }
-    # Compatibility with the lock this replaces (created exclusively with a token
-    # inside, stale after 120 s), for the day a machine may run one old copy of
-    # this check beside one new: an old hook mid-check right now has written its
-    # token into this same file within the last two minutes - yield to it. Then
-    # leave the file empty with a fresh write time, so an old hook that looks
-    # while we hold the lock sees a live lock, not a stale one to break.
+    # A machine may briefly run one old copy of this check beside one new. The old
+    # copy claims by creating ITS OWN lock file exclusively with a token inside,
+    # and treats it as stale after 120 s. That file is read here and never
+    # touched: a fresh token means an old hook is mid-check, so this one yields
+    # to it. In the other order the stamp, checked again under the lock, is what
+    # keeps the old hook quiet. Two files, so nothing the old protocol moves or
+    # deletes can ever be the file held here.
     try {
-        $ageS = ((Get-Date) - (Get-Item $Path).LastWriteTime).TotalSeconds
-        if ($fs.Length -gt 0 -and $ageS -ge 0 -and $ageS -le 120) {
-            $fs.Dispose()
-            return $null
+        if ($LegacyPath -and (Test-Path $LegacyPath)) {
+            $old = Get-Item $LegacyPath
+            $ageS = ((Get-Date) - $old.LastWriteTime).TotalSeconds
+            if ($old.Length -gt 0 -and $ageS -ge 0 -and $ageS -le 120) {
+                $fs.Dispose()
+                return $null
+            }
         }
-        $fs.WriteByte(0)
-        $fs.Flush()
-        $fs.SetLength(0)
-        $fs.Flush()
     } catch { }
     return $fs
 }
@@ -242,7 +243,7 @@ function Report-PersonalForkDrift {
     if (-not $url) { return }                        # nothing to measure against
     if (Test-CanonicalOrigin $url) { return }        # NSLS's own repo: the freeze check above owns it
     if (Test-StampFresh) { return }
-    $lock = Claim-Lock -Path $PersonalUpstreamLock
+    $lock = Claim-Lock -Path $PersonalUpstreamLock -LegacyPath $PersonalLegacyLock
     if ($null -eq $lock) { return }                  # another hook is mid-check this very second; it will speak
     try {
         if (Test-StampFresh) { return }              # it finished between our two looks

@@ -102,7 +102,8 @@ def make_world(tmp, nsls_ahead=5):
 
     hook.CONFIG_DIR = config_dir
     hook.PERSONAL_UPSTREAM_STAMP = config_dir / ".nsls-personal-upstream-check"
-    hook.PERSONAL_UPSTREAM_LOCK = config_dir / ".nsls-personal-upstream-check.lock"
+    hook.PERSONAL_UPSTREAM_LOCK = config_dir / ".nsls-personal-upstream-check.flock"
+    hook.PERSONAL_UPSTREAM_LEGACY_LOCK = config_dir / ".nsls-personal-upstream-check.lock"
     hook.PERSONAL_UPSTREAM_URL = str(nsls)
     return plugin_dir, nsls, fork
 
@@ -117,6 +118,7 @@ def run(deadline=None):
 def rearm():
     hook.PERSONAL_UPSTREAM_STAMP.unlink(missing_ok=True)
     hook.PERSONAL_UPSTREAM_LOCK.unlink(missing_ok=True)
+    hook.PERSONAL_UPSTREAM_LEGACY_LOCK.unlink(missing_ok=True)
 
 
 def lock_is_free():
@@ -223,32 +225,26 @@ with tempfile.TemporaryDirectory() as tmp:
         check("...and nothing was left behind to reclaim (no graves, lock free)",
               not list(hook.PERSONAL_UPSTREAM_LOCK.parent.glob("*.stale-*")) and lock_is_free())
 
-    # One machine may briefly run an OLD copy of this check (exclusive create, a
-    # token inside, stale after 120 s) beside this one. A fresh token is an old
-    # hook mid-check: yield to it, touch nothing. A stale token is a dead old
-    # hook: proceed, and leave the file empty for whoever comes next.
+    # One machine may briefly run an OLD copy of this check beside this one. The
+    # old copy claims by creating ITS OWN lock file exclusively with a token
+    # inside, stale after 120 s. That file is read, never touched: a fresh token
+    # is an old hook mid-check — yield; a stale one is a dead old hook — proceed.
+    legacy = hook.PERSONAL_UPSTREAM_LEGACY_LOCK
     rearm()
-    hook.PERSONAL_UPSTREAM_LOCK.write_text("4242-1700000000-deadbeef")
+    legacy.write_text("4242-1700000000-deadbeef")
     recent = time.time() - 10
-    os.utime(hook.PERSONAL_UPSTREAM_LOCK, (recent, recent))
+    os.utime(legacy, (recent, recent))
     check("an old-style lock with a fresh token (an old hook mid-check): silent", run() == "")
     check("...the stamp is not written (the old hook will write it)", not hook.PERSONAL_UPSTREAM_STAMP.exists())
-    check("...and its token is left intact for its own release",
-          hook.PERSONAL_UPSTREAM_LOCK.read_text() == "4242-1700000000-deadbeef")
+    check("...and the old file is left exactly as it was", legacy.read_text() == "4242-1700000000-deadbeef")
     old = time.time() - 300
-    os.utime(hook.PERSONAL_UPSTREAM_LOCK, (old, old))
+    os.utime(legacy, (old, old))
     check("an old-style lock with a stale token (a dead old hook): the check proceeds", "OWN FORK" in run())
-    check("...and the file is left empty for the next hook", hook.PERSONAL_UPSTREAM_LOCK.read_bytes() == b"")
-
-    # While we hold the lock the file's mtime is fresh, so an OLD hook looking
-    # right now reads it as live rather than as stale-and-breakable.
-    rearm()
-    hook.PERSONAL_UPSTREAM_LOCK.write_text("")
-    os.utime(hook.PERSONAL_UPSTREAM_LOCK, (old, old))
-    held = hook._claim_lock(hook.PERSONAL_UPSTREAM_LOCK)
-    age = time.time() - hook.PERSONAL_UPSTREAM_LOCK.stat().st_mtime
-    check("while held, the lock file's mtime reads as live to an old hook", held is not None and 0 <= age < 30)
-    hook._release_lock(held)
+    check("...and the old file is STILL left alone — this protocol never writes it",
+          legacy.read_text() == "4242-1700000000-deadbeef" and abs(legacy.stat().st_mtime - old) < 2)
+    check("...while our own lock lives in a different file, now free again",
+          hook.PERSONAL_UPSTREAM_LOCK.exists() and lock_is_free())
+    legacy.unlink()
 
     # Her own `upstream` pointing at something unrelated: left alone, not counted.
     other = seed_repo(Path(tmp) / "other")
