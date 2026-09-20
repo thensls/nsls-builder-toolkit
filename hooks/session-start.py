@@ -220,11 +220,26 @@ def _warn_if_frozen(plugin, plugin_dir, err):
     )
 
 
-def _git_out(plugin_dir, *args):
+def _git_out(plugin_dir, *args, deadline=None):
+    """Run a git command, optionally bounded by a shared deadline.
+
+    Callers used to check a deadline once and then make several of these, each
+    free to burn the full 3s -- five calls behind one check is 15s against a 90s
+    hook budget that still owes work to pointer-sync and the pings. Making the
+    deadline an argument of the call itself is the only version that cannot
+    drift: a caller past its budget gets "" without spawning anything, and a
+    caller near it gets a timeout clamped to whatever is actually left.
+    """
+    timeout = 3
+    if deadline is not None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return ""
+        timeout = min(timeout, remaining)
     try:
         r = subprocess.run(
             ["git", "-C", str(plugin_dir), *args],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True, text=True, timeout=timeout,
             stdin=subprocess.DEVNULL,
         )
         return r.stdout.strip() if r.returncode == 0 else ""
@@ -272,7 +287,7 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir, deadline=None):
     # builder their session credit — a stale-branch NOTE is never worth that.
     if deadline is not None and time.monotonic() >= deadline:
         return
-    branch = _git_out(plugin_dir, "rev-parse", "--abbrev-ref", "HEAD")
+    branch = _git_out(plugin_dir, "rev-parse", "--abbrev-ref", "HEAD", deadline=deadline)
     if not branch or branch == "HEAD":
         return  # detached: pinned on purpose
     # A checkout tracking a FORK is supported (NSLS_PERSONAL_REPO), and its
@@ -288,14 +303,14 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir, deadline=None):
     # (feat/builder-guardrails tracked its own branch while main moved 5 ahead).
     # Both get told; the WORDING carries the ambiguity instead of the logic.
     upstream = _git_out(plugin_dir, "rev-parse", "--abbrev-ref",
-                        "--symbolic-full-name", "@{u}")
+                        "--symbolic-full-name", "@{u}", deadline=deadline)
     if upstream == "origin/main":
         return  # tracking main IS the healthy shape. A checkout on main that
         # has diverged locally is _warn_if_frozen's business (its ff-only pull
         # genuinely fails); saying "it tracks its own upstream rather than
         # main" about main itself is contradictory advice.
     has_upstream = bool(upstream)
-    behind = _git_out(plugin_dir, "rev-list", "--count", "HEAD..origin/main")
+    behind = _git_out(plugin_dir, "rev-list", "--count", "HEAD..origin/main", deadline=deadline)
     if not behind.isdigit() or int(behind) == 0:
         return  # nothing on main this checkout is missing
     # Everything printed here lands in the model's context, and a branch name
@@ -315,17 +330,26 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir, deadline=None):
     # ready-made offer, never the notice itself.
     offer = ""
     if deadline is None or time.monotonic() < deadline:
-        ahead = _git_out(plugin_dir, "rev-list", "--count", "origin/main..HEAD")
-        dirty = bool(_git_out(plugin_dir, "status", "--porcelain"))
+        ahead = _git_out(plugin_dir, "rev-list", "--count", "origin/main..HEAD", deadline=deadline)
+        dirty = bool(_git_out(plugin_dir, "status", "--porcelain", deadline=deadline))
         if dirty and not (ahead.isdigit() and int(ahead) > 0):
             offer = (" There are uncommitted edits in this checkout, so nothing "
                      "should move until those are dealt with — say that is what "
                      "is in the way.")
         elif ahead == "0":
-            offer = (" This is the safe shape: the branch carries nothing main "
-                     "does not already have, and the tree is clean, so putting "
-                     "the checkout back on main loses nothing. Offer exactly "
-                     "that, and act only if they say yes.")
+            # Deliberately NOT "loses nothing". `status --porcelain` omits
+            # ignored files, and git will silently clobber an ignored file that
+            # is tracked on main -- so a clean tree here does not entitle us to
+            # promise a lossless switch. Adding --ignored is not the fix either:
+            # __pycache__ and .toolkit-state.json exist in nearly every
+            # checkout, so it would report dirty always and the branch would
+            # never fire. The honest shape is to offer the repair and check for
+            # overwrites at the moment of acting, where it can be done properly.
+            offer = (" The branch carries nothing main does not already have "
+                     "and has no uncommitted edits, so putting the checkout "
+                     "back on main is the repair. Offer exactly that; if they "
+                     "say yes, confirm nothing untracked or ignored would be "
+                     "overwritten before switching.")
         elif ahead.isdigit() and int(ahead) > 0:
             edits = " plus uncommitted edits" if dirty else ""
             offer = (f" This branch carries {ahead} commit(s) of its own{edits}, "
