@@ -27,7 +27,7 @@ function Check([string]$Label, [bool]$Cond, [string]$Detail = '') {
 function Start-Probe([string]$Mode) {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = 'python'
-    foreach ($a in @($probe, $pyHook, $lock, $Mode)) { $psi.ArgumentList.Add($a) }
+    foreach ($a in @($probe, $pyHook, $lock, $Mode, $legacy)) { $psi.ArgumentList.Add($a) }
     $psi.UseShellExecute = $false
     $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
@@ -39,7 +39,10 @@ function Read-Probe($Proc) {
     $out = $Proc.StandardOutput.ReadToEnd()
     $err = $Proc.StandardError.ReadToEnd()
     if ($err) { Write-Host $err }
-    return @($out -split "`r?`n" | Where-Object { $_ -ne '' })
+    $lines = @($out -split "`r?`n" | Where-Object { $_ -ne '' })
+    # The leading comma stops PowerShell unrolling a one-line result into a bare
+    # string - which made `$lines[0]` the letter "r" of "refused" on the first run.
+    return ,$lines
 }
 function Probe-State([string]$Why) {
     # One JSON line from a fresh Python: can it open the file, can it lock it, and
@@ -48,7 +51,9 @@ function Probe-State([string]$Why) {
     Write-Host "     python sees ($Why): $($l -join ' | ')"
 }
 
-$lock = Join-Path ([System.IO.Path]::GetTempPath()) ("fork-check-{0}.lock" -f [guid]::NewGuid().ToString('N'))
+$stem   = Join-Path ([System.IO.Path]::GetTempPath()) ("fork-check-{0}" -f [guid]::NewGuid().ToString('N'))
+$lock   = "$stem.flock"   # this protocol's file
+$legacy = "$stem.lock"    # the previous protocol's file: read, never written
 
 # --- PowerShell against PowerShell --------------------------------------------
 $a = Claim-Lock -Path $lock
@@ -61,15 +66,15 @@ Release-Lock -Handle $b
 Check 'PS: the lock file is never deleted' (Test-Path $lock)
 
 # --- compatibility with the previous, token-in-a-file lock --------------------
-[System.IO.File]::WriteAllText($lock, '4242-1700000000-deadbeef')
-Check 'PS: a fresh old-style token (an old hook mid-check) is yielded to' ($null -eq (Claim-Lock -Path $lock))
-Check '...and its token is left intact for its own release' ([System.IO.File]::ReadAllText($lock) -eq '4242-1700000000-deadbeef')
-[System.IO.File]::SetLastWriteTime($lock, (Get-Date).AddSeconds(-300))
-$c = Claim-Lock -Path $lock
+[System.IO.File]::WriteAllText($legacy, '4242-1700000000-deadbeef')
+Check 'PS: a fresh old-style token (an old hook mid-check) is yielded to' ($null -eq (Claim-Lock -Path $lock -LegacyPath $legacy))
+Check '...and the old file is left exactly as it was' ([System.IO.File]::ReadAllText($legacy) -eq '4242-1700000000-deadbeef')
+[System.IO.File]::SetLastWriteTime($legacy, (Get-Date).AddSeconds(-300))
+$c = Claim-Lock -Path $lock -LegacyPath $legacy
 Check 'PS: a stale old-style token (a dead old hook) does not block' ($null -ne $c)
-Check '...and the file is left empty' ($null -ne $c -and $c.Length -eq 0)
-Check '...with a fresh write time, so an old hook looking now sees a live lock' (((Get-Date) - (Get-Item $lock).LastWriteTime).TotalSeconds -lt 30)
+Check '...and the old file is still left alone - this protocol never writes it' (([System.IO.File]::ReadAllText($legacy) -eq '4242-1700000000-deadbeef') -and (((Get-Date) - (Get-Item $legacy).LastWriteTime).TotalSeconds -gt 250))
 Release-Lock -Handle $c
+[System.IO.File]::WriteAllText($legacy, '')   # empty = no old hook; leaves the path for the Python checks below
 
 # --- Python against Python, and Python holding while PowerShell tries ---------
 $p = Start-Probe 'hold'
@@ -93,16 +98,16 @@ Release-Lock -Handle $d
 $lines = Read-Probe (Start-Probe 'try')
 Check 'PY: claims once PowerShell has released' ($lines[0] -eq 'held') ($lines -join ' | ')
 
-# --- Python: a stale old-style token is cleared, a fresh one is yielded to ----
-[System.IO.File]::WriteAllText($lock, '4242-1700000000-deadbeef')
+# --- Python: a fresh old-style token is yielded to, a stale one is not --------
+[System.IO.File]::WriteAllText($legacy, '4242-1700000000-deadbeef')
 Probe-State 'fresh old-style token'
 $lines = Read-Probe (Start-Probe 'try')
 Check 'PY: a fresh old-style token (an old hook mid-check) is yielded to' ($lines[0] -eq 'refused') ($lines -join ' | ')
-[System.IO.File]::SetLastWriteTime($lock, (Get-Date).AddSeconds(-300))
+[System.IO.File]::SetLastWriteTime($legacy, (Get-Date).AddSeconds(-300))
 Probe-State 'stale old-style token'
 $lines = Read-Probe (Start-Probe 'try')
 Check 'PY: a stale old-style token (a dead old hook) does not block' ($lines[0] -eq 'held') ($lines -join ' | ')
-Check '...and the file is left empty' ($lines -contains 'size=0') ($lines -join ' | ')
+Check '...and the old file is left alone' ([System.IO.File]::ReadAllText($legacy) -eq '4242-1700000000-deadbeef')
 
 Write-Host ''
 if ($script:failures -gt 0) { Write-Host "$($script:failures) FAILED"; exit 1 }
