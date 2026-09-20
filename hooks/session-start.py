@@ -397,7 +397,14 @@ PERSONAL_UPSTREAM_STAMP = CONFIG_DIR / ".nsls-personal-upstream-check"
 # The stamp is a throttle, not a claim: two hooks can both read it as stale
 # before either writes it. The lock is the claim — an OS-level exclusive lock
 # on a file that is never deleted, so exactly one of them fetches and speaks.
-PERSONAL_UPSTREAM_LOCK = CONFIG_DIR / ".nsls-personal-upstream-check.lock"
+PERSONAL_UPSTREAM_LOCK = CONFIG_DIR / ".nsls-personal-upstream-check.flock"
+# The lock file of the protocol this one replaced (created exclusively, a token
+# inside, treated as stale after 120 s). A machine may briefly run one old copy
+# of this check beside one new — the plugin cache and the personal checkout
+# update on different schedules — so this file is READ, never written: a fresh
+# token means an old hook is mid-check and the new one yields. Two files, so
+# nothing the old protocol renames or deletes can ever be the inode locked here.
+PERSONAL_UPSTREAM_LEGACY_LOCK = CONFIG_DIR / ".nsls-personal-upstream-check.lock"
 PERSONAL_UPSTREAM_CHECK_EVERY_H = 12
 PERSONAL_FETCH_TIMEOUT = 6
 
@@ -571,27 +578,23 @@ def _claim_lock(path):
     except (OSError, ImportError):
         _release_lock(fd)
         return None
-    # Compatibility with the lock this replaces (created exclusively with a
-    # token inside, stale after 120 s), for the day a machine may run one old
-    # copy of this check beside one new: an old hook mid-check right now has
-    # written its token into this same file within the last two minutes —
-    # yield to it. Then leave the file empty with a fresh mtime, so an old hook
-    # that looks while we hold the lock sees a live lock, not a stale one to
-    # break. Harmless once every copy has moved to the OS lock.
-    try:
-        st = os.fstat(fd)
-        legacy_live = st.st_size > 0 and 0 <= time.time() - st.st_mtime <= 120
-    except OSError:
-        legacy_live = False
-    if legacy_live:
+    if _legacy_lock_is_live(PERSONAL_UPSTREAM_LEGACY_LOCK):
         _release_lock(fd)
-        return None
-    try:
-        os.ftruncate(fd, 0)
-        os.utime(fd if os.utime in os.supports_fd else str(path), None)
-    except OSError:
-        pass
+        return None  # an old copy of this check is mid-check right now; it will speak
     return fd
+
+
+def _legacy_lock_is_live(path):
+    """True while a hook still on the previous lock protocol is mid-check: its
+    token file exists, is non-empty, and is under 120 s old (its own stale
+    threshold). Older or future-dated means a dead hook left it; empty means
+    nothing. Read only — in the other order, when this copy claims first, the
+    stamp checked again under the lock is what keeps the old copy quiet."""
+    try:
+        st = path.stat()
+    except OSError:
+        return False
+    return st.st_size > 0 and 0 <= time.time() - st.st_mtime <= 120
 
 
 def _release_lock(fd):
