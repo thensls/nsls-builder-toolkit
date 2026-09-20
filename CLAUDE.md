@@ -225,6 +225,13 @@ python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-memory.py" record exploration-log
      we-might-overlap note before you sink more time?"* Their call entirely;
      parallel exploration is often fine. Never auto-send anything.
    - Nothing — say nothing about the check. Silence, not "no duplicates found".
+     The check reads **registered NSLS automations and nothing else** — not
+     Jira, not Asana, not repos nobody registered. A clean result is the
+     absence of a signal, never evidence that nobody else is circling this
+     ground. So never tell a builder their ground is clear: that sentence is
+     not one this check can support. Royce's NCO skill and the BI squad's
+     Jira ticket for the same reporting are what it costs when someone
+     believes it.
 2. **Log it**: `POST /register-automation-with-builder` with their name, the one
    sentence as description, `stage: "Exploring"`, `scope: "Personal"`, repo URL
    if one exists. Skip every checklist, reviewer, and design-doc question —
