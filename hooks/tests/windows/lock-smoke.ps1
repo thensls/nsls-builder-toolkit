@@ -21,8 +21,8 @@ if ($fns.Count -ne 2) { throw "expected Claim-Lock and Release-Lock in session-s
 foreach ($f in $fns) { Invoke-Expression $f.Extent.Text }
 
 $script:failures = 0
-function Check([string]$Label, [bool]$Cond) {
-    if ($Cond) { Write-Host "ok   $Label" } else { Write-Host "FAIL $Label"; $script:failures++ }
+function Check([string]$Label, [bool]$Cond, [string]$Detail = '') {
+    if ($Cond) { Write-Host "ok   $Label" } else { Write-Host "FAIL $Label"; if ($Detail) { Write-Host "     saw: $Detail" }; $script:failures++ }
 }
 function Start-Probe([string]$Mode) {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -40,6 +40,12 @@ function Read-Probe($Proc) {
     $err = $Proc.StandardError.ReadToEnd()
     if ($err) { Write-Host $err }
     return @($out -split "`r?`n" | Where-Object { $_ -ne '' })
+}
+function Probe-State([string]$Why) {
+    # One JSON line from a fresh Python: can it open the file, can it lock it, and
+    # what size and mtime age does it see - so a failing check names the step.
+    $l = Read-Probe (Start-Probe 'probe')
+    Write-Host "     python sees ($Why): $($l -join ' | ')"
 }
 
 $lock = Join-Path ([System.IO.Path]::GetTempPath()) ("fork-check-{0}.lock" -f [guid]::NewGuid().ToString('N'))
@@ -79,20 +85,24 @@ $d = Claim-Lock -Path $lock
 Check 'PS: claims once Python has released' ($null -ne $d)
 
 # --- PowerShell holding while Python tries ------------------------------------
+Write-Host "     PowerShell handle: $($d.GetType().FullName), closed=$($d.SafeFileHandle.IsClosed)"
+Probe-State 'while PowerShell holds'
 $lines = Read-Probe (Start-Probe 'try')
-Check 'PY: refused while PowerShell holds' ($lines[0] -eq 'refused')
+Check 'PY: refused while PowerShell holds' ($lines[0] -eq 'refused') ($lines -join ' | ')
 Release-Lock -Handle $d
 $lines = Read-Probe (Start-Probe 'try')
-Check 'PY: claims once PowerShell has released' ($lines[0] -eq 'held')
+Check 'PY: claims once PowerShell has released' ($lines[0] -eq 'held') ($lines -join ' | ')
 
 # --- Python: a stale old-style token is cleared, a fresh one is yielded to ----
 [System.IO.File]::WriteAllText($lock, '4242-1700000000-deadbeef')
+Probe-State 'fresh old-style token'
 $lines = Read-Probe (Start-Probe 'try')
-Check 'PY: a fresh old-style token (an old hook mid-check) is yielded to' ($lines[0] -eq 'refused')
+Check 'PY: a fresh old-style token (an old hook mid-check) is yielded to' ($lines[0] -eq 'refused') ($lines -join ' | ')
 [System.IO.File]::SetLastWriteTime($lock, (Get-Date).AddSeconds(-300))
+Probe-State 'stale old-style token'
 $lines = Read-Probe (Start-Probe 'try')
-Check 'PY: a stale old-style token (a dead old hook) does not block' ($lines[0] -eq 'held')
-Check '...and the file is left empty' ($lines -contains 'size=0')
+Check 'PY: a stale old-style token (a dead old hook) does not block' ($lines[0] -eq 'held') ($lines -join ' | ')
+Check '...and the file is left empty' ($lines -contains 'size=0') ($lines -join ' | ')
 
 Write-Host ''
 if ($script:failures -gt 0) { Write-Host "$($script:failures) FAILED"; exit 1 }
