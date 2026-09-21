@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read   # to list the PR's changed files (the context exemption)
 
 jobs:
   plugin-version-bump:
@@ -32,5 +33,23 @@ jobs:
       - uses: actions/checkout@v4   # base branch (the default for pull_request_target)
       - name: Fetch the PR head commit (read-only; never executed)
         run: git fetch --no-tags --depth=1 origin "+refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/pr/head"
+
+      # The changed-path list comes from the API, not from the PR's own
+      # contents — the PR cannot describe itself to the gate. `|| true` is
+      # deliberate: a failed or empty listing leaves the file empty, and the
+      # script treats "unknown" as "run the version check", never as an
+      # exemption. See read_changed_paths() in check_plugin_version.py.
+      - name: List the PR's changed paths
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --paginate \
+            "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+            --jq '.[].filename' > changed-files.txt || true
+          echo "changed paths: $(wc -l < changed-files.txt)"
+
       - name: Version on PR head must exceed version on base
-        run: python3 .github/scripts/check_plugin_version.py HEAD "${{ github.event.pull_request.head.sha }}"
+        run: |
+          python3 .github/scripts/check_plugin_version.py \
+            --changed-files changed-files.txt \
+            HEAD "${{ github.event.pull_request.head.sha }}"
