@@ -490,8 +490,10 @@ def _rich_append_table(doc, rows, callout=False):
 
 def rich_missing_markers(before, after, verify):
     """A --verify phrase counts only if the append ADDED an occurrence: a phrase
-    that was already in the doc must not make an accidental no-op look verified."""
-    return [v for v in verify if after.count(v) <= before.count(v)]
+    that was already in the doc must not make an accidental no-op look verified.
+    An empty phrase is reported as missing, never as verified: str.count("") is
+    the text length plus one, so it would otherwise always look "added"."""
+    return [v for v in verify if not v or after.count(v) <= before.count(v)]
 
 
 def do_append_rich(doc, md, verify=()):
@@ -502,6 +504,8 @@ def do_append_rich(doc, md, verify=()):
     blocks = rich_parse_blocks(md)
     if not blocks:
         sys.exit("append-rich: the --md file parsed to zero blocks (empty or whitespace-only?)")
+    if any(not v for v in verify):
+        sys.exit("append-rich: an empty --verify phrase cannot be checked; give a phrase or drop the flag")
     before = full_text(get_doc(doc))
     for kind, payload in blocks:
         if kind == "text":
