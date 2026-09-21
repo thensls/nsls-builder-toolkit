@@ -1,11 +1,12 @@
 {
-  "generatedAt": "2026-08-13T12:16:30.041Z",
-  "commit": "ecffef05",
+  "generatedAt": "2026-09-15T19:20:05.416Z",
+  "commit": "59c59167",
   "fieldTypes": {
     "declared": [
       "assessment-results",
       "banner",
       "banner-multiple",
+      "career-segment",
       "celebration",
       "checkbox",
       "currency",
@@ -37,6 +38,7 @@
       "assessment-results",
       "banner",
       "banner-multiple",
+      "career-segment",
       "celebration",
       "currency",
       "dream-job-requirements",
@@ -68,6 +70,39 @@
         "work"
       ],
       "genericFallbackForUnlistedTypes": true
+    },
+    "multiValued": ["multi-checkbox", "multi-select"],
+    "optionSource": {
+      "multi-select": "options",
+      "multi-checkbox": "options",
+      "image-multiselect": "options",
+      "select": "options",
+      "radio": "options",
+      "select-with-custom-time": "options",
+      "dream-job-select": "options",
+      "dream-job-requirements": "options",
+      "dropdown-with-checkboxes": "checkboxOptions",
+      "multi-select-list": "checkboxOptions",
+      "text": null,
+      "textarea": null,
+      "number": null,
+      "currency": null,
+      "email": null,
+      "url": null,
+      "date": null,
+      "time": null,
+      "checkbox": null,
+      "education": null,
+      "work": null,
+      "wheel": null,
+      "banner": null,
+      "banner-multiple": null,
+      "celebration": null,
+      "intro": null,
+      "assessment-results": null,
+      "career-segment": null,
+      "resume-upload": null,
+      "profile-avatar": null
     }
   },
   "runtimeCapabilities": {
