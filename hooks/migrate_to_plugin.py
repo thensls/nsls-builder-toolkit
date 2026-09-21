@@ -36,9 +36,15 @@ Safety properties:
   * reversible — settings.json is backed up to settings.json.pre-plugin-migration
     before its first edit
   * escape hatch — set NSLS_NO_PLUGIN_MIGRATION=1 to freeze migration
-  * Windows — stage A runs (agents start working); stage B is deferred until
-    the plugin's hooks.json has verified Windows parity, so Windows builders
-    stay on shims and lose nothing
+  * Windows — NEITHER stage runs today, and this docstring used to claim
+    stage A did. Nothing calls this module on Windows: session-start.ps1 is the
+    hook that fires there, and its only entry into Python is
+    runpy.run_path(..., run_name="__guardrails__"), which executes that block
+    alone and never main(). That, not a shortage of installs, is why no PC has
+    ever had the plugin — so no PC has the three agents, and stage B has never
+    had anything to be deferred from. Wiring stage A into the Windows path is
+    the Windows-parity change; stage B stays gated on per-hook beacon evidence
+    that the plugin's own hooks actually fire on that machine.
 """
 
 import json
@@ -73,6 +79,56 @@ _LOCK_STALE_SECS = 300
 # then, so a partial cleanup (one stub failing to delete, a timed-out mcp
 # remove) retries instead of being orphaned forever.
 _DONE = _CONFIG_DIR / ".nsls-plugin-migration-done"
+# The done-marker is permanent: once written, stage B never runs again on that
+# machine. That was fine while stage B only had to remove what the installer
+# wrote before the marker existed — and became a trap the moment a LATER
+# installer run added something new. #168 (2026-09-07) registered the guardrail
+# gate into settings.json; any machine that re-ran install.sh after that date
+# with the marker already written keeps that entry for good, and once the
+# plugin registers the gate too, both fire.
+#
+# Versioning the marker gives stage B exactly one more pass per schema bump.
+# Every step it runs is idempotent and announces only when something changed,
+# so a machine that is already clean sees nothing at all.
+_MIGRATION_SCHEMA = 2
+
+
+def _done_schema():
+    """Schema of this machine's done-marker, or None if it has never run.
+
+    Pre-versioning markers hold the literal text "migrated" and are schema 1.
+    """
+    try:
+        raw = _DONE.read_text(encoding="utf-8-sig").strip()
+    except Exception:
+        return None
+    try:
+        return int(json.loads(raw).get("schema", 1))
+    except Exception:
+        return 1 if raw else None
+
+
+def _stage_b_reason():
+    """Why stage B should run this session: "full", "reappeared", or None.
+
+    The done-marker is permanent, and both installers deliberately re-create any
+    missing settings.json shim. So a builder who re-runs the installer after
+    migrating gets every shim back, for good, silently duplicating whatever the
+    plugin already registers — which is the permanent-overlap failure the marker
+    versioning was meant to end, arriving by a different door. Live state
+    therefore outranks the marker: if a shim or an org stub is present, stage B
+    has work regardless of what the marker says.
+
+    "reappeared" runs the cheap half only. The signal MCP check is a CLI call
+    against a 15 s timeout, and it was settled the first time through; paying
+    for it every session to re-confirm would be a real cost on every machine.
+    """
+    schema = _done_schema()
+    if schema is None or schema < _MIGRATION_SCHEMA:
+        return "full"
+    if _shims_present() or _org_stubs_exist():
+        return "reappeared"
+    return None
 
 
 def _read_json(path):
@@ -314,7 +370,7 @@ def _remove_user_scope_signal():
     return (True, True) if removed else (False, False)
 
 
-def _stage_b():
+def _stage_b(reason="full"):
     """Retire the shims now that the plugin is live.
 
     Re-runs every session until the machine VERIFIES clean, then writes the
@@ -330,15 +386,23 @@ def _stage_b():
     # CLI calls first: the claude CLI may normalize/rewrite settings.json as a
     # side effect (observed live: it rewrote a model alias during `mcp get`),
     # so our own settings edit must come after every CLI invocation.
-    signal_moved, signal_clean = _remove_user_scope_signal()
+    if reason == "full":
+        signal_moved, signal_clean = _remove_user_scope_signal()
+    else:
+        signal_moved, signal_clean = False, True  # settled on the first pass
     hooks_removed = _remove_settings_hooks()
     stubs_removed = _remove_org_stubs()
 
+    local_key_removed = _remove_inert_local_enablement()
+
     clean = signal_clean and not _shims_present() and not _org_stubs_exist()
     if clean:
-        _DONE.write_text("migrated\n", encoding="utf-8")
+        _DONE.write_text(
+            json.dumps({"schema": _MIGRATION_SCHEMA, "at": int(time.time())}) + "\n",
+            encoding="utf-8",
+        )
 
-    if hooks_removed or stubs_removed or signal_moved:
+    if hooks_removed or stubs_removed or signal_moved or local_key_removed:
         _announce(
             "NSLS Builder Toolkit plugin migration"
             + (" complete (step 2 of 2)" if clean else " progressed") + ": "
@@ -352,6 +416,51 @@ def _stage_b():
             "~/.claude/settings.json.pre-plugin-migration and run "
             "`claude plugin uninstall nsls-builder-toolkit@nsls-toolkit`."
         )
+
+
+def _remove_inert_local_enablement():
+    """Drop `nsls-builder-toolkit@local` from enabledPlugins. Returns bool.
+
+    Both installers write this key. It names a marketplace called `local` that
+    does not exist, so Claude Code can never resolve it and it has no effect —
+    but it LOOKS like a second live installation, and twice now that appearance
+    has produced the wrong conclusion: an 2026-08-23 test against this key
+    "proved" that bundled plugin hooks do not load, which is the belief that
+    removed the guardrail gate from hooks.json on 2026-09-06 and left every
+    migrated Mac unguarded for two weeks.
+
+    Removed only when the absence of a `local` marketplace can be positively
+    confirmed. If that file cannot be read, the key stays: a misleading no-op
+    is cheaper than disabling a plugin someone actually installed.
+    """
+    try:
+        known = _read_json(_CONFIG_DIR / "plugins" / "known_marketplaces.json")
+    except Exception:
+        return False
+    names = known.get("marketplaces", known) if isinstance(known, dict) else {}
+    if not isinstance(names, dict) or "local" in names:
+        return False
+    try:
+        settings = _read_json(_SETTINGS)
+    except Exception:
+        return False
+    plugins = settings.get("enabledPlugins")
+    if not isinstance(plugins, dict) or "nsls-builder-toolkit@local" not in plugins:
+        return False
+    backup = _SETTINGS.with_name("settings.json.pre-plugin-migration")
+    if not backup.exists():
+        try:
+            shutil.copy2(_SETTINGS, backup)
+        except Exception:
+            return False
+    del plugins["nsls-builder-toolkit@local"]
+    try:
+        tmp = _SETTINGS.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, _SETTINGS)
+        return True
+    except Exception:
+        return False
 
 
 def _acquire_lock():
@@ -389,8 +498,10 @@ def run_migration():
             _stage_a()
         elif _plugin_disabled_by_user():
             return
-        elif not _DONE.exists():
-            _stage_b()
+        else:
+            reason = _stage_b_reason()
+            if reason:
+                _stage_b(reason)
     except Exception:
         pass  # fail-open: shims still work; retry next session
     finally:
