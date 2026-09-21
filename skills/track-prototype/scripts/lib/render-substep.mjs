@@ -544,7 +544,7 @@ function multiSelectListField(sub, slug) {
 // the real thing, and this is the same situation.
 function resumeUploadField(sub) {
   const label = sub.textFieldLabel || "Upload your resume";
-  return `<div class="space-y-2"><label class="block text-sm font-medium text-dark">${esc(label)}</label><input type="file" class="step-input w-full" accept=".pdf,.doc,.docx"><div class="tp-stub-note text-xs text-grey pt-1">Stand-in for the real screen: members are looked up on LinkedIn and can pick a found profile, or upload a resume to be parsed. Not reproducible in a static prototype.</div></div>`;
+  return `<div class="space-y-2"><label class="block text-sm font-medium text-dark">${esc(label)}</label><input type="file" class="step-input w-full" accept=".pdf,.doc,.docx"><div class="tp-stub-note text-xs text-grey pt-1">Stand-in, not the real screen. Members choose one of three paths: import from LinkedIn (they run a self-search), upload a resume, or start from scratch. A static prototype can host none of them.</div></div>`;
 }
 
 // Education / Work entry forms — SubStepRenderer EducationInput/WorkInput.
