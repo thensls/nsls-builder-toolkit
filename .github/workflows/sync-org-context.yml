@@ -1,5 +1,16 @@
 name: Sync Org Context
 
+# Opens a PR rather than pushing to main. Branch protection began requiring a
+# PR plus two status checks on 2026-08-31; the bot's direct push failed with
+# `GH006: Protected branch update failed` every week from then on, while the
+# "Run sync" step kept succeeding. org-chart.json froze at the 2026-08-24 copy
+# for four weeks and nothing alerted — list_relationships.py reported
+# org_chart_age_days and no consumer read it.
+#
+# The PR passes `plugin-version-bump` via the `_shared/context/` exemption in
+# .github/scripts/check_plugin_version.py (synced data has no version to bump),
+# and auto-merges once both required checks are green.
+
 on:
   schedule:
     # Weekly: Sunday 11 PM ET (Monday 3 AM UTC)
@@ -16,6 +27,10 @@ on:
           - org-chart
           - lops
           - strategy
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   sync:
@@ -52,15 +67,51 @@ jobs:
           AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
         run: python3 _shared/scripts/sync_org_context.py ${{ steps.target.outputs.flags }}
 
-      - name: Commit if changed
+      - name: Open or update the sync PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
           git add _shared/context/
           if git diff --staged --quiet; then
             echo "No changes to commit"
+            exit 0
+          fi
+
+          CHANGED=$(git diff --staged --name-only | xargs -I{} basename {} .md | tr '\n' ', ' | sed 's/,$//')
+          SUBJECT="sync: ${CHANGED} $(date +%Y-%m-%d)"
+          BRANCH="bot/sync-org-context"
+
+          # One stable branch, recreated from main each run. delete_branch_on_merge
+          # is on, so in the normal case it does not exist; when a previous week's
+          # PR is still open, this force-push updates that PR in place rather than
+          # stacking a second one.
+          git checkout -b "$BRANCH"
+          git commit -m "$SUBJECT"
+          git push --force origin "$BRANCH"
+
+          if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr create \
+              --base main --head "$BRANCH" \
+              --title "$SUBJECT" \
+              --body "Automated weekly sync of \`_shared/context/\` from Airtable.
+
+          Data only — no plugin code changes, so no version bump (see the
+          \`_shared/context/\` exemption in \`.github/scripts/check_plugin_version.py\`).
+
+          Opened by the \`Sync Org Context\` workflow. Auto-merges when checks pass."
           else
-            CHANGED=$(git diff --staged --name-only | xargs -I{} basename {} .md | tr '\n' ', ' | sed 's/,$//')
-            git commit -m "sync: ${CHANGED} $(date +%Y-%m-%d)"
-            git push
+            echo "Existing open PR for $BRANCH updated by the push above."
+          fi
+
+          # Fail loudly if auto-merge cannot be armed. A PR that silently sits
+          # open is the same outage as the push that silently failed — the whole
+          # reason this file was rewritten.
+          if ! gh pr merge "$BRANCH" --auto --squash; then
+            echo "::error::Could not enable auto-merge on the sync PR. It is open but \
+          will not land on its own — check that auto-merge is enabled in repo settings."
+            exit 1
           fi
