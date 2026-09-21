@@ -45,12 +45,23 @@ tracks; this skill is the *doer*.)
 2. **Show what's in the Studio** (skip only when adding a brand-new idea). Run
    the bundled listing script — it lives in **this skill's own `scripts/`
    directory**, so run it from there (or give its full path):
-   ```bash
-   **Prefer the Studio MCP tools when available** (`society-studio` server, ships
-   with this toolkit): `list_tracks` / `get_track` need no Airtable PAT and see
-   exactly what the board sees. The script below is the fallback when the MCP
-   server isn't configured (no `STUDIO_MCP_TOKEN`).
+   **Prefer the Studio MCP tools when available** (`society-studio` server):
+   `list_tracks` / `get_track` need no Airtable PAT and see exactly what the
+   board sees. If that server isn't connected on this machine, connecting takes
+   two commands and no token to paste — offer it before falling back:
 
+   ```bash
+   claude mcp add --transport http --scope user society-studio https://studio.nsls.org/api/mcp
+   claude mcp login society-studio
+   ```
+
+   `--scope user` matters: `claude mcp add` defaults to `local`, which would bind
+   the server to this directory alone and leave the Studio tools missing the next
+   time they work from a different repo.
+
+   The script below is the fallback for anyone who hasn't connected:
+
+   ```bash
    cd "<this skill's directory>" && AIRTABLE_API_KEY=… node scripts/list_studio_tracks.mjs
    ```
    Lists every track grouped by stage (Backlog / In Development / Live /

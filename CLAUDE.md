@@ -214,8 +214,19 @@ python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-memory.py" record exploration-log
 
 **If they say yes** — three steps, ~15 seconds of their time:
 
-1. **Check for neighbours first**: `POST /similar` with `{"name", "description"}`
-   (their one sentence). Three outcomes:
+1. **Check for neighbours first — in BOTH places, because they hold different
+   things.** The registry knows what has been *registered*; the machine knows
+   what has been *built*. Most skills never get a registry row, so for anything
+   skill-shaped the second check is the one that finds the neighbour:
+
+   ```
+   python3 "${CLAUDE_PLUGIN_ROOT}/hooks/similar-skills.py" "<name>" "<their one sentence>"
+   ```
+
+   It prints installed skills covering the same ground, or nothing. Treat a hit
+   exactly like a registry hit below — an offer, never a wall. Then
+   `POST /similar` with `{"name", "description"}` (their one sentence). Three
+   outcomes:
    - A match with `from_idea_backlog: true` — someone already parked this exact
      idea in the registry. Offer to **claim that row** (update it: their builder
      link, Stage → `Exploring`, their description) instead of creating a twin.
@@ -225,6 +236,14 @@ python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guardrail-memory.py" record exploration-log
      we-might-overlap note before you sink more time?"* Their call entirely;
      parallel exploration is often fine. Never auto-send anything.
    - Nothing — say nothing about the check. Silence, not "no duplicates found".
+     Together the two checks read **registered NSLS automations and the skills
+     installed on this machine** — not Jira, not Asana, not repos nobody
+     registered, not a colleague's unshipped work. A clean result is the
+     absence of a signal, never evidence that nobody else is circling this
+     ground. So never tell a builder their ground is clear: that sentence is
+     not one these checks can support. Royce's NCO skill and the BI squad's
+     Jira ticket for the same reporting are what it costs when someone
+     believes it.
 2. **Log it**: `POST /register-automation-with-builder` with their name, the one
    sentence as description, `stage: "Exploring"`, `scope: "Personal"`, repo URL
    if one exists. Skip every checklist, reviewer, and design-doc question —

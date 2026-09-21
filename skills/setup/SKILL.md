@@ -457,6 +457,69 @@ profile.
 
 Never commit `client_secret.json` to any repo — it stays Drive-distributed.
 
+## Step 5.5: Track Studio access (optional, ~30 sec)
+
+Only for people who author Society **tracks**. Ask, don't assume — and if the
+answer is no, say nothing further. This is a question rather than a line in
+`.mcp.json` on purpose: a plugin MCP config auto-loads for *every* toolkit user,
+so shipping it there would park a permanent "Needs authentication" entry in the
+`/mcp` list of every builder who never touches a track.
+
+Ask:
+
+```
+Do you work on Society tracks — the learning series members walk through?
+(yes / no)
+```
+
+### If yes — a browser sign-in, no token to paste
+
+Run the registration yourself:
+
+```bash
+claude mcp add --transport http --scope user society-studio https://studio.nsls.org/api/mcp
+```
+
+**`--scope user` is not optional.** `claude mcp add` defaults to `local`, which
+binds the server to whatever directory it was run in. A track author who
+registers it here and then works from a different repo finds the Studio tools
+simply absent, and the track skills quietly fall back to the Airtable PAT path —
+no error, just worse behaviour. User scope follows them everywhere.
+
+Then hand them the sign-in, because it opens a browser and must be theirs:
+
+```
+Now run this one yourself — type it with a leading ! so it runs in this session:
+
+  ! claude mcp login society-studio
+
+It opens your browser. Sign in with your @nsls.org account and approve.
+```
+
+After a restart, `claude mcp list` should show `society-studio … ✔ Connected`,
+and the track skills (`/track-studio`, `/track-brief`, `/track-design`,
+`/track-optimize`, `/track-publish`) get `list_tracks`, `save_draft` and the rest
+with no Airtable PAT and nothing in `~/.zshrc`.
+
+**The old route still works.** Minting `STUDIO_MCP_TOKEN` at
+studio.nsls.org/mcp-token and exporting it is unchanged and unrevoked — it is
+just no longer the short path, and it stays the answer for a client that can't
+do OAuth.
+
+**Two traps worth naming if they ask:**
+
+- `claude mcp login` and a claude.ai connector hold **separate** tokens by design
+  (`cli` vs `connector`), so signing in here never disconnects Claude on the web,
+  and regenerating a shell token never disconnects either of them.
+- If `ANTHROPIC_API_KEY` or another auth source is set, Claude Code does not load
+  claude.ai connectors at all. That is exactly why a track author wants this
+  local sign-in rather than relying on the org connector being picked up.
+
+### If no
+
+Move on without comment. The same two commands live in `/track-studio` whenever
+they need them.
+
 ## Step 6: Personal productivity (optional)
 
 Pitch it, then let them choose the depth. **Two tiers:**
