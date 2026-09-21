@@ -72,9 +72,11 @@ Check '...and the old file is left exactly as it was' ([System.IO.File]::ReadAll
 [System.IO.File]::SetLastWriteTime($legacy, (Get-Date).AddSeconds(-300))
 $c = Claim-Lock -Path $lock -LegacyPath $legacy
 Check 'PS: a stale old-style token (a dead old hook) does not block' ($null -ne $c)
-Check '...and the old file is still left alone - this protocol never writes it' (([System.IO.File]::ReadAllText($legacy) -eq '4242-1700000000-deadbeef') -and (((Get-Date) - (Get-Item $legacy).LastWriteTime).TotalSeconds -gt 250))
+Check '...and the dead token is replaced by our EMPTY shadow, fresh - an old hook looking now sees a live lock' (((Get-Item $legacy).Length -eq 0) -and (((Get-Date) - (Get-Item $legacy).LastWriteTime).TotalSeconds -lt 30))
 Release-Lock -Handle $c
-[System.IO.File]::WriteAllText($legacy, '')   # empty = no old hook; leaves the path for the Python checks below
+$e = Claim-Lock -Path $lock -LegacyPath $legacy
+Check 'PS: our own empty shadow from last time does not block the next claim' ($null -ne $e)
+Release-Lock -Handle $e
 
 # --- Python against Python, and Python holding while PowerShell tries ---------
 $p = Start-Probe 'hold'
@@ -107,7 +109,7 @@ Check 'PY: a fresh old-style token (an old hook mid-check) is yielded to' ($line
 Probe-State 'stale old-style token'
 $lines = Read-Probe (Start-Probe 'try')
 Check 'PY: a stale old-style token (a dead old hook) does not block' ($lines[0] -eq 'held') ($lines -join ' | ')
-Check '...and the old file is left alone' ([System.IO.File]::ReadAllText($legacy) -eq '4242-1700000000-deadbeef')
+Check '...and the dead token is replaced by an EMPTY shadow' ((Get-Item $legacy).Length -eq 0)
 
 Write-Host ''
 if ($script:failures -gt 0) { Write-Host "$($script:failures) FAILED"; exit 1 }

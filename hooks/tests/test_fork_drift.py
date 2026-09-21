@@ -188,6 +188,8 @@ with tempfile.TemporaryDirectory() as tmp:
           (plugin_dir / "mine.md").exists() and git(plugin_dir, "status", "--porcelain") == "")
     check("the stamp was written", hook.PERSONAL_UPSTREAM_STAMP.exists())
     check("the lock was released (the file stays; the OS lock is gone)", lock_is_free())
+    check("the old protocol's file holds our EMPTY shadow claim (an old hook arriving now would yield)",
+          hook.PERSONAL_UPSTREAM_LEGACY_LOCK.exists() and hook.PERSONAL_UPSTREAM_LEGACY_LOCK.stat().st_size == 0)
 
     check("an immediate second run is throttled into silence", run() == "")
 
@@ -203,7 +205,8 @@ with tempfile.TemporaryDirectory() as tmp:
     rearm()
     check("no time left in the hook budget: silent", run(deadline=time.monotonic() - 1) == "")
     check("...and the slot was NOT claimed, so the next session gets a real check",
-          not hook.PERSONAL_UPSTREAM_STAMP.exists() and not hook.PERSONAL_UPSTREAM_LOCK.exists())
+          not hook.PERSONAL_UPSTREAM_STAMP.exists() and not hook.PERSONAL_UPSTREAM_LOCK.exists()
+          and not hook.PERSONAL_UPSTREAM_LEGACY_LOCK.exists())
 
     # Another hook holds the lock right now: this one stays quiet and leaves it.
     rearm()
@@ -240,11 +243,17 @@ with tempfile.TemporaryDirectory() as tmp:
     old = time.time() - 300
     os.utime(legacy, (old, old))
     check("an old-style lock with a stale token (a dead old hook): the check proceeds", "OWN FORK" in run())
-    check("...and the old file is STILL left alone — this protocol never writes it",
-          legacy.read_text() == "4242-1700000000-deadbeef" and abs(legacy.stat().st_mtime - old) < 2)
+    check("...and the dead token is replaced by our EMPTY shadow, fresh — an old hook looking now sees a live lock",
+          legacy.exists() and legacy.stat().st_size == 0 and 0 <= time.time() - legacy.stat().st_mtime < 30)
     check("...while our own lock lives in a different file, now free again",
           hook.PERSONAL_UPSTREAM_LOCK.exists() and lock_is_free())
-    legacy.unlink()
+
+    # Our own empty shadow from a previous run is not an old hook: only a fresh
+    # NON-EMPTY token makes this protocol yield.
+    rearm()
+    legacy.write_text("")
+    check("a fresh but EMPTY old-file (our own last shadow) does not block the check", "OWN FORK" in run())
+    check("...and the shadow is there, empty, when the check ends", legacy.exists() and legacy.stat().st_size == 0)
 
     # Her own `upstream` pointing at something unrelated: left alone, not counted.
     other = seed_repo(Path(tmp) / "other")
@@ -366,6 +375,7 @@ me = sys.argv[1]
 (arena / ("ready-" + me)).touch()
 while not (arena / "go").exists():
     time.sleep(0.005)
+h.PERSONAL_UPSTREAM_LEGACY_LOCK = Path({str(hook.PERSONAL_UPSTREAM_LEGACY_LOCK)!r})
 fd = h._claim_lock(Path({str(hook.PERSONAL_UPSTREAM_LOCK)!r}))
 (arena / ("result-" + me)).write_text("refused" if fd is None else "held")
 if fd is not None:

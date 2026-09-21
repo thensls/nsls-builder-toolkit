@@ -73,7 +73,7 @@ $PersonalUpstreamRef     = 'refs/nsls/upstream-main'   # a private ref of our ow
 $PersonalUpstreamRefspec = "+refs/heads/main:$PersonalUpstreamRef"
 $PersonalUpstreamStamp   = Join-Path $ClaudeDir '.nsls-personal-upstream-check'
 $PersonalUpstreamLock    = Join-Path $ClaudeDir '.nsls-personal-upstream-check.flock'
-$PersonalLegacyLock      = Join-Path $ClaudeDir '.nsls-personal-upstream-check.lock'   # the previous protocol's file: read, never written
+$PersonalLegacyLock      = Join-Path $ClaudeDir '.nsls-personal-upstream-check.lock'   # the previous protocol's file: shadow-claimed (empty) while ours is held
 $PersonalCheckEveryH     = 12
 
 function Test-CanonicalOrigin {
@@ -223,21 +223,34 @@ function Claim-Lock {
     }
     # A machine may briefly run one old copy of this check beside one new. The old
     # copy claims by creating ITS OWN lock file exclusively with a token inside,
-    # and treats it as stale after 120 s. That file is read here and never
-    # touched: a fresh token means an old hook is mid-check, so this one yields
-    # to it. In the other order the stamp, checked again under the lock, is what
-    # keeps the old hook quiet. Two files, so nothing the old protocol moves or
-    # deletes can ever be the file held here.
-    try {
-        if ($LegacyPath -and (Test-Path $LegacyPath)) {
-            $old = Get-Item $LegacyPath
-            $ageS = ((Get-Date) - $old.LastWriteTime).TotalSeconds
-            if ($old.Length -gt 0 -and $ageS -ge 0 -and $ageS -le 120) {
-                $fs.Dispose()
-                return $null
+    # and treats it as stale after 120 s. So, while holding the lock above, also
+    # claim under that protocol: create the old file exclusively and leave it
+    # EMPTY. An old hook arriving now sees a live lock and yields; an old hook
+    # already mid-check (a fresh, non-empty token) makes this one yield. Only ever
+    # done while holding $fs, so no two new hooks touch the old file at once. Our
+    # empty shadow is never deleted by us - old tokens are never empty, so a later
+    # new hook does not mistake it for a live old hook, and an old hook's release
+    # only deletes a file that still carries its own token.
+    if ($LegacyPath) {
+        foreach ($attempt in 1, 2) {
+            try {
+                $shadow = [System.IO.File]::Open($LegacyPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+                $shadow.Dispose()
+                break
+            } catch {
+                $old = $null
+                try { $old = Get-Item -LiteralPath $LegacyPath -ErrorAction Stop } catch { }
+                if ($null -eq $old) { break }                        # cannot create or read it: the stamp arbitrates
+                $ageS = ((Get-Date) - $old.LastWriteTime).TotalSeconds
+                if ($old.Length -gt 0 -and $ageS -ge 0 -and $ageS -le 120) {
+                    $fs.Dispose()
+                    return $null                                    # an old hook is mid-check right now
+                }
+                if ($attempt -eq 2) { break }
+                try { [System.IO.File]::Delete($LegacyPath) } catch { break }   # a dead old hook's token, or our own empty shadow
             }
         }
-    } catch { }
+    }
     return $fs
 }
 
