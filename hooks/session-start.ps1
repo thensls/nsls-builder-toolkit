@@ -210,6 +210,17 @@ function Claim-Lock {
     } catch {
         return $null
     }
+    # Belt and braces: FileShare.None already refuses any other open handle, and
+    # that is what excludes the Python copy (its descriptor stays open for as long
+    # as it holds; proven on windows-latest, "PS: refused while Python holds").
+    # Take the same one-byte lock Python takes as well, so both languages hold
+    # one visible primitive; if even that is refused, someone else holds it.
+    try {
+        $fs.Lock(0, 1)
+    } catch {
+        $fs.Dispose()
+        return $null
+    }
     # A machine may briefly run one old copy of this check beside one new. The old
     # copy claims by creating ITS OWN lock file exclusively with a token inside,
     # and treats it as stale after 120 s. That file is read here and never
