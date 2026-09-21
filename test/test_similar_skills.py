@@ -51,6 +51,29 @@ q, long_row = {"alpha", "beta"}, {"alpha", "beta"} | {f"w{i}" for i in range(30)
 check("full query coverage scores 1.0", m.similarity(q, long_row), 1.0)
 check("empty set scores 0.0", m.similarity(set(), long_row), 0.0)
 
+print("\nan exact name match is reported, not suppressed")
+# An earlier version skipped it as "not its own neighbour", which got the
+# purpose backwards: this runs BEFORE a build, so a skill already installed
+# under the proposed name is the loudest possible answer, not noise.
+s = sc("macroscope", "anything at all", "macroscope", "Use when the review bot has posted comments")
+check(f"identical name scores {s} (>= threshold)", s >= m.THRESHOLD, True)
+
+print("\ncached plugin versions sort newest-first, numerically not lexically")
+import pathlib
+def newer(a, b):
+    ka = m._version_key(pathlib.Path(f"/x/{a}/skills"))
+    kb = m._version_key(pathlib.Path(f"/x/{b}/skills"))
+    return a if ka > kb else b
+check("3.8.10 beats 3.8.9 (lexical would pick 3.8.9)", newer("3.8.9", "3.8.10"), "3.8.10")
+check("3.10.0 beats 3.9.1", newer("3.9.1", "3.10.0"), "3.10.0")
+check("a non-numeric directory sorts last",
+      m._version_key(pathlib.Path("/x/some-branch/skills")) < m._version_key(pathlib.Path("/x/0.0.1/skills")), True)
+
+print("\nroots include a project's own .claude/skills and never repeat one")
+roots = [str(r) for r in m.skill_roots()]
+check("no duplicate roots", len(roots), len(set(roots)))
+check("found roots", len(roots) > 0, True)
+
 print("\ndiscovery is deduplicated across cached plugin versions")
 names = list(m.installed_skills())
 check("no duplicate skill names", len(names), len(set(names)))

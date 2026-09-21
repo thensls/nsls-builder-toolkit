@@ -50,18 +50,49 @@ def similarity(query, row):
     return len(query & row) / min(len(query), len(row))
 
 
-def skill_roots():
-    """Every directory a SKILL.md can live in, deduplicated by real path.
+def _version_key(path):
+    """Sort a cached plugin version newest-first, numerically.
 
-    A plugin installed from the marketplace keeps one directory per cached
-    version, so the same skill appears three or four times. Reporting "matched
-    macroscope (x4)" would read as four neighbours instead of one.
+    The cache keeps one directory per version, so the same skill appears three
+    or four times and the first copy seen wins the name. Plain sorted() orders
+    those lexically, where "3.8.10" lands before "3.8.9" -- the winner is then
+    whichever string happened to sort first, and a stale description can shadow
+    the current one. Anything that is not a dotted number (a branch name, say)
+    sorts last rather than raising.
+    """
+    try:
+        return (1, tuple(int(part) for part in path.parent.name.split(".")))
+    except ValueError:
+        return (0, ())
+
+
+def skill_roots():
+    """Every directory a SKILL.md can live in, most authoritative first.
+
+    Order is precedence: the first copy of a name found wins, so a skill the
+    builder has installed personally outranks a project's vendored copy, which
+    outranks a cached plugin version.
     """
     home = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
     roots = [home / "skills"]
+    # A project can carry its own .claude/skills, and that is precisely where a
+    # builder about to build something is standing -- leaving it out meant the
+    # check could miss a duplicate sitting in the repo already open.
+    here = Path.cwd()
+    roots.append(here / ".claude" / "skills")
+    for parent in here.parents:
+        if (parent / ".git").exists():
+            roots.append(parent / ".claude" / "skills")
+            break
     roots += sorted((home / "local-plugins").glob("*/skills"))
-    roots += sorted((home / "plugins" / "cache").glob("*/*/*/skills"))
-    return [r for r in roots if r.is_dir()]
+    roots += sorted((home / "plugins" / "cache").glob("*/*/*/skills"),
+                    key=_version_key, reverse=True)
+    seen, out = set(), []
+    for r in roots:
+        if r.is_dir() and r.resolve() not in seen:
+            seen.add(r.resolve())
+            out.append(r)
+    return out
 
 
 def installed_skills():
@@ -114,8 +145,12 @@ def main(argv):
     q_all = tokens(argv[1] + " " + (argv[2] if len(argv) > 2 else ""))
     hits = []
     for name, (desc, where) in installed_skills().items():
-        if tokens(name) == q_name:
-            continue  # the skill being described is not its own neighbour
+        # No self-skip. An earlier version suppressed an exact name match as
+        # "not its own neighbour", which got the purpose backwards: this runs
+        # BEFORE a build, so a skill already installed under the proposed name
+        # is not noise, it is the loudest possible answer to the question being
+        # asked. Re-running the check on something already logged reports it at
+        # 1.00, which is correct and reads as such.
         s = score(q_name, q_all, tokens(name), tokens(name + " " + desc))
         if s >= THRESHOLD:
             hits.append((s, name, desc, where))
