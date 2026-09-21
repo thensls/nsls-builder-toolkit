@@ -1,10 +1,5 @@
 # Lines of Priority (LOPs)
-_Last synced: 2026-08-17_
-
-## L1: Scalable Operating Engine
-**Owner**: Chelsea Byers | **Health**: No update
-**Goal**: Prove the operating engine scales — hold positive operating leverage (revenue growth outpaces Ops-spend growth by ≥ 10 pts) and reduce Cost-to-Serve per active member by ≥ 10% by Q4.
-> No update yet.
+_Last synced: 2026-09-21_
 
 ## L1: Simplification/Efficiency
 **Owner**: Anish Patel | **Health**: On Track
@@ -24,7 +19,7 @@ _Last synced: 2026-08-17_
 > Dashboards are up and running. Currently waiting on SLT member feedback to proceed.
 
 ### L2: Build a repeatable system to track and engage 100% of advisors and E-board members each season.
-**Owner**: Adam Stone | **Health**: Hit Goal | **Deadline**: 2026-06-30
+**Owner**: Adam Stone | **Health**: Complete | **Deadline**: 2026-06-30
 > DRI indicates the goal is likely complete but is waiting to confirm acceptance of the deliverable or system before finalizing.
 
 ### L2: 90% of schools on evergreen partnership agreements by 12/31/2026
@@ -44,17 +39,25 @@ _Last synced: 2026-08-17_
 **Owner**: Adam Stone | **Health**: On Track | **Deadline**: 2026-12-31
 > No new updates reported. DRI suggests reassigning the goal to Adam, Joe's new manager, who has better visibility into events.
 
-### L2: Complete job framework and compensation leveling project by the end of Q2
-**Owner**: Heather Darnell | **Health**: At Risk | **Deadline**: 2026-06-30
+### L2: Complete job framework and compensation leveling project by the end of Q3
+**Owner**: Heather Darnell | **Health**: At Risk | **Deadline**: 2026-09-30
 > Job framework and compensation leveling project is fragmented and blocking progress. DRI identified that the framework (KPI base, LOP work, Knowledge Base) needs unification; a follow-up is scheduled for July 27. A dependent compensation decision remains open and is being handled outside this goal. Quarterly reviews are scheduled for next week, but core framework alignment is pending.
 
 ### L2: Host Meaningful 25th Anniversary Event
 **Owner**: Chelsea Byers | **Health**: On Track | **Deadline**: 2026-10-27
-> Venue has been secured with Danielle and the people team. Planning appears well-organized and progressing.
+> No update yet.
 
 ## L1: Customer Experience Quality
 **Owner**: Chelsea Byers | **Health**: No update
 **Goal**: Deliver best-in-class member support — sustain member NPS ≥ 50 and 90%+ within-SLA resolution while scaling AI/self-serve deflection past 20% by Q4.
+> No update yet.
+
+### L2: Create unified, cross-org customer touchpoints NPS metric
+**Owner**: Chelsea Byers | **Health**: On Track | **Deadline**: 2026-12-31
+> No update yet.
+
+### L2: Resolve 90%+ of member support tickets within SLA every quarter
+**Owner**: Kimberly Campbell | **Health**: No update | **Deadline**: 2026-12-31
 > No update yet.
 
 ## L1: Core Revenue
@@ -66,9 +69,9 @@ _Last synced: 2026-08-17_
 **Owner**: Ashleigh Smith | **Health**: At Risk | **Deadline**: 2026-12-31
 > Enrollment progress remains unchanged from last update. On track for the L1 goal (10.6M total) but likely to miss this specific L2 goal.
 
-### L2: (Archive) Achieve RR 5.0% + AOVe $130 → $30.7M core revenue
+### L2: Develop brand tracking score & launch 10 B2B/B2C brand improvement initiatives
 **Owner**: Michael O'Brien | **Health**: On Track | **Deadline**: 2026-12-31
-> Response rate is lower than target, but average order value is exceeding expectations, resulting in revenue being on target for the $30.7M core revenue goal.
+> Goal progressing but DRI acknowledges need for dedicated focus time. Has scheduled focus session for next week to maintain momentum.
 
 ### L2: Increase ARPM1 to $140
 **Owner**: Michael O'Brien | **Health**: At Risk
@@ -90,6 +93,10 @@ _Last synced: 2026-08-17_
 **Owner**: Kevin Prentiss | **Health**: On Track
 **Goal**: Establish proof that Society drives superior engagement through baseline establishment and optimization: 50k members on Society with Orientation on Society completion >50%, Clarity track completion >25% for members.
 > We're making strong progress on Product Engagement with five of six goals on track or completed, including Personal Insights shipping early. Dashboard and global nav completion for SNT testing are critical path items; we should monitor their sprint delivery closely to keep the May timeline intact.
+
+### L2: Launch Successful Society brand, measured by converting X% of uninvited segment to signup [Stretch]
+**Owner**: Adam Stone | **Health**: On Track
+> DRI indicates the brand launch is gated on completing stakeholder engagement and event programs. They are clarifying that the path forward requires executing 3 stakeholder engagement programs and 9 event programs to drive meaningful engagement.
 
 ### L2: Get 30k 2026 vintage NSLS members to complete Welcome and Personal Insights on Society
 **Owner**: Kevin Prentiss | **Health**: No update
