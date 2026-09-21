@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """Refuse a PR to main that does not bump `.claude-plugin/plugin.json`.
 
-Usage: python3 .github/scripts/check_plugin_version.py <base-ref> [<head-ref>]
+Usage: python3 .github/scripts/check_plugin_version.py [--changed-files PATH]
+                                                      <base-ref> [<head-ref>]
 
-With one argument the PR head is the working tree. With two, the head
-manifest is read from <head-ref> via `git show` — the shape the workflow
+With one positional argument the PR head is the working tree. With two, the
+head manifest is read from <head-ref> via `git show` — the shape the workflow
 uses under `pull_request_target`, where this script and the workflow come
 from the BASE branch and nothing from the PR is ever executed, only read.
+
+`--changed-files PATH` names a file holding the PR's changed paths, one per
+line, as returned by the GitHub API (see CONTEXT_ONLY_PREFIX below).
 
 Why this gate exists: builders run the toolkit from a VERSION-PINNED plugin
 cache. `claude plugin update` compares version strings and nothing else, so a
@@ -24,6 +28,7 @@ Tests: test/test_check_plugin_version.py
 """
 
 import json
+import posixpath
 import re
 import subprocess
 import sys
@@ -32,11 +37,65 @@ from pathlib import Path
 MANIFEST = ".claude-plugin/plugin.json"
 SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
+# Data the toolkit READS, written by the weekly Sync Org Context job from
+# Airtable — org-chart.json, the LOPs, the strategy docs. None of it is code,
+# none of it changes plugin behavior, and it has no version to bump.
+#
+# Requiring a bump here is what broke the sync: on 2026-08-31 branch protection
+# started demanding a PR plus these two checks, the bot's direct push to main
+# began failing with GH006, and org-chart.json froze at the 2026-08-24 copy for
+# four weeks while every dashboard read healthy. The sync now opens a PR
+# (.github/workflows/sync-org-context.yml) and this exemption lets that PR pass.
+#
+# Distribution still works: ensure_plugin_fresh() in hooks/session-start.py
+# compares the installed COMMIT against the marketplace HEAD, not just the
+# version string, and reinstalls on drift — so an unbumped context merge still
+# reaches builders within a day. That commit check is the backstop this
+# exemption leans on; if it is ever removed, this exemption has to go with it.
+CONTEXT_ONLY_PREFIX = "_shared/context/"
+
 
 def fail(msg):
     print(f"::error file={MANIFEST}::{msg}")
     print(f"\nFAIL: {msg}")
     sys.exit(1)
+
+
+def read_changed_paths(path):
+    """The PR's changed paths, or None if they could not be established.
+
+    None means "unknown" and must route to the version check — never to the
+    exemption. Every failure here (missing file, unreadable, empty list) is
+    indistinguishable from a PR that touches nothing, and treating that as
+    "context only" would wave through a PR that edits the plugin.
+    """
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except OSError as e:
+        print(f"note: could not read --changed-files {path!r} ({e}); "
+              f"falling back to the version check.")
+        return None
+    paths = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+    if not paths:
+        print("note: --changed-files was empty; falling back to the version check.")
+        return None
+    return paths
+
+
+def is_context_only(paths):
+    """True when every changed path is inside CONTEXT_ONLY_PREFIX.
+
+    Paths are normalized first: `_shared/context/../../.github/workflows/x.yml`
+    starts with the prefix as a string but is not inside the directory, and a
+    plain `startswith` would exempt a PR that rewrites CI.
+    """
+    for p in paths:
+        normalized = posixpath.normpath(p.replace("\\", "/")).lstrip("/")
+        if normalized.startswith("../") or normalized == "..":
+            return False
+        if not normalized.startswith(CONTEXT_ONLY_PREFIX):
+            return False
+    return True
 
 
 def parse_version(raw, where):
@@ -55,11 +114,31 @@ def parse_version(raw, where):
 
 
 def main():
-    if len(sys.argv) not in (2, 3):
+    argv = sys.argv[1:]
+    changed_files = None
+    if argv and argv[0] == "--changed-files":
+        if len(argv) < 2:
+            print(__doc__)
+            sys.exit(2)
+        changed_files = argv[1]
+        argv = argv[2:]
+
+    if len(argv) not in (1, 2):
         print(__doc__)
         sys.exit(2)
-    base_ref = sys.argv[1]
-    head_ref = sys.argv[2] if len(sys.argv) == 3 else None
+    base_ref = argv[0]
+    head_ref = argv[1] if len(argv) == 2 else None
+
+    # Checked before the manifest is read: a context-only PR has no manifest
+    # change to inspect, and on the sync branch there is no bump to find.
+    if changed_files is not None:
+        paths = read_changed_paths(changed_files)
+        if paths is not None and is_context_only(paths):
+            shown = ", ".join(paths[:5]) + (f" (+{len(paths) - 5} more)"
+                                            if len(paths) > 5 else "")
+            print(f"ok: PR touches only {CONTEXT_ONLY_PREFIX} ({shown}); "
+                  f"no version bump required for synced context data.")
+            return
 
     if head_ref is None:
         head_path = Path(MANIFEST)

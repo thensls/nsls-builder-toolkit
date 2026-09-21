@@ -74,10 +74,20 @@ def make_repo(tmp, base_version, head_version=None, head_raw=None):
     return repo
 
 
-def run(repo, base="main", head=None):
-    argv = [sys.executable, str(SCRIPT), base] + ([head] if head else [])
+def run(repo, base="main", head=None, changed_files=None):
+    argv = [sys.executable, str(SCRIPT)]
+    if changed_files is not None:
+        argv += ["--changed-files", str(changed_files)]
+    argv += [base] + ([head] if head else [])
     r = subprocess.run(argv, cwd=str(repo), capture_output=True, text=True)
     return r.returncode, r.stdout + r.stderr
+
+
+def changed_list(repo, *paths):
+    """A --changed-files payload: the PR's changed paths, one per line."""
+    p = Path(repo) / "changed.txt"
+    p.write_text("".join(f"{x}\n" for x in paths), encoding="utf-8")
+    return p
 
 
 with tempfile.TemporaryDirectory() as tmp:
@@ -149,6 +159,90 @@ with tempfile.TemporaryDirectory() as tmp:
     repo = make_repo(tmp, "3.6.0", "3.7.0")
     code, out = run(repo, base="main", head="refs/remotes/pr/nope")
     check("head-ref form: unresolvable head fails loudly", code != 0 and "nope" in out)
+
+# --------------------------------------------------------------------------
+# The `_shared/context/` exemption.
+#
+# Why it exists: the weekly Sync Org Context job writes Airtable data into
+# `_shared/context/`. Branch protection started requiring a PR on 2026-08-31,
+# the bot's direct push began failing with GH006, and org-chart.json froze for
+# four weeks. The sync now opens a PR; synced data has no version to bump.
+#
+# Every case below is the exemption REFUSING to apply. That is the direction
+# that matters — an over-eager exemption waves through a PR that edits the
+# plugin, which is the exact failure the gate was built to stop.
+# --------------------------------------------------------------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo = make_repo(tmp, "3.6.0", "3.6.0")  # unbumped
+    code, out = run(repo, changed_files=changed_list(
+        repo, "_shared/context/org-chart.json"))
+    check("context-only PR passes unbumped", code == 0)
+    check("context-only pass says why", "_shared/context/" in out)
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo = make_repo(tmp, "3.6.0", "3.6.0")
+    code, out = run(repo, changed_files=changed_list(
+        repo, "_shared/context/org-chart.json", "_shared/context/lops/fy26.md"))
+    check("several context files still count as context-only", code == 0)
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo = make_repo(tmp, "3.6.0", "3.6.0")
+    code, out = run(repo, changed_files=changed_list(
+        repo, "_shared/context/org-chart.json", "skills/airtable/SKILL.md"))
+    check("one non-context file revokes the exemption", code != 0)
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo = make_repo(tmp, "3.6.0", "3.6.0")
+    code, out = run(repo, changed_files=changed_list(
+        repo, "_shared/context/../../.github/workflows/plugin-version.yml"))
+    check("path traversal out of the prefix is refused", code != 0)
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo = make_repo(tmp, "3.6.0", "3.6.0")
+    code, out = run(repo, changed_files=changed_list(
+        repo, "_shared/context-evil/payload.json"))
+    check("a sibling dir sharing the prefix string is refused", code != 0)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # Unknown file list must read as "unknown", never as "touched nothing,
+    # therefore context-only" — the empty case is the dangerous one.
+    repo = make_repo(tmp, "3.6.0", "3.6.0")
+    code, out = run(repo, changed_files=changed_list(repo))
+    check("empty changed-files falls back to the version check", code != 0)
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo = make_repo(tmp, "3.6.0", "3.6.0")
+    code, out = run(repo, changed_files=Path(repo) / "does-not-exist.txt")
+    check("missing changed-files falls back to the version check", code != 0)
+    check("missing changed-files says it fell back", "falling back" in out)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # The exemption must not become a way to LOWER the version either.
+    repo = make_repo(tmp, "3.6.0", "3.5.0")
+    code, out = run(repo, changed_files=changed_list(
+        repo, "_shared/context/org-chart.json", ".claude-plugin/plugin.json"))
+    check("a manifest edit is never context-only", code != 0)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # A context-only PR that ALSO bumps correctly is fine; the flag is not
+    # required for the normal path to keep working.
+    repo = make_repo(tmp, "3.6.0", "3.6.1")
+    code, out = run(repo, changed_files=changed_list(
+        repo, "_shared/context/org-chart.json"))
+    check("context-only + a bump still passes", code == 0)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # Backward compatibility: no flag at all behaves exactly as before.
+    code, out = run(make_repo(tmp, "3.6.0", "3.6.0"))
+    check("without --changed-files the gate is unchanged", code != 0)
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo = make_repo(tmp, "3.6.0", "3.7.0")
+    git(repo, "checkout", "-q", "main")
+    code, out = run(repo, base="HEAD", head="feature", changed_files=changed_list(
+        repo, "_shared/context/org-chart.json"))
+    check("exemption composes with the head-ref form", code == 0)
 
 print()
 if failures:

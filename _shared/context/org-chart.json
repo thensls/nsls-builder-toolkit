@@ -192,8 +192,7 @@
     "department": "Client Services",
     "manages": [
       "Chris Higbee",
-      "Melvin Rosal",
-      "Timothy Duffy"
+      "Melvin Rosal"
     ]
   },
   {
@@ -313,7 +312,6 @@
     "department": "Marketing",
     "manages": [
       "Elizabeth Garretson",
-      "Noah Camenker",
       "Stefani Stout"
     ]
   },
@@ -345,7 +343,7 @@
     "slack": "U08EVP8CF8A",
     "department": "Marketing",
     "manages": [
-      "Boris Savoie Doyer",
+      "Boris Savoie Doyer (DUPLICATE - merged into the bdoyer@nsls.org record)",
       "Collin Wood",
       "Devin Lasker",
       "Dylan Blaty",
@@ -376,11 +374,11 @@
     ]
   },
   {
-    "name": "Boris Savoie Doyer",
+    "name": "Boris Savoie Doyer (DUPLICATE - merged into the bdoyer@nsls.org record)",
     "title": "",
     "manager": "Adam Stone",
     "email": "bsavoiedoyer@nsls.org",
-    "slack": "U096X7F82MP",
+    "slack": "",
     "department": "Marketing",
     "manages": []
   },
@@ -415,40 +413,11 @@
     "manages": []
   },
   {
-    "name": "Noah Camenker",
-    "title": "Video and Media Producer",
-    "manager": "Tatiana McGrath",
-    "email": "ncamenker@nsls.org",
-    "slack": "U03ATLQ2BL1",
-    "department": "Marketing",
-    "manages": [
-      "Angel Gonzalez"
-    ]
-  },
-  {
-    "name": "Timothy Duffy",
-    "title": "Director, Student Program Development",
-    "manager": "Ashleigh Smith",
-    "email": "tduffy@nsls.org",
-    "slack": "U04M4JFNRU7",
-    "department": "Student Program Development",
-    "manages": []
-  },
-  {
     "name": "Leila McAvoy",
     "title": "",
     "manager": "",
     "email": "",
     "slack": "",
-    "department": "Unknown",
-    "manages": []
-  },
-  {
-    "name": "David Avila",
-    "title": "Contractor",
-    "manager": "Juan Maggi",
-    "email": "davila@nsls.org",
-    "slack": "U09HEHF778A",
     "department": "Unknown",
     "manages": []
   },
@@ -525,7 +494,7 @@
     "manages": []
   },
   {
-    "name": "Patricia Pina",
+    "name": "Patricia Pi\u00f1a",
     "title": "Contractor",
     "manager": "Alejandro Gabriel",
     "email": "ppina@nsls.org",
@@ -660,6 +629,15 @@
     "manages": []
   },
   {
+    "name": "Thomas Krieglstein",
+    "title": "Contractor",
+    "manager": "Kevin Prentiss",
+    "email": "tkrieglstein@nsls.org",
+    "slack": "U0C1M11UWUX",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
     "name": "Collin Wood",
     "title": "Contractor",
     "manager": "Adam Stone",
@@ -687,64 +665,13 @@
     "manages": []
   },
   {
-    "name": "Kyle Coberly",
+    "name": "Colorado Coberly",
     "title": "Contractor",
     "manager": "Kevin Prentiss",
     "email": "kcoberly@nsls.org",
     "slack": "U0B286J7NUE",
     "department": "Unknown",
     "manages": []
-  },
-  {
-    "name": "Lillian Collazo",
-    "title": "HR Generalist",
-    "manager": "Heather Darnell",
-    "email": "lcollazo@nsls.org",
-    "slack": "U023CU7BTSM",
-    "department": "Human Resources",
-    "manages": []
-  },
-  {
-    "name": "Joanne Sandoval",
-    "title": "Early Talent Acquisition Specialist",
-    "manager": "Jenna Fontanez",
-    "email": "jsandoval@nsls.org",
-    "slack": "U04UQR9SBFH",
-    "department": "Human Resources",
-    "manages": []
-  },
-  {
-    "name": "Jenna Fontanez",
-    "title": "Director, Talent Management",
-    "manager": "Heather Darnell",
-    "email": "jfontanez@nsls.org",
-    "slack": "U03RR8TKEDA",
-    "department": "Human Resources",
-    "manages": [
-      "Joanne Sandoval"
-    ]
-  },
-  {
-    "name": "Danielle Mariani",
-    "title": "Senior Culture and Organizational Strategist",
-    "manager": "Heather Darnell",
-    "email": "dmariani@nsls.org",
-    "slack": "UHXFN781L",
-    "department": "Human Resources",
-    "manages": []
-  },
-  {
-    "name": "Heather Darnell",
-    "title": "Senior Director, Human Resources",
-    "manager": "Cory Capoccia",
-    "email": "hdarnell@nsls.org",
-    "slack": "U03D1HK963E",
-    "department": "Human Resources",
-    "manages": [
-      "Danielle Mariani",
-      "Jenna Fontanez",
-      "Lillian Collazo"
-    ]
   },
   {
     "name": "Samantha Montas",
@@ -775,7 +702,8 @@
       "Atrayu Polhemus",
       "Charlotte Donnelly",
       "Melissa Baggett",
-      "Monica Cerrato"
+      "Monica Cerrato",
+      "Nancy Castillo"
     ]
   },
   {
@@ -805,9 +733,7 @@
     "department": "Member Experience",
     "manages": [
       "Aicel Tavares",
-      "Angel Guzman",
       "Elian Castro",
-      "Emilia Santana",
       "Franklin Ortega",
       "Jennifer Arias",
       "Jose Perdomo",
@@ -815,7 +741,7 @@
       "Malvin Vital",
       "Mia Vasquez",
       "Naomi Ariza",
-      "Patricia Pina",
+      "Patricia Pi\u00f1a",
       "Rauly Villar",
       "Reiny Garcia",
       "Samantha Montas",
@@ -870,11 +796,11 @@
     "manages": []
   },
   {
-    "name": "Emilia Santana",
-    "title": "Membership Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "esantana@nsls.org",
-    "slack": "U0B1PMSKT0E",
+    "name": "Nancy Castillo",
+    "title": "Member Experience Specialist",
+    "manager": "Kara Klimuszko",
+    "email": "ncastillo@nsls.org",
+    "slack": "U05516H7B8A",
     "department": "Member Experience",
     "manages": []
   },
@@ -884,15 +810,6 @@
     "manager": "Kara Klimuszko",
     "email": "mcerrato@nsls.org",
     "slack": "U02EG4YQ2UF",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Angel Guzman",
-    "title": "Membership Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "aguzman@nsls.org",
-    "slack": "U0B1VBGR6DS",
     "department": "Member Experience",
     "manages": []
   },
@@ -977,11 +894,12 @@
       "Brandon Evans",
       "Chelsea Byers",
       "Christophre Munns",
+      "Colorado Coberly",
       "David Adams",
       "David Wood",
       "Jana Amsellem",
       "Juan Maggi",
-      "Kyle Coberly",
+      "Thomas Krieglstein",
       "Trina Limpert",
       "Tyler Lagaly"
     ]
@@ -1024,7 +942,6 @@
     "department": "Engineering",
     "manages": [
       "Bogdan Tarbujaru",
-      "David Avila",
       "Evgeny Pokrovskiy",
       "Ionut Mutascu",
       "Kibaek Kim",
@@ -1078,6 +995,47 @@
     "manages": [
       "Aner Huang",
       "Rumzy Khalil"
+    ]
+  },
+  {
+    "name": "Joanne Sandoval",
+    "title": "Early Talent Acquisition Specialist",
+    "manager": "Jenna Fontanez",
+    "email": "jsandoval@nsls.org",
+    "slack": "U04UQR9SBFH",
+    "department": "Human Resources",
+    "manages": []
+  },
+  {
+    "name": "Jenna Fontanez",
+    "title": "Director, Talent Management",
+    "manager": "Heather Darnell",
+    "email": "jfontanez@nsls.org",
+    "slack": "U03RR8TKEDA",
+    "department": "Human Resources",
+    "manages": [
+      "Joanne Sandoval"
+    ]
+  },
+  {
+    "name": "Danielle Mariani",
+    "title": "Senior Culture and Organizational Strategist",
+    "manager": "Heather Darnell",
+    "email": "dmariani@nsls.org",
+    "slack": "UHXFN781L",
+    "department": "Human Resources",
+    "manages": []
+  },
+  {
+    "name": "Heather Darnell",
+    "title": "Senior Director, Human Resources",
+    "manager": "Cory Capoccia",
+    "email": "hdarnell@nsls.org",
+    "slack": "U03D1HK963E",
+    "department": "Human Resources",
+    "manages": [
+      "Danielle Mariani",
+      "Jenna Fontanez"
     ]
   },
   {
@@ -1249,7 +1207,7 @@
     "title": "IT Operations Administrator",
     "manager": "Erin Muskat",
     "email": "jbillmann@nsls.org",
-    "slack": "",
+    "slack": "U0BSNE8QHL2",
     "department": "Finance",
     "manages": []
   },
