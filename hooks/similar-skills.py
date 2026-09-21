@@ -111,7 +111,11 @@ def installed_skills():
             # a real YAML parse would pull in a dependency the toolkit ships
             # without, and every SKILL.md in this repo is a plain block scalar.
             desc = ""
-            m = re.search(r"^description:\s*(.*?)(?=^\w+:|^---\s*$)",
+            # [\w-] not \w: standard frontmatter keys are hyphenated
+            # (argument-hint, allowed-tools), and a terminator that cannot see
+            # them swallowed every following key into the description, putting
+            # their words into the candidate's tokens and inventing matches.
+            m = re.search(r"^description:\s*(.*?)(?=^[\w-]+:|^---\s*$)",
                           head, re.M | re.S)
             if m:
                 desc = " ".join(m.group(1).split())
