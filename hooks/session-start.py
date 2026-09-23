@@ -395,12 +395,20 @@ PERSONAL_UPSTREAM_REF = "refs/nsls/upstream-main"
 PERSONAL_UPSTREAM_REFSPEC = f"+refs/heads/main:{PERSONAL_UPSTREAM_REF}"
 PERSONAL_UPSTREAM_STAMP = CONFIG_DIR / ".nsls-personal-upstream-check"
 # The stamp is a throttle, not a claim: two hooks can both read it as stale
-# before either writes it. The lock is the claim — created exclusively, so
-# exactly one of them fetches and speaks.
-PERSONAL_UPSTREAM_LOCK = CONFIG_DIR / ".nsls-personal-upstream-check.lock"
+# before either writes it. The lock is the claim — an OS-level exclusive lock
+# on a file that is never deleted, so exactly one of them fetches and speaks.
+PERSONAL_UPSTREAM_LOCK = CONFIG_DIR / ".nsls-personal-upstream-check.flock"
+# The lock file of the protocol this one replaced (created exclusively, a token
+# inside, treated as stale after 120 s). A machine may briefly run one old copy
+# of this check beside one new — the plugin cache and the personal checkout
+# update on different schedules — so while the OS lock is held this copy ALSO
+# claims under that protocol: it creates the old file exclusively and leaves it
+# empty (see _shadow_legacy_claim); a fresh, non-empty token there means an old
+# hook is mid-check and this one yields. Two files, so
+# nothing the old protocol renames or deletes can ever be the inode locked here.
+PERSONAL_UPSTREAM_LEGACY_LOCK = CONFIG_DIR / ".nsls-personal-upstream-check.lock"
 PERSONAL_UPSTREAM_CHECK_EVERY_H = 12
 PERSONAL_FETCH_TIMEOUT = 6
-PERSONAL_LOCK_STALE_S = 120  # a lock this old belongs to a hook that died
 
 # NSLS's own repository, in any spelling git accepts — compared as host + path,
 # never as a substring: a mirror on another host, or a longer-named repo under
@@ -536,82 +544,99 @@ def _stamp_is_fresh(stamp):
     return False
 
 
-def _claim_lock(path):
-    """Create `path` exclusively and write a token into it; the token (truthy)
-    when we hold the lock, None when another hook does.
+def _lock_exclusive(fd):
+    """Non-blocking exclusive lock on an open descriptor: flock where the
+    platform has it, the C runtime's byte-range lock on Windows. Raises
+    OSError when another process holds it."""
+    try:
+        import fcntl
+    except ImportError:
+        import msvcrt
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+    else:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
-    A lock whose age is outside 0..PERSONAL_LOCK_STALE_S was left by a hook
-    that died (or is dated in the future) and is reclaimed ATOMICALLY: the
-    stale inode is renamed away rather than deleted by name. Only one of two
-    racing hooks can win that rename; the loser sees ENOENT and simply retries
-    the exclusive create, which then fails on the winner's fresh lock. Deleting
-    by name let the loser remove the winner's new lock and both proceed."""
-    token = f"{os.getpid()}-{time.time_ns()}-{os.urandom(4).hex()}"
+
+def _claim_lock(path):
+    """Take an exclusive OS lock on `path`; the open descriptor when we hold it,
+    None when another hook does.
+
+    An OS lock, not create-exclusively/rename/unlink: the kernel owns the
+    claim and drops it the instant the holder exits, so a hook that dies
+    mid-check leaves nothing to reclaim — no stale threshold, no token, no
+    grave — and there is no step at which a third hook can be handed a lock
+    that is still in use. The file is never deleted: every hook locks the same
+    inode. On a PC session-start.ps1 opens this same file with sharing denied
+    and this copy opens it with the default share mode, so whichever of the two
+    opens first holds it and the other's open simply fails."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(str(path), os.O_CREAT | os.O_RDWR | getattr(os, "O_CLOEXEC", 0), 0o644)
+    except OSError:
+        return None  # includes a Windows sharing violation: the PowerShell hook holds it
+    try:
+        _lock_exclusive(fd)
+    except (OSError, ImportError):
+        _release_lock(fd)
+        return None
+    if not _shadow_legacy_claim(PERSONAL_UPSTREAM_LEGACY_LOCK):
+        _release_lock(fd)
+        return None  # an old copy of this check is mid-check right now; it will speak
+    return fd
+
+
+def _legacy_lock_is_live(path):
+    """True while a hook still on the previous lock protocol is mid-check: its
+    token file exists, is NON-EMPTY, and is under 120 s old (its own stale
+    threshold). Older or future-dated means a dead hook left it. Empty means a
+    hook on THIS protocol left its shadow claim (below) — never a live old hook,
+    whose token is always written."""
+    try:
+        st = path.stat()
+    except OSError:
+        return False
+    return st.st_size > 0 and 0 <= time.time() - st.st_mtime <= 120
+
+
+def _shadow_legacy_claim(path):
+    """Also claim under the previous protocol while the OS lock is held, so a
+    hook still on the old code sees a live lock and yields — the one atomic
+    handshake the two protocols share is the old one's own exclusive create.
+    Only ever called while holding the OS lock, so no two hooks on this protocol
+    touch the file at once; the only other actor is an old hook, and the old
+    rules apply to it: a file under 120 s old is someone mid-check.
+
+    False when an old hook is mid-check right now (yield). True when the shadow
+    is ours, or the file cannot be written at all (then the stamp, re-checked
+    under the lock, is what arbitrates). The shadow is left EMPTY and never
+    deleted by us: old tokens are never empty, so a later hook on this protocol
+    does not mistake our own leftover for a live old hook, and an old hook's
+    own release only ever deletes a file that still carries its token."""
     for attempt in (1, 2):
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            try:
-                os.write(fd, token.encode("ascii"))
-            finally:
-                os.close(fd)
-            return token
+            fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
         except FileExistsError:
-            if attempt != 1:
-                return None
+            if _legacy_lock_is_live(path):
+                return False
+            if attempt == 2:
+                return True
             try:
-                st = path.stat()
-            except FileNotFoundError:
-                continue  # vanished under us: retry the create once
+                path.unlink()  # a dead old hook's token, or our own empty shadow from last time
             except OSError:
-                return None
-            # Negative age counts as stale too: a lock dated in the FUTURE
-            # (clock skew, a restored backup) would otherwise read as held
-            # until that moment arrives, silencing every check until then.
-            age_s = time.time() - st.st_mtime
-            if 0 <= age_s <= PERSONAL_LOCK_STALE_S:
-                return None  # live: someone is mid-check right now
-            grave = path.with_name(f"{path.name}.stale-{token}")
-            try:
-                os.rename(path, grave)
-            except FileNotFoundError:
-                continue  # the other racer won the rename: retry the create once
-            except OSError:
-                return None
-            try:
-                same = grave.stat().st_ino == st.st_ino
-            except OSError:
-                same = True
-            if not same:
-                # We moved a LIVE lock created between our look and our rename.
-                # Put it back if the name is still free (link is atomic and
-                # refuses an existing path), and do not claim.
-                try:
-                    os.link(str(grave), str(path))
-                except OSError:
-                    pass
-                try:
-                    grave.unlink()
-                except OSError:
-                    pass
-                return None
-            try:
-                grave.unlink()
-            except OSError:
-                pass
+                return True
             continue
         except OSError:
-            return None
-    return None
+            return True
+        os.close(fd)
+        return True
+    return True
 
 
-def _release_lock(path, token):
-    """Delete the lock only if it still carries OUR token. A hook paused past the
-    stale threshold (a laptop asleep mid-check) would otherwise delete the lock
-    a newer hook created after breaking ours, letting a third one in."""
+def _release_lock(fd):
+    """Closing the descriptor drops the lock; the file itself stays."""
     try:
-        if path.read_text(encoding="ascii", errors="replace") == token:
-            path.unlink()
+        os.close(fd)
     except OSError:
         pass
 
@@ -710,7 +735,7 @@ def report_personal_fork_drift(deadline=None):
                 return
             print(_fork_notice(int(count), plugin_dir))
         finally:
-            _release_lock(PERSONAL_UPSTREAM_LOCK, lock)
+            _release_lock(lock)
     except TimeoutError:
         return
 

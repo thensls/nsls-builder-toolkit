@@ -1,0 +1,39 @@
+name: windows-hooks
+
+# The Macs that write these hooks have no PowerShell. This is the only place
+# session-start.ps1 is parsed under Windows PowerShell 5.1 and PowerShell 7
+# before it reaches a PC, and the only place the fork-check lock is proven to
+# admit one holder at a time across the two languages that share it on Windows.
+on:
+  pull_request:
+    paths:
+      - 'hooks/**'
+      - '.github/workflows/windows-hooks.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'hooks/**'
+      - '.github/workflows/windows-hooks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-hooks:
+    name: hooks parse (PS 5.1 + 7) and the fork-check lock excludes
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Parse every hook script under Windows PowerShell 5.1
+        shell: powershell
+        run: ./hooks/tests/windows/parse-hooks.ps1
+      - name: Parse every hook script under PowerShell 7
+        shell: pwsh
+        run: ./hooks/tests/windows/parse-hooks.ps1
+      - name: One holder at a time, PowerShell and Python, on a real PC
+        shell: pwsh
+        run: ./hooks/tests/windows/lock-smoke.ps1
