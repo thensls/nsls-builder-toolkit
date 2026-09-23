@@ -63,13 +63,18 @@ the gate on Monday fails on Wednesday, and matching main exactly fails as well �
 the check wants strictly greater, never equal. Read the field before choosing:
 
 ```bash
-for n in $(gh pr list --repo thensls/nsls-builder-toolkit --state open --json number --jq '.[].number'); do
-  br=$(gh pr view "$n" --repo thensls/nsls-builder-toolkit --json headRefName --jq '.headRefName')
-  printf '#%s %s ' "$n" "$br"
-  gh api "repos/thensls/nsls-builder-toolkit/contents/.claude-plugin/plugin.json?ref=$br" \
-    --jq '.content' | base64 -d | grep '"version"'
+for n in $(gh pr list --repo thensls/nsls-builder-toolkit --state open --limit 200 --json number --jq '.[].number'); do
+  info=$(gh pr view "$n" --repo thensls/nsls-builder-toolkit --json headRefName,headRefOid --jq '.headRefName + " " + .headRefOid')
+  printf '#%s %s ' "$n" "${info%% *}"
+  gh api "repos/thensls/nsls-builder-toolkit/contents/.claude-plugin/plugin.json?ref=${info##* }" \
+    --jq '.content' | base64 -d | grep '"version"' || echo "(no plugin.json on that head)"
 done
 ```
+
+Read the head by its commit SHA rather than its branch name: a PR opened from a fork has a branch
+this repository does not have, so a name-based lookup quietly returns nothing and that PR's claim
+never enters the comparison. The explicit limit matters for the same reason — `gh pr list` stops at
+30 by default, and a claim it never printed is one you cannot clear.
 
 Sitting above the whole field means nothing landing ahead of you knocks your PR
 back to a failing gate. Whoever merges after you bumps again — one of the two
