@@ -94,6 +94,8 @@ no more, no less. That is the security model: your permissions, your audit trail
 - **Change a doc that already exists** (URL must stay stable, comments must survive, iterating
   in place) → **this skill**.
 - **New but simple** (a quick doc from text, no tables) → this skill's `create` is fine.
+- **Append a section with tables, links or bullets to an existing doc** (an appendix, a
+  sources list) → this skill's `append-rich`. It keeps the URL and every comment intact.
 
 ## Quick Start
 
@@ -110,14 +112,23 @@ python3 $S insert-after --doc $DOC --anchor "Top questions for Kevin" --text "�
 # insert-after H3) — match the doc's own hierarchy, e.g. --level 1 in an H1 doc.
 # Inserted body text is pinned to NORMAL_TEXT so it never inherits a heading style.
 python3 $S append --doc $DOC --text "One appended paragraph."
+python3 $S append-rich --doc $DOC --md /tmp/section.md --verify "a phrase from it"
+# append-rich: a whole section at the END of the doc from a markdown subset —
+# `#`/`##` headings, `- ` real bullets, `**bold**`, `[text](url)` hyperlinks,
+# `| a | b |` tables (first row = header), `> ` one-cell shaded callouts.
+# Verifies by marker like `batch`, but stricter: a --verify phrase must be NEWLY
+# added by this append (one already in the doc doesn't count); exits 1 otherwise,
+# and refuses an --md file that parses to zero blocks. Inline markup is not
+# nestable (no bold inside a link) and a link URL may not contain spaces or ")".
 python3 $S remove --doc $DOC --anchor "What changed (v1.0"   # delete whole paragraphs w/ anchor
 python3 $S create --title "Scratch notes" --text "First line."   # net-new simple doc → prints URL
 ```
 
 `--find` is a **literal** by default; pass `--regex` to treat it as a pattern (resolved
-client-side, since the Docs API has no regex replace). `insert-after`/`remove` target
-**top-level paragraphs** — text inside tables isn't matched by anchors (build tables with
-`/gdoc-build`).
+client-side, since the Docs API has no regex replace). `insert-after`/`remove` target **top-level paragraphs** — text inside tables isn't matched by
+anchors. To ADD a section that needs tables, hyperlinks or real bullets, use `append-rich`
+(it goes at the end of the doc — an appendix, a new section, a sources list). Editing an
+EXISTING table still means `/gdoc-build` or index-level work.
 
 ## The reliable pattern: read → batch → verify
 
@@ -157,6 +168,8 @@ python3 $S batch --doc $DOC --file /tmp/edits.json
 | Regex expectation | `--find` didn't behave like a pattern | `replace` is **literal** by default; pass `--regex` (resolved client-side). |
 | `replace` can't make paragraphs | `\n` in a literal `replace` won't create a new paragraph/bullet | New sections/bullets → `insert-top` or `insert-after`, not `replace`. |
 | Insert looks right in text, wrong on screen | marker verification is text-presence only — it passes while formatting is mangled (e.g. a section landing as the wrong heading level) | The helper pins body to NORMAL_TEXT and takes `--level` for the title; after inserts near headings, eyeball the doc or re-read and check the section sits at the intended level. |
+| Callout or table indented like the list above it | a `> ` callout or table placed right after `- ` bullets inherits the list indent | Put a plain line or heading between the list and the table (Appendix-style), or accept the indent — cosmetic only. |
+| Blank **bulleted** line under a table | the paragraph Docs creates after a table inherits the bullet of the paragraph above it | `append-rich` clears it; if you insert a table by hand, `deleteParagraphBullets` on the trailing paragraph. |
 | `replace` with '' leaves blank paragraphs | stale section "deleted" but gaps remain | Use `remove` (deletes whole paragraphs), not an empty `replace`. |
 | Comment orphaned after an edit | reviewer's comment detaches | Keep the anchored substring verbatim; check `comments` first, and re-read after. |
 | Anchor inside a table | `insert-after`/`remove` can't find it | Anchors match top-level paragraphs only. Edit table content via `/gdoc-build` or by index. |
