@@ -102,7 +102,8 @@ def make_world(tmp, nsls_ahead=5):
 
     hook.CONFIG_DIR = config_dir
     hook.PERSONAL_UPSTREAM_STAMP = config_dir / ".nsls-personal-upstream-check"
-    hook.PERSONAL_UPSTREAM_LOCK = config_dir / ".nsls-personal-upstream-check.lock"
+    hook.PERSONAL_UPSTREAM_LOCK = config_dir / ".nsls-personal-upstream-check.flock"
+    hook.PERSONAL_UPSTREAM_LEGACY_LOCK = config_dir / ".nsls-personal-upstream-check.lock"
     hook.PERSONAL_UPSTREAM_URL = str(nsls)
     return plugin_dir, nsls, fork
 
@@ -117,6 +118,17 @@ def run(deadline=None):
 def rearm():
     hook.PERSONAL_UPSTREAM_STAMP.unlink(missing_ok=True)
     hook.PERSONAL_UPSTREAM_LOCK.unlink(missing_ok=True)
+    hook.PERSONAL_UPSTREAM_LEGACY_LOCK.unlink(missing_ok=True)
+
+
+def lock_is_free():
+    """True when nobody holds the OS lock: we can take it (and let it go again).
+    The lock FILE existing means nothing — it is never deleted by design."""
+    fd = hook._claim_lock(hook.PERSONAL_UPSTREAM_LOCK)
+    if fd is None:
+        return False
+    hook._release_lock(fd)
+    return True
 
 
 # ---------------------------------------------------------------- URL forms
@@ -175,7 +187,9 @@ with tempfile.TemporaryDirectory() as tmp:
     check("her own commit is untouched and the tree is clean (we only fetched)",
           (plugin_dir / "mine.md").exists() and git(plugin_dir, "status", "--porcelain") == "")
     check("the stamp was written", hook.PERSONAL_UPSTREAM_STAMP.exists())
-    check("the lock was released", not hook.PERSONAL_UPSTREAM_LOCK.exists())
+    check("the lock was released (the file stays; the OS lock is gone)", lock_is_free())
+    check("the old protocol's file holds our EMPTY shadow claim (an old hook arriving now would yield)",
+          hook.PERSONAL_UPSTREAM_LEGACY_LOCK.exists() and hook.PERSONAL_UPSTREAM_LEGACY_LOCK.stat().st_size == 0)
 
     check("an immediate second run is throttled into silence", run() == "")
 
@@ -191,30 +205,55 @@ with tempfile.TemporaryDirectory() as tmp:
     rearm()
     check("no time left in the hook budget: silent", run(deadline=time.monotonic() - 1) == "")
     check("...and the slot was NOT claimed, so the next session gets a real check",
-          not hook.PERSONAL_UPSTREAM_STAMP.exists() and not hook.PERSONAL_UPSTREAM_LOCK.exists())
+          not hook.PERSONAL_UPSTREAM_STAMP.exists() and not hook.PERSONAL_UPSTREAM_LOCK.exists()
+          and not hook.PERSONAL_UPSTREAM_LEGACY_LOCK.exists())
 
     # Another hook holds the lock right now: this one stays quiet and leaves it.
     rearm()
-    hook.PERSONAL_UPSTREAM_LOCK.write_text("")
-    check("a lock held by a concurrent hook: silent", run() == "")
+    held = hook._claim_lock(hook.PERSONAL_UPSTREAM_LOCK)
+    check("a lock held by a concurrent hook: silent", held is not None and run() == "")
     check("...the stamp is not written (the holder will write it)", not hook.PERSONAL_UPSTREAM_STAMP.exists())
-    check("...and the holder's lock is left alone", hook.PERSONAL_UPSTREAM_LOCK.exists())
+    check("...and the holder still holds it", not lock_is_free())
+    hook._release_lock(held)
+    check("...and once the holder lets go, the next hook gets through", "OWN FORK" in run())
 
-    # A lock left by a hook that died: broken once, check proceeds, lock cleaned up.
-    old = time.time() - 300
-    os.utime(hook.PERSONAL_UPSTREAM_LOCK, (old, old))
-    check("a stale lock from a dead hook is broken and the check proceeds", "OWN FORK" in run())
-    check("...and no lock is left behind", not hook.PERSONAL_UPSTREAM_LOCK.exists())
-    check("...and the reclaimed stale file was cleaned up too, not left as a grave",
-          not list(hook.PERSONAL_UPSTREAM_LOCK.parent.glob("*.stale-*")))
+    # A lock FILE left on disk by a hook that died — however old, or dated in the
+    # future — is not a lock. The OS lock is the claim, and it died with the
+    # process that took it; there is nothing on disk to reclaim, and no grave.
+    for label, when in (("300s old", time.time() - 300), ("dated 3h ahead", time.time() + 3 * 3600)):
+        rearm()
+        hook.PERSONAL_UPSTREAM_LOCK.write_text("")
+        os.utime(hook.PERSONAL_UPSTREAM_LOCK, (when, when))
+        check(f"a lock file {label} from a hook that died does not block the check", "OWN FORK" in run())
+        check("...and nothing was left behind to reclaim (no graves, lock free)",
+              not list(hook.PERSONAL_UPSTREAM_LOCK.parent.glob("*.stale-*")) and lock_is_free())
 
-    # A lock dated in the FUTURE must not read as held until that moment arrives.
+    # One machine may briefly run an OLD copy of this check beside this one. The
+    # old copy claims by creating ITS OWN lock file exclusively with a token
+    # inside, stale after 120 s. That file is read, never touched: a fresh token
+    # is an old hook mid-check — yield; a stale one is a dead old hook — proceed.
+    legacy = hook.PERSONAL_UPSTREAM_LEGACY_LOCK
     rearm()
-    hook.PERSONAL_UPSTREAM_LOCK.write_text("")
-    ahead = time.time() + 3 * 3600
-    os.utime(hook.PERSONAL_UPSTREAM_LOCK, (ahead, ahead))
-    check("a future-dated lock is broken like a stale one and the check proceeds", "OWN FORK" in run())
-    check("...and no lock is left behind afterwards", not hook.PERSONAL_UPSTREAM_LOCK.exists())
+    legacy.write_text("4242-1700000000-deadbeef")
+    recent = time.time() - 10
+    os.utime(legacy, (recent, recent))
+    check("an old-style lock with a fresh token (an old hook mid-check): silent", run() == "")
+    check("...the stamp is not written (the old hook will write it)", not hook.PERSONAL_UPSTREAM_STAMP.exists())
+    check("...and the old file is left exactly as it was", legacy.read_text() == "4242-1700000000-deadbeef")
+    old = time.time() - 300
+    os.utime(legacy, (old, old))
+    check("an old-style lock with a stale token (a dead old hook): the check proceeds", "OWN FORK" in run())
+    check("...and the dead token is replaced by our EMPTY shadow, fresh — an old hook looking now sees a live lock",
+          legacy.exists() and legacy.stat().st_size == 0 and 0 <= time.time() - legacy.stat().st_mtime < 30)
+    check("...while our own lock lives in a different file, now free again",
+          hook.PERSONAL_UPSTREAM_LOCK.exists() and lock_is_free())
+
+    # Our own empty shadow from a previous run is not an old hook: only a fresh
+    # NON-EMPTY token makes this protocol yield.
+    rearm()
+    legacy.write_text("")
+    check("a fresh but EMPTY old-file (our own last shadow) does not block the check", "OWN FORK" in run())
+    check("...and the shadow is there, empty, when the check ends", legacy.exists() and legacy.stat().st_size == 0)
 
     # Her own `upstream` pointing at something unrelated: left alone, not counted.
     other = seed_repo(Path(tmp) / "other")
@@ -306,18 +345,65 @@ with tempfile.TemporaryDirectory() as tmp:
     for b in ("l3", "l2", "l1"):
         git(plugin_dir, "branch", "--quiet", "-D", b)
 
-    # The lock is released only if it is still ours.
+    # The lock is the OS's, not a token's: a second claim fails while the first
+    # is held, succeeds once it is released, and the file is never deleted.
     rearm()
-    tok = hook._claim_lock(hook.PERSONAL_UPSTREAM_LOCK)
-    check("claiming the lock returns our token and writes it into the file",
-          bool(tok) and hook.PERSONAL_UPSTREAM_LOCK.read_text() == tok)
-    hook.PERSONAL_UPSTREAM_LOCK.write_text("someone-else")
-    hook._release_lock(hook.PERSONAL_UPSTREAM_LOCK, tok)
-    check("a lock now held by another hook is NOT deleted by our release",
-          hook.PERSONAL_UPSTREAM_LOCK.exists())
-    hook.PERSONAL_UPSTREAM_LOCK.write_text(tok)
-    hook._release_lock(hook.PERSONAL_UPSTREAM_LOCK, tok)
-    check("...but our own lock is", not hook.PERSONAL_UPSTREAM_LOCK.exists())
+    first = hook._claim_lock(hook.PERSONAL_UPSTREAM_LOCK)
+    second = hook._claim_lock(hook.PERSONAL_UPSTREAM_LOCK)
+    check("claiming the lock returns a handle, and a second claim while it is held does not",
+          first is not None and second is None)
+    hook._release_lock(first)
+    third = hook._claim_lock(hook.PERSONAL_UPSTREAM_LOCK)
+    check("...and once released, the next claim succeeds", third is not None)
+    hook._release_lock(third)
+    check("...and the lock file itself is never deleted", hook.PERSONAL_UPSTREAM_LOCK.exists())
+
+    # Six real processes race for the lock at the same instant: exactly one
+    # holds it, the other five are refused, and none can take it from the
+    # holder. The winner keeps the lock until every racer has reported, so a
+    # slow runner cannot turn the race into six sequential holders.
+    racers = 6
+    arena = Path(tmp) / "arena"
+    arena.mkdir()
+    racer = f"""
+import importlib.util, sys, time
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("h", {str(HOOK)!r})
+h = importlib.util.module_from_spec(spec); spec.loader.exec_module(h)
+arena = Path({str(arena)!r})
+me = sys.argv[1]
+(arena / ("ready-" + me)).touch()
+while not (arena / "go").exists():
+    time.sleep(0.005)
+h.PERSONAL_UPSTREAM_LEGACY_LOCK = Path({str(hook.PERSONAL_UPSTREAM_LEGACY_LOCK)!r})
+fd = h._claim_lock(Path({str(hook.PERSONAL_UPSTREAM_LOCK)!r}))
+(arena / ("result-" + me)).write_text("refused" if fd is None else "held")
+if fd is not None:
+    while not (arena / "release").exists():
+        time.sleep(0.005)
+    h._release_lock(fd)
+"""
+    procs = [subprocess.Popen([sys.executable, "-c", racer, str(i)]) for i in range(racers)]
+
+    def all_present(pattern, seconds):
+        until = time.time() + seconds
+        while len(list(arena.glob(pattern))) < racers and time.time() < until:
+            time.sleep(0.01)
+        return len(list(arena.glob(pattern))) == racers
+
+    all_ready = all_present("ready-*", 30)
+    (arena / "go").touch()
+    all_tried = all_present("result-*", 30)
+    (arena / "release").touch()
+    for p in procs:
+        try:
+            p.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.wait()
+    outcomes = [f.read_text() for f in arena.glob("result-*")]
+    check("six processes race for the lock: all six try while the winner holds; one holds, five are refused",
+          all_ready and all_tried and outcomes.count("held") == 1 and outcomes.count("refused") == racers - 1)
 
     # Fork caught up: silent.
     git(plugin_dir, "merge", "--quiet", "--no-edit", "refs/nsls/upstream-main")
