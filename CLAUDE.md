@@ -57,6 +57,24 @@ If two open PRs bump to the same number, the second lands unversioned; the
 session hook catches that by comparing the installed commit with the marketplace
 HEAD and reinstalls in place (`ensure_plugin_fresh` in `hooks/session-start.py`).
 
+**Choose a number above main AND above every open PR's claim, then re-check it
+right before you merge.** Main moves while a PR sits, so a version that cleared
+the gate on Monday fails on Wednesday, and matching main exactly fails as well —
+the check wants strictly greater, never equal. Read the field before choosing:
+
+```bash
+for n in $(gh pr list --repo thensls/nsls-builder-toolkit --state open --json number --jq '.[].number'); do
+  br=$(gh pr view "$n" --repo thensls/nsls-builder-toolkit --json headRefName --jq '.headRefName')
+  printf '#%s %s ' "$n" "$br"
+  gh api "repos/thensls/nsls-builder-toolkit/contents/.claude-plugin/plugin.json?ref=$br" \
+    --jq '.content' | base64 -d | grep '"version"'
+done
+```
+
+Sitting above the whole field means nothing landing ahead of you knocks your PR
+back to a failing gate. Whoever merges after you bumps again — one of the two
+always has to, and it may as well be the PR that is not ready yet.
+
 ## PR Review — Macroscope
 
 Macroscope is a code review tool — it pays off when the PR contains claims about APIs, SDKs, query syntax, data system behavior, or other technical facts it can verify against documentation patterns. It has a per-review cost. Use it where it earns its keep.
