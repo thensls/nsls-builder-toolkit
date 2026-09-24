@@ -1811,6 +1811,23 @@ def note_ping_failure(body):
         )
 
 
+def _collector_backed():
+    """True when the NSLS usage collector's evidence file here is fresh.
+
+    See hooks/collector_evidence.py for the contract. Any failure to load or
+    read it means False, which is exactly today's behaviour.
+    """
+    try:
+        here = str(Path(__file__).resolve().parent)
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import collector_evidence
+
+        return collector_evidence.fresh(config_dir=CONFIG_DIR)
+    except Exception:
+        return False
+
+
 def session_ping(replayed=None):
     """Ping the automation tracker for points, PR credits, and announcements.
 
@@ -1847,6 +1864,11 @@ def session_ping(replayed=None):
         "github_username": github,
         "platform": platform,
     }
+    if _collector_backed():
+        # The usage collector already reports this machine's daily session, so
+        # the tracker skips ONLY that credit. PR credit, install tracking,
+        # stage advancement and announcements still run off this ping.
+        body["collector_backed"] = True
 
     if replayed == body:
         return  # this exact payload was just delivered by the replay

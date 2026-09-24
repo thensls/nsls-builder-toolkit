@@ -15,6 +15,49 @@ set -uo pipefail
 
 INPUT=$(cat)
 
+# Collector early-exit. While the NSLS usage collector's evidence file is fresh,
+# the collector already reports this machine's skill use, so posting here too is
+# redundant. Same contract as hooks/collector_evidence.py (the test runs this
+# copy against every one of its cases): at most 4 KB, a JSON object, a
+# non-empty string machine_id, and `at` in ISO-8601 UTC no more than 7 days old
+# and no more than 1 day ahead. Pure bash + date -u, no python3, so a
+# python3-less Mac keeps working. Anything unexpected -> not fresh -> post as
+# always. Placed after the stdin read so the hook never leaves input unread.
+collector_evidence_fresh() {
+  local f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.nsls-collector/reported.json"
+  [ -f "$f" ] || return 1
+  local raw
+  raw=$(head -c 4097 "$f" 2>/dev/null | tr -d '\r\n') || return 1
+  [ "$(head -c 4097 "$f" 2>/dev/null | wc -c)" -le 4096 ] || return 1
+  local obj_re='^[[:space:]]*\{.*\}[[:space:]]*$'
+  [[ $raw =~ $obj_re ]] || return 1
+  local mid_re='"machine_id"[[:space:]]*:[[:space:]]*"[^"]'
+  [[ $raw =~ $mid_re ]] || return 1
+  local at_re='"at"[[:space:]]*:[[:space:]]*"([^"]*)"'
+  [[ $raw =~ $at_re ]] || return 1
+  local at="${BASH_REMATCH[1]}"
+  local iso_re='^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(\.[0-9]+)?(Z|\+00:00)$'
+  [[ $at =~ $iso_re ]] || return 1
+  local y=$((10#${BASH_REMATCH[1]})) m=$((10#${BASH_REMATCH[2]})) d=$((10#${BASH_REMATCH[3]}))
+  local hh=$((10#${BASH_REMATCH[4]})) mm=$((10#${BASH_REMATCH[5]})) ss=$((10#${BASH_REMATCH[6]}))
+  [ "$m" -ge 1 ] && [ "$m" -le 12 ] && [ "$d" -ge 1 ] && [ "$d" -le 31 ] || return 1
+  [ "$hh" -le 23 ] && [ "$mm" -le 59 ] && [ "$ss" -le 59 ] || return 1
+  # Days since 1970-01-01 (Howard Hinnant's days_from_civil), all integer math.
+  local yy=$y mp
+  [ "$m" -le 2 ] && yy=$((yy - 1))
+  local era=$((yy / 400)) yoe
+  yoe=$((yy - era * 400))
+  if [ "$m" -gt 2 ]; then mp=$((m - 3)); else mp=$((m + 9)); fi
+  local doy=$(((153 * mp + 2) / 5 + d - 1))
+  local doe=$((yoe * 365 + yoe / 4 - yoe / 100 + doy))
+  local at_epoch=$(((era * 146097 + doe - 719468) * 86400 + hh * 3600 + mm * 60 + ss))
+  local now
+  now=$(date -u +%s 2>/dev/null) || return 1
+  local age=$((now - at_epoch))
+  [ "$age" -le 604800 ] && [ "$age" -ge -86400 ]
+}
+collector_evidence_fresh && exit 0
+
 # Extract tool_input.skill WITHOUT python3 — a python3-less Mac otherwise loses
 # skill credit silently (the Windows .ps1 uses ConvertFrom-Json and is fine).
 # The PreToolUse(Skill) payload has exactly one "skill" key (tool_input.skill);
