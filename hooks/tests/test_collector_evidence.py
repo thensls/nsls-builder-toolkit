@@ -49,7 +49,10 @@ def write_evidence(config_dir, content):
     p = d / "reported.json"
     if isinstance(content, (dict, list)):
         content = json.dumps(content)
-    p.write_text(content, encoding="utf-8")
+    if isinstance(content, bytes):
+        p.write_bytes(content)
+    else:
+        p.write_text(content, encoding="utf-8")
     return p
 
 
@@ -57,25 +60,68 @@ def record(at, machine_id="m-123"):
     return {"machine_id": machine_id, "at": at, "version": "1.0.0"}
 
 
-# Each case: (name, file content or None for absent, expected fresh()).
+def utc(*a):
+    return datetime(*a, tzinfo=timezone.utc)
+
+
+def at1h():
+    return iso(ago(hours=1))
+
+
+# Each case: (name, file content or None for absent, expected fresh(), now).
+# `now` pins the clock (None = real time); the bash run pins it with a stub
+# `date` on PATH, so every implementation sees the same instant.
 CASES = [
-    ("fresh", lambda: record(iso(ago(hours=1))), True),
+    ("fresh", lambda: record(at1h()), True, None),
     ("fresh_fractional_offset", lambda: record(
-        ago(days=6).strftime("%Y-%m-%dT%H:%M:%S.123456+00:00")), True),
-    ("slightly_future_clock_skew", lambda: record(iso(ago(hours=-12))), True),
-    ("eight_days_old", lambda: record(iso(ago(days=8))), False),
-    ("missing", None, False),
-    ("malformed", lambda: '{"machine_id": "m-1", "at": ', False),
-    ("not_an_object", lambda: [record(iso(ago(hours=1)))], False),
-    ("far_future", lambda: record(iso(ago(days=-2))), False),
-    ("numeric_machine_id", lambda: record(iso(ago(hours=1)), machine_id=123), False),
-    ("empty_machine_id", lambda: record(iso(ago(hours=1)), machine_id=""), False),
-    ("missing_machine_id", lambda: {"at": iso(ago(hours=1))}, False),
+        ago(days=6).strftime("%Y-%m-%dT%H:%M:%S.123456+00:00")), True, None),
+    ("slightly_future_clock_skew", lambda: record(iso(ago(hours=-12))), True, None),
+    ("pretty_printed_any_key_order", lambda: json.dumps(
+        {"version": "1.0.0", "at": at1h(), "machine_id": "m-1"}, indent=2), True, None),
+    ("eight_days_old", lambda: record(iso(ago(days=8))), False, None),
+    ("missing", None, False, None),
+    ("malformed", lambda: '{"machine_id": "m-1", "at": ', False, None),
+    ("trailing_comma", lambda: '{"machine_id":"m","at":"%s","version":"1",}' % at1h(),
+     False, None),
+    ("not_an_object", lambda: [record(at1h())], False, None),
+    ("far_future", lambda: record(iso(ago(days=-2))), False, None),
+    ("numeric_machine_id", lambda: record(at1h(), machine_id=123), False, None),
+    ("empty_machine_id", lambda: record(at1h(), machine_id=""), False, None),
+    ("missing_machine_id", lambda: {"at": at1h(), "version": "1"}, False, None),
+    # KTD3: EXACTLY {machine_id, at, version}.
+    ("missing_version", lambda: {"machine_id": "m", "at": at1h()}, False, None),
+    ("numeric_version", lambda: {"machine_id": "m", "at": at1h(), "version": 1},
+     False, None),
+    ("extra_key", lambda: dict(record(at1h()), extra="x"), False, None),
+    # Ambiguity fails closed: duplicate keys, nested decoys.
+    ("duplicate_at_fresh_then_stale", lambda:
+        '{"machine_id":"m","at":"%s","at":"%s","version":"1"}'
+        % (at1h(), iso(ago(days=8))), False, None),
+    ("duplicate_at_stale_then_fresh", lambda:
+        '{"machine_id":"m","at":"%s","at":"%s","version":"1"}'
+        % (iso(ago(days=8)), at1h()), False, None),
+    ("nested_decoy", lambda: {"machine_id": "", "at": iso(ago(days=8)),
+                              "version": {"machine_id": "m", "at": at1h()}},
+     False, None),
+    ("escaped_value", lambda: '{"machine_id":"m\\u0041","at":"%s","version":"1"}'
+     % at1h(), False, None),
+    ("non_ascii_value", lambda: '{"machine_id":"mé","at":"%s","version":"1"}'
+     % at1h(), False, None),
+    ("nul_byte", lambda: ('{"machine_id":"m\x00","at":"%s","version":"1"}'
+                          % at1h()).encode(), False, None),
     ("non_utc_offset", lambda: record(
-        ago(hours=1).strftime("%Y-%m-%dT%H:%M:%S-05:00")), False),
-    ("date_only", lambda: record(ago(hours=1).strftime("%Y-%m-%d")), False),
-    ("garbage_at", lambda: record("yesterday"), False),
-    ("oversized", lambda: dict(record(iso(ago(hours=1))), pad="x" * 5000), False),
+        ago(hours=1).strftime("%Y-%m-%dT%H:%M:%S-05:00")), False, None),
+    ("date_only", lambda: record(ago(hours=1).strftime("%Y-%m-%d")), False, None),
+    ("garbage_at", lambda: record("yesterday"), False, None),
+    ("oversized", lambda: dict(record(at1h()), pad="x" * 5000), False, None),
+    # Calendar validity, pinned so a rolled-over date would otherwise be fresh.
+    ("feb_30", lambda: record("2026-02-30T12:00:00Z"), False, utc(2026, 3, 2, 12)),
+    ("feb_29_non_leap_century", lambda: record("2100-02-29T12:00:00Z"), False,
+     utc(2100, 3, 2, 12)),
+    ("feb_29_leap_year", lambda: record("2028-02-29T12:00:00Z"), True,
+     utc(2028, 3, 1, 12)),
+    ("apr_31", lambda: record("2026-04-31T12:00:00Z"), False, utc(2026, 5, 2, 12)),
+    ("hour_24", lambda: record("2026-05-01T24:00:00Z"), False, utc(2026, 5, 2, 12)),
 ]
 
 
@@ -90,13 +136,33 @@ def _with_case(content_fn):
 
 
 def test_fresh_contract_cases():
-    for name, content_fn, expected in CASES:
+    for name, content_fn, expected, now in CASES:
         tmp = _with_case(content_fn)
         try:
-            got = evidence.fresh(config_dir=tmp)
+            got = evidence.fresh(config_dir=tmp, now=now)
             assert got is expected, f"{name}: fresh() -> {got!r}, want {expected!r}"
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_fresh_does_not_block_on_a_fifo():
+    """A FIFO at reported.json must read as not fresh, not hang session start."""
+    if not hasattr(os, "mkfifo"):
+        return
+    tmp = Path(tempfile.mkdtemp(prefix="ce-test-"))
+    try:
+        d = tmp / ".nsls-collector"
+        d.mkdir()
+        os.mkfifo(d / "reported.json")
+        code = ("import importlib.util,sys;"
+                f"s=importlib.util.spec_from_file_location('ce',{str(HOOKS / 'collector_evidence.py')!r});"
+                "m=importlib.util.module_from_spec(s);s.loader.exec_module(m);"
+                f"print(m.fresh(config_dir={str(tmp)!r}))")
+        proc = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                              text=True, timeout=10)
+        assert proc.stdout.strip() == "False", proc.stdout + proc.stderr
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_fresh_honours_claude_config_dir():
@@ -166,7 +232,7 @@ def test_session_ping_flags_collector_backed_when_fresh():
 def test_session_ping_unflagged_when_stale_missing_or_malformed():
     for name in ("eight_days_old", "missing", "malformed", "far_future",
                  "numeric_machine_id"):
-        content_fn = next(c for n, c, _ in CASES if n == name)
+        content_fn = next(c for n, c, _, _ in CASES if n == name)
         tmp = _with_case(content_fn)
         try:
             body = _ping_payload(tmp)
@@ -180,13 +246,24 @@ def test_session_ping_unflagged_when_stale_missing_or_malformed():
 # ── skill-event.sh ─────────────────────────────────────────────────────────
 
 
-def _run_skill_event(config_dir):
-    """Run skill-event.sh with a stub curl on PATH. Returns (rc, curl_called)."""
+def _stub(bindir, name, body):
+    p = bindir / name
+    p.write_text("#!/bin/sh\n" + body)
+    p.chmod(p.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def _run_skill_event(config_dir, now=None):
+    """Run skill-event.sh with a stub curl on PATH. Returns (rc, curl_called).
+
+    With `now`, a stub `date` answers `date -u +%s` with that instant."""
     bindir = Path(tempfile.mkdtemp(prefix="ce-bin-"))
     log = bindir / "curl.log"
-    stub = bindir / "curl"
-    stub.write_text(f'#!/bin/sh\necho "$@" >> "{log}"\nexit 0\n')
-    stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    _stub(bindir, "curl", f'echo "$@" >> "{log}"\nexit 0\n')
+    if now is not None:
+        real_date = shutil.which("date") or "/bin/date"
+        _stub(bindir, "date",
+              f'if [ "$*" = "-u +%s" ]; then echo {int(now.timestamp())}; '
+              f'else exec {real_date} "$@"; fi\n')
     envdir = Path(config_dir) / "local-plugins" / "nsls-personal-toolkit"
     envdir.mkdir(parents=True, exist_ok=True)
     (envdir / ".env").write_text("BUILDER_EMAIL=builder@nsls.org\n")
@@ -208,16 +285,29 @@ def _run_skill_event(config_dir):
 def test_skill_event_sh_matches_fresh_for_every_case():
     """The bash check is a second implementation of the same contract, so it
     runs against every fixture the Python one does."""
-    for name, content_fn, expected_fresh in CASES:
+    for name, content_fn, expected_fresh, now in CASES:
         tmp = _with_case(content_fn)
         try:
-            rc, posted = _run_skill_event(tmp)
+            rc, posted = _run_skill_event(tmp, now)
             assert rc == 0, f"{name}: exit {rc}"
             assert posted is (not expected_fresh), (
                 f"{name}: curl {'called' if posted else 'not called'}, "
                 f"evidence fresh={expected_fresh}")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_skill_event_sh_does_not_block_on_a_fifo():
+    if not hasattr(os, "mkfifo"):
+        return
+    tmp = Path(tempfile.mkdtemp(prefix="ce-test-"))
+    try:
+        (tmp / ".nsls-collector").mkdir()
+        os.mkfifo(tmp / ".nsls-collector" / "reported.json")
+        rc, posted = _run_skill_event(tmp)  # subprocess timeout=20 catches a hang
+        assert rc == 0 and posted, f"rc={rc} posted={posted}"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_guardrail_gate_untouched():

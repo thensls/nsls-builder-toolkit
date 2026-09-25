@@ -15,28 +15,43 @@ and skill use, so:
 A collector that dies, fails or is paused stops refreshing the file, and within
 7 days the hooks take back over on their own. Fresh means all of:
 
-  - the file is at most MAX_BYTES and parses as a JSON object;
-  - `machine_id` is a non-empty string;
-  - `at` is ISO-8601 UTC (`YYYY-MM-DDTHH:MM:SS[.fff](Z|+00:00)`), no more than
-    7 days old and no more than 1 day in the future (clock skew, not a forgery
-    that never expires).
+  - the path is a regular file (a FIFO or device must never block a hook) of
+    at most MAX_BYTES;
+  - the whole document is one flat JSON object with EXACTLY the three keys
+    machine_id, at and version, each once, in any order, each a plain string
+    of printable ASCII with no escapes (anything else - nesting, duplicates,
+    extra or missing keys, trailing commas - is ambiguous and fails closed);
+  - `machine_id` is non-empty;
+  - `at` is a real UTC calendar time `YYYY-MM-DDTHH:MM:SS[.fff](Z|+00:00)`
+    (no Feb 30, no hour 24), no more than 7 days old and no more than 1 day
+    in the future (clock skew, not a forgery that never expires).
 
 The file is untrusted input: anything unexpected means "not fresh", never an
-exception. skill-event.sh and collector_evidence.ps1 implement the same rules;
-hooks/tests/test_collector_evidence.py runs the bash copy against every case.
+exception. skill-event.sh and collector_evidence.ps1 implement the same
+grammar with the same regex; hooks/tests/test_collector_evidence.py runs the
+Python and bash copies against every case, and the Windows smoke test runs
+the PowerShell copy.
 
 Deliberately standalone: stdlib only, no dependency on the plugin beacons.
 """
 
-import json
 import os
 import re
+import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 MAX_BYTES = 4096
 FRESH_FOR = timedelta(days=7)
 FUTURE_SLACK = timedelta(days=1)
+
+# One flat object of exactly three "key": "value" members. Strings are
+# printable ASCII minus `"` and `\`, so no escapes can hide a key or a value.
+_WS = r"[ \t\r\n]*"
+_STR = r'"([\x20\x21\x23-\x5b\x5d-\x7e]*)"'
+_MEMBER = _WS + _STR + _WS + ":" + _WS + _STR + _WS
+_DOC = re.compile(r"\{" + _MEMBER + "," + _MEMBER + "," + _MEMBER + r"\}")
+_KEYS = ["at", "machine_id", "version"]
 
 _AT = re.compile(
     r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})"
@@ -60,23 +75,40 @@ def _parse_at(value):
     return datetime(y, mo, d, h, mi, s, tzinfo=timezone.utc)
 
 
+def _read_regular(path):
+    """Bytes of `path` if it is a small regular file, else None. Never blocks:
+    the type is checked before opening and again on the open descriptor, and
+    O_NONBLOCK covers a FIFO swapped in between the two."""
+    st = os.stat(path)
+    if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_BYTES:
+        return None
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+    fd = os.open(path, flags)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        raw = os.read(fd, MAX_BYTES + 1)
+    finally:
+        os.close(fd)
+    return raw if len(raw) <= MAX_BYTES else None
+
+
 def fresh(config_dir=None, now=None):
     """True only when the collector evidence file is present and fresh."""
     try:
-        path = evidence_path(config_dir)
-        if path.stat().st_size > MAX_BYTES:
+        raw = _read_regular(evidence_path(config_dir))
+        if raw is None:
             return False
-        with open(path, "rb") as f:
-            raw = f.read(MAX_BYTES + 1)
-        if len(raw) > MAX_BYTES:
+        m = _DOC.fullmatch(raw.decode("ascii").strip(" \t\r\n"))
+        if not m:
             return False
-        data = json.loads(raw.decode("utf-8"))
-        if not isinstance(data, dict):
+        g = m.groups()
+        fields = {g[0]: g[1], g[2]: g[3], g[4]: g[5]}
+        if sorted([g[0], g[2], g[4]]) != _KEYS:
             return False
-        machine_id = data.get("machine_id")
-        if not isinstance(machine_id, str) or not machine_id:
+        if not fields["machine_id"]:
             return False
-        at = _parse_at(data.get("at"))
+        at = _parse_at(fields["at"])
         if at is None:
             return False
         now = now or datetime.now(timezone.utc)

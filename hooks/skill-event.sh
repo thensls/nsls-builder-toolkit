@@ -17,31 +17,67 @@ INPUT=$(cat)
 
 # Collector early-exit. While the NSLS usage collector's evidence file is fresh,
 # the collector already reports this machine's skill use, so posting here too is
-# redundant. Same contract as hooks/collector_evidence.py (the test runs this
-# copy against every one of its cases): at most 4 KB, a JSON object, a
-# non-empty string machine_id, and `at` in ISO-8601 UTC no more than 7 days old
-# and no more than 1 day ahead. Pure bash + date -u, no python3, so a
-# python3-less Mac keeps working. Anything unexpected -> not fresh -> post as
-# always. Placed after the stdin read so the hook never leaves input unread.
+# redundant. Same contract and same grammar as hooks/collector_evidence.py (the
+# test runs this copy against every one of its cases):
+#   - a regular file (never a FIFO or device, so the read cannot block) of at
+#     most 4096 bytes with no NUL bytes;
+#   - the whole document is one flat JSON object of EXACTLY the keys
+#     machine_id, at and version, each once, any order, each value a plain
+#     printable-ASCII string with no escapes. Nesting, duplicates, extra or
+#     missing keys and trailing commas all fail closed;
+#   - machine_id non-empty; at a real UTC calendar time
+#     YYYY-MM-DDTHH:MM:SS[.fff](Z|+00:00), at most 7 days old and at most 1
+#     day ahead.
+# Pure bash + date -u, no python3, so a python3-less Mac keeps working.
+# Anything unexpected -> not fresh -> post as always. Placed after the stdin
+# read so the hook never leaves input unread.
+# Assigns one member into the caller's mid/at/ver; fails on an unknown key or
+# a key seen before (bash's dynamic scoping writes the caller's locals).
+_ce_field() {
+  case "$seen" in *" $1 "*) return 1 ;; esac
+  case "$1" in
+    machine_id) mid=$2 ;;
+    at) at=$2 ;;
+    version) ver=$2 ;;
+    *) return 1 ;;
+  esac
+  seen="$seen$1 "
+}
 collector_evidence_fresh() {
+  local LC_ALL=C
   local f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.nsls-collector/reported.json"
-  [ -f "$f" ] || return 1
+  [ -f "$f" ] && [ ! -p "$f" ] || return 1
+  local size
+  size=$(wc -c < "$f" 2>/dev/null) || return 1
+  size=$((size + 0))
+  [ "$size" -le 4096 ] || return 1
+  # Bash drops NUL bytes from $(...); refuse any file that has them.
+  [ "$(tr -d '\000' < "$f" | wc -c)" -eq "$size" ] || return 1
   local raw
-  raw=$(head -c 4097 "$f" 2>/dev/null | tr -d '\r\n') || return 1
-  [ "$(head -c 4097 "$f" 2>/dev/null | wc -c)" -le 4096 ] || return 1
-  local obj_re='^[[:space:]]*\{.*\}[[:space:]]*$'
-  [[ $raw =~ $obj_re ]] || return 1
-  local mid_re='"machine_id"[[:space:]]*:[[:space:]]*"[^"]'
-  [[ $raw =~ $mid_re ]] || return 1
-  local at_re='"at"[[:space:]]*:[[:space:]]*"([^"]*)"'
-  [[ $raw =~ $at_re ]] || return 1
-  local at="${BASH_REMATCH[1]}"
+  raw=$(cat "$f" 2>/dev/null) || return 1
+  local ws=$'[ \t\r\n]*'
+  local str='"([] !#-[^-~]*)"'
+  local member="${ws}${str}${ws}:${ws}${str}${ws}"
+  local doc_re="^${ws}\\{${member},${member},${member}\\}${ws}\$"
+  [[ $raw =~ $doc_re ]] || return 1
+  local mid="" at="" ver="" seen=" "
+  _ce_field "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" &&
+    _ce_field "${BASH_REMATCH[3]}" "${BASH_REMATCH[4]}" &&
+    _ce_field "${BASH_REMATCH[5]}" "${BASH_REMATCH[6]}" || return 1
+  [ -n "$mid" ] || return 1
   local iso_re='^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(\.[0-9]+)?(Z|\+00:00)$'
   [[ $at =~ $iso_re ]] || return 1
   local y=$((10#${BASH_REMATCH[1]})) m=$((10#${BASH_REMATCH[2]})) d=$((10#${BASH_REMATCH[3]}))
   local hh=$((10#${BASH_REMATCH[4]})) mm=$((10#${BASH_REMATCH[5]})) ss=$((10#${BASH_REMATCH[6]}))
-  [ "$m" -ge 1 ] && [ "$m" -le 12 ] && [ "$d" -ge 1 ] && [ "$d" -le 31 ] || return 1
+  [ "$m" -ge 1 ] && [ "$m" -le 12 ] && [ "$d" -ge 1 ] || return 1
   [ "$hh" -le 23 ] && [ "$mm" -le 59 ] && [ "$ss" -le 59 ] || return 1
+  local dim
+  case "$m" in
+    4|6|9|11) dim=30 ;;
+    2) if [ $((y % 4)) -eq 0 ] && { [ $((y % 100)) -ne 0 ] || [ $((y % 400)) -eq 0 ]; }; then dim=29; else dim=28; fi ;;
+    *) dim=31 ;;
+  esac
+  [ "$d" -le "$dim" ] || return 1
   # Days since 1970-01-01 (Howard Hinnant's days_from_civil), all integer math.
   local yy=$y mp
   [ "$m" -le 2 ] && yy=$((yy - 1))
