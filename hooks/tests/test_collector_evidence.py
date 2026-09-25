@@ -122,6 +122,13 @@ CASES = [
      utc(2028, 3, 1, 12)),
     ("apr_31", lambda: record("2026-04-31T12:00:00Z"), False, utc(2026, 5, 2, 12)),
     ("hour_24", lambda: record("2026-05-01T24:00:00Z"), False, utc(2026, 5, 2, 12)),
+    # Fractions are truncated, which moves `at` EARLIER and makes the file look
+    # OLDER, so the 7-day window can only close early, never late. 0.1 s past
+    # seven days must already read stale.
+    ("fraction_just_past_seven_days", lambda: record("2026-09-01T12:00:00.900Z"),
+     False, utc(2026, 9, 8, 12, 0, 1)),
+    ("fraction_just_inside_seven_days", lambda: record("2026-09-01T12:00:00.900Z"),
+     True, utc(2026, 9, 8, 12, 0, 0)),
 ]
 
 

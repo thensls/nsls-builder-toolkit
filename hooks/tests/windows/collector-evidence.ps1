@@ -76,6 +76,8 @@ try {
         @{ n = 'Feb 30';                  c = (Rec '2026-02-30T12:00:00Z'); want = $false; now = (Utc 2026 3 2 12) },
         @{ n = 'Feb 29 non-leap century'; c = (Rec '2100-02-29T12:00:00Z'); want = $false; now = (Utc 2100 3 2 12) },
         @{ n = 'Feb 29 leap year';        c = (Rec '2028-02-29T12:00:00Z'); want = $true;  now = (Utc 2028 3 1 12) },
+        @{ n = 'fraction just past 7 days';   c = (Rec '2026-09-01T12:00:00.900Z'); want = $false; now = ([DateTime]::new(2026, 9, 8, 12, 0, 1, [DateTimeKind]::Utc)) },
+        @{ n = 'fraction just inside 7 days'; c = (Rec '2026-09-01T12:00:00.900Z'); want = $true;  now = ([DateTime]::new(2026, 9, 8, 12, 0, 0, [DateTimeKind]::Utc)) },
         @{ n = 'Apr 31';                  c = (Rec '2026-04-31T12:00:00Z'); want = $false; now = (Utc 2026 5 2 12) },
         @{ n = 'hour 24';                 c = (Rec '2026-05-01T24:00:00Z'); want = $false; now = (Utc 2026 5 2 12) }
     )

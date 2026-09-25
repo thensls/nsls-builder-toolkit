@@ -66,6 +66,9 @@ def evidence_path(config_dir=None):
 
 
 def _parse_at(value):
+    # Fractional seconds are truncated. That moves `at` earlier, so a file can
+    # only look OLDER than it is: the 7-day window closes early, never late.
+    # The bash and PowerShell copies truncate the same way, so all three agree.
     if not isinstance(value, str):
         return None
     m = _AT.fullmatch(value)
