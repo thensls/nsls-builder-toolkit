@@ -66,7 +66,7 @@ try {
         @{ n = 'duplicate at fresh,stale'; c = ('{"machine_id":"m","at":"' + $h1 + '","at":"' + $d8 + '","version":"1"}'); want = $false },
         @{ n = 'duplicate at stale,fresh'; c = ('{"machine_id":"m","at":"' + $d8 + '","at":"' + $h1 + '","version":"1"}'); want = $false },
         @{ n = 'nested decoy';            c = ('{"machine_id":"","at":"' + $d8 + '","version":{"machine_id":"m","at":"' + $h1 + '"}}'); want = $false },
-        @{ n = 'escaped value';           c = ('{"machine_id":"mA","at":"' + $h1 + '","version":"1"}'); want = $false },
+        @{ n = 'escaped value';           c = ('{"machine_id":"m\u0041","at":"' + $h1 + '","version":"1"}'); want = $false },
         @{ n = 'non-ASCII value';         c = ('{"machine_id":"m' + [char]0xE9 + '","at":"' + $h1 + '","version":"1"}'); want = $false },
         @{ n = 'NUL byte';                c = ('{"machine_id":"m' + [char]0 + '","at":"' + $h1 + '","version":"1"}'); want = $false },
         @{ n = 'non-UTC offset';          c = (Rec ($now.AddHours(-1).ToString("yyyy-MM-dd'T'HH:mm:ss'-05:00'", $inv))); want = $false },

@@ -20,7 +20,7 @@ INPUT=$(cat)
 # redundant. Same contract and same grammar as hooks/collector_evidence.py (the
 # test runs this copy against every one of its cases):
 #   - a regular file (never a FIFO or device, so the read cannot block) of at
-#     most 4096 bytes with no NUL bytes;
+#     most 4096 bytes with no NUL bytes, read once and bounded;
 #   - the whole document is one flat JSON object of EXACTLY the keys
 #     machine_id, at and version, each once, any order, each value a plain
 #     printable-ASCII string with no escapes. Nesting, duplicates, extra or
@@ -47,14 +47,14 @@ collector_evidence_fresh() {
   local LC_ALL=C
   local f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.nsls-collector/reported.json"
   [ -f "$f" ] && [ ! -p "$f" ] || return 1
-  local size
-  size=$(wc -c < "$f" 2>/dev/null) || return 1
-  size=$((size + 0))
-  [ "$size" -le 4096 ] || return 1
-  # Bash drops NUL bytes from $(...); refuse any file that has them.
-  [ "$(tr -d '\000' < "$f" | wc -c)" -eq "$size" ] || return 1
+  # ONE bounded read (a file swapped in after the -f check still yields at
+  # most 4097 bytes). NUL -> \001 so bash cannot silently drop it; the grammar
+  # below rejects control bytes. The trailing x keeps $(...) from eating
+  # newlines, so the length check is exact.
   local raw
-  raw=$(cat "$f" 2>/dev/null) || return 1
+  raw=$(head -c 4097 "$f" 2>/dev/null | tr '\000' '\001'; printf x) || return 1
+  raw=${raw%x}
+  [ "${#raw}" -le 4096 ] || return 1
   local ws=$'[ \t\r\n]*'
   local str='"([] !#-[^-~]*)"'
   local member="${ws}${str}${ws}:${ws}${str}${ws}"

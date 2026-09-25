@@ -21,7 +21,9 @@
 # ASCII only, PowerShell 5.1 compatible, no BOM.
 
 function Test-CollectorEvidenceFresh {
-    param([Nullable[DateTime]]$Now = $null)
+    # -Now pins the clock (tests only). Typed [object], not [Nullable[DateTime]]:
+    # PowerShell unwraps a Nullable, so .Value on it is $null and would throw.
+    param([object]$Now = $null)
     $ErrorActionPreference = 'Stop'
     try {
         $cfg = $env:CLAUDE_CONFIG_DIR
@@ -32,8 +34,21 @@ function Test-CollectorEvidenceFresh {
         if (-not ($item -is [System.IO.FileInfo])) { return $false }
         if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { return $false }
         if ($item.Length -gt 4096) { return $false }
-        $bytes = [System.IO.File]::ReadAllBytes($path)
-        if ($bytes.Length -gt 4096) { return $false }
+        # One bounded read from one handle: a file swapped in after the checks
+        # above still yields at most 4097 bytes.
+        $buf = New-Object byte[] 4097
+        $n = 0
+        $fs = [System.IO.File]::Open($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        try {
+            while ($n -lt 4097) {
+                $r = $fs.Read($buf, $n, 4097 - $n)
+                if ($r -le 0) { break }
+                $n += $r
+            }
+        } finally { $fs.Dispose() }
+        if ($n -gt 4096) { return $false }
+        $bytes = New-Object byte[] $n
+        [System.Array]::Copy($buf, $bytes, $n)
         foreach ($b in $bytes) { if ($b -gt 127) { return $false } }
         $raw = [System.Text.Encoding]::ASCII.GetString($bytes)
         $ws = '[ \t\r\n]*'
@@ -56,7 +71,7 @@ function Test-CollectorEvidenceFresh {
         $at = [DateTime]::new([int]$g[1].Value, [int]$g[2].Value, [int]$g[3].Value,
                               [int]$g[4].Value, [int]$g[5].Value, [int]$g[6].Value,
                               [DateTimeKind]::Utc)
-        $clock = if ($null -ne $Now) { $Now.Value.ToUniversalTime() } else { [DateTime]::UtcNow }
+        $clock = if ($null -ne $Now) { ([DateTime]$Now).ToUniversalTime() } else { [DateTime]::UtcNow }
         $ageDays = ($clock - $at).TotalDays
         return ($ageDays -le 7 -and $ageDays -ge -1)
     } catch {
