@@ -15,6 +15,85 @@ set -uo pipefail
 
 INPUT=$(cat)
 
+# Collector early-exit. While the NSLS usage collector's evidence file is fresh,
+# the collector already reports this machine's skill use, so posting here too is
+# redundant. Same contract and same grammar as hooks/collector_evidence.py (the
+# test runs this copy against every one of its cases):
+#   - a regular file (never a FIFO or device, so the read cannot block) of at
+#     most 4096 bytes with no NUL bytes, read once and bounded;
+#   - the whole document is one flat JSON object of EXACTLY the keys
+#     machine_id, at and version, each once, any order, each value a plain
+#     printable-ASCII string with no escapes. Nesting, duplicates, extra or
+#     missing keys and trailing commas all fail closed;
+#   - machine_id non-empty; at a real UTC calendar time
+#     YYYY-MM-DDTHH:MM:SS[.fff](Z|+00:00), at most 7 days old and at most 1
+#     day ahead.
+# Pure bash + date -u, no python3, so a python3-less Mac keeps working.
+# Anything unexpected -> not fresh -> post as always. Placed after the stdin
+# read so the hook never leaves input unread.
+# Assigns one member into the caller's mid/at/ver; fails on an unknown key or
+# a key seen before (bash's dynamic scoping writes the caller's locals).
+_ce_field() {
+  case "$seen" in *" $1 "*) return 1 ;; esac
+  case "$1" in
+    machine_id) mid=$2 ;;
+    at) at=$2 ;;
+    version) ver=$2 ;;
+    *) return 1 ;;
+  esac
+  seen="$seen$1 "
+}
+collector_evidence_fresh() {
+  local LC_ALL=C
+  local f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.nsls-collector/reported.json"
+  [ -f "$f" ] && [ ! -p "$f" ] || return 1
+  # ONE bounded read (a file swapped in after the -f check still yields at
+  # most 4097 bytes). NUL -> \001 so bash cannot silently drop it; the grammar
+  # below rejects control bytes. The trailing x keeps $(...) from eating
+  # newlines, so the length check is exact.
+  local raw
+  raw=$(head -c 4097 "$f" 2>/dev/null | tr '\000' '\001'; printf x) || return 1
+  raw=${raw%x}
+  [ "${#raw}" -le 4096 ] || return 1
+  local ws=$'[ \t\r\n]*'
+  local str='"([] !#-[^-~]*)"'
+  local member="${ws}${str}${ws}:${ws}${str}${ws}"
+  local doc_re="^${ws}\\{${member},${member},${member}\\}${ws}\$"
+  [[ $raw =~ $doc_re ]] || return 1
+  local mid="" at="" ver="" seen=" "
+  _ce_field "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" &&
+    _ce_field "${BASH_REMATCH[3]}" "${BASH_REMATCH[4]}" &&
+    _ce_field "${BASH_REMATCH[5]}" "${BASH_REMATCH[6]}" || return 1
+  [ -n "$mid" ] || return 1
+  local iso_re='^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(\.[0-9]+)?(Z|\+00:00)$'
+  [[ $at =~ $iso_re ]] || return 1
+  local y=$((10#${BASH_REMATCH[1]})) m=$((10#${BASH_REMATCH[2]})) d=$((10#${BASH_REMATCH[3]}))
+  local hh=$((10#${BASH_REMATCH[4]})) mm=$((10#${BASH_REMATCH[5]})) ss=$((10#${BASH_REMATCH[6]}))
+  [ "$m" -ge 1 ] && [ "$m" -le 12 ] && [ "$d" -ge 1 ] || return 1
+  [ "$hh" -le 23 ] && [ "$mm" -le 59 ] && [ "$ss" -le 59 ] || return 1
+  local dim
+  case "$m" in
+    4|6|9|11) dim=30 ;;
+    2) if [ $((y % 4)) -eq 0 ] && { [ $((y % 100)) -ne 0 ] || [ $((y % 400)) -eq 0 ]; }; then dim=29; else dim=28; fi ;;
+    *) dim=31 ;;
+  esac
+  [ "$d" -le "$dim" ] || return 1
+  # Days since 1970-01-01 (Howard Hinnant's days_from_civil), all integer math.
+  local yy=$y mp
+  [ "$m" -le 2 ] && yy=$((yy - 1))
+  local era=$((yy / 400)) yoe
+  yoe=$((yy - era * 400))
+  if [ "$m" -gt 2 ]; then mp=$((m - 3)); else mp=$((m + 9)); fi
+  local doy=$(((153 * mp + 2) / 5 + d - 1))
+  local doe=$((yoe * 365 + yoe / 4 - yoe / 100 + doy))
+  local at_epoch=$(((era * 146097 + doe - 719468) * 86400 + hh * 3600 + mm * 60 + ss))
+  local now
+  now=$(date -u +%s 2>/dev/null) || return 1
+  local age=$((now - at_epoch))
+  [ "$age" -le 604800 ] && [ "$age" -ge -86400 ]
+}
+collector_evidence_fresh && exit 0
+
 # Extract tool_input.skill WITHOUT python3 — a python3-less Mac otherwise loses
 # skill credit silently (the Windows .ps1 uses ConvertFrom-Json and is fine).
 # The PreToolUse(Skill) payload has exactly one "skill" key (tool_input.skill);

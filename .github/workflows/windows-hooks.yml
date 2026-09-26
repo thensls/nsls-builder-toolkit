@@ -37,3 +37,6 @@ jobs:
       - name: One holder at a time, PowerShell and Python, on a real PC
         shell: pwsh
         run: ./hooks/tests/windows/lock-smoke.ps1
+      - name: Collector evidence silences the skill hook, under Windows PowerShell 5.1
+        shell: powershell
+        run: ./hooks/tests/windows/collector-evidence.ps1

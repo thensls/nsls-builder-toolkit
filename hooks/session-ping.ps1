@@ -33,7 +33,17 @@ $github = "$github".Trim()
 $builderDir = Join-Path $env:USERPROFILE '.claude\local-plugins\nsls-builder-toolkit'
 $toolkit = if (Test-Path $builderDir) { 'both' } else { 'personal' }
 
-$payload = @{ builder_email = $email; toolkit = $toolkit; github_username = $github; platform = 'windows' } | ConvertTo-Json -Compress
+$body = @{ builder_email = $email; toolkit = $toolkit; github_username = $github; platform = 'windows' }
+# Parity with session_ping() in session-start.py: while the NSLS usage
+# collector's evidence file is fresh, the collector already reports this
+# machine's daily session, so the tracker skips ONLY that credit. PR credit,
+# stage advancement and announcements still run off this ping.
+$evidenceHelper = Join-Path $PSScriptRoot 'collector_evidence.ps1'
+if (Test-Path $evidenceHelper) {
+    . $evidenceHelper
+    if (Test-CollectorEvidenceFresh) { $body.collector_backed = $true }
+}
+$payload = $body | ConvertTo-Json -Compress
 
 # Retry marker (parity with session-start.py A-4). When a ping can't be
 # delivered, stash the payload here and replay it at the next session start so a

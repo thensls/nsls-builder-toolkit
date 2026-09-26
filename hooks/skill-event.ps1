@@ -5,6 +5,16 @@
 $ErrorActionPreference = 'SilentlyContinue'
 
 try { $raw = [Console]::In.ReadToEnd() } catch { $raw = '' }
+
+# Collector early-exit (mirror of skill-event.sh): while the NSLS usage
+# collector's evidence file is fresh, the collector already reports this
+# machine's skill use, so post nothing. Contract in collector_evidence.ps1.
+$evidenceHelper = Join-Path $PSScriptRoot 'collector_evidence.ps1'
+if (Test-Path $evidenceHelper) {
+  . $evidenceHelper
+  if (Test-CollectorEvidenceFresh) { exit 0 }
+}
+
 $skill = $null
 try { $skill = ($raw | ConvertFrom-Json).tool_input.skill } catch {}
 if ([string]::IsNullOrWhiteSpace($skill)) { exit 0 }
