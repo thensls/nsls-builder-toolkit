@@ -60,7 +60,7 @@ one of our scarce research slots? Never assumed, always asked.
 ## Quick Start
 
 Idea → **1** Sketch capture → **1.5** Board-worthiness gate (materiality —
-below both bars, capture it and **hand it down** to a squad, then stop) →
+missing either bar, capture it and **hand it down** to a squad, then stop) →
 **2** Taxonomy + growth vector + `create_bet` → **3**
 Office-hours diagnostic → **4** Causal-chain interrogation → **5** Stress test
 → **6** Rubric → **7** The gate offer → a bet at Idea stage (or Research, if
@@ -204,22 +204,36 @@ step below reuses it as the natural order to walk the chain of beliefs.
 ## Step 1.5 — Board-worthiness gate (materiality)
 
 **Purpose:** keep the board for bets, and keep improvement work with the
-LOPs/squads that own it — the test the SLT asked for (2026-07-23).
+LOPs/squads that own it — the test the SLT asked for (2026-07-23), with the
+thresholds Gary set on 2026-09-03.
 
 A bet earns board space when **being wrong is expensive** — the size of the
 stakes, not the cost of finding out (finding out is deliberately cheap here).
 With the step-1 sketch in hand, ask the owner both legs:
 
-1. *"If this validates, does committing to it mean **≥ $500K of capital** —
-   the build/scale/hire decision waiting at the end of the research?"*
-2. *"Is there a **credible path to revenue material at NSLS scale** — rule of
-   thumb, ≥ $1M/yr net-new or protected?"*
+1. *"If this validates, does actually rolling it out cost **more than
+   $100K** — the build/scale/hire decision at the end of the research, not
+   the price of the test?"*
+2. *"Is the return on that **more than $500K**?"*
 
-**Either yes → proceed to step 2.**
+**Both yes → proceed to step 2.** Money in *and* money back: *"for a true
+bet, you have to be putting money to make a bet."* An idea clearing only one
+leg is not a bet — a cheap test with a large upside (the A&E enrollment
+tests are the canonical example) is real work that belongs elsewhere.
 
-**Both no → hand it down. Do not stop with nothing on the record.** This is
-real work that isn't bet-shaped, and the outcome for that is a **hand-down**,
-not a shrug and not a kill. Say it in those words — *"that's a hand-down, not
+Then ask a third question out loud. It is a judgment call, not a threshold:
+
+3. *"What does this pull from the team, and what doesn't get done because we
+   said yes to it?"*
+
+Resourcing alone never makes something a bet. But a yes/yes the team cannot
+staff is an answer the owner should hear themselves give before the bet gets
+created.
+
+**Either leg no → hand it down. Do not stop with nothing on the record.**
+This is real work that isn't bet-shaped, and the outcome for that is a
+**hand-down** (Gary's "sub-bet" — same idea, and it already exists), not a
+shrug and not a kill. Say it in those words — *"that's a hand-down, not
 a no"* — then:
 
 1. `create_bet` with the name and one-liner from the step-1 sketch. **Skip
@@ -453,8 +467,8 @@ statements, scores) so the human can enter them by hand, and point at
 | "The alternative canvas is good, I'll just write it in too." | Conversation-only unless the human adopts it. Writing it unasked pollutes the real bet's history. |
 | "It's just a new segment, I'll create it and move on." | Shared-system tier — every other bet sees this taxonomy. Confirm first. |
 | "No token, I'll skip the write and keep going quietly." | Print what would have been written. Silent skips lose the human's own idea. |
-| "This is obviously a bet, skipping the materiality gate." | The gate exists because the SLT asked what qualifies. Ask both legs out loud — a great idea below both bars is squad work, and saying so is the skill working. |
-| "Below both bars — I'll tell them it isn't a bet and we're done." | Half the job. Capture it and `hand_off_bet` to a squad or a person, with the reason on the record. An unrecorded idea evaporates, and so does the credit for raising it. |
+| "This is obviously a bet, skipping the materiality gate." | The gate exists because the SLT asked what qualifies. Ask both legs out loud — an idea that misses *either* bar is a hand-down, and saying so is the skill working. |
+| "Misses a bar — I'll tell them it isn't a bet and we're done." | Half the job. Capture it and `hand_off_bet` to a squad or a person, with the reason on the record. An unrecorded idea evaporates, and so does the credit for raising it. |
 | "It's too small, I'll park it / kill it to keep the board clean." | Neither. Park and kill are verdicts on the idea; this idea is fine and just isn't bet-shaped. A hand-down keeps it out of the graveyard AND out of the kill rate. |
 | "I'll run the full canvas first, then hand it down." | Backwards. Once both materiality legs are no, skip to the hand-down — nobody owes a lean canvas for a $120K idea. |
 | "The vector is obvious from the sketch, I'll just set it." | Propose it, but the owner confirms — the vector files the bet in every portfolio review. |
