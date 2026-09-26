@@ -120,6 +120,17 @@ try {
     Check 'lock held -> busy' ($r -eq 'busy') "$r"
     Check 'busy: no launch' ($script:launches.Count -eq 0)
 
+    # An abandoned lock (older than 10 minutes) is taken over, and cleaned up.
+    $roots += New-Box
+    $lockDir = Split-Path $script:marker -Parent
+    New-Item -ItemType Directory -Path $lockDir -Force | Out-Null
+    $staleLock = Join-Path $lockDir 'bootstrap.lock'
+    [System.IO.File]::WriteAllText($staleLock, '', $utf8)
+    (Get-Item -LiteralPath $staleLock).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(-30)
+    $r = Invoke-CollectorBootstrap -Now $t0
+    Check 'stale lock -> launched' ($r -eq 'launched') "$r"
+    Check 'stale lock: no lock or quarantine left' (@(Get-ChildItem -LiteralPath $lockDir -Filter 'bootstrap.lock*').Count -eq 0) ((@(Get-ChildItem -LiteralPath $lockDir) | ForEach-Object { $_.Name }) -join ', ')
+
     # A bad base URL override is refused, never launched.
     $roots += New-Box
     $env:NSLS_COLLECTOR_BASE_URL = 'https://x.org; Remove-Item C:\'

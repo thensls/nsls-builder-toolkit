@@ -62,7 +62,18 @@ function Invoke-CollectorBootstrap {
                 $held = $true
             } catch {
                 $age = ([DateTime]::UtcNow - (Get-Item -LiteralPath $lock -Force).LastWriteTimeUtc).TotalSeconds
-                if ($age -gt 600 -or $age -lt -60) { Remove-Item -LiteralPath $lock -Force } else { return 'busy' }
+                if ($age -le 600 -and $age -ge -60) { return 'busy' }
+                # Take over atomically: rename wins for exactly one session. If
+                # what we renamed turns out to be live (another session already
+                # replaced the stale lock), put it back and stand down.
+                $quarantine = "$lock.stale.$PID." + [guid]::NewGuid().ToString('N')
+                try { [System.IO.File]::Move($lock, $quarantine) } catch { continue }
+                $qAge = ([DateTime]::UtcNow - (Get-Item -LiteralPath $quarantine -Force).LastWriteTimeUtc).TotalSeconds
+                if ($qAge -le 600 -and $qAge -ge -60) {
+                    try { [System.IO.File]::Move($quarantine, $lock) } catch { }
+                    return 'busy'
+                }
+                Remove-Item -LiteralPath $quarantine -Force
             }
         }
         if (-not $held) { return 'busy' }

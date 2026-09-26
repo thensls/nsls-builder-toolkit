@@ -41,6 +41,12 @@ class FakePopen:
         if self.marker is not None:
             self.marker_seen_at_launch = (
                 json.loads(self.marker.read_text()) if self.marker.exists() else None)
+        out = kw.get("stdout")
+        try:
+            import os
+            kw = dict(kw, stdout_ino=os.fstat(out.fileno()).st_ino)
+        except Exception:
+            pass
         self.calls.append((args, kw))
         return object()
 
@@ -267,6 +273,62 @@ def test_stale_lock_is_taken_over(box):
     assert not lock.exists()
 
 
+def _in_subprocess(box, timeout=15):
+    """Run maybe_bootstrap in a child with Popen stubbed; a hang fails the test."""
+    code = (
+        "import importlib.util,sys,json;"
+        f"sys.path.insert(0,{str(HOOKS)!r});"
+        f"s=importlib.util.spec_from_file_location('cb',{str(HOOKS / 'collector_bootstrap.py')!r});"
+        "m=importlib.util.module_from_spec(s);s.loader.exec_module(m);"
+        "from datetime import datetime,timezone;"
+        f"print(m.run(config_dir={str(box.cfg)!r},platform='darwin',"
+        f"env={box.env!r},popen=lambda *a,**k: None))"
+    )
+    proc = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                          text=True, timeout=timeout)
+    return proc.stdout.strip()
+
+
+@boxed
+def test_fifo_marker_does_not_hang(box):
+    import os
+    if not hasattr(os, "mkfifo"):
+        return
+    box.marker.parent.mkdir(parents=True)
+    os.mkfifo(box.marker)
+    assert _in_subprocess(box) in ("launched", "error")
+
+
+@boxed
+def test_fifo_log_does_not_hang(box):
+    import os
+    if not hasattr(os, "mkfifo"):
+        return
+    box.marker.parent.mkdir(parents=True)
+    os.mkfifo(box.marker.parent / "bootstrap.log")
+    assert _in_subprocess(box) == "launched"
+
+
+@boxed
+def test_stale_lock_takeover_never_steals_a_live_lock(box):
+    """Session B judged the old lock stale; session A has since replaced it
+    with a live one. B's takeover must notice and stand down, leaving A's."""
+    import os
+    import time
+    box.marker.parent.mkdir(parents=True)
+    lock = box.marker.parent / "bootstrap.lock"
+    lock.write_text("")
+    old = time.time() - 1800
+    os.utime(lock, (old, old))
+    stale_ino = lock.stat().st_ino
+    # A replaces it with a live lock between B's stat and B's rename.
+    lock.unlink()
+    lock.write_text("")
+    assert lock.stat().st_ino != stale_ino
+    assert cb._take_over_stale(lock, stale_ino) is False
+    assert lock.exists(), "the live lock must be put back"
+
+
 # ── logging ───────────────────────────────────────────────────────────────
 
 
@@ -276,14 +338,14 @@ def test_logs_to_collector_home_when_it_exists(box):
     home.mkdir(parents=True)  # exists, but no config.json yet
     assert box.run() == "launched"
     _, kw = box.popen.calls[0]
-    assert Path(kw["stdout"].name) == home / "bootstrap.log"
+    assert kw["stdout_ino"] == (home / "bootstrap.log").stat().st_ino
 
 
 @boxed
 def test_logs_to_marker_dir_otherwise(box):
     assert box.run() == "launched"
     _, kw = box.popen.calls[0]
-    assert Path(kw["stdout"].name) == box.cfg / ".nsls-collector" / "bootstrap.log"
+    assert kw["stdout_ino"] == (box.cfg / ".nsls-collector" / "bootstrap.log").stat().st_ino
 
 
 # ── never costs the session anything ─────────────────────────────────────

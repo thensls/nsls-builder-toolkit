@@ -28,6 +28,7 @@ https://signal.nsls.org for tests; it must be a bare http(s) origin.
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -96,10 +97,39 @@ def _iso(dt):
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _open_regular(path, flags, mode=0o600):
+    """fd for `path` only if it is a regular file, else None. O_NONBLOCK means a
+    FIFO planted at the path can never block the hook: a read open returns at
+    once and a write open with no reader fails; the fstat then rejects it."""
+    flags |= getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+    try:
+        fd = os.open(path, flags, mode)
+    except OSError:
+        return None
+    try:
+        if stat.S_ISREG(os.fstat(fd).st_mode):
+            return fd
+    except OSError:
+        pass
+    os.close(fd)
+    return None
+
+
+def _open_log(path):
+    """Append handle on the log (a regular file), or on devnull."""
+    fd = _open_regular(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT)
+    if fd is None:
+        return open(os.devnull, "a", encoding="utf-8")
+    return os.fdopen(fd, "a", encoding="utf-8")
+
+
 def _read_marker(path):
     """(attempts, attempted_at or None, gave_up). Untrusted: junk reads as empty."""
     try:
-        with open(path, "rb") as f:
+        fd = _open_regular(path, os.O_RDONLY)
+        if fd is None:
+            return 0, None, False
+        with os.fdopen(fd, "rb") as f:
             raw = f.read(MAX_MARKER_BYTES + 1)
         if len(raw) > MAX_MARKER_BYTES:
             return 0, None, False
@@ -124,6 +154,31 @@ def _write_marker(path, data):
     os.replace(tmp, path)
 
 
+def _take_over_stale(lock, stale_ino):
+    """Remove the lock judged stale, but only if it is still that same file.
+
+    Rename is atomic, so exactly one session wins the stale file. If what we
+    renamed is not the inode we judged stale, another session has already
+    replaced it with a live lock: put it back and stand down.
+    """
+    quarantine = lock.with_name(f"{lock.name}.stale.{os.getpid()}.{time.time_ns()}")
+    try:
+        os.rename(lock, quarantine)
+    except OSError:
+        return True  # someone else took it first; retry the O_EXCL create
+    try:
+        if os.stat(quarantine).st_ino != stale_ino:
+            try:
+                os.rename(quarantine, lock)
+            except OSError:
+                pass
+            return False
+        os.unlink(quarantine)
+    except OSError:
+        pass
+    return True
+
+
 def _acquire_lock(lock):
     """True if we now hold the lock. A lock older than 10 minutes (or dated in
     the future) is abandoned and taken over once."""
@@ -133,13 +188,12 @@ def _acquire_lock(lock):
             return True
         except FileExistsError:
             try:
-                age = time.time() - lock.stat().st_mtime
+                st = os.stat(lock)
             except OSError:
                 continue
+            age = time.time() - st.st_mtime
             if age > LOCK_STALE_SECONDS or age < -60:
-                try:
-                    lock.unlink()
-                except OSError:
+                if not _take_over_stale(lock, st.st_ino):
                     return False
                 continue
             return False
@@ -155,7 +209,7 @@ def _log_path(platform, env, marker_dir):
 
 def _append_log(path, line):
     try:
-        with open(path, "a", encoding="utf-8") as f:
+        with _open_log(path) as f:
             f.write(line + "\n")
     except Exception:
         pass
@@ -213,10 +267,7 @@ def maybe_bootstrap(config_dir, platform, env, now, popen):
                                    | getattr(subprocess, "CREATE_NO_WINDOW", 0))
     else:
         kwargs["start_new_session"] = True
-    try:
-        out = open(log, "a", encoding="utf-8")
-    except Exception:
-        out = open(os.devnull, "a")
+    out = _open_log(log)
     try:
         kwargs["stdout"] = out
         kwargs["stderr"] = out
