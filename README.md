@@ -330,6 +330,17 @@ Mac, or `setx NSLS_COLLECTOR_OPTOUT 1` on Windows). Nothing is installed and
 nothing is written. This only stops the automatic install. It doesn't remove
 a collector that's already installed.
 
+### Uninstall
+
+**Set `NSLS_COLLECTOR_OPTOUT=1` first.** Otherwise the toolkit installs the
+collector again at a later session start, since once it's removed there's
+nothing left to show it was ever there. Then run:
+
+- **Mac:** `curl -fsSL https://signal.nsls.org/api/collector/dist/uninstall.sh | bash`
+- **Windows:** `iwr -UseBasicParsing https://signal.nsls.org/api/collector/dist/uninstall.ps1 | iex`
+
+These remove the collector's schedule, its folder and its evidence file.
+
 ## Request a Skill
 
 Open a [GitHub issue](https://github.com/thensls/nsls-builder-toolkit/issues) or message Kevin in Slack.
