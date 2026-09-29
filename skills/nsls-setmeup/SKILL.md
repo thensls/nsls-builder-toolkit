@@ -38,6 +38,16 @@ This takes about 5 minutes, and I'll do it with you one step at a time:
 Ready?
 ```
 
+## Typed values are data, never shell
+
+Anything the builder types (email, GitHub username, full name) ends up inside a
+command below. Check it against the pattern **before** it goes into any command;
+if it doesn't match, re-ask, and never "clean it up" by guessing.
+
+- **Email:** `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$`
+- **GitHub username:** `^[A-Za-z0-9-]{1,39}$`
+- **Full name:** no backtick, `$`, `\`, `"`, `;`, `|`, `&`, `<`, `>` or line breaks
+
 ## Step 1: Confirm Your Builder Email (~15 sec)
 
 The session-start hook (daily session points + PR credit) and the skill-use
@@ -155,7 +165,7 @@ Validate before writing — never store an unverified guess:
 
 1. **Does the account exist?**
    ```bash
-   GH_USER="<their answer>"
+   GH_USER="<their answer>"   # only after it matches the username pattern above
    curl -s -o /dev/null -w '%{http_code}' "https://api.github.com/users/$GH_USER"
    ```
    (When `gh` is installed and authed, `gh api "users/$GH_USER" --jq .login`
@@ -213,9 +223,16 @@ So ask: *"Is <builder email> one of the addresses on your GitHub account?"*
   Step 1.7:
 
   ```bash
-  GH_ID=$(curl -fsSL "https://api.github.com/users/<validated username>" | grep -o '"id": *[0-9]*' | grep -o '[0-9]*')
-  echo "${GH_ID}+<validated username>@users.noreply.github.com"
+  if GH_ID=$(curl -fsSL "https://api.github.com/users/<validated username>" | grep -o '"id": *[0-9]*' | grep -o '[0-9]*') && [ -n "$GH_ID" ]; then
+    echo "${GH_ID}+<validated username>@users.noreply.github.com"
+  else
+    echo "LOOKUP_FAILED"
+  fi
   ```
+
+  On `LOOKUP_FAILED` (offline, rate-limited), do **not** configure `git user.email`
+  yet: a noreply address without the numeric ID attributes nothing. Tell them
+  plainly, and offer to retry now or skip this step and re-run /nsls-setmeup later.
 
   Say which you're using and why — a noreply address looks odd in `git log` if
   nobody explained it.
