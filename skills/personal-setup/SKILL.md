@@ -34,7 +34,7 @@ if [ -f "$FULL_SKILL" ]; then echo "PERSONAL_KIT_PRESENT"; else echo "PERSONAL_K
 ## Step 2: Install + enable the personal toolkit (only if missing)
 
 Tell the builder: "One sec — grabbing the personal productivity skills." Then
-install, **preserving any existing `.env`** (the org `/setup` may have written
+install, **preserving any existing `.env`** (the org `/nsls-setmeup` may have written
 `BUILDER_EMAIL` into this dir before the kit was cloned — cloning into a
 non-empty dir would otherwise fail and silently no-op):
 

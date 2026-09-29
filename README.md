@@ -31,13 +31,13 @@ ping) and PreToolUse skill hook (`hooks/skill-event.ps1`) in `settings.json`,
 since the bundled hooks use `python3`/`bash`. Idempotent; re-run anytime.
 Restart Claude Code afterward.
 
-Then open Claude Code and say `/setup` to connect your tools and optionally install personal productivity skills.
+Then open Claude Code and say `/nsls-setmeup` to connect your tools and optionally install personal productivity skills.
 
 ## Org Skills
 
 | Skill | What it does |
 |-------|-------------|
-| **/setup** | Onboarding — connect tools, install personal skills |
+| **/nsls-setmeup** | Onboarding — connect tools, install personal skills |
 | **/register-automation** | Track your work in the NSLS Automation Tracker |
 | **/product-design** | UX guardrail — DESIGN.md, reviews, focus groups |
 | **/dashboard-design** | Design a dashboard before building it — one purpose, ≤ 6 headline metrics with comparisons, right chart per data shape, color with meaning, honest stale/missing states. Brief template, chart chooser, 12 layout patterns, review checklist |
@@ -104,7 +104,7 @@ These are installed automatically by the install script:
 
 ## Personal Productivity Skills (Optional)
 
-During `/setup`, you can optionally install personal productivity skills — daily planning, weekly reviews, project logging, relationship tracking. These are Kevin's personal template — fork them, edit them, make them yours. They live in a [separate repo](https://github.com/thensls/nsls-personal-toolkit).
+During `/nsls-setmeup`, you can optionally install personal productivity skills — daily planning, weekly reviews, project logging, relationship tracking. These are Kevin's personal template — fork them, edit them, make them yours. They live in a [separate repo](https://github.com/thensls/nsls-personal-toolkit).
 ## First-Time Setup
 
 After installing, run `/connect` in Claude Code to connect your data systems (PostHog, Airtable, Slack, Customer.io, n8n, and more). Each connection persists across sessions — you only do it once per system.
@@ -275,7 +275,7 @@ toolkit. Empty `BUILDER_EMAIL` is the canonical path.
 ### Known limitations
 
 - **Tracking only fires for builders whose `BUILDER_EMAIL` is set.** Running
-  `/personal-setup` writes it; running only the org-side `/setup` does not.
+  `/personal-setup` writes it; running only the org-side `/nsls-setmeup` does not.
   Builders who skip personal-setup are invisible until they configure it or
   until a separate fix wires `BUILDER_EMAIL` into the builder-toolkit
   installer.

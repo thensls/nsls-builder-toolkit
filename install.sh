@@ -8,7 +8,7 @@
 # What this does:
 #   1. Installs the NSLS org skills (local plugin)
 #   2. Installs superpowers + compound-engineering plugins (marketplace)
-#   3. Tells you to run /setup to connect your tools
+#   3. Tells you to run /nsls-setmeup to connect your tools
 
 set -euo pipefail
 
@@ -270,7 +270,7 @@ fi
 [ -z "$INSTALL_EMAIL" ] && INSTALL_EMAIL=$(git config user.email 2>/dev/null || true)
 [ -z "$INSTALL_EMAIL" ] && INSTALL_EMAIL="${USER:-unknown}@$(hostname -s 2>/dev/null || echo unknown)"
 
-# Persist the EXACT provisional identity used for these early events so /setup
+# Persist the EXACT provisional identity used for these early events so /nsls-setmeup
 # Step 1.5 can reconcile them WITHOUT recomputing (parity with install.ps1).
 # Written beside the toolkit, not in .env (which doesn't exist yet); gitignored.
 # Idempotent — overwritten with the current value on every run.
@@ -471,7 +471,7 @@ if [ -n "$CLAUDE_BIN" ]; then
 else
   echo ""
   echo "  Could not find the 'claude' CLI in PATH."
-  echo "  After your next Claude Code session, run /setup — it will detect"
+  echo "  After your next Claude Code session, run /nsls-setmeup — it will detect"
   echo "  missing plugins and give you the install commands."
   echo ""
   echo "  Or run these manually:"
@@ -911,7 +911,7 @@ else
   echo "  NOTE: the 'claude' CLI wasn't found, so these were SKIPPED:"
   echo "    - plugins (superpowers, compound-engineering) — NOT installed"
   echo "    - bundled MCP servers (e.g. signal) — NOT registered"
-  echo "  Finish them after your first Claude Code session by running:  /setup"
+  echo "  Finish them after your first Claude Code session by running:  /nsls-setmeup"
   echo ""
 fi
 if [ "$TEST_MODE" != "1" ]; then
@@ -934,7 +934,7 @@ if [ "$TEST_MODE" = "1" ]; then
   echo ""
   echo "       CLAUDE_CONFIG_DIR=\"$CONFIG_DIR\" claude"
   echo ""
-  echo "  2. Try it: say  /setup  (or  open day )  as a first-time user would."
+  echo "  2. Try it: say  /nsls-setmeup  (or  open day )  as a first-time user would."
   echo ""
   echo "  3. Reset back to a brand-new user (wipes the test install only):"
   echo ""
@@ -957,7 +957,7 @@ else
   echo "       Terminal:    open a new window and type  cc"
   echo "     (A restart is required to load the MCP servers and hooks.)"
   echo ""
-  echo "  2. Say:  /setup"
+  echo "  2. Say:  /nsls-setmeup"
   echo "     This connects your tools (Slack, Google Drive, Calendar, Gmail,"
   echo "     Fathom — one at a time, with you) and optionally installs personal"
   echo "     productivity skills (daily planning, weekly reviews, project logging)."

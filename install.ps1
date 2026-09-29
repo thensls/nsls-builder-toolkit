@@ -34,7 +34,7 @@ $ErrorActionPreference = 'Stop'
 # host that also speaks TLS 1.3 is never downgraded.
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
 
-# How were we launched? `-File` (the /setup re-provision path, or any wrapper)
+# How were we launched? `-File` (the /nsls-setmeup re-provision path, or any wrapper)
 # sets $PSCommandPath; a bare `iwr | iex` paste does not. Under -File we hand
 # back real exit codes; under a bare paste we must NEVER `exit` -- that closes
 # the user's interactive PowerShell window and swallows the summary/error. Each
@@ -442,7 +442,7 @@ if (-not $InstallEmail) { $InstallEmail = (& git config user.email 2>$null) }
 if (-not $InstallEmail) { $InstallEmail = "$($env:USERNAME)@$($env:COMPUTERNAME)" }
 
 # Persist the EXACT provisional identity used for the install/skill events so
-# /setup Step 1.5 can reconcile early events WITHOUT recomputing. On Windows Git
+# /nsls-setmeup Step 1.5 can reconcile early events WITHOUT recomputing. On Windows Git
 # Bash the old recompute (`${USER:-unknown}@$(hostname -s)`) yields
 # `unknown@unknown` and could never match this. Written beside the toolkit (NOT
 # .env, which doesn't exist yet); untracked (see .gitignore). Idempotent.
@@ -510,7 +510,7 @@ if ($ClaudeBin) {
     Install-Plugin 'compound-engineering' 'compound-engineering@compound-engineering-plugin' `
         'https://github.com/EveryInc/compound-engineering-plugin.git'
 } else {
-    Write-Host "  Could not find the 'claude' CLI. After your next Claude Code session, run /setup."
+    Write-Host "  Could not find the 'claude' CLI. After your next Claude Code session, run /nsls-setmeup."
 }
 
 # --- Step 3.5: Register bundled MCP servers (A1 parity: stdio + http) ---
@@ -636,7 +636,7 @@ if ($ClaudeBin) {
     Write-Host "  NOTE: the 'claude' CLI wasn't found, so these steps were SKIPPED:"
     Write-Host "    - Step 3:   plugins (superpowers, compound-engineering) - NOT installed"
     Write-Host "    - Step 3.5: bundled MCP servers (e.g. signal) - NOT registered"
-    Write-Host "  Finish them after your first Claude Code session by running:  /setup"
+    Write-Host "  Finish them after your first Claude Code session by running:  /nsls-setmeup"
     Write-Host "  (or re-run this installer from a shell where 'claude' is on PATH)."
 }
 Write-Host ""
@@ -650,14 +650,14 @@ if ($Test) {
     Write-Host "=== NEXT STEP ==="
     Write-Host "  1. Restart Claude Code (quit and reopen - a restart loads the MCP servers"
     Write-Host "     and hooks). In the desktop app, click Code (top left) when it reopens."
-    Write-Host "  2. Say:  /setup"
+    Write-Host "  2. Say:  /nsls-setmeup"
     Write-Host "     It connects your tools (Slack, Google Drive, Calendar, Gmail, Fathom -"
     Write-Host "     one at a time, with you) and offers the personal productivity skills."
 }
 Write-Host ""
 # Explicit success exit under -File: native calls above leak their code into
 # $LASTEXITCODE, so a good install would otherwise return non-zero and any
-# wrapper checking the code (or /setup's re-provision) would treat it as failed.
+# wrapper checking the code (or /nsls-setmeup's re-provision) would treat it as failed.
 # Under a bare `iwr | iex` paste there's no wrapper to see a code and `exit`
 # would close the user's window, so just return.
 if ($RunningFromFile) { exit 0 } else { return }

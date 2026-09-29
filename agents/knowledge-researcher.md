@@ -42,7 +42,7 @@ You are **read-only**. You never write, append, or modify files. The skills that
 Synced read-only snapshots. Every builder has these.
 
 **Location (try in order, use the first that contains `lops.md`):**
-1. `~/.claude/local-plugins/nsls-builder-toolkit/_shared/context/` — standard `/setup` install (usually a symlink).
+1. `~/.claude/local-plugins/nsls-builder-toolkit/_shared/context/` — standard `/nsls-setmeup` install (usually a symlink).
 2. `~/nsls-skills/nsls-builder-toolkit/_shared/context/` — direct source checkout (NSLS convention).
 3. Any path ending in `nsls-builder-toolkit/_shared/context/` that contains `lops.md` — prefer `$CLAUDE_PLUGIN_ROOT` if set.
 
