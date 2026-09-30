@@ -6,7 +6,10 @@
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $bad = 0
-Get-ChildItem -Path $root -Filter *.ps1 -Recurse | Sort-Object FullName | ForEach-Object {
+# install.ps1 sits beside hooks/, not in it, and was never parsed here.
+$installer = Join-Path (Split-Path $root) 'install.ps1'
+@(Get-ChildItem -Path $root -Filter *.ps1 -Recurse) + @(Get-Item $installer -ErrorAction SilentlyContinue) |
+    Sort-Object FullName | ForEach-Object {
     $tokens = $null
     $errors = $null
     [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
