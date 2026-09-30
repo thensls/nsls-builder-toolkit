@@ -70,7 +70,7 @@ MAX_BUILDS = 200
 def git(args, cwd):
     try:
         out = subprocess.run(
-            ["git"] + args, cwd=cwd, capture_output=True, text=True, timeout=2
+            ["git"] + args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=2
         )
         return out.stdout.strip() if out.returncode == 0 else ""
     except Exception:

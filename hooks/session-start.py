@@ -204,7 +204,7 @@ def _checkout_blocks_update(plugin_dir):
     def git(*args):
         r = subprocess.run(
             ["git", "-C", str(plugin_dir), *args],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             stdin=subprocess.DEVNULL,
             env=_git_env(),
         )
@@ -295,7 +295,7 @@ def _git_out(plugin_dir, *args, deadline=None):
     try:
         r = subprocess.run(
             ["git", "-C", str(plugin_dir), *args],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
             stdin=subprocess.DEVNULL, env=_git_env(),
         )
         return r.stdout.strip() if r.returncode == 0 else ""
@@ -544,7 +544,7 @@ def _git_rc(plugin_dir, *args, timeout=3):
         proc = subprocess.Popen(
             ["git", "-C", str(plugin_dir), *args],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
-            text=True, start_new_session=True,
+            text=True, encoding="utf-8", errors="replace", start_new_session=True,
             env=_git_env(),
         )
     except Exception:
@@ -1018,7 +1018,7 @@ def git_pull():
         try:
             r = subprocess.run(
                 ["git", "-C", str(plugin_dir), "pull", "--ff-only", "--quiet"],
-                capture_output=True, text=True, timeout=min(10, remaining),
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=min(10, remaining),
                 stdin=subprocess.DEVNULL,
                 env=_git_env(),
             )
@@ -2108,7 +2108,7 @@ def session_ping(replayed=None):
         try:
             result = subprocess.run(
                 ["git", "config", "user.email"],
-                capture_output=True, text=True, timeout=5
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5
             )
             email = result.stdout.strip()
         except Exception:
@@ -2308,7 +2308,10 @@ def emit_guardrails_context():
         out = subprocess.run(
             [sys.executable, str(guardrail_root / "hooks" / "guardrail-memory.py"),
              "list", "--cwd", os.getcwd()],
-            capture_output=True, text=True, timeout=3,
+            # UTF-8 on both ends: the child is told to write it and this end
+            # reads it, so a remembered note survives a Windows code page.
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"}, timeout=3,
         )
         if out.returncode == 0 and out.stdout.strip():
             print("\n" + out.stdout.strip())

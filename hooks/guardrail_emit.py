@@ -129,7 +129,7 @@ SEEN_MAX = 400
 def _git(args, cwd=None):
     try:
         out = subprocess.run(
-            ["git"] + args, cwd=cwd, capture_output=True, text=True,
+            ["git"] + args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=GIT_TIMEOUT,
         )
         return out.stdout.strip() if out.returncode == 0 else ""
