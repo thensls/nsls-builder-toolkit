@@ -46,3 +46,6 @@ jobs:
       - name: Collector bootstrap launches once, hidden, and stays out when installed or opted out (PS 5.1)
         shell: powershell
         run: ./hooks/tests/windows/collector-bootstrap.ps1
+      - name: A push through the PowerShell tool is judged by PowerShell's rules, on a real PC
+        shell: pwsh
+        run: python hooks/tests/test_gate_powershell_paths.py
