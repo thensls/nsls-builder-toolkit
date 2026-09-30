@@ -8,11 +8,15 @@ on:
   pull_request:
     paths:
       - 'hooks/**'
+      - 'install.ps1'
+      - 'CLAUDE.md'
       - '.github/workflows/windows-hooks.yml'
   push:
     branches: [main]
     paths:
       - 'hooks/**'
+      - 'install.ps1'
+      - 'CLAUDE.md'
       - '.github/workflows/windows-hooks.yml'
 
 permissions:
@@ -46,3 +50,6 @@ jobs:
       - name: Collector bootstrap launches once, hidden, and stays out when installed or opted out (PS 5.1)
         shell: powershell
         run: ./hooks/tests/windows/collector-bootstrap.ps1
+      - name: The hook's Python step runs, and says so when it cannot, under the exact settings.json command (PS 5.1)
+        shell: powershell
+        run: ./hooks/tests/windows/shim-python-step.ps1
