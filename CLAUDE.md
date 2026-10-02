@@ -243,6 +243,12 @@ first (private repos get no secret scanning), and add reviewers explicitly
 afterwards (the org default permission is none). Give this *after* they say yes;
 it doesn't belong in the block itself.
 
+**Second opinions.** Before handing over risky work, run `/second-opinion`
+first. Risky means code that changes production or hard-to-undo data, logins,
+money or member data, or that runs unattended; or facts and numbers headed to
+leadership, members or outside NSLS. For other team-facing work, ask once in one
+line. For small or routine work, skip it.
+
 **Reviewers.** Kevin — platform, architecture, anything member-facing; final say,
 usually turns these round inside a day. Davo — Tier 2/3 design, skills, agentic
 flows. Jenna — adoption, UX, HR-ops surfaces. Plus a domain reviewer when the
