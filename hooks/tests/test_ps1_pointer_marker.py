@@ -54,8 +54,21 @@ check("the ownership path is built from this plugin and this skill", bool(own)
 fn = func_body(src)
 check("session-start.ps1 defines Test-OwnPointer", bool(fn))
 check("install.ps1 carries the identical Test-OwnPointer", fn is not None and func_body(inst) == fn)
-check("session-start.ps1 gates the overwrite on it",
-      "if (-not (Test-OwnPointer -Text $existing -OwnPath $ownPath)) { continue }" in src)
+check("session-start.ps1 gates the overwrite on it, for either toolkit's copy",
+      "if (Test-OwnPointer -Text $existing -OwnPath $tkPath) { $ours = $true }" in src
+      and "if (-not $ours) { continue }" in src
+      and '$tkPath = "local-plugins/$tk/skills/$($skillFolder.Name)/SKILL.md"' in src)
+calls = re.findall(r"^\$null = Sync-Pointers -PluginDir \$(\w+)$", src, re.M)
+check("the personal toolkit syncs first, so it wins a shared name",
+      calls == ["PersonalDir", "BuilderDir"], f"({calls})")
+check("in the same order as POINTER_PRECEDENCE in session-start.py",
+      "$PointerPrecedence = @('nsls-personal-toolkit', 'nsls-builder-toolkit')" in src
+      and 'POINTER_PRECEDENCE = [\n    "nsls-personal-toolkit",\n    "nsls-builder-toolkit",\n]'
+      in (HOOKS / "session-start.py").read_text(encoding="utf-8"))
+check("a name the first toolkit wrote is not rewritten by the second",
+      "if ($script:PointerWritten.ContainsKey($skillFolder.Name)) { continue }" in src
+      and "$script:PointerWritten[$skillFolder.Name] = $true" in src
+      and src.index("$script:PointerWritten = @{}") < src.index("$null = Sync-Pointers"))
 check("install.ps1 gates the overwrite on it",
       "if (-not (Test-OwnPointer -Text $existing -OwnPath $ownPath)) { continue }" in inst)
 check("install.ps1 names this skill's own toolkit path",

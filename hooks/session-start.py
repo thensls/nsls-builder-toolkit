@@ -64,10 +64,18 @@ PING_FAIL_MARKER = PLUGIN_DIR / ".last-ping-failed"
 # comfortably above this (install.sh sets 90).
 PING_TIMEOUT = 35
 
-# Plugins to sync, in precedence order — earlier entries win on name collision.
+# Toolkits to pull and to write skill pointers for.
 SYNC_PLUGINS = [
     "nsls-builder-toolkit",
     "nsls-personal-toolkit",
+]
+# When both toolkits ship a skill with the same name, the earlier one's pointer
+# wins. Personal first: the builder chose that toolkit and can customise it,
+# and the one name the two share today, personal-setup, is an org bootstrapper
+# that hands off to the personal copy once that is installed.
+POINTER_PRECEDENCE = [
+    "nsls-personal-toolkit",
+    "nsls-builder-toolkit",
 ]
 # The two pointer shapes the toolkit writes. sync_pointers() below writes the
 # credit shape; install.sh and hooks/sync-pointers.sh write the plain one.
@@ -87,7 +95,8 @@ def is_own_pointer(text, skill, plugins=SYNC_PLUGINS):
     toolkit path is not enough: a builder's own skill that credits or links a
     toolkit skill would match that and be overwritten, and so would a pointer
     the builder extended with notes of their own. A pointer to any of `plugins`'
-    copies of THIS skill counts, so the org copy can replace a personal one.
+    copies of THIS skill counts, so the copy that wins under POINTER_PRECEDENCE
+    can replace the other.
     Backslashes, CRLF and a BOM are normalised first (mirrors Test-OwnPointer
     in session-start.ps1).
     """
@@ -1515,15 +1524,15 @@ def _heal_and_announce(claude, record, head, deadline, marker):
 def sync_pointers():
     """Sync skill pointers from installed plugins to ~/.claude/skills/.
 
-    Iterates plugins in SYNC_PLUGINS precedence order. On name collision,
-    earlier plugins win (org skills override personal). Skips skills that
+    Iterates plugins in POINTER_PRECEDENCE order. On name collision, earlier
+    plugins win (personal skills override org). Skips skills that
     are not exactly a toolkit pointer to that skill (see is_own_pointer).
     """
     SKILLS_DIR.mkdir(parents=True, exist_ok=True)
     written = set()
     created = 0
 
-    for plugin_name in SYNC_PLUGINS:
+    for plugin_name in POINTER_PRECEDENCE:
         # Once the org toolkit is an ACTIVE plugin, its skills load through
         # the plugin system — stop regenerating its pointer stubs so the
         # stage-B migration cleanup sticks. Gates on active, not installed:
@@ -1548,7 +1557,7 @@ def sync_pointers():
                 print(f"sync: skipping skill with unsafe name: {skill!r}", file=sys.stderr)
                 continue
 
-            # Org-wins precedence: skip if a higher-precedence plugin
+            # Personal-wins precedence: skip if a higher-precedence plugin
             # already wrote this skill in the current run.
             if skill in written:
                 continue
