@@ -67,15 +67,36 @@ fi
 echo "Step 1: Installing org skills..."
 mkdir -p "$CONFIG_DIR/local-plugins"
 
-if [ -d "$PLUGIN_DIR" ]; then
+# A failed update must say so. With errors sent to /dev/null under set -e, a
+# failed fetch used to end the installer with no message at all.
+# A failed FETCH changes nothing on disk, so warn and carry on. A failed RESET
+# may leave files half-updated, so that one stops rather than claim "unchanged".
+# Only a real checkout counts as installed: an interrupted clone can leave a bare dir.
+if [ -d "$PLUGIN_DIR/.git" ]; then
   echo "  Updating existing installation..."
-  git -C "$PLUGIN_DIR" fetch origin "$REPO_BRANCH" --quiet 2>/dev/null
-  git -C "$PLUGIN_DIR" reset --hard "origin/$REPO_BRANCH" --quiet 2>/dev/null
+  if ! UPD_ERR=$(git -C "$PLUGIN_DIR" fetch origin "$REPO_BRANCH" --quiet 2>&1); then
+    echo "  WARNING: couldn't download the update, so your toolkit is UNCHANGED (still the version you had)."
+    printf '%s\n' "$UPD_ERR" | tail -3 | sed 's/^/    /'
+    echo "  Check your internet connection, then re-run this installer."
+  elif ! UPD_ERR=$(git -C "$PLUGIN_DIR" reset --hard "origin/$REPO_BRANCH" --quiet 2>&1); then
+    echo "  ERROR: the update stopped partway, so the toolkit may be incomplete."
+    printf '%s\n' "$UPD_ERR" | tail -3 | sed 's/^/    /'
+    echo "  Re-run this installer to finish it."
+    exit 1
+  else
+    echo "  Done."
+  fi
 else
   echo "  Cloning plugin..."
-  git clone --branch "$REPO_BRANCH" "$REPO_URL" "$PLUGIN_DIR" --quiet
+  if ! git clone --branch "$REPO_BRANCH" "$REPO_URL" "$PLUGIN_DIR" --quiet; then
+    echo "  ERROR: couldn't download the toolkit. Check your internet connection, then re-run this installer."
+    echo "  (If this keeps happening, delete the folder $PLUGIN_DIR and try again.)"
+    exit 1
+  fi
+  echo "  Done."
 fi
-echo "  Done."
+# The receipt: which code is actually installed.
+echo "  Installed commit: $(git -C "$PLUGIN_DIR" log -1 --format='%h %s' 2>/dev/null || echo unknown)"
 
 # --- Step 2: Enable the local plugin and register the auto-update hook in settings.json ---
 
