@@ -167,7 +167,9 @@ function Update-Checkout {
     $eap = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
-        $pullOut = (& git -C $Dir @mergeArgs 2>&1 | Out-String)
+        # ForEach-Object { "$_" }: 5.1 wraps each stderr line in a NativeCommandError
+        # dump, which can split the words the regex below looks for.
+        $pullOut = (& git -C $Dir @mergeArgs 2>&1 | ForEach-Object { "$_" } | Out-String)
         $mergeCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $eap

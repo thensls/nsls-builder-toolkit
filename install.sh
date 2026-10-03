@@ -80,6 +80,9 @@ if [ -e "$PLUGIN_DIR/.git" ]; then
     echo "  WARNING: couldn't download the update, so your toolkit is UNCHANGED (still the version you had)."
     printf '%s\n' "$UPD_ERR" | tail -3 | sed 's/^/    /'
     echo "  Check your internet connection, then re-run this installer."
+    if [ -n "${NSLS_TOOLKIT_BRANCH:-}" ]; then
+      echo "  (You set NSLS_TOOLKIT_BRANCH=$NSLS_TOOLKIT_BRANCH: check that branch exists.)"
+    fi
   elif ! UPD_ERR=$(git -C "$PLUGIN_DIR" reset --hard "origin/$REPO_BRANCH" --quiet 2>&1); then
     echo "  ERROR: the update stopped partway, so the toolkit may be incomplete."
     printf '%s\n' "$UPD_ERR" | tail -3 | sed 's/^/    /'
