@@ -168,8 +168,11 @@ Claude drafts the slide structure as JSON. Work with Kevin to define:
 
 **Preflight first, and STOP if it fails:**
 
+Mac/Linux commands here call the launcher by its full path, `~/.local/bin/nsls-python`, so nothing
+depends on this session's `PATH`. On Windows, replace it with plain `nsls-python`.
+
 ```bash
-nsls-python -c 'import pptx' && echo PREFLIGHT_OK
+~/.local/bin/nsls-python -c 'import pptx' && echo PREFLIGHT_OK
 ```
 
 If you don't see `PREFLIGHT_OK`, don't run the build commands below — the builder would get a raw
@@ -178,25 +181,24 @@ repairing and re-run the toolkit installer for them. See "Python environment" un
 
 **Repair, by platform** (a launcher the installer just wrote isn't on this session's PATH yet):
 - *Mac/Linux:* `curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash`,
-  then preflight again using the full path `~/.local/bin/nsls-python`, and keep using that
-  full path for every later `nsls-python` command in this session.
+  then preflight again.
 - *Windows:* `powershell -NoProfile -Command "iwr -useb https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.ps1 | iex"`,
   then have the builder fully restart Claude Code (Task Manager → End task on every Claude entry,
   reopen, say "back") and preflight again. Never run `install.sh` on Windows.
 
 ```bash
 # Society brand (default)
-echo '<json>' | nsls-python \
+echo '<json>' | ~/.local/bin/nsls-python \
   ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
   --brand society --output /tmp/presentation.pptx
 
 # NSLS brand
-echo '<json>' | nsls-python \
+echo '<json>' | ~/.local/bin/nsls-python \
   ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
   --brand nsls --output /tmp/presentation.pptx
 
 # Add --pdf for font-safe PDF export (works with either brand)
-echo '<json>' | nsls-python \
+echo '<json>' | ~/.local/bin/nsls-python \
   ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
   --brand society --output /tmp/presentation.pptx --pdf
 ```
@@ -248,7 +250,7 @@ already importable. Run the script with `nsls-python`, as the commands above do.
 Nothing to set up on a machine that ran the installer. Verify with:
 
 ```bash
-nsls-python -c 'import pptx, PIL, lxml; print("slides deps OK")'
+~/.local/bin/nsls-python -c 'import pptx, PIL, lxml; print("slides deps OK")'
 ```
 
 If that fails, **re-run the toolkit installer** — it reinstalls the libraries and
@@ -310,7 +312,7 @@ cat > /tmp/slides.json <<'JSON'
 JSON
 
 # 2. Build .pptx
-nsls-python ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
+~/.local/bin/nsls-python ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
   --input /tmp/slides.json \
   --output /tmp/q2-update.pptx
 

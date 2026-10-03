@@ -886,17 +886,25 @@ NSLSPYEOF
   then
     rm -f "$LAUNCHER_TMP" 2>/dev/null
     echo "  Note: couldn't write the nsls-python launcher — re-run this installer to fix it."
-  elif ! chmod +x "$LAUNCHER_TMP" 2>/dev/null || ! mv -f "$LAUNCHER_TMP" "$LAUNCHER" 2>/dev/null; then
+  elif ! chmod +x "$LAUNCHER_TMP" 2>/dev/null; then
     rm -f "$LAUNCHER_TMP" 2>/dev/null
     echo "  Note: couldn't install the nsls-python launcher — re-run this installer."
-  # Claim readiness only after the launcher ACTUALLY imports both libraries.
-  # Reporting "ready" off a successful file-write is the worst outcome here: the
-  # installer looks green and the builder still hits a raw import traceback.
-  elif "$LAUNCHER" -c 'import docx, pptx' &>/dev/null; then
-    echo "  nsls-python launcher ready (the document skills call this)."
+  # Test the NEW launcher before it replaces anything: a failed provisioning run
+  # must never swap out a launcher that was working. And claim "ready" only off
+  # a real import, never off a successful file-write.
+  elif ! "$LAUNCHER_TMP" -c 'import docx, pptx' &>/dev/null; then
+    rm -f "$LAUNCHER_TMP" 2>/dev/null
+    if [ -x "$LAUNCHER" ] && "$LAUNCHER" -c 'import docx, pptx' &>/dev/null; then
+      echo "  Note: couldn't refresh the nsls-python launcher, so your existing one (which works) was kept."
+    else
+      echo "  Note: the document skills' Python libraries aren't importable yet."
+      echo "        /gdoc-build and /nsls-slides will be unavailable until this installer is re-run; everything else is fine."
+    fi
+  elif ! mv -f "$LAUNCHER_TMP" "$LAUNCHER" 2>/dev/null; then
+    rm -f "$LAUNCHER_TMP" 2>/dev/null
+    echo "  Note: couldn't install the nsls-python launcher — re-run this installer."
   else
-    echo "  Note: the nsls-python launcher was written but can't import the libraries."
-    echo "        /gdoc-build and /nsls-slides will be unavailable; everything else is fine."
+    echo "  nsls-python launcher ready (the document skills call this)."
   fi
 
   # Put ~/.local/bin on PATH for OUR launcher, independent of whether the gws

@@ -35,15 +35,16 @@ The fastest path for a builder asking for a Google Doc:
 1. **Confirm branding.** "NSLS or Society?" Default NSLS unless the doc is for `thesociety.org` audiences.
 2. **Preflight the Python libraries — and STOP if it fails.** The installer provisions these, so this
    is normally a 1-line no-op:
+   **Mac/Linux: always call the launcher by its full path, `~/.local/bin/nsls-python`**, as every
+   command below does, so nothing depends on this session's `PATH`. On Windows use plain `nsls-python`.
    ```bash
-   nsls-python -c 'import docx' && echo PREFLIGHT_OK
+   ~/.local/bin/nsls-python -c 'import docx' && echo PREFLIGHT_OK
    ```
    **If you don't see `PREFLIGHT_OK`, do not continue to step 3.** Tell the builder in one plain
    sentence that the document tooling needs repairing and re-run the toolkit installer for them.
    **Repair, by platform** (a launcher the installer just wrote isn't on this session's PATH yet):
    - *Mac/Linux:* `curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash`,
-     then preflight again using the full path `~/.local/bin/nsls-python`, and keep using that
-     full path for every later `nsls-python` command in this session.
+     then preflight again.
    - *Windows:* `powershell -NoProfile -Command "iwr -useb https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.ps1 | iex"`,
      then have the builder fully restart Claude Code (Task Manager → End task on every Claude entry,
      reopen, say "back") and preflight again. Never run `install.sh` on Windows. Never let the builder see a raw `ModuleNotFoundError`, an import traceback,
@@ -60,7 +61,7 @@ The fastest path for a builder asking for a Google Doc:
    Guard on a real import, never a directory — macOS `/tmp` cleanup guts old installs but leaves the dirs,
    so a `-d` check passes on a broken install weeks later.
 3. **Copy the template.** `cp templates/build_doc.py ~/build_<short-name>.py` (must be in `~`, not `/tmp` — see gws cwd gotcha below). Customize content sections.
-4. **Build the docx.** `nsls-python ~/build_<short-name>.py` → produces `~/<short-name>.docx`.
+4. **Build the docx.** `~/.local/bin/nsls-python ~/build_<short-name>.py` → produces `~/<short-name>.docx`.
 5. **Upload as Google Doc.** `export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"; set -o pipefail; cd ~ && gws drive files create --json '{"name":"<doc title>","mimeType":"application/vnd.google-apps.document"}' --upload <short-name>.docx --upload-content-type "application/vnd.openxmlformats-officedocument.wordprocessingml.document" --format json | tail -10` — the `pipefail` is load-bearing: without it `tail` swallows a failed upload and the command still exits 0.
 6. **Return the URL.** `https://docs.google.com/document/d/<id>/edit` — give the user that link.
 7. **Clean up local artifacts.** `rm ~/build_<short-name>.py ~/<short-name>.docx`
