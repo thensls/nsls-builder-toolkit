@@ -100,8 +100,10 @@ def is_own_pointer(text, skill, plugins=SYNC_PLUGINS):
         + r"[^`\n]*/local-plugins/nsls-builder-toolkit/hooks/skill-event\.sh\n```\n\n"
         + "Then read " + follow
     )
-    # Front matter is `---`, lines that are not themselves `---`, then `---`.
-    front = r"---\n(?:(?!---\n)[^\n]*\n)*?---\n\s*"
+    # Front matter exactly as every writer has always emitted it: a name line
+    # and a one-line folded description. Keys of the builder's own (model:,
+    # allowed-tools:, ...) mean they have customised it, so it is theirs.
+    front = r"---\nname:[^\n]*\ndescription: >-\n  [^\n]*\n---\n\s*"
     return re.fullmatch(front + f"(?:Read {follow}|{credit})", t) is not None
 
 

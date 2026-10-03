@@ -83,6 +83,11 @@ check("a credit block with an extra command in the fence",
 check("body text between two --- lines is not front matter",
       not own("---\nname: x\n---\nMy own notes.\n---\n" + f"Read and follow the full skill at `~/.claude/{ORG}`.\n",
               "brainstorm"))
+check("a pointer the builder added a front-matter key to",
+      not own(PLAIN.replace("description: >-", "model: opus\ndescription: >-"), "brainstorm"))
+check("a pointer whose description the builder made multi-line",
+      not own(PLAIN.replace("  Explore an idea.\n", "  Explore an idea.\n  Mine: ask about budget.\n"),
+              "brainstorm"))
 check("no front matter at all",
       not own(f"Read and follow the full skill at `~/.claude/{ORG}`.\n", "brainstorm"))
 check("install.sh's org-only check rejects a personal-copy pointer",
