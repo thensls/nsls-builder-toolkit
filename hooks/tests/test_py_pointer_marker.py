@@ -59,7 +59,7 @@ check("credit pointer (session-start.py shape)", own(credit(f"/Users/b/.claude/{
 check("credit pointer from before the hook path was absolute",
       own(credit(f"/Users/b/.claude/{ORG}", "$HOME/.claude/local-plugins/nsls-builder-toolkit/hooks/skill-event.sh"),
           "brainstorm"))
-check("a pointer to the personal copy of THIS skill (org may replace it)",
+check("a pointer to the other toolkit's copy of THIS skill (either may replace it)",
       own(FM + f"Read and follow the full skill at `~/.claude/{PERSONAL}`.\n", "brainstorm"))
 check("CRLF, a BOM and Windows backslashes",
       own("\ufeff" + PLAIN.replace("~/.claude/", "C:\\Users\\b\\.claude\\")
@@ -134,6 +134,30 @@ with tempfile.TemporaryDirectory() as td:
     check("the builder's own skill is untouched", read(cfg, "brainstorm") == MINE)
     check("our stale pointer is refreshed", "NEW description of plan" in read(cfg, "plan"))
     check("and the refresh is still ours next session", own(read(cfg, "plan"), "plan"))
+
+print("both toolkits ship the same name: the personal copy wins")
+with tempfile.TemporaryDirectory() as td:
+    cfg = fake_config(Path(td))
+    for tk in ("nsls-builder-toolkit", "nsls-personal-toolkit"):
+        d = cfg / "local-plugins" / tk / "skills" / "personal-setup"
+        d.mkdir(parents=True)
+        (d / "SKILL.md").write_text(f"---\nname: personal-setup\ndescription: {tk} copy.\n---\n\nBody.\n")
+    org_ptr = ("---\nname: personal-setup\ndescription: >-\n  org\n---\n\nRead and follow the full skill at "
+               "`~/.claude/local-plugins/nsls-builder-toolkit/skills/personal-setup/SKILL.md`.\n")
+    (cfg / "skills" / "personal-setup").mkdir(parents=True)
+    (cfg / "skills" / "personal-setup" / "SKILL.md").write_text(org_ptr)
+    hook.CONFIG_DIR, hook.SKILLS_DIR = cfg, cfg / "skills"
+    hook.sync_pointers()
+    got = read(cfg, "personal-setup")
+    check("an existing org pointer is taken over by the personal copy",
+          "nsls-personal-toolkit/skills/personal-setup/SKILL.md" in got and "nsls-personal-toolkit copy." in got)
+    hook.sync_pointers()
+    check("and it stays personal on the next session",
+          "nsls-personal-toolkit/skills/personal-setup/SKILL.md" in read(cfg, "personal-setup"))
+    mine = "---\nname: personal-setup\n---\n\nMy own setup steps.\n"
+    (cfg / "skills" / "personal-setup" / "SKILL.md").write_text(mine)
+    hook.sync_pointers()
+    check("a builder's own skill of that name still beats both", read(cfg, "personal-setup") == mine)
 
 print("hooks/sync-pointers.sh, for real")
 with tempfile.TemporaryDirectory() as td:

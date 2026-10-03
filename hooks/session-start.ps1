@@ -545,10 +545,19 @@ function Sync-Pointers {
         # it never matched, no pointer was ever refreshed, and changed
         # descriptions never reached Windows builders. Anything looser than an
         # exact pointer would overwrite skills the builder wrote.
+        # A toolkit synced earlier already wrote this name: it wins.
+        if ($script:PointerWritten.ContainsKey($skillFolder.Name)) { continue }
         $ownPath = "local-plugins/$pluginName/skills/$($skillFolder.Name)/SKILL.md"
         if (Test-Path $destMd) {
             $existing = [string](Get-Content $destMd -Raw -Encoding UTF8)
-            if (-not (Test-OwnPointer -Text $existing -OwnPath $ownPath)) { continue }
+            # Either toolkit's pointer to THIS skill may be replaced, so the
+            # personal copy can take over a name the org pointer held.
+            $ours = $false
+            foreach ($tk in $PointerPrecedence) {
+                $tkPath = "local-plugins/$tk/skills/$($skillFolder.Name)/SKILL.md"
+                if (Test-OwnPointer -Text $existing -OwnPath $tkPath) { $ours = $true }
+            }
+            if (-not $ours) { continue }
         }
         if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
         $pointerPath = "~/.claude/$ownPath"
@@ -566,6 +575,7 @@ Read and follow the full skill at ``$pointerPath``.
         # every session, so a BOM here would silently re-introduce one on files
         # install.ps1 just wrote clean.
         [System.IO.File]::WriteAllText($destMd, ($pointer + "`r`n"), (New-Object System.Text.UTF8Encoding $false))
+        $script:PointerWritten[$skillFolder.Name] = $true
         $count++
     }
     return $count
@@ -573,8 +583,12 @@ Read and follow the full skill at ``$pointerPath``.
 
 # --- 2. sync pointer skills ---
 if (-not (Test-Path $SkillsDir)) { New-Item -ItemType Directory -Path $SkillsDir -Force | Out-Null }
-$null = Sync-Pointers -PluginDir $BuilderDir
+# Personal first: when both toolkits ship a skill with the same name, the
+# personal one wins (same order as POINTER_PRECEDENCE in session-start.py).
+$PointerPrecedence = @('nsls-personal-toolkit', 'nsls-builder-toolkit')
+$script:PointerWritten = @{}
 $null = Sync-Pointers -PluginDir $PersonalDir
+$null = Sync-Pointers -PluginDir $BuilderDir
 
 # --- 2b. surface announcements stashed by the previous detached ping ---
 # session-ping.ps1 runs detached, so it can't print to session context itself;
