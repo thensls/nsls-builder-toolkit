@@ -26,7 +26,7 @@ description: >-
 
 Machines can hold OAuth client files from several gws-based tools; the default config dir
 is contested ground (a foreign client there 403s every call with "…required permission to
-use project `<other-project>`…"). The gdoc skills (`/gdoc-edit`, `/gdoc-build`, `/setup`'s
+use project `<other-project>`…"). The gdoc skills (`/gdoc-edit`, `/gdoc-build`, `/nsls-setmeup`'s
 turnkey step) ALWAYS run from the toolkit's own profile; for other gws work, a healthy
 default dir is fine — but on any wrong-project 403, switch to the profile (and log in with
 the services you actually need, e.g. `--services docs,drive,sheets`):

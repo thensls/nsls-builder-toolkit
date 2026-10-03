@@ -195,7 +195,7 @@ If a token is compromised or the user just wants a fresh one:
 
 **`403 not your profile`** on a `person/<slug>` call → self-scope token reading a slug that isn't theirs (or a typo'd slug — the API deliberately doesn't distinguish). Have them check the slug spelling against their own name.
 
-**Tools still missing after restart** → run `/mcp` (or `claude mcp list`) to see if the `signal` server is listed. If it's listed but errored, run the `--selftest` from Step 5 to see the failure. If it's **not listed at all**, the server was never registered — this is the local-enable gap from Step 1, *not* a disabled plugin. Don't re-run `/setup` or re-enable the plugin; that won't register the MCP server. Run the `claude mcp add` from Step 1 (`claude mcp get signal` first to confirm it's absent), then restart.
+**Tools still missing after restart** → run `/mcp` (or `claude mcp list`) to see if the `signal` server is listed. If it's listed but errored, run the `--selftest` from Step 5 to see the failure. If it's **not listed at all**, the server was never registered — this is the local-enable gap from Step 1, *not* a disabled plugin. Don't re-run `/nsls-setmeup` or re-enable the plugin; that won't register the MCP server. Run the `claude mcp add` from Step 1 (`claude mcp get signal` first to confirm it's absent), then restart.
 
 ## Why a token file (not an env var, not a shell wrapper)
 

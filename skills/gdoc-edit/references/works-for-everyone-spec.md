@@ -65,7 +65,7 @@ super-admin artifact (domain-wide delegation) and **without** a shared secret.
   > sign in with NSLS and grant Google Docs access: `<authorise-url>`"
   They click once (NSLS Auth → Google consent), and from then on it just works (refresh token
   persists). No secrets stored locally.
-- `/setup` can *optionally* offer to pre-authorise, but lazy-on-first-use is lower friction and
+- `/nsls-setmeup` can *optionally* offer to pre-authorise, but lazy-on-first-use is lower friction and
   is the recommended default. Read actions and write actions both gate on the same one-time
   consent.
 
