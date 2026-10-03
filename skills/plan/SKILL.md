@@ -52,7 +52,7 @@ Launch the `knowledge-researcher` agent — always. This single call covers all 
 
 ```
 Task(
-  subagent_type="nsls-builder-toolkit:research:knowledge-researcher",
+  subagent_type="nsls-builder-toolkit:knowledge-researcher",
   prompt="Planning context for <work type>: <plan request>
   Keywords: <5-7 extracted keywords>"
 )
