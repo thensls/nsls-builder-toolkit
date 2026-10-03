@@ -207,7 +207,7 @@ for name, blankable in (("we@ird;x", True), ("a=b", False), ("café", False)):
         git(plugin_dir, "config", f"branch.{name}.mergeOptions", "-s ours")
         ship(seed, nsls, "skill.md", "v2 from NSLS\n", branch=name)
         before = head(plugin_dir)
-        run()
+        out = run()
         if blankable:
             check(f"on branch {name!r}, mergeOptions are blanked and it is a true fast-forward",
                   head(plugin_dir) == upstream(plugin_dir)
@@ -215,6 +215,16 @@ for name, blankable in (("we@ird;x", True), ("a=b", False), ("café", False)):
         else:
             check(f"on branch {name!r}, which cannot be blanked, nothing is merged at all",
                   head(plugin_dir) == before and (plugin_dir / "skill.md").read_text() == "v1\n")
+            check("...and, being behind, it says so instead of going stale in silence",
+                  "cannot protect" in out and "FROZEN" in out and name not in out)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # The same branch with nothing new upstream: nothing to say.
+    seed, nsls, plugin_dir = make_world(tmp)
+    git(seed, "push", "--quiet", str(nsls), "HEAD:a=b")
+    git(plugin_dir, "fetch", "--quiet")
+    git(plugin_dir, "checkout", "--quiet", "-b", "a=b", "--track", "origin/a=b")
+    check("a branch that cannot be blanked but is level stays quiet", run() == "")
 
 with tempfile.TemporaryDirectory() as tmp:
     # --squash stages the new tree and leaves the branch where it is; the next
@@ -301,6 +311,26 @@ with tempfile.TemporaryDirectory() as tmp:
           "unfinished git operation" in out and "FROZEN" in out)
     check("...while the fetch still ran, so the stale-branch check sees today's main",
           git(plugin_dir, "rev-parse", "origin/main") == git(nsls, "rev-parse", "main"))
+
+with tempfile.TemporaryDirectory() as tmp:
+    # An operation started WHILE the fetch runs (it can take seconds) is still
+    # seen: the check sits after the fetch, immediately before the merge.
+    seed, nsls, plugin_dir = make_world(tmp)
+    ship(seed, nsls, "skill2.md", "new\n")
+    real_run = subprocess.run
+    def run_then_bisect(args, *a, **k):
+        r = real_run(args, *a, **k)
+        if "fetch" in args and any("nsls-no-hooks" in str(x) for x in args):
+            real_run(["git", "-C", str(plugin_dir), "bisect", "start"], capture_output=True)
+        return r
+    before = head(plugin_dir)
+    subprocess.run = run_then_bisect
+    try:
+        out = run()
+    finally:
+        subprocess.run = real_run
+    check("a bisect started during the fetch is seen: the checkout is NOT moved",
+          head(plugin_dir) == before and "unfinished git operation" in out)
 
 with tempfile.TemporaryDirectory() as tmp:
     # A detached checkout is a deliberate pin: still not moved, still quiet.

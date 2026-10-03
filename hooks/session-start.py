@@ -337,6 +337,24 @@ def _warn_operation_in_progress(plugin, plugin_dir):
     )
 
 
+def _warn_unguardable_branch(plugin, plugin_dir):
+    """Say so when the branch's NAME kept a behind checkout from updating.
+
+    The update blanks the branch's mergeOptions through `-c`, which cannot carry
+    a name containing "=" or anything outside plain ASCII (_CONFIG_SAFE_BRANCH),
+    and merging without that guard can discard NSLS's changes. The name itself
+    is not printed: it is text someone else can choose."""
+    print(
+        f"WARNING - {plugin} did not self-update: the checkout at {plugin_dir} is "
+        f"on a branch whose name the automatic update cannot protect (it contains "
+        f"'=' or characters outside plain ASCII) and is behind its upstream, so "
+        f"automatic updates are FROZEN while it stays on that branch. Tell the "
+        f"user at the first natural moment and offer the fix: rename the branch "
+        f"using only letters, digits, '-', '_', '.' and '/', or put the checkout "
+        f"back on main."
+    )
+
+
 def _git_out(plugin_dir, *args, deadline=None):
     """Run a git command, optionally bounded by a shared deadline.
 
@@ -906,7 +924,8 @@ def _guarded_ff_merge(plugin_dir, target, branch, wait, output=subprocess.DEVNUL
         (--no-overwrite-ignore): it refuses instead, and _warn_if_frozen says so.
     """
     if not _CONFIG_SAFE_BRANCH.fullmatch(branch or ""):
-        return -1  # its mergeOptions cannot be blanked, so it is not merged
+        return -1  # its mergeOptions cannot be blanked, so it is not merged (a backstop:
+        # _update_checkout checks first, so that it can say so)
     args = ["git", "-C", str(plugin_dir), *_no_hooks(plugin_dir),
             "-c", "maintenance.auto=false", "-c", "gc.auto=0",
             "-c", f"branch.{branch}.mergeOptions=",
@@ -1074,6 +1093,7 @@ def report_personal_fork_drift(deadline=None):
 PULL_FETCH_TIMEOUT = 10
 PULL_MERGE_MIN_LEFT_S = 2
 OP_IN_PROGRESS = "op-in-progress"
+UNGUARDABLE_BRANCH = "unguardable-branch"
 
 
 def _update_checkout(plugin_dir, deadline):
@@ -1086,7 +1106,8 @@ def _update_checkout(plugin_dir, deadline):
     the merge target is the branch's upstream, `@{u}` — what pull merges.
 
     Returns (code, git_output). code is the merge's exit status; OP_IN_PROGRESS
-    when an unfinished operation held the merge back; None when nothing was
+    when an unfinished operation held the merge back; UNGUARDABLE_BRANCH when
+    the branch's name kept it from being merged and it is behind; None when nothing was
     merged and there is nothing to say (the fetch failed, detached, no time
     left, the merge still running when its wait ended, or this checkout could
     not be read).
@@ -1094,15 +1115,6 @@ def _update_checkout(plugin_dir, deadline):
     def left():
         return deadline - time.monotonic()
 
-    if left() <= 0:
-        return None, ""
-    rc, probe = _git_rc(plugin_dir, "rev-parse", "--symbolic-full-name", "HEAD",
-                        *[a for name in GIT_OP_STATE for a in ("--git-path", name)],
-                        timeout=min(3, left()))
-    lines = probe.splitlines()
-    if rc != 0 or len(lines) != 1 + len(GIT_OP_STATE):
-        return None, ""
-    head, markers = lines[0], lines[1:]
     if left() <= 0:
         return None, ""
     try:
@@ -1113,6 +1125,19 @@ def _update_checkout(plugin_dir, deadline):
         ).returncode == 0
     except Exception:
         fetched = False
+    if left() <= 0:
+        return None, ""
+    # Read AFTER the fetch, immediately before the merge: the fetch can take
+    # seconds, and a branch switched or an operation started inside them must be
+    # what the merge is judged against. git has no lock a separate `git bisect
+    # start` would honour, so this is as close to the merge as the check can sit.
+    rc, probe = _git_rc(plugin_dir, "rev-parse", "--symbolic-full-name", "HEAD",
+                        *[a for name in GIT_OP_STATE for a in ("--git-path", name)],
+                        timeout=min(3, left()))
+    lines = probe.splitlines()
+    if rc != 0 or len(lines) != 1 + len(GIT_OP_STATE):
+        return None, ""
+    head, markers = lines[0], lines[1:]
     if any(_git_path_exists(plugin_dir, rel) for rel in markers):
         return OP_IN_PROGRESS, ""
     if not fetched:
@@ -1122,11 +1147,20 @@ def _update_checkout(plugin_dir, deadline):
         return None, ""
     if not head.startswith("refs/heads/"):
         return None, ""  # detached: a deliberate pin, and it has no upstream to merge
+    branch = head[len("refs/heads/"):]
+    if not _CONFIG_SAFE_BRANCH.fullmatch(branch):
+        # Not merged (see _CONFIG_SAFE_BRANCH). Said out loud only when that
+        # actually leaves it behind, so a level checkout does not cry wolf.
+        if left() <= 0:
+            return None, ""
+        rc, behind = _git_rc(plugin_dir, "rev-list", "--count", "HEAD..@{u}",
+                             timeout=min(3, left()))
+        stuck = rc == 0 and behind.isdigit() and int(behind) > 0
+        return (UNGUARDABLE_BRANCH if stuck else None), ""
     if left() < PULL_MERGE_MIN_LEFT_S:
         return None, ""  # a write we might have to abandon is a write we do not begin
     with tempfile.TemporaryFile() as out:
-        code = _guarded_ff_merge(plugin_dir, "@{u}", head[len("refs/heads/"):],
-                                 left(), output=out)
+        code = _guarded_ff_merge(plugin_dir, "@{u}", branch, left(), output=out)
         if code is None:
             return None, ""  # still running: it finishes on its own
         out.seek(0)
@@ -1179,6 +1213,8 @@ def git_pull(deadline=None):
             code, out = _update_checkout(plugin_dir, deadline)
             if code == OP_IN_PROGRESS:
                 _warn_operation_in_progress(plugin, plugin_dir)
+            elif code == UNGUARDABLE_BRANCH:
+                _warn_unguardable_branch(plugin, plugin_dir)
             elif code:  # None (nothing merged, nothing to say) and 0 both fall through
                 _warn_if_frozen(plugin, plugin_dir, out, deadline=deadline)
             # Runs whether the update succeeded or not: a clean update aimed at

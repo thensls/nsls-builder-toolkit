@@ -142,6 +142,7 @@ foreach ($case in @(@('we@ird;x', $true), @('a=b', $false))) {
         Check "on branch '$name', mergeOptions are blanked and it is a true fast-forward" (((Head $w) -eq (Upstream $w)) -and ((Read-Lf (Join-Path $w.Plugin 'skill.md')) -eq "v2 from NSLS`n"))
     } else {
         Check "on branch '$name', which cannot be blanked, nothing is merged at all" (((Head $w) -eq $before) -and ((Read-Lf (Join-Path $w.Plugin 'skill.md')) -eq "v1`n"))
+        Check '...and, being behind, it says so instead of going stale in silence' (($out -match 'cannot protect') -and ($out -match 'FROZEN') -and ($out -notmatch [regex]::Escape($name))) $out
     }
 }
 

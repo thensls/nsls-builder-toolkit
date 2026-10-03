@@ -81,13 +81,16 @@ function Update-Checkout {
     # the one pull runs; '@{u}' is what pull merges. Same steps as
     # _update_checkout in the .py; the .py adds the 15s envelope, which this
     # section has never had - the merge is a local write and is never stopped.
+    $noHooks = (Join-Path $Dir '.git/nsls-no-hooks') -replace '\\', '/'   # deliberately never created
+    & git -C $Dir -c "core.hooksPath=$noHooks" fetch --quiet 2>&1 | Out-Null
+    $fetchCode = $LASTEXITCODE
+    # Read AFTER the fetch, immediately before the merge: a branch switched or an
+    # operation started while the fetch ran must be what the merge is judged
+    # against. Same order as the .py.
     $opArgs = @()
     foreach ($n in $GitOpState) { $opArgs += @('--git-path', $n) }
     $probe = @(& git -C $Dir rev-parse --symbolic-full-name HEAD @opArgs 2>$null)
     if ($LASTEXITCODE -ne 0 -or $probe.Count -ne (1 + $GitOpState.Count)) { return }
-    $noHooks = (Join-Path $Dir '.git/nsls-no-hooks') -replace '\\', '/'   # deliberately never created
-    & git -C $Dir -c "core.hooksPath=$noHooks" fetch --quiet 2>&1 | Out-Null
-    $fetchCode = $LASTEXITCODE
     foreach ($rel in ($probe | Select-Object -Skip 1)) {
         if (Test-GitPath -Dir $Dir -Rel $rel.Trim()) {
             # Held back silently, an operation abandoned weeks ago would freeze the
@@ -102,7 +105,15 @@ function Update-Checkout {
     if ($fetchCode -ne 0) { return }
     if ($probe[0] -cmatch '^refs/heads/(.+)$') { $branch = $Matches[1] } else { return }   # detached: a deliberate pin
     $mergeArgs = Get-FastForwardArgs -Dir $Dir -Branch $branch -Target '@{u}'
-    if (-not $mergeArgs) { return }   # a branch name whose mergeOptions cannot be blanked
+    if (-not $mergeArgs) {
+        # A branch name whose mergeOptions cannot be blanked: not merged. Said out
+        # loud only when that leaves it behind; the name itself is not printed.
+        $behind = (& git -C $Dir rev-list --count 'HEAD..@{u}' 2>$null | Out-String).Trim()
+        if ($LASTEXITCODE -eq 0 -and $behind -match '^\d+$' -and [int]$behind -gt 0) {
+            Write-Output ("WARNING - $(Split-Path $Dir -Leaf) did not self-update: the checkout at $Dir is on a branch whose name the automatic update cannot protect (it contains '=' or characters outside plain ASCII) and is behind its upstream, so automatic updates are FROZEN while it stays on that branch. Tell the user at the first natural moment and offer the fix: rename the branch using only letters, digits, '-', '_', '.' and '/', or put the checkout back on main.")
+        }
+        return
+    }
     # Windows PowerShell 5.1 applies $ErrorActionPreference to native stderr
     # redirected with 2>&1, and this script runs under SilentlyContinue, which
     # drops it - and git's refusal is on stderr. 'Continue' for this one capture,
