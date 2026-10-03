@@ -14,15 +14,15 @@ $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors)
 if ($errors.Count -gt 0) { throw "session-start.ps1 does not parse: $($errors[0].Message)" }
 $want = @('Clear-GitRepoEnv', 'Report-PersonalForkDrift', 'Get-PullSourceUrl', 'Test-CanonicalOrigin', 'Test-StampFresh', 'Claim-Lock', 'Release-Lock', 'Invoke-GitBounded',
-          'Test-GitPath', 'Test-CleanToFastForward', 'Invoke-FastForwardDetached', 'Get-CheckoutState', 'Invoke-ForkCatchUp')
+          'Test-GitPath', 'Get-FastForwardArgs', 'Test-CleanToFastForward', 'Invoke-FastForwardDetached', 'Get-CheckoutState', 'Invoke-ForkCatchUp')
 $fns = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $want -contains $n.Name }, $true)
 if ($fns.Count -ne $want.Count) { throw "expected $($want.Count) functions in session-start.ps1, found $($fns.Count)" }
 foreach ($f in $fns) { Invoke-Expression $f.Extent.Text }
 # The two lists the new helpers read, lifted from the script too, so the smoke
 # test can never drift from what the hook actually checks.
 $lists = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and
-    @('$PersonalOpState', '$PersonalStatusArgs') -contains $n.Left.Extent.Text }, $true)
-if ($lists.Count -ne 2) { throw "expected `$PersonalOpState and `$PersonalStatusArgs in session-start.ps1, found $($lists.Count)" }
+    @('$GitOpState', '$PersonalStatusArgs') -contains $n.Left.Extent.Text }, $true)
+if ($lists.Count -ne 2) { throw "expected `$GitOpState and `$PersonalStatusArgs in session-start.ps1, found $($lists.Count)" }
 foreach ($a in $lists) { Invoke-Expression ('$script:' + $a.Extent.Text.Substring(1)) }
 
 # The constants the lifted functions read, exactly as session-start.ps1 sets them.

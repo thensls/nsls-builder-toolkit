@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 import urllib.error
@@ -192,7 +193,10 @@ _FREEZE_SIGNS = (
 )
 
 
-def _checkout_blocks_update(plugin_dir):
+IGNORED_BLOCKER = "ignored local file(s) that the update would replace"
+
+
+def _checkout_blocks_update(plugin_dir, deadline=None):
     """Why this checkout itself blocks a fast-forward, or None if it doesn't.
 
     Asked BEFORE claiming a toolkit is frozen, because "local commits or edits"
@@ -203,17 +207,24 @@ def _checkout_blocks_update(plugin_dir):
     back up local changes that did not exist.
 
     Returns a human phrase naming the real blocker so the warning can say which
-    of the two it is, since the repair differs: commits need a backup branch,
-    a dirty tree needs a stash or a commit.
+    it is, since the repair differs: commits need a backup branch, a dirty tree
+    needs a stash or a commit, and an ignored file the update would replace
+    needs moving aside — the update refuses rather than overwrite it.
 
-    Unable to tell (git failed, no upstream configured, anything unexpected) is
-    reported as None — NOT as frozen. A guess is what this function exists to
-    stop, and staying quiet costs at most one session's update, which the next
-    session's pull picks up anyway."""
+    Unable to tell (git failed, no upstream configured, out of time, anything
+    unexpected) is reported as None — NOT as frozen. A guess is what this
+    function exists to stop, and staying quiet costs at most one session's
+    update, which the next session's update picks up anyway."""
     def git(*args):
+        # Inside the caller's deadline: this runs within the 15s update envelope.
+        timeout = 5
+        if deadline is not None:
+            timeout = min(timeout, deadline - time.monotonic())
+            if timeout <= 0:
+                raise TimeoutError
         r = subprocess.run(
             ["git", "-C", str(plugin_dir), *args],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
             stdin=subprocess.DEVNULL,
             env=_git_env(),
         )
@@ -238,12 +249,22 @@ def _checkout_blocks_update(plugin_dir):
             return f"{commits} local commit(s) not in its upstream"
         if dirty:
             return "uncommitted local edits"
-        return None
+        # Clean and level, yet refused: the update adds a path that already
+        # exists here as a file git does not show (ignored, typically). The merge
+        # runs with --no-overwrite-ignore, so it refuses where plain git would
+        # silently replace the builder's file. Counted from the paths the update
+        # adds, never from git's error text (see _warn_if_frozen).
+        code, added = git("diff", "--name-only", "-z", "--no-renames",
+                          "--diff-filter=A", "HEAD", "@{u}")
+        if code != 0:
+            return None
+        hits = sum(1 for p in added.split("\0") if p and os.path.lexists(plugin_dir / p))
+        return f"{hits} {IGNORED_BLOCKER}" if hits else None
     except Exception:
         return None
 
 
-def _warn_if_frozen(plugin, plugin_dir, err):
+def _warn_if_frozen(plugin, plugin_dir, err, deadline=None):
     """Announce a self-update blocked by the checkout's own state. stdout of a
     SessionStart hook lands in the model's context, so Claude can tell the
     user and offer the repair — a frozen toolkit must never be silent.
@@ -268,20 +289,69 @@ def _warn_if_frozen(plugin, plugin_dir, err):
     matched = next((s for s in _FREEZE_SIGNS if s in err), None)
     if matched is None:
         return
-    blocker = _checkout_blocks_update(plugin_dir)
+    blocker = _checkout_blocks_update(plugin_dir, deadline=deadline)
     if blocker is None:
         # Verified clean and level with upstream: the pull failed for some other
         # reason and this is not a frozen toolkit. Nothing to repair, so say
         # nothing rather than send Claude after a backup with no target.
         return
+    if blocker.endswith(IGNORED_BLOCKER):
+        # A backup branch would not hold these: git does not track them. Their
+        # names are not printed (they are paths NSLS's update chose); a
+        # fast-forward attempt lists them for Claude when it goes to look.
+        fix = ("find those files (a fast-forward attempt names them), copy them "
+               "somewhere safe and move them out of the way, then fast-forward "
+               "the checkout to its upstream and help them keep whatever in "
+               "those files was theirs")
+    else:
+        fix = ("preserve their local changes on a backup branch, then "
+               "fast-forward the checkout to its upstream")
     print(
         f"WARNING - {plugin} could not self-update: the checkout at {plugin_dir} "
         f"has {blocker}, so automatic updates are FROZEN and this "
         f"toolkit is going stale. Tell the user at the first natural moment and "
-        f"offer the fix: preserve their local changes on a backup branch, then "
-        f"fast-forward the checkout to its upstream. (Skills in ~/.claude/skills "
+        f"offer the fix: {fix}. (Skills in ~/.claude/skills "
         f"are the right place for personal edits and are unaffected.) "
         f"git refused with: {matched!r}"
+    )
+
+
+def _warn_operation_in_progress(plugin, plugin_dir):
+    """Say so when the update was held back by an unfinished git operation.
+
+    A checkout mid-bisect, mid-rebase or mid-cherry-pick can sit clean on its
+    branch, and fast-forwarding that branch changes what the operation does, so
+    the update does not run. Held back silently, an operation abandoned weeks ago
+    would freeze the toolkit with no signal — the failure _warn_if_frozen exists
+    for — so it is said out loud. Someone may genuinely be mid-operation in
+    another session, which is why the wording leaves room for that."""
+    print(
+        f"WARNING - {plugin} did not self-update this session: the checkout at "
+        f"{plugin_dir} has an unfinished git operation in progress (a merge, "
+        f"rebase, cherry-pick, revert or bisect), and updating under it would "
+        f"change what that operation does. If nobody is working in that checkout "
+        f"right now, it was left behind and automatic updates stay FROZEN until "
+        f"it is finished or abandoned. Tell the user at the first natural moment "
+        f"and offer to look; finish or abort the operation only after they "
+        f"confirm nothing of theirs depends on it."
+    )
+
+
+def _warn_unguardable_branch(plugin, plugin_dir):
+    """Say so when the branch's NAME kept a behind checkout from updating.
+
+    The update blanks the branch's mergeOptions through `-c`, which cannot carry
+    a name containing "=" or anything outside plain ASCII (_CONFIG_SAFE_BRANCH),
+    and merging without that guard can discard NSLS's changes. The name itself
+    is not printed: it is text someone else can choose."""
+    print(
+        f"WARNING - {plugin} did not self-update: the checkout at {plugin_dir} is "
+        f"on a branch whose name the automatic update cannot protect (it contains "
+        f"'=' or characters outside plain ASCII) and is behind its upstream, so "
+        f"automatic updates are FROZEN while it stays on that branch. Tell the "
+        f"user at the first natural moment and offer the fix: rename the branch "
+        f"using only letters, digits, '-', '_', '.' and '/', or put the checkout "
+        f"back on main."
     )
 
 
@@ -342,9 +412,9 @@ def _warn_if_stale_by_configuration(plugin, plugin_dir, deadline=None):
     docstring protects, and it is a different git state than a branch with
     nowhere to pull from.
 
-    Costs no network. `git pull` fetches the whole remote by default, so
-    origin/main is already current by the time this runs, and everything here is
-    a local ref comparison.
+    Costs no network. The update's bare `git fetch` fetches the whole remote by
+    default, so origin/main is already current by the time this runs, and
+    everything here is a local ref comparison.
     """
     # Four git calls at up to GIT_TIMEOUT each, twice over (two toolkits),
     # running AFTER git_pull's 15s and before two 35s ping attempts inside a
@@ -487,10 +557,12 @@ PERSONAL_FF_MIN_LEFT_S = 5
 # second, with hooks and background maintenance switched off for it.
 PERSONAL_FF_WAIT_S = 20
 # git's markers for an operation in progress. A checkout mid-bisect, mid-rebase,
-# mid-am or mid-revert can look clean and sit on main, and moving main under it
-# changes what that operation does. git merge itself only refuses some of these.
-PERSONAL_OP_STATE = ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_START",
-                     "BISECT_LOG", "rebase-merge", "rebase-apply", "sequencer")
+# mid-am or mid-revert can look clean and sit on its branch, and moving that
+# branch under it changes what the operation does. git merge itself only refuses
+# some of these. Both unattended fast-forwards check them: the daily update and
+# the clean-fork catch-up.
+GIT_OP_STATE = ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_START",
+                "BISECT_LOG", "rebase-merge", "rebase-apply", "sequencer")
 # The one status that counts everything: untracked files even where
 # status.showUntrackedFiles=no hides them, and submodules even where configured away.
 PERSONAL_STATUS_ARGS = ("status", "--porcelain=v1", "--untracked-files=all", "--ignore-submodules=none")
@@ -797,7 +869,7 @@ def _clean_to_fast_forward(git, plugin_dir):
     rc, branch = git("symbolic-ref", "--short", "-q", "HEAD")
     if rc != 0 or branch != "main":
         return False
-    rc, paths = git("rev-parse", *[a for name in PERSONAL_OP_STATE for a in ("--git-path", name)])
+    rc, paths = git("rev-parse", *[a for name in GIT_OP_STATE for a in ("--git-path", name)])
     if rc != 0 or any(_git_path_exists(plugin_dir, rel) for rel in paths.splitlines()):
         return False
     if (plugin_dir / ".gitmodules").exists():
@@ -812,29 +884,59 @@ def _clean_to_fast_forward(git, plugin_dir):
     return rc == 0 and not dirty
 
 
-def _ff_merge(plugin_dir, wait):
-    """The fast-forward itself. Returns its exit code, or None if still running.
+def _no_hooks(plugin_dir):
+    """`-c` that runs git with no hooks at all. The builder's own hooks (often a
+    global core.hooksPath) have no business running on NSLS's checkout, and a
+    post-merge hook runs after the branch has already moved, and can hang.
+
+    The hooks path is .git/HEAD: a file, so git can never find a hook "inside"
+    it, and in a linked worktree, where .git is itself a file, it cannot exist at
+    all. A folder that is merely never created could be created by someone."""
+    return ["-c", f"core.hooksPath={(plugin_dir / '.git' / 'HEAD').as_posix()}"]
+
+
+# A branch name that can sit inside a `-c branch.<name>.mergeOptions=` key and
+# reach git intact: printable ASCII without "=". git splits `-c` at the first
+# "=", which ref names may contain, and a non-ASCII name may not survive the
+# round trip through a Windows console code page. Any other name is not merged
+# at all: without the blanking, "-s ours" in its mergeOptions is back.
+_CONFIG_SAFE_BRANCH = re.compile(r"[\x21-\x3c\x3e-\x7e]+")
+
+
+def _guarded_ff_merge(plugin_dir, target, branch, wait, output=subprocess.DEVNULL):
+    """Fast-forward `branch` onto `target`, unattended. Returns git's exit code,
+    None if it is still running when `wait` ends, or -1 if it never ran (git
+    could not start, or `branch` is a name whose mergeOptions cannot be blanked).
+
+    Every unattended fast-forward of a toolkit checkout goes through here — the
+    daily update and the clean-fork catch-up — so the two cannot drift apart.
 
     Never killed: git stopped mid-checkout leaves a half-updated folder and a
-    stale index.lock. It runs in its own session with its output discarded, so
-    it can outlive this hook and finish on its own. Everything that could turn
-    it into something else is switched off for this one call:
-      * branch.main.mergeOptions (e.g. --squash stages NSLS's tree without
-        moving the branch), with --no-squash and --no-autostash stated outright;
-      * hooks, via a hooks directory that does not exist — a post-merge hook
-        runs after the branch has already moved, and can hang;
-      * background maintenance and auto-gc, which also run after the move;
-      * overwriting an ignored local file NSLS starts tracking (--no-overwrite-ignore).
+    stale index.lock. It runs in its own session, writing only to `output`
+    (a file, never a pipe), so it can outlive this hook and finish on its own.
+    Everything that could turn it into something else is switched off:
+      * branch.<branch>.mergeOptions. --squash there stages the new tree without
+        moving the branch; "-s ours" there makes even `merge --ff-only` exit 0
+        with a merge commit that keeps the old tree and discards every incoming
+        change. --no-squash and --no-autostash are stated outright as well;
+      * hooks (_no_hooks);
+      * background maintenance and auto-gc, which also run after the move and
+        would hold the merge open past its wait. Housekeeping still runs after
+        the daily update's fetch, which is safe to stop;
+      * overwriting an ignored local file the update starts tracking
+        (--no-overwrite-ignore): it refuses instead, and _warn_if_frozen says so.
     """
-    no_hooks = plugin_dir / ".git" / "nsls-no-hooks"   # deliberately never created
+    if not _CONFIG_SAFE_BRANCH.fullmatch(branch or ""):
+        return -1  # its mergeOptions cannot be blanked, so it is not merged (a backstop:
+        # _update_checkout checks first, so that it can say so)
+    args = ["git", "-C", str(plugin_dir), *_no_hooks(plugin_dir),
+            "-c", "maintenance.auto=false", "-c", "gc.auto=0",
+            "-c", f"branch.{branch}.mergeOptions=",
+            "merge", "--ff-only", "--no-squash", "--no-autostash",
+            "--no-overwrite-ignore", "--quiet", target]
     try:
         proc = subprocess.Popen(
-            ["git", "-C", str(plugin_dir),
-             "-c", f"core.hooksPath={no_hooks.as_posix()}", "-c", "maintenance.auto=false",
-             "-c", "gc.auto=0", "-c", "branch.main.mergeOptions=",
-             "merge", "--ff-only", "--no-squash", "--no-autostash",
-             "--no-overwrite-ignore", "--quiet", PERSONAL_UPSTREAM_REF],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            args, stdin=subprocess.DEVNULL, stdout=output, stderr=output,
             start_new_session=True, env=_git_env(),
         )
     except Exception:
@@ -843,6 +945,11 @@ def _ff_merge(plugin_dir, wait):
         return proc.wait(timeout=wait)
     except subprocess.TimeoutExpired:
         return None
+
+
+def _ff_merge(plugin_dir, wait):
+    """The clean-fork catch-up's fast-forward: main onto NSLS's main."""
+    return _guarded_ff_merge(plugin_dir, PERSONAL_UPSTREAM_REF, "main", wait)
 
 
 def _checkout_state(plugin_dir, head_before, target):
@@ -982,8 +1089,87 @@ def report_personal_fork_drift(deadline=None):
         return
 
 
-def git_pull():
-    """Pull latest changes for every toolkit in SYNC_PLUGINS.
+# The daily update's fetch is network and safe to stop, so it keeps the cap the
+# whole `git pull` used to have. Its merge is a local write that is never stopped
+# (_guarded_ff_merge), so it is not begun with less than this much of the
+# envelope left; with hooks and housekeeping off it takes well under a second.
+PULL_FETCH_TIMEOUT = 10
+PULL_MERGE_MIN_LEFT_S = 2
+OP_IN_PROGRESS = "op-in-progress"
+UNGUARDABLE_BRANCH = "unguardable-branch"
+
+
+def _update_checkout(plugin_dir, deadline):
+    """Fetch this checkout's upstream and fast-forward onto it.
+
+    A fetch and then a merge rather than one `git pull`: the merge has to carry
+    --no-overwrite-ignore, which `git pull` rejects outright (exit 129), and the
+    split also takes pull.rebase and its relatives out of play. The fetch is the
+    one a bare pull runs (the current branch's remote, its configured refspecs);
+    the merge target is the branch's upstream, `@{u}` — what pull merges.
+
+    Returns (code, git_output). code is the merge's exit status; OP_IN_PROGRESS
+    when an unfinished operation held the merge back; UNGUARDABLE_BRANCH when
+    the branch's name kept it from being merged and it is behind; None when nothing was
+    merged and there is nothing to say (the fetch failed, detached, no time
+    left, the merge still running when its wait ended, or this checkout could
+    not be read).
+    """
+    def left():
+        return deadline - time.monotonic()
+
+    if left() <= 0:
+        return None, ""
+    # Through _git_rc: a fetch that runs out of time is stopped with its whole
+    # process tree, network helper included, not just git itself.
+    rc, _ = _git_rc(plugin_dir, *_no_hooks(plugin_dir), "fetch", "--quiet",
+                    timeout=min(PULL_FETCH_TIMEOUT, left()))
+    fetched = rc == 0
+    if left() <= 0:
+        return None, ""
+    # Read AFTER the fetch, immediately before the merge: the fetch can take
+    # seconds, and a branch switched or an operation started inside them must be
+    # what the merge is judged against. git has no lock a separate `git bisect
+    # start` would honour, so this is as close to the merge as the check can sit.
+    rc, probe = _git_rc(plugin_dir, "rev-parse", "--symbolic-full-name", "HEAD",
+                        *[a for name in GIT_OP_STATE for a in ("--git-path", name)],
+                        timeout=min(3, left()))
+    lines = probe.splitlines()
+    if rc != 0 or len(lines) != 1 + len(GIT_OP_STATE):
+        return None, ""
+    head, markers = lines[0], lines[1:]
+    if any(_git_path_exists(plugin_dir, rel) for rel in markers):
+        return OP_IN_PROGRESS, ""
+    if not fetched:
+        # Offline, refused or stopped: nothing merged, as with a failed pull. The
+        # upstream ref may still hold what some earlier session fetched, which
+        # NSLS may since have withdrawn.
+        return None, ""
+    if not head.startswith("refs/heads/"):
+        return None, ""  # detached: a deliberate pin, and it has no upstream to merge
+    branch = head[len("refs/heads/"):]
+    if not _CONFIG_SAFE_BRANCH.fullmatch(branch):
+        # Not merged (see _CONFIG_SAFE_BRANCH). Said out loud only when that
+        # actually leaves it behind, so a level checkout does not cry wolf.
+        if left() <= 0:
+            return None, ""
+        rc, behind = _git_rc(plugin_dir, "rev-list", "--count", "HEAD..@{u}",
+                             timeout=min(3, left()))
+        stuck = rc == 0 and behind.isdigit() and int(behind) > 0
+        return (UNGUARDABLE_BRANCH if stuck else None), ""
+    with tempfile.TemporaryFile() as out:
+        # Checked here, the last step before the merge starts.
+        if left() < PULL_MERGE_MIN_LEFT_S:
+            return None, ""  # a write we might have to abandon is a write we do not begin
+        code = _guarded_ff_merge(plugin_dir, "@{u}", branch, left(), output=out)
+        if code is None:
+            return None, ""  # still running: it finishes on its own
+        out.seek(0)
+        return code, out.read().decode("utf-8", "replace")
+
+
+def git_pull(deadline=None):
+    """Update every toolkit in SYNC_PLUGINS from its configured upstream.
 
     Parity fix with the Windows hook: session-start.ps1 has always looped
     @($BuilderDir, $PersonalDir) and pulled both, but this function pulled only
@@ -992,49 +1178,48 @@ def git_pull():
     visual-companion self-heal) never reached those machines. SYNC_PLUGINS
     already names both toolkits for pointer sync; pull the same list.
 
-    Bare `pull --ff-only` — no explicit remote/refspec — follows each
-    checkout's configured upstream, the same convention personal-setup's own
-    update path uses. Hardcoding `origin main` here would silently fast-forward
-    a supported fork checkout (NSLS_PERSONAL_REPO / NSLS_PERSONAL_BRANCH) or a
+    No explicit remote/refspec (see _update_checkout): each checkout follows
+    its configured upstream, the same convention personal-setup's own update
+    path uses. Hardcoding `origin main` here would silently fast-forward a
+    supported fork checkout (NSLS_PERSONAL_REPO / NSLS_PERSONAL_BRANCH) or a
     deliberately pinned detached HEAD onto a branch it never tracked; with no
-    upstream configured, a bare pull just exits nonzero and the checkout is
-    left alone. --ff-only matches the .ps1: the `pull origin main` this
-    replaces could stop on merge conflicts (leaving a conflicted tree) or, on
-    modern git with no reconcile config, refuse divergence outright — neither
-    visible here, since the exit status is ignored and output captured, while
-    the toolkit quietly never updated again. ff-only refuses cleanly instead
-    of half-merging.
+    upstream configured, the merge just exits nonzero and the checkout is left
+    alone. --ff-only matches the .ps1: the `pull origin main` this once was
+    could stop on merge conflicts (leaving a conflicted tree) or, on modern git
+    with no reconcile config, refuse divergence outright — neither visible
+    here, while the toolkit quietly never updated again. ff-only refuses
+    cleanly instead of half-merging.
 
     Prompts are disabled (GIT_TERMINAL_PROMPT=0, stdin closed) so a remote
     that wants credentials fails in milliseconds instead of hanging out the
     timeout, and the loop shares one 15s deadline so the worst case — every
-    pull wedged — still leaves the 35s replay + 35s live ping inside the 90s
-    hook budget install.sh configures.
+    update wedged — still leaves the 35s replay + 35s live ping inside the 90s
+    hook budget install.sh configures. `deadline` is for tests.
 
-    A pull refused for checkout-local reasons (divergence, dirty tree) prints
-    a warning to stdout — SessionStart stdout reaches the model's context — so
-    a frozen toolkit is announced instead of silently stale. Offline failures
-    and missing upstreams stay quiet.
+    An update refused for checkout-local reasons (divergence, dirty tree, an
+    ignored file it would replace, an unfinished operation) prints a warning to
+    stdout — SessionStart stdout reaches the model's context — so a frozen
+    toolkit is announced instead of silently stale. Offline failures and missing
+    upstreams stay quiet.
     """
-    deadline = time.monotonic() + 15
+    if deadline is None:
+        deadline = time.monotonic() + 15
     for plugin in SYNC_PLUGINS:
         plugin_dir = CONFIG_DIR / "local-plugins" / plugin
         if not (plugin_dir / ".git").exists():
             continue
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
+        if deadline - time.monotonic() <= 0:
             break
         try:
-            r = subprocess.run(
-                ["git", "-C", str(plugin_dir), "pull", "--ff-only", "--quiet"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=min(10, remaining),
-                stdin=subprocess.DEVNULL,
-                env=_git_env(),
-            )
-            if r.returncode != 0:
-                _warn_if_frozen(plugin, plugin_dir, (r.stderr or "") + (r.stdout or ""))
-            # Runs whether the pull succeeded or not: a clean pull aimed at a
-            # branch that never moves is the freeze this catches.
+            code, out = _update_checkout(plugin_dir, deadline)
+            if code == OP_IN_PROGRESS:
+                _warn_operation_in_progress(plugin, plugin_dir)
+            elif code == UNGUARDABLE_BRANCH:
+                _warn_unguardable_branch(plugin, plugin_dir)
+            elif code:  # None (nothing merged, nothing to say) and 0 both fall through
+                _warn_if_frozen(plugin, plugin_dir, out, deadline=deadline)
+            # Runs whether the update succeeded or not: a clean update aimed at
+            # a branch that never moves is the freeze this catches.
             _warn_if_stale_by_configuration(plugin, plugin_dir, deadline=deadline)
         except Exception:
             pass

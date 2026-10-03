@@ -13,9 +13,9 @@ $LocalDir    = Join-Path $ClaudeDir 'local-plugins'
 $BuilderDir  = Join-Path $LocalDir  'nsls-builder-toolkit'
 $PersonalDir = Join-Path $LocalDir  'nsls-personal-toolkit'
 
-# --- 1. git pull (direct call; the prior Start-Process form failed silently on
+# --- 1. update (direct calls; the prior Start-Process form failed silently on
 #        Windows, freezing toolkits weeks behind). ff-only never merges.
-#        Bare pull (no remote/refspec) follows each checkout's configured
+#        No remote/refspec: each checkout follows its configured
 #        upstream, so a customized fork (NSLS_PERSONAL_REPO/BRANCH) or a pinned
 #        checkout is never fast-forwarded onto a branch it doesn't track.
 #        A pull refused by the checkout's own state (divergence, dirty tree) is
@@ -35,26 +35,180 @@ function Clear-GitRepoEnv {
 }
 Clear-GitRepoEnv
 $env:GIT_TERMINAL_PROMPT = '0'   # credentialed remotes fail fast, never prompt-hang the hook
-foreach ($dir in @($BuilderDir, $PersonalDir)) {
-    if (-not (Test-Path $dir)) { continue }
-    $pullOut = (& git -C $dir pull --ff-only --quiet 2>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0 -and $pullOut -match 'fast-forward|would be overwritten|unmerged|not concluded') {
+
+# git's markers for an operation in progress. A checkout mid-bisect, mid-rebase,
+# mid-am or mid-revert can look clean and sit on its branch, and moving that branch
+# changes what the operation does. Both unattended fast-forwards check them: the
+# daily update below and the clean-fork catch-up in 1b.
+$GitOpState = @('MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'BISECT_START', 'BISECT_LOG', 'rebase-merge', 'rebase-apply', 'sequencer')
+
+function Test-GitPath {
+    param([string]$Dir, [string]$Rel)
+    # rev-parse --git-path answers relative to the checkout, or absolute.
+    if (-not $Rel) { return $false }
+    $p = if ([System.IO.Path]::IsPathRooted($Rel)) { $Rel } else { Join-Path $Dir $Rel }
+    return (Test-Path -LiteralPath $p)
+}
+
+function Get-FastForwardArgs {
+    param([string]$Dir, [string]$Branch, [string]$Target)
+    # The git arguments (after -C) for an unattended fast-forward of $Branch onto
+    # $Target. Both the daily update and the clean-fork catch-up use these, so the
+    # two cannot drift apart. Same list as _guarded_ff_merge in the .py:
+    #   * the branch's mergeOptions blanked - '-s ours' there makes even
+    #     `merge --ff-only` exit 0 with a merge commit that discards every incoming
+    #     change; --squash stages the new tree without moving the branch - with
+    #     --no-squash and --no-autostash stated outright;
+    #   * hooks, via a hooks path that is a file (.git/HEAD; in a linked worktree
+    #     .git is itself a file, so the path cannot exist) - forward slashes: a
+    #     backslash path would hand git the characters '\n';
+    #   * background maintenance and auto-gc, which run after the move;
+    #   * overwriting an ignored local file the update starts tracking.
+    # Returns $null for a branch whose mergeOptions cannot be blanked, which is
+    # then not merged at all: printable ASCII without '=' only, because git splits
+    # -c at the first '=' (which a branch name may contain) and a non-ASCII name
+    # may not survive the console code page. Same rule as _CONFIG_SAFE_BRANCH.
+    if ($Branch -cnotmatch '^[\x21-\x3c\x3e-\x7e]+$') { return $null }
+    $noHooks = (Join-Path $Dir '.git/HEAD') -replace '\\', '/'   # a file: no hook can live under it
+    return @('-c', "core.hooksPath=$noHooks", '-c', 'maintenance.auto=false', '-c', 'gc.auto=0',
+             '-c', "branch.$($Branch).mergeOptions=",
+             'merge', '--ff-only', '--no-squash', '--no-autostash', '--no-overwrite-ignore', '--quiet', $Target)
+}
+
+function Invoke-GitBounded {
+    param([string]$Dir, [string[]]$GitArgs, [int]$TimeoutMs = 3000)
+    # Every git call in 1b, and the update's path list in 1, runs through here:
+    # a hard time limit (the
+    # direct `& git` form has none, and a fetch can hang for a minute on a captive
+    # portal; a rev-list walk has no natural bound either), the whole process
+    # TREE killed on timeout (git's HTTPS remote helper is a child that
+    # Process.Kill() alone leaves running the fetch after we release the lock),
+    # and output captured only for our own parsing. Everything this hook prints
+    # is the model's context and git echoes server-controlled text, so nothing
+    # captured here is ever surfaced - only our literals and a verified integer.
+    # Returns @{ Code = exit code (-1 on timeout or failure to start); Out = stdout }.
+    $result = @{ Code = -1; Out = '' }
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = 'git'
+        $parts = @('-C', $Dir) + $GitArgs
+        $psi.Arguments = (($parts | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' ')
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        # UTF-8, not the console code page: git writes paths as UTF-8, and a
+        # mis-decoded name never matches the file on disk.
+        $psi.StandardOutputEncoding = New-Object System.Text.UTF8Encoding $false
+        $psi.CreateNoWindow = $true
+        $psi.EnvironmentVariables['GIT_TERMINAL_PROMPT'] = '0'
+        $p = [System.Diagnostics.Process]::Start($psi)
+        # Drain both pipes while waiting - a chatty child deadlocks on a full pipe
+        # otherwise. stdout is kept (for the count); stderr is discarded.
+        $outTask = $p.StandardOutput.ReadToEndAsync()
+        $p.BeginErrorReadLine()
+        if (-not $p.WaitForExit($TimeoutMs)) {
+            try { & taskkill /T /F /PID $p.Id 2>$null | Out-Null } catch { }
+            try { $p.WaitForExit(3000) | Out-Null } catch { }
+            return $result
+        }
+        $p.WaitForExit()   # lets the async readers finish after a timed wait
+        $result.Code = $p.ExitCode
+        $result.Out = $outTask.Result.Trim()
+        return $result
+    } catch {
+        return $result
+    }
+}
+
+function Update-Checkout {
+    param([string]$Dir)
+    # A fetch and then a guarded merge, not one `git pull`: --no-overwrite-ignore
+    # is a merge option `git pull` rejects outright (exit 129). The bare fetch is
+    # the one pull runs; '@{u}' is what pull merges. Same steps as
+    # _update_checkout in the .py; the .py adds the 15s envelope, which this
+    # section has never had - the merge is a local write and is never stopped.
+    $noHooks = (Join-Path $Dir '.git/HEAD') -replace '\\', '/'   # a file: no hook can live under it
+    & git -C $Dir -c "core.hooksPath=$noHooks" fetch --quiet 2>&1 | Out-Null
+    $fetchCode = $LASTEXITCODE
+    # Read AFTER the fetch, immediately before the merge: a branch switched or an
+    # operation started while the fetch ran must be what the merge is judged
+    # against. Same order as the .py.
+    $opArgs = @()
+    foreach ($n in $GitOpState) { $opArgs += @('--git-path', $n) }
+    $probe = @(& git -C $Dir rev-parse --symbolic-full-name HEAD @opArgs 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $probe.Count -ne (1 + $GitOpState.Count)) { return }
+    foreach ($rel in ($probe | Select-Object -Skip 1)) {
+        if (Test-GitPath -Dir $Dir -Rel $rel.Trim()) {
+            # Held back silently, an operation abandoned weeks ago would freeze the
+            # toolkit with no signal, so it is said out loud.
+            Write-Output ("WARNING - $(Split-Path $Dir -Leaf) did not self-update this session: the checkout at $Dir has an unfinished git operation in progress (a merge, rebase, cherry-pick, revert or bisect), and updating under it would change what that operation does. If nobody is working in that checkout right now, it was left behind and automatic updates stay FROZEN until it is finished or abandoned. Tell the user at the first natural moment and offer to look; finish or abort the operation only after they confirm nothing of theirs depends on it.")
+            return
+        }
+    }
+    # Offline, refused or stopped: nothing merged, as with a failed pull. The
+    # upstream ref may still hold what some earlier session fetched, which NSLS may
+    # since have withdrawn.
+    if ($fetchCode -ne 0) { return }
+    if ($probe[0] -cmatch '^refs/heads/(.+)$') { $branch = $Matches[1] } else { return }   # detached: a deliberate pin
+    $mergeArgs = Get-FastForwardArgs -Dir $Dir -Branch $branch -Target '@{u}'
+    if (-not $mergeArgs) {
+        # A branch name whose mergeOptions cannot be blanked: not merged. Said out
+        # loud only when that leaves it behind; the name itself is not printed.
+        $behind = (& git -C $Dir rev-list --count 'HEAD..@{u}' 2>$null | Out-String).Trim()
+        if ($LASTEXITCODE -eq 0 -and $behind -match '^\d+$' -and [int]$behind -gt 0) {
+            Write-Output ("WARNING - $(Split-Path $Dir -Leaf) did not self-update: the checkout at $Dir is on a branch whose name the automatic update cannot protect (it contains '=' or characters outside plain ASCII) and is behind its upstream, so automatic updates are FROZEN while it stays on that branch. Tell the user at the first natural moment and offer the fix: rename the branch using only letters, digits, '-', '_', '.' and '/', or put the checkout back on main.")
+        }
+        return
+    }
+    # Windows PowerShell 5.1 applies $ErrorActionPreference to native stderr
+    # redirected with 2>&1, and this script runs under SilentlyContinue, which
+    # drops it - and git's refusal is on stderr. 'Continue' for this one capture,
+    # so the freeze check below sees what git said.
+    $eap = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $pullOut = (& git -C $Dir @mergeArgs 2>&1 | Out-String)
+        $mergeCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $eap
+    }
+    if ($mergeCode -ne 0 -and $pullOut -match 'fast-forward|would be overwritten|unmerged|not concluded') {
         # Two gates, not one - matching session-start.py's `_checkout_blocks_update`.
         # The regex says git's complaint LOOKS checkout-local; this checks whether it
         # IS. Clean, up-to-date checkouts were reported FROZEN every session, sending
         # builders to back up local changes that did not exist.
-        $dirty  = (& git -C $dir status --porcelain 2>$null | Out-String).Trim()
-        $ahead  = (& git -C $dir rev-list --count '@{u}..HEAD' 2>$null | Out-String).Trim()
+        $dirty  = (& git -C $Dir status --porcelain 2>$null | Out-String).Trim()
+        $ahead  = (& git -C $Dir rev-list --count '@{u}..HEAD' 2>$null | Out-String).Trim()
         # `@{u}`, not origin/main: a fork checkout tracks something else, and the
-        # pull being diagnosed follows the same upstream.
+        # update being diagnosed follows the same upstream.
+        $haveUpstream = ($LASTEXITCODE -eq 0 -and $ahead -match '^\d+$')
         $commits = 0
-        if ($LASTEXITCODE -eq 0 -and $ahead -match '^\d+$') { $commits = [int]$ahead }
+        if ($haveUpstream) { $commits = [int]$ahead }
         $blocker = $null
+        $fix = 'preserve their local changes on a backup branch, then fast-forward the checkout to its upstream'
         if ($commits -gt 0 -and $dirty) { $blocker = "$commits local commit(s) and uncommitted edits" }
         elseif ($commits -gt 0)         { $blocker = "$commits local commit(s) not in its upstream" }
         elseif ($dirty)                 { $blocker = 'uncommitted local edits' }
+        elseif ($haveUpstream) {
+            # Clean and level, yet refused: the update adds a path that already
+            # exists here as a file git does not show (ignored, typically), and
+            # --no-overwrite-ignore refused rather than replace it. Counted from the
+            # paths the update adds, never from git's error text.
+            # NUL-separated and read as UTF-8: git quotes unusual names otherwise,
+            # and a quoted spelling never matches the file on disk.
+            $r = Invoke-GitBounded -Dir $Dir -GitArgs @('diff', '--name-only', '-z', '--no-renames', '--diff-filter=A', 'HEAD', '@{u}')
+            if ($r.Code -eq 0) {
+                $added = @($r.Out -split [char]0)
+                $hits = @($added | Where-Object { $_ -and (Test-Path -LiteralPath (Join-Path $Dir $_)) }).Count
+                if ($hits -gt 0) {
+                    $blocker = "$hits ignored local file(s) that the update would replace"
+                    # A backup branch would not hold these: git does not track them.
+                    $fix = 'find those files (a fast-forward attempt names them), copy them somewhere safe and move them out of the way, then fast-forward the checkout to its upstream and help them keep whatever in those files was theirs'
+                }
+            }
+        }
         # $null means verified clean and level, or unknowable - either way NOT frozen.
-        # Staying quiet costs one session's update; the next pull picks it up.
+        # Staying quiet costs one session's update; the next session picks it up.
         if ($blocker) {
             # Which phrase matched, never git's raw text: everything written here
             # reaches the model's context, and git echoes attacker-controlled
@@ -63,9 +217,14 @@ foreach ($dir in @($BuilderDir, $PersonalDir)) {
             # literals, so it carries the diagnostic value with none of the surface.
             $matched = @('fast-forward','would be overwritten','unmerged','not concluded') |
                 Where-Object { $pullOut -match [regex]::Escape($_) } | Select-Object -First 1
-            Write-Output ("WARNING - $(Split-Path $dir -Leaf) could not self-update: the checkout at $dir has $blocker, so automatic updates are FROZEN and this toolkit is going stale. Tell the user at the first natural moment and offer the fix: preserve their local changes on a backup branch, then fast-forward the checkout to its upstream. (Skills in ~/.claude/skills are the right place for personal edits and are unaffected.) git refused with: '$matched'")
+            Write-Output ("WARNING - $(Split-Path $Dir -Leaf) could not self-update: the checkout at $Dir has $blocker, so automatic updates are FROZEN and this toolkit is going stale. Tell the user at the first natural moment and offer the fix: $fix. (Skills in ~/.claude/skills are the right place for personal edits and are unaffected.) git refused with: '$matched'")
         }
     }
+}
+
+foreach ($dir in @($BuilderDir, $PersonalDir)) {
+    if (-not (Test-Path $dir)) { continue }
+    Update-Checkout -Dir $dir
 }
 
 # --- 1b. personal-toolkit forks: measured against NSLS, not against their own copy ---
@@ -87,9 +246,7 @@ $PersonalUpstreamStamp   = Join-Path $ClaudeDir '.nsls-personal-upstream-check'
 $PersonalUpstreamLock    = Join-Path $ClaudeDir '.nsls-personal-upstream-check.flock'
 $PersonalLegacyLock      = Join-Path $ClaudeDir '.nsls-personal-upstream-check.lock'   # the previous protocol's file: shadow-claimed (empty) while ours is held
 $PersonalCheckEveryH     = 12
-# git's markers for an operation in progress: mid-bisect, -rebase, -am or -revert a
-# checkout can look clean and sit on main, and moving main changes that operation.
-$PersonalOpState    = @('MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'BISECT_START', 'BISECT_LOG', 'rebase-merge', 'rebase-apply', 'sequencer')
+# The operations-in-progress list is $GitOpState, in section 1.
 # The status that counts everything: untracked files even where
 # status.showUntrackedFiles=no hides them, and submodules even where configured away.
 $PersonalStatusArgs = @('status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=none')
@@ -122,47 +279,6 @@ function Test-CanonicalOrigin {
     if ($repoPath -match '\.git$') { $repoPath = $repoPath.Substring(0, $repoPath.Length - 4) }
     # -eq and -match are case-insensitive in PowerShell, which is what GitHub names need.
     return (($hostName -eq 'github.com') -and ($repoPath.TrimEnd('/') -eq 'thensls/nsls-personal-toolkit'))
-}
-
-function Invoke-GitBounded {
-    param([string]$Dir, [string[]]$GitArgs, [int]$TimeoutMs = 3000)
-    # EVERY git call in this block runs through here: a hard time limit (the
-    # direct `& git` form has none, and a fetch can hang for a minute on a captive
-    # portal; a rev-list walk has no natural bound either), the whole process
-    # TREE killed on timeout (git's HTTPS remote helper is a child that
-    # Process.Kill() alone leaves running the fetch after we release the lock),
-    # and output captured only for our own parsing. Everything this hook prints
-    # is the model's context and git echoes server-controlled text, so nothing
-    # captured here is ever surfaced - only our literals and a verified integer.
-    # Returns @{ Code = exit code (-1 on timeout or failure to start); Out = stdout }.
-    $result = @{ Code = -1; Out = '' }
-    try {
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = 'git'
-        $parts = @('-C', $Dir) + $GitArgs
-        $psi.Arguments = (($parts | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' ')
-        $psi.UseShellExecute = $false
-        $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError = $true
-        $psi.CreateNoWindow = $true
-        $psi.EnvironmentVariables['GIT_TERMINAL_PROMPT'] = '0'
-        $p = [System.Diagnostics.Process]::Start($psi)
-        # Drain both pipes while waiting - a chatty child deadlocks on a full pipe
-        # otherwise. stdout is kept (for the count); stderr is discarded.
-        $outTask = $p.StandardOutput.ReadToEndAsync()
-        $p.BeginErrorReadLine()
-        if (-not $p.WaitForExit($TimeoutMs)) {
-            try { & taskkill /T /F /PID $p.Id 2>$null | Out-Null } catch { }
-            try { $p.WaitForExit(3000) | Out-Null } catch { }
-            return $result
-        }
-        $p.WaitForExit()   # lets the async readers finish after a timed wait
-        $result.Code = $p.ExitCode
-        $result.Out = $outTask.Result.Trim()
-        return $result
-    } catch {
-        return $result
-    }
 }
 
 function Get-PullSourceUrl {
@@ -278,14 +394,6 @@ function Release-Lock {
     try { if ($null -ne $Handle) { $Handle.Dispose() } } catch { }
 }
 
-function Test-GitPath {
-    param([string]$Dir, [string]$Rel)
-    # rev-parse --git-path answers relative to the checkout, or absolute.
-    if (-not $Rel) { return $false }
-    $p = if ([System.IO.Path]::IsPathRooted($Rel)) { $Rel } else { Join-Path $Dir $Rel }
-    return (Test-Path -LiteralPath $p)
-}
-
 function Test-CleanToFastForward {
     param([string]$Dir)
     # Every condition under which a fast-forward can only add NSLS's commits.
@@ -293,7 +401,7 @@ function Test-CleanToFastForward {
     $r = Invoke-GitBounded -Dir $Dir -GitArgs @('symbolic-ref', '--short', '-q', 'HEAD')
     if ($r.Code -ne 0 -or $r.Out -cne 'main') { return $false }   # -cne: branch names are case-sensitive
     $gitArgs = @('rev-parse')
-    foreach ($n in $PersonalOpState) { $gitArgs += @('--git-path', $n) }
+    foreach ($n in $GitOpState) { $gitArgs += @('--git-path', $n) }
     $r = Invoke-GitBounded -Dir $Dir -GitArgs $gitArgs
     if ($r.Code -ne 0) { return $false }
     foreach ($rel in ($r.Out -split "`r?`n")) { if (Test-GitPath -Dir $Dir -Rel $rel.Trim()) { return $false } }
@@ -311,15 +419,9 @@ function Invoke-FastForwardDetached {
     # The fast-forward itself. Returns its exit code, or $null if still running.
     # Never killed: git stopped mid-checkout leaves a half-updated folder and a
     # stale index.lock. Output goes to files, not pipes, so git can outlive this
-    # hook without ever writing into a closed pipe. Switched off for this one
-    # call, exactly as in the .py: branch.main.mergeOptions (with --no-squash and
-    # --no-autostash stated outright), hooks (via a hooks directory that does not
-    # exist), background maintenance and auto-gc, and overwriting an ignored file.
-    # Forward slashes: a backslash path here would hand git the characters '\n'.
-    $noHooks = (Join-Path $Dir '.git/nsls-no-hooks') -replace '\\', '/'   # deliberately never created
-    $parts = @('-C', $Dir, '-c', "core.hooksPath=$noHooks", '-c', 'maintenance.auto=false', '-c', 'gc.auto=0',
-               '-c', 'branch.main.mergeOptions=', 'merge', '--ff-only', '--no-squash', '--no-autostash',
-               '--no-overwrite-ignore', '--quiet', $PersonalUpstreamRef)
+    # hook without ever writing into a closed pipe. The guards are the daily
+    # update's own (Get-FastForwardArgs), for main onto NSLS's main.
+    $parts = @('-C', $Dir) + (Get-FastForwardArgs -Dir $Dir -Branch 'main' -Target $PersonalUpstreamRef)
     $argLine = (($parts | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' ')
     $tmpOut = [System.IO.Path]::GetTempFileName()
     $tmpErr = [System.IO.Path]::GetTempFileName()
