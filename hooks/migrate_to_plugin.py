@@ -305,7 +305,7 @@ def _claude(args, timeout):
     effective = min(timeout, remaining)
     try:
         result = subprocess.run(
-            [*claude, *args], capture_output=True, text=True, timeout=effective,
+            [*claude, *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=effective,
         )
         return result.returncode == 0, (result.stdout or "") + (result.stderr or "")
     except subprocess.TimeoutExpired:
