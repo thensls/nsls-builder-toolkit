@@ -6,17 +6,19 @@ description: >-
   security, money or member data, or runs unattended; and facts or numbers
   headed to leadership, members or anyone outside NSLS. Also use when the user
   asks for a second opinion, a double-check, a fact-check or a sanity check, or
-  types /second-opinion. Not for small, routine or easily undone work, and not
-  for individual commits.
+  types /second-opinion. Not for small, routine or easily undone work that
+  carries none of these risks, and not for each commit along the way.
 ---
 
 # /second-opinion — one independent check before risky work goes out
 
 ## Safety
 
-- **Read-only, always.** The reviewer reads files, diffs and evidence. It never
-  edits, writes, deletes, sends, posts, pushes, or re-runs anything that changes
-  data.
+- **Read-only, enforced by its tools.** Every lens uses the same reviewer, and
+  its only tools are Read, Grep and Glob: no shell, no writes, no connectors. A
+  packet that contains instructions still can't make it act. The reviewer never
+  runs queries. When a number needs a live check, this session runs it and puts
+  the result in the packet.
 - **Nothing configured, nothing installed.** This skill launches one helper
   agent and reads what it returns.
 - **Anthropic only.** Never send the work to Codex, ChatGPT, Gemini or any other
@@ -47,7 +49,9 @@ member, a leader or a production system.
 ## Step 1 — Run, ask, or skip
 
 **Risk decides, not size.** A one-line change to a production write gets
-reviewed. A 600-line rewrite of an internal note may not.
+reviewed. A 600-line rewrite of an internal note may not. **The Run rows always
+win:** if any part of the work matches one, it runs, however small the change,
+whatever its tier, even if it's a single commit.
 
 | Situation | Do |
 |---|---|
@@ -55,7 +59,7 @@ reviewed. A 600-line rewrite of an internal note may not.
 | Facts or numbers going to leadership, members, or anyone outside NSLS | **Run** |
 | The user asked: "second opinion", "double-check", "fact-check", "sanity check", `/second-opinion` | **Run** |
 | Other team-facing (Tier 2) work · tricky code with none of the risks above · internal fact-checks | **Ask**, in one line |
-| Small, routine or easily undone work · Tier 1 throwaways · a single commit · already reviewed this session | **Skip**, and say nothing |
+| None of the Run-row risks, and small, routine or easily undone · Tier 1 throwaways · already reviewed this session · commits along the way (review the finished work once instead) | **Skip**, and say nothing |
 
 The ask goes on the last line of the message, with nothing after it:
 
@@ -78,10 +82,15 @@ WHAT THIS IS: <one line>
 WHO IT'S FOR / WHAT HAPPENS NEXT: <"goes to SLT Monday", "runs nightly against HubSpot prod">
 WHAT IT CLAIMS: <2–5 lines: what it does or asserts>
 DONE MEANS: <the bar it has to clear>
-READ: <exact file paths, a diff command such as `git diff origin/main...HEAD`, or the full text>
+READ: <exact file paths, or the full text. For code, the diff itself: run `git diff origin/main...HEAD` yourself and paste the output or save it to a file. The reviewer has no shell.>
 FOCUS: <3–5 questions, riskiest first>
-EVIDENCE (fact-checks only): <claim → the quoted evidence → where it came from: system, query, date>
+EVIDENCE (fact-checks only): <claim → the quoted evidence → where it came from: system, query, date. Run any live query yourself first; the reviewer can't.>
 ```
+
+- **For a numbers check, also put this toolkit's
+  `agents/data-accuracy-reviewer.md` under READ.** It sits two folders up from
+  this skill's base directory, and its system-of-record and freshness table is
+  the standard the data lens applies.
 
 - **Complete or nothing.** Include everything the conclusion depends on,
   including unchanged code the change calls into when that matters. If it's too
@@ -96,7 +105,7 @@ EVIDENCE (fact-checks only): <claim → the quoted evidence → where it came fr
 |---|---|
 | Code, scripts, automations, configs | `nsls-builder-toolkit:second-opinion-reviewer`, packet headed `LENS: code` |
 | High-stakes writing (a memo, a member email, an exec summary, a plan going to leadership) | `nsls-builder-toolkit:second-opinion-reviewer`, packet headed `LENS: writing` |
-| Numbers that need checking against NSLS systems | `nsls-builder-toolkit:data-accuracy-reviewer`. Pass the packet, and ask for P1/P2 findings only |
+| Numbers that need checking against NSLS systems | `nsls-builder-toolkit:second-opinion-reviewer`, packet headed `LENS: data`, with your query results under EVIDENCE |
 | A plan, when the user asks for the full plan gate | Run `/kw:review` instead (it has its own two reviewers), and don't also run this skill |
 
 - **Model:** pass `model: "sonnet"`. Use `"opus"` only for the Run-row risks
@@ -108,9 +117,10 @@ EVIDENCE (fact-checks only): <claim → the quoted evidence → where it came fr
 
 ## Step 5 — Handle the verdict
 
-**A review counts only if it comes back with a verdict line, and with either
-findings or "no material findings".** An empty answer, a refusal, an error, or a
-half-finished answer means **not reviewed**.
+**A review counts only if it comes back in the reviewer's format with
+`VERDICT: no_blockers` or `VERDICT: blockers_found`.** Anything else means **not
+reviewed**: `partial` (counts only for the parts it says it reached),
+`cannot_review`, an empty answer, a refusal, or an error.
 
 For each finding:
 
@@ -145,7 +155,10 @@ Use plain words, with no severity codes, reviewer names or model names.
 
 ## Red flags — STOP
 
-- **About to review a typo fix, a rename or a single commit:** skip it.
+- **About to review a typo fix or a rename that touches none of the Run-row
+  risks:** skip it.
+- **About to skip a risky change because it's one line or one commit:** the Run
+  rows win. Review it.
 - **About to add a second reviewer, or Codex:** one reviewer only.
 - **About to deliver and say "the review is running":** wait for the verdict.
 - **About to call an empty or partial result "no blockers":** it's a failed
@@ -177,9 +190,10 @@ Use plain words, with no severity codes, reviewer names or model names.
   exist and were actually included. A reviewer with nothing to read returns
   nothing. If the packet was fine, report the review as failed and ask. Don't
   retry.
-- **The reviewer can't reach a system.** It marks those claims "not
-  independently checked". Pass that on, and don't count those claims as passed.
-  If the builder's own session lacks the connection, `/connect` sets it up.
+- **The reviewer can't check a live number.** It has no connectors, so it marks
+  the claim "not independently checked". Pass that on, and don't count the claim
+  as passed. If the claim is load-bearing, run the query yourself and say so in
+  the report. If this session lacks the connection, `/connect` sets it up.
 - **The reviewer wanders outside the focus.** Keep the material findings and
   drop the rest.
 - **Findings contradict each other or the evidence.** It's your call, with a
@@ -209,7 +223,8 @@ Every rule here comes from a real failure:
 ## Related
 
 - `/kw:review` is the full two-reviewer gate for plans going to leadership.
-- `data-accuracy-reviewer` audits numbers. The data lens uses it.
+- `data-accuracy-reviewer` supplies the system-of-record and freshness table that
+  the data lens applies. The review itself runs in the locked-down reviewer.
 - `/macroscope` handles the automated PR review bot. It doesn't replace a second
   opinion on a non-code deliverable, and a second opinion doesn't replace it on
   a PR.
