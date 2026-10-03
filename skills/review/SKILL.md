@@ -46,7 +46,7 @@ Confirm the target with the user before proceeding:
 
 ```
 Task(
-  subagent_type="nsls-builder-toolkit:review:strategic-alignment-reviewer",
+  subagent_type="nsls-builder-toolkit:strategic-alignment-reviewer",
   prompt="Review <path> for strategic alignment. Check LOP grounding, goal clarity, hypothesis falsifiability, success metrics, scope, operating-memo fit."
 )
 ```
@@ -55,7 +55,7 @@ Task(
 
 ```
 Task(
-  subagent_type="nsls-builder-toolkit:review:data-accuracy-reviewer",
+  subagent_type="nsls-builder-toolkit:data-accuracy-reviewer",
   prompt="Review <path> for data accuracy. Audit every number for source, date, freshness, NSLS system-of-record match, and consistency."
 )
 ```

@@ -81,7 +81,7 @@ Launch the `knowledge-researcher` agent in parallel with any other lookups you n
 
 ```
 Task(
-  subagent_type="nsls-builder-toolkit:research:knowledge-researcher",
+  subagent_type="nsls-builder-toolkit:knowledge-researcher",
   prompt="Brainstorm context for: <one-sentence problem from Step 2>
   Keywords: <5-7 keywords from the brain dump>"
 )
