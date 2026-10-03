@@ -104,7 +104,7 @@ def installed_skills():
             if name in found:
                 continue
             try:
-                head = skill_md.read_text(errors="replace")[:4000]
+                head = skill_md.read_text(encoding="utf-8", errors="replace")[:4000]
             except OSError:
                 continue
             # Frontmatter description, folded to one line. Deliberately naive:

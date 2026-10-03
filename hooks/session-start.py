@@ -2345,7 +2345,9 @@ def emit_guardrails_context():
                 if "__file__" in globals() else PLUGIN_DIR)
     guardrail_root = own_root if (own_root / "CLAUDE.md").is_file() else PLUGIN_DIR
     try:
-        text = (guardrail_root / "CLAUDE.md").read_text(errors="ignore")
+        # UTF-8 explicitly: the default is the locale's code page, cp1252 on a
+        # PC, which garbled every dash and dot of the policy (Windows CI).
+        text = (guardrail_root / "CLAUDE.md").read_text(encoding="utf-8", errors="ignore")
     except Exception:
         return
 

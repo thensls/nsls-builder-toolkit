@@ -641,29 +641,24 @@ if (Test-Path $bootstrapScript) {
     } catch { }
 }
 
-# --- 4. Builder Guardrails context + plugin freshness ---
-# Windows parity with session-start.py's emit_guardrails_context(). Without
-# this, Windows builders got the four hard gates (the hook is registered for
-# them) but none of the conversational half - tiers, escalation triggers, the
-# voice guide, remembered declines - which is the same
-# configuration-present-but-not-loaded failure this project has hit three times.
-# Delegated to the Python emitter rather than reimplemented: one copy of the
-# section-extraction and path-resolution logic, not two that can drift.
-# The same Python entry point also runs ensure_plugin_fresh(): the daily
-# `claude plugin update` plus the commit-level drift check and self-heal. THIS
-# script is the only place that fires on Windows  -  but not for the reason this
-# comment used to give. It said the plugin's hooks.json hook dies on the
-# `python3` Store alias; in fact no PC has the plugin at all, so nothing on
-# Windows loads hooks.json in the first place. (The interpreter problem was
-# real on Mac-authored entries and is why hooks.json now goes through
-# run-hook.sh, which resolves the interpreter and never selects the Store
-# alias.) Until the Windows-parity change installs the plugin on PCs, this
-# remains the only path. It is a no-op unless the plugin is
-# installed and enabled; clone-only machines stay fresh via the git pull above.
+# --- 4. Builder Guardrails context, plugin stage A, plugin freshness ---
+# All three live in session-start.py's __guardrails__ block, reached through
+# guardrails_entry.py: one copy of the section-extraction, migration and
+# freshness logic, not two that can drift. Until the plugin is installed, this
+# is the only hook that runs on a PC: Windows has had no guardrail gate
+# registered in settings.json, so the plugin (stage A) is what brings the gates.
+#
+# The step used to run `py -3 -c $program`, and Windows PowerShell 5.1 strips
+# the double quotes inside an argument it hands to a native program. Python got
+# `run_name=__guardrails__`, raised a NameError, and exited 1 - on every PC,
+# every session, since the step was added. `2>$null` threw the traceback away
+# and try/catch never sees a native exit code, so nothing ever said so. Hence a
+# file entry point, whose path has no quotes to lose, and hence the exit code
+# is now checked and a failure reported (see Report-ShimStuck).
+#
 # Interpreter: the stock Windows `python3` is a Store alias that exits without
-# running anything, so falling back to it emitted nothing at all - worse than
-# failing loudly. Prefer the launcher, then the toolkit-provisioned runtime,
-# and give up quietly only when there is genuinely no Python.
+# running anything, so falling back to it emitted nothing at all. Prefer the
+# launcher, then the toolkit-provisioned runtime, then `python`.
 $pyExe = $null
 if (Get-Command py -ErrorAction SilentlyContinue) { $pyExe = 'py' }
 elseif (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe')) {
@@ -671,18 +666,96 @@ elseif (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python
 }
 elseif (Get-Command python -ErrorAction SilentlyContinue) { $pyExe = 'python' }
 
-$startPy = Join-Path $PSScriptRoot 'session-start.py'
-if ($pyExe -and (Test-Path $startPy)) {
-    # The path goes in as an ARGUMENT, never interpolated into Python source:
-    # a Windows profile containing an apostrophe (O'Brien) made the inline
-    # program a SyntaxError, and the empty catch swallowed it - the guardrail
-    # context just silently vanished for that person.
-    $emitter = @'
-import runpy, sys
-runpy.run_path(sys.argv[1], run_name="__guardrails__")
-'@
+# Where Python keeps the same record: CLAUDE_CONFIG_DIR when set, as
+# session-start.py and migrate_to_plugin.py read it. Two files would mean two
+# records that never agree on what was said or cleared.
+$ShimStateDir = if ([string]::IsNullOrWhiteSpace($env:CLAUDE_CONFIG_DIR)) { $ClaudeDir } else { $env:CLAUDE_CONFIG_DIR }
+$ShimStatus = Join-Path $ShimStateDir '.nsls-plugin-migration-status'
+$ShimPyLog  = Join-Path $ShimStateDir '.nsls-session-start-py.log'
+
+# Same record and the same once-a-day notice as migrate_to_plugin.py's
+# _report_stuck, for the one failure Python cannot report itself: Python not
+# starting. Only toolkit-authored words reach stdout, which is the model's
+# context; the raw stderr line stays in the local status file, flattened.
+function Report-ShimStuck {
+    param([string]$Reason, [string]$Detail)
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $noticed = 0
     try {
-        if ($pyExe -eq 'py') { & $pyExe -3 -c $emitter $startPy 2>$null }
-        else { & $pyExe -c $emitter $startPy 2>$null }
+        $prev = Get-Content $ShimStatus -Raw -ErrorAction Stop | ConvertFrom-Json
+        if ($prev.noticed) { $noticed = [long]$prev.noticed }
     } catch { }
+    if ($noticed -gt $now) { $noticed = 0 }   # a future stamp must not silence it for good
+    $speak = ($now - $noticed) -ge 86400
+    $clean = ([regex]::Replace([string]$Detail, '[^\x20-\x7E]', ' ') -replace '\s+', ' ').Trim()
+    if ($clean.Length -gt 200) { $clean = $clean.Substring(0, 200) }
+    $record = [ordered]@{ at = $now; stage = 'shim-python'; reason = $Reason; detail = $clean
+                          noticed = $(if ($speak) { $now } else { $noticed }) }
+    try {
+        $tmp = "$ShimStatus.tmp"
+        [System.IO.File]::WriteAllText($tmp, (($record | ConvertTo-Json -Compress) + "`n"), (New-Object System.Text.UTF8Encoding $false))
+        Move-Item -Path $tmp -Destination $ShimStatus -Force
+    } catch { }
+    if ($speak) {
+        Write-Output ("[NSLS Builder Toolkit] Setup could not finish on this machine: $Reason, " +
+            "so the toolkit's guardrails are not active here yet. It retries every session. " +
+            "Mention this to the user once, in one plain sentence, and suggest they tell the " +
+            "NSLS AI team if it keeps happening.")
+    }
+}
+
+$startPy = Join-Path $PSScriptRoot 'session-start.py'
+$entryPy = Join-Path $PSScriptRoot 'guardrails_entry.py'
+if ((Test-Path $startPy) -and (Test-Path $entryPy)) {
+    if (-not $pyExe) {
+        Report-ShimStuck -Reason 'no Python was found' -Detail ''
+    } else {
+        $pyExit = -1
+        $pyErr = ''
+        try {
+            # Python is started directly rather than through PowerShell's native
+            # call. Windows PowerShell 5.1 decodes a child's output with the
+            # console code page, and a hook has no console to set one on, so the
+            # policy's dashes and dots arrived garbled (CI, 2026-10-03). Here
+            # Python writes UTF-8, it is read as UTF-8, and written to this
+            # hook's stdout as UTF-8 bytes, untouched. stderr is read apart:
+            # diagnosis for a person, never context for the model.
+            $utf8 = New-Object System.Text.UTF8Encoding $false
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = $pyExe
+            $psi.Arguments = $(if ($pyExe -eq 'py') { '-3 ' } else { '' }) + ('"{0}" "{1}"' -f $entryPy, $startPy)
+            $psi.UseShellExecute = $false
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $psi.StandardOutputEncoding = $utf8
+            $psi.StandardErrorEncoding = $utf8
+            $psi.EnvironmentVariables['PYTHONIOENCODING'] = 'utf-8'
+            $proc = [System.Diagnostics.Process]::Start($psi)
+            $errTask = $proc.StandardError.ReadToEndAsync()
+            $pyOut = $proc.StandardOutput.ReadToEnd()
+            $proc.WaitForExit()
+            $pyExit = $proc.ExitCode
+            $pyErr = [string]$errTask.Result
+            if ($pyOut) {
+                [Console]::Out.Flush()   # anything this script printed comes first
+                $bytes = $utf8.GetBytes($pyOut)
+                $stdout = [Console]::OpenStandardOutput()
+                $stdout.Write($bytes, 0, $bytes.Length)
+                $stdout.Flush()
+            }
+        } catch { }
+        # A small local log, overwritten each session.
+        try { [System.IO.File]::WriteAllText($ShimPyLog, $pyErr, (New-Object System.Text.UTF8Encoding $false)) } catch { }
+        if ($pyExit -ne 0) {
+            $last = [string]($pyErr -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -Last 1)
+            Report-ShimStuck -Reason "the toolkit's Python step could not run" -Detail "exit $pyExit; $last"
+        } else {
+            # Clear only our own record: migrate_to_plugin.py keeps its stage-A
+            # record in the same file and clears that one itself.
+            try {
+                $prev = Get-Content $ShimStatus -Raw -ErrorAction Stop | ConvertFrom-Json
+                if ($prev.stage -eq 'shim-python') { Remove-Item $ShimStatus -Force }
+            } catch { }
+        }
+    }
 }
