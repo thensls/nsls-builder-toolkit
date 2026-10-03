@@ -711,28 +711,43 @@ if ((Test-Path $startPy) -and (Test-Path $entryPy)) {
         Report-ShimStuck -Reason 'no Python was found' -Detail ''
     } else {
         $pyExit = -1
-        # Under Windows PowerShell 5.1 a redirected native stderr still obeys
-        # $ErrorActionPreference, and this script runs SilentlyContinue - so
-        # the log stayed empty. Continue for this one call, restored after.
-        $savedEap = $ErrorActionPreference
-        # Python writes its pipe in the ANSI code page and Windows PowerShell
-        # decodes it in the OEM one, so the policy text's dashes and quotes
-        # would arrive garbled. UTF-8 on both ends of the pipe.
-        $env:PYTHONIOENCODING = 'utf-8'
-        try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+        $pyErr = ''
         try {
-            $ErrorActionPreference = 'Continue'
-            # stderr to a small local log (overwritten each session), never to
-            # stdout: it is diagnosis for a person, not context for the model.
-            if ($pyExe -eq 'py') { & $pyExe -3 $entryPy $startPy 2> $ShimPyLog }
-            else { & $pyExe $entryPy $startPy 2> $ShimPyLog }
-            $pyExit = $LASTEXITCODE
-        } catch { } finally { $ErrorActionPreference = $savedEap }
+            # Python is started directly rather than through PowerShell's native
+            # call. Windows PowerShell 5.1 decodes a child's output with the
+            # console code page, and a hook has no console to set one on, so the
+            # policy's dashes and dots arrived garbled (CI, 2026-10-03). Here
+            # Python writes UTF-8, it is read as UTF-8, and written to this
+            # hook's stdout as UTF-8 bytes, untouched. stderr is read apart:
+            # diagnosis for a person, never context for the model.
+            $utf8 = New-Object System.Text.UTF8Encoding $false
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = $pyExe
+            $psi.Arguments = $(if ($pyExe -eq 'py') { '-3 ' } else { '' }) + ('"{0}" "{1}"' -f $entryPy, $startPy)
+            $psi.UseShellExecute = $false
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $psi.StandardOutputEncoding = $utf8
+            $psi.StandardErrorEncoding = $utf8
+            $psi.EnvironmentVariables['PYTHONIOENCODING'] = 'utf-8'
+            $proc = [System.Diagnostics.Process]::Start($psi)
+            $errTask = $proc.StandardError.ReadToEndAsync()
+            $pyOut = $proc.StandardOutput.ReadToEnd()
+            $proc.WaitForExit()
+            $pyExit = $proc.ExitCode
+            $pyErr = [string]$errTask.Result
+            if ($pyOut) {
+                [Console]::Out.Flush()   # anything this script printed comes first
+                $bytes = $utf8.GetBytes($pyOut)
+                $stdout = [Console]::OpenStandardOutput()
+                $stdout.Write($bytes, 0, $bytes.Length)
+                $stdout.Flush()
+            }
+        } catch { }
+        # A small local log, overwritten each session.
+        try { [System.IO.File]::WriteAllText($ShimPyLog, $pyErr, (New-Object System.Text.UTF8Encoding $false)) } catch { }
         if ($pyExit -ne 0) {
-            $last = ''
-            try {
-                $last = (Get-Content $ShimPyLog -ErrorAction Stop | Where-Object { $_.Trim() } | Select-Object -Last 1)
-            } catch { }
+            $last = [string]($pyErr -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -Last 1)
             Report-ShimStuck -Reason "the toolkit's Python step could not run" -Detail "exit $pyExit; $last"
         } else {
             # Clear only our own record: migrate_to_plugin.py keeps its stage-A

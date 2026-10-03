@@ -44,8 +44,22 @@ function Invoke-Hook([string]$Root) {
     $env:NSLS_NO_PLUGIN_MIGRATION = '1'   # never install anything from CI
     $env:NSLS_COLLECTOR_OPTOUT = '1'
     $hook = Join-Path $Root 'toolkit\hooks\session-start.ps1'
-    # The exact command install.ps1 registers in settings.json.
-    return (& powershell -NoProfile -ExecutionPolicy Bypass -File $hook 2>$null | Out-String)
+    # The exact command install.ps1 registers in settings.json, its stdout read
+    # as raw UTF-8 the way Claude Code reads a hook's - not through this
+    # process's console code page, which a CI runner cannot set.
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = 'powershell'
+    $psi.Arguments = ('-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $hook)
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.StandardOutputEncoding = New-Object System.Text.UTF8Encoding $false
+    $p = [System.Diagnostics.Process]::Start($psi)
+    $errTask = $p.StandardError.ReadToEndAsync()
+    $out = $p.StandardOutput.ReadToEnd()
+    $p.WaitForExit()
+    $null = $errTask.Result
+    return $out
 }
 
 function Status-Path([string]$Root) { return (Join-Path $Root 'cfg\.nsls-plugin-migration-status') }
@@ -60,8 +74,6 @@ $saved = @{}
 foreach ($v in 'USERPROFILE', 'HOME', 'CLAUDE_CONFIG_DIR', 'NSLS_NO_PLUGIN_MIGRATION', 'NSLS_COLLECTOR_OPTOUT') {
     $saved[$v] = [Environment]::GetEnvironmentVariable($v, 'Process')
 }
-# Read the child's stdout as UTF-8, the way Claude Code reads a hook's.
-try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 $w = New-World
 try {
 

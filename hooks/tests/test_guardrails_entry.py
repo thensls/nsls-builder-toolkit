@@ -62,18 +62,20 @@ with tempfile.TemporaryDirectory() as tmp:
 print("\nthe hook is pinned to it")
 check("no inline `-c` program is left in session-start.ps1", not re.search(r"&\s*\$pyExe[^\n]*\s-c\s", PS1))
 check("both interpreter branches run the entry file",
-      "& $pyExe -3 $entryPy $startPy 2> $ShimPyLog" in PS1 and "& $pyExe $entryPy $startPy 2> $ShimPyLog" in PS1)
-check("the exit code is checked", "$pyExit = $LASTEXITCODE" in PS1 and "if ($pyExit -ne 0)" in PS1)
+      """$psi.Arguments = $(if ($pyExe -eq 'py') { '-3 ' } else { '' }) + ('"{0}" "{1}"' -f $entryPy, $startPy)""" in PS1)
+check("the exit code is checked", "$pyExit = $proc.ExitCode" in PS1 and "if ($pyExit -ne 0)" in PS1)
+check("Python's output is read and re-emitted as UTF-8, not through the console code page",
+      "$psi.StandardOutputEncoding = $utf8" in PS1 and "[Console]::OpenStandardOutput()" in PS1
+      and "$psi.EnvironmentVariables['PYTHONIOENCODING'] = 'utf-8'" in PS1)
 check("no Python at all is reported too", "Report-ShimStuck -Reason 'no Python was found'" in PS1)
 section4 = "\n".join(l for l in PS1.split("# --- 4.")[1].splitlines() if not l.lstrip().startswith("#"))
-check("stderr goes to a local log, never discarded", "2>$null" not in section4 and "2> $ShimPyLog" in section4)
+check("stderr goes to a local log, never discarded", "2>$null" not in section4
+      and "$psi.RedirectStandardError = $true" in section4 and "WriteAllText($ShimPyLog, $pyErr" in section4)
 notice = re.search(r'Write-Output \(\"\[NSLS Builder Toolkit\] Setup could not finish(.*?)\"\)\n', PS1, re.S)
 check("the notice interpolates only the toolkit-authored reason, never the raw detail",
       notice is not None and "$Reason" in notice.group(0) and "$Detail" not in notice.group(0)
       and "$clean" not in notice.group(0), f"({notice.group(0)[:120] if notice else None!r})")
 check("only its own stage is cleared on success", "if ($prev.stage -eq 'shim-python')" in PS1)
-check("stderr is captured under 5.1: Continue for the call, restored after",
-      "$ErrorActionPreference = 'Continue'" in PS1 and "finally { $ErrorActionPreference = $savedEap }" in PS1)
 check("the record lives where Python keeps it (CLAUDE_CONFIG_DIR first)",
       "$ShimStateDir = if ([string]::IsNullOrWhiteSpace($env:CLAUDE_CONFIG_DIR))" in PS1
       and "$ShimStatus = Join-Path $ShimStateDir" in PS1)
