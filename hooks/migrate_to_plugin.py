@@ -165,11 +165,21 @@ def _hook_for_command(command: str):
         if any(s in normalised for s in scripts):
             return hook
     return None
-# Matches ONLY org-toolkit pointer stubs. Personal-toolkit stubs also mention
-# nsls-builder-toolkit (their credit-logging command calls this repo's
-# skill-event.sh), so the discriminator must be the skills path, not the repo
-# name.
-_STUB_MARKER = "local-plugins/nsls-builder-toolkit/skills/"
+# What counts as an org stub is decided by session-start.py's is_own_pointer,
+# handed over when it runs this file: the folder's SKILL.md must BE a pointer
+# the toolkit writes for that skill, not merely mention a toolkit path. The old
+# test here was a substring match, and stage B deleted every folder that
+# matched, so a builder's own skill that credited or linked a toolkit skill was
+# deleted outright with no copy (PC test, 2026-10-03; on Macs since 12 Aug).
+# Run any other way, nothing is treated as a stub: deleting less is the safe
+# direction, and detection then reports "not clean" so stage B simply retries.
+_IS_OWN_POINTER = globals().get("_NSLS_IS_OWN_POINTER")
+_ORG_PLUGIN = "nsls-builder-toolkit"
+# Files an OS drops into any folder it has shown. They don't make a pointer
+# folder the builder's.
+_OS_LITTER = {".DS_Store", "Thumbs.db", "desktop.ini"}
+# Removed pointers are moved here, never deleted outright.
+_REMOVED_DIR = _CONFIG_DIR / ".nsls-removed-skills"
 _LOCK = _CONFIG_DIR / ".nsls-plugin-migration.lock"
 _LOCK_STALE_SECS = 300
 # Written once stage B has VERIFIED the machine is clean (no shim hooks, no
@@ -224,7 +234,14 @@ def _stage_b_reason():
     schema = _done_schema()
     if schema is None or schema < _MIGRATION_SCHEMA:
         return "full"
-    if _shims_present() or _org_stubs_exist():
+    if _shims_present():
+        return "reappeared"
+    # Without session-start.py's exact-pointer check (an older plugin copy
+    # running this newer migration from the clone) no stub can be retired, and
+    # _org_stubs_exist() says "not clean" by design. Counting that here sent
+    # every already-migrated machine through stage B, CLI call included, every
+    # session until its plugin caught up.
+    if _IS_OWN_POINTER is not None and _org_stubs_exist():
         return "reappeared"
     return None
 
@@ -364,6 +381,33 @@ def _shims_present():
     return any(_is_shim_command(c) for c in _iter_hook_commands(settings))
 
 
+def _is_org_stub(entry):
+    """True only for a folder that is exactly a toolkit pointer and nothing else.
+
+    Its SKILL.md must be a pointer the toolkit writes for THIS skill
+    (is_own_pointer, organisation toolkit only, never the personal one), and
+    the folder must hold nothing else: scripts or references beside it mean a
+    builder made it. Raises when it cannot read; callers decide what that means.
+    """
+    if not (entry.is_dir() and not entry.is_symlink()):
+        return False
+    stub = entry / "SKILL.md"
+    if not stub.is_file():
+        return False
+    if any(p.name not in _OS_LITTER and p.name != "SKILL.md" for p in entry.iterdir()):
+        return False
+    if _IS_OWN_POINTER is None:
+        return False
+    try:
+        text = stub.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError:
+        # The toolkit only writes UTF-8, so this file is a builder's (an ANSI
+        # save with an accented letter). Raising here instead made detection
+        # report "not clean" every session, so stage B never finished.
+        return False
+    return bool(_IS_OWN_POINTER(text, entry.name, plugins=[_ORG_PLUGIN]))
+
+
 def _org_stubs_exist():
     """True if any org stub remains — or if we could not prove otherwise.
 
@@ -377,16 +421,16 @@ def _org_stubs_exist():
 
     Treating "I couldn't tell" as "something's still there" costs one extra
     retry next session; the alternative costs a permanently double-wired
-    install that nothing will ever notice.
+    install that nothing will ever notice. Without the exact-pointer test (this
+    file run on its own) it cannot tell at all, so it says not clean.
     """
     if not _SKILLS_DIR.is_dir():
         return False
+    if _IS_OWN_POINTER is None:
+        return True
     for entry in _SKILLS_DIR.iterdir():
-        stub = entry / "SKILL.md"
         try:
-            if (entry.is_dir() and not entry.is_symlink() and stub.exists()
-                    and _STUB_MARKER in _norm(
-                        stub.read_text(encoding="utf-8-sig"))):
+            if _is_org_stub(entry):
                 return True
         except Exception:
             return True  # undetermined — assume not clean, retry next session
@@ -577,32 +621,33 @@ def _remove_settings_hooks(only=None):
 
 
 def _remove_org_stubs(allowed=True):
-    """Delete org-toolkit pointer stubs. Returns count. Never touches
-    personal-toolkit stubs or user-authored skills (marker check).
+    """Retire org-toolkit pointer stubs. Returns count.
+
+    Only folders that are exactly a toolkit pointer (_is_org_stub) are touched,
+    so a builder's own skill, a personal-toolkit pointer, or a pointer the
+    builder extended is left alone. Each one is moved under
+    ~/.claude/.nsls-removed-skills/<time>/ rather than deleted, so even a wrong
+    call can be undone by moving it back.
 
     `allowed` is False until the plugin has been seen running here: the stubs
     are how skills reach a machine that has no plugin, and on Windows that has
     been every machine.
     """
     removed = 0
-    if not allowed:
+    if not allowed or _IS_OWN_POINTER is None:
         return 0
     if not _SKILLS_DIR.is_dir():
         return 0
+    batch = _REMOVED_DIR / time.strftime("%Y%m%d-%H%M%S")
     for entry in sorted(_SKILLS_DIR.iterdir()):
-        stub = entry / "SKILL.md"
         try:
-            if not (entry.is_dir() and not entry.is_symlink() and stub.exists()):
+            if not _is_org_stub(entry):
                 continue
-            # _norm here too: detection (_org_stubs_exist) and removal must
-            # agree, or a Windows stub is seen but never deleted and stage B
-            # retries every session forever.
-            if _STUB_MARKER not in _norm(stub.read_text(encoding="utf-8-sig")):
-                continue
-            shutil.rmtree(entry)
+            batch.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(entry), str(batch / entry.name))
             removed += 1
         except Exception:
-            continue
+            continue  # never fall back to deleting; next session retries
     return removed
 
 
@@ -673,8 +718,9 @@ def _stage_b():
         _announce(
             "NSLS Builder Toolkit plugin migration"
             + (" complete (step 2 of 2)" if clean else " progressed") + ": "
-            f"removed {stubs_removed} legacy skill pointers, {hooks_removed} "
-            "legacy hook entries"
+            f"removed {stubs_removed} legacy skill pointers"
+            + (" (copies kept in ~/.claude/.nsls-removed-skills)" if stubs_removed else "")
+            + f", {hooks_removed} legacy hook entries"
             + (", and moved the signal MCP server to plugin scope"
                if signal_moved else "")
             + ". Org skills now load as nsls-builder-toolkit:<name> — if a "

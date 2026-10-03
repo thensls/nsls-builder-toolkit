@@ -53,6 +53,13 @@ def load(path, config_dir):
     spec = importlib.util.spec_from_file_location(f"m_{path.stem}_{time.time_ns()}", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    if path.stem == "migrate_to_plugin":
+        # session-start.py hands the migration its exact-pointer test.
+        ss_spec = importlib.util.spec_from_file_location(
+            f"ss_{time.time_ns()}", path.parent / "session-start.py")
+        ss = importlib.util.module_from_spec(ss_spec)
+        ss_spec.loader.exec_module(ss)
+        mod._IS_OWN_POINTER = ss.is_own_pointer
     return mod
 
 
@@ -164,7 +171,9 @@ with tempfile.TemporaryDirectory() as tmp:
     stub = cfg / "skills" / "gws"
     stub.mkdir(parents=True)
     (stub / "SKILL.md").write_text(
-        "points at local-plugins/nsls-builder-toolkit/skills/gws\n")
+        "---\nname: gws\ndescription: >-\n  Google Workspace\n---\n\n"
+        "Read and follow the full skill at "
+        "`~/.claude/local-plugins/nsls-builder-toolkit/skills/gws/SKILL.md`.\n")
     check("a stub that reappeared after the marker re-opens stage B",
           mig._stage_b_reason() == "reappeared")
 

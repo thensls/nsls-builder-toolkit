@@ -62,8 +62,12 @@ def build(cfg: Path):
     }, indent=2))
     skills = cfg / "skills" / "gws"
     skills.mkdir(parents=True)
+    # A real pointer, exactly as the toolkit writes one: stage B retires only
+    # those, never a file that merely mentions a toolkit path.
     (skills / "SKILL.md").write_text(
-        "points at local-plugins/nsls-builder-toolkit/skills/gws\n")
+        "---\nname: gws\ndescription: >-\n  Google Workspace\n---\n\n"
+        "Read and follow the full skill at "
+        "`~/.claude/local-plugins/nsls-builder-toolkit/skills/gws/SKILL.md`.\n")
     cache = (cfg / "plugins" / "cache" / "nsls-toolkit"
              / "nsls-builder-toolkit" / "3.8.6" / "hooks")
     cache.mkdir(parents=True)
@@ -84,6 +88,10 @@ SCENARIO = textwrap.dedent("""
         assert plugin_beacon.record(hook, f), "beacon should have been written"
     spec = importlib.util.spec_from_file_location("mig", os.path.join(hooks, "migrate_to_plugin.py"))
     mig = importlib.util.module_from_spec(spec); spec.loader.exec_module(mig)
+    # session-start.py hands the migration its exact-pointer test; do the same.
+    ss_spec = importlib.util.spec_from_file_location("ss", os.path.join(hooks, "session-start.py"))
+    ss = importlib.util.module_from_spec(ss_spec); ss_spec.loader.exec_module(ss)
+    mig._IS_OWN_POINTER = ss.is_own_pointer
     proven = mig._proven_hooks()
     removed = mig._remove_settings_hooks(only=proven)
     stubs = mig._remove_org_stubs(allowed="session-start" in proven)

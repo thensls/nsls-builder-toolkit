@@ -229,7 +229,7 @@ if (Test-Path $PyExe) {
 # The pip install above is `--user`, so the libraries are already importable by
 # $PyExe without any PYTHONPATH. The shim sets it anyway for the SECOND location
 # the gdoc-build skill documents on Windows ($env:LOCALAPPDATA\nsls-pydeps, for a
-# manual --target repair) — belt-and-braces, not load-bearing.
+# manual --target repair) - belt-and-braces, not load-bearing.
 $ShimPath = Join-Path (Join-Path $env:LOCALAPPDATA 'Programs\nsls-bin') 'nsls-python.cmd'
 $ShimOk = $false
 if (Test-Path $PyExe) {
@@ -248,7 +248,7 @@ if defined PYTHONPATH (set "PYTHONPATH=$PyDeps;%PYTHONPATH%") else (set "PYTHONP
 "$PyExe" %*
 "@
         # Must be BOM-less: cmd.exe treats a leading BOM as part of the first
-        # line and the shim dies on "'ï»¿@echo' is not recognized".
+        # line and the shim dies on "'<BOM>@echo' is not recognized" (the BOM shows as three odd characters).
         # Write then rename, so an interrupted write never leaves a truncated launcher.
         Write-TextNoBom -Path "$ShimPath.tmp" -Content $shim
         Move-Item -Force -Path "$ShimPath.tmp" -Destination $ShimPath
