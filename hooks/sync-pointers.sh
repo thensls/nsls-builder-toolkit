@@ -5,10 +5,26 @@
 
 PLUGIN_DIR="$HOME/.claude/local-plugins/nsls-builder-toolkit"
 SKILLS_DIR="$HOME/.claude/skills"
-MARKER="local-plugins/nsls-builder-toolkit"
 
 [ -d "$PLUGIN_DIR/skills" ] || exit 0
 mkdir -p "$SKILLS_DIR"
+
+# True only if file $1 is exactly the toolkit's pointer to skill $2. Anything
+# else may be a skill the builder wrote, even one that mentions a toolkit path.
+# The check is is_own_pointer() in hooks/session-start.py, the one definition
+# all three pointer writers share; if it cannot run, the file is left alone.
+is_own_pointer() {
+  python3 - "$1" "$2" "$PLUGIN_DIR/hooks/session-start.py" << 'PYEOF' 2>/dev/null
+import importlib.util, sys
+path, skill, hook = sys.argv[1:4]
+spec = importlib.util.spec_from_file_location("nsls_session_start", hook)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+with open(path, encoding="utf-8") as f:
+    text = f.read()
+sys.exit(0 if mod.is_own_pointer(text, skill, ("nsls-builder-toolkit",)) else 1)
+PYEOF
+}
 
 created=0
 for skill_dir in "$PLUGIN_DIR/skills"/*/; do
@@ -17,9 +33,9 @@ for skill_dir in "$PLUGIN_DIR/skills"/*/; do
   src="$skill_dir/SKILL.md"
   [ -f "$src" ] || continue
 
-  # Skip if user has a custom (non-pointer) skill
+  # Skip if the builder has their own skill with this name
   if [ -d "$dest" ] && [ -f "$dest/SKILL.md" ]; then
-    grep -q "$MARKER" "$dest/SKILL.md" 2>/dev/null || continue
+    is_own_pointer "$dest/SKILL.md" "$skill" || continue
   fi
 
   # Extract name from frontmatter
