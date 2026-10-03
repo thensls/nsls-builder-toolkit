@@ -149,10 +149,13 @@ Write the track's `academic_outcomes_json` **item** per
 Wrap the item in a document (title, About, the How-learning-works tenets, the one
 item) and render:
 ```bash
-PYTHONPATH="$HOME/.local/lib/nsls-pydeps:/tmp/pptx_deps" python3.12 -c 'import docx' 2>/dev/null \
-  || python3.12 -m pip install --upgrade python-docx --target "$HOME/.local/lib/nsls-pydeps" -q
-python3.12 scripts/render_academic_outcomes.py document.json out.docx
+# Mac/Linux: the launcher by full path. Windows: plain nsls-python.
+~/.local/bin/nsls-python -c 'import docx' && echo PREFLIGHT_OK
+~/.local/bin/nsls-python scripts/render_academic_outcomes.py document.json out.docx
 ```
+No `PREFLIGHT_OK`? Don't render; re-run the toolkit installer (gdoc-build's preflight has the
+per-platform repair). Never pip-install into `~/.local/lib/nsls-pydeps` with another Python: its
+compiled parts (lxml) only load in the Python the launcher uses.
 Upload `out.docx` as a Society Google Doc via `gdoc-build`'s `gws drive files
 create --upload …` step (this renderer is already Society-branded — no separate
 template build needed).

@@ -4,9 +4,9 @@ USAGE
   1. cp this file to ~/build_<name>_scorecard.py
   2. Fill the BODY section (marked ==== FILL THIS ====). Keep every uncertain
      value as a [bracket] — those are confirmed WITH the report, not by you.
-  3. PYTHONPATH="$HOME/.local/lib/nsls-pydeps:/tmp/pptx_deps" python3.12 ~/build_<name>_scorecard.py
-     (if import fails: python3.12 -m pip install --upgrade --force-reinstall \
-      python-docx --target ~/.local/lib/nsls-pydeps -q)
+  3. ~/.local/bin/nsls-python ~/build_<name>_scorecard.py   (Windows: nsls-python ...)
+     (if import fails: re-run the toolkit installer; never pip-install into
+      ~/.local/lib/nsls-pydeps with another Python)
      The script derives the output filename from NAME (e.g. ~/chelsea_byers_scorecard.docx)
      and PRINTS both commands you need — upload, then the REQUIRED HR share.
   4. Run the printed STEP 1 upload command (it fills in the right filename):
@@ -29,7 +29,6 @@ conversion. add_runs() parses mini-markdown inside any paragraph or table cell:
 **bold**, *italic*, `code`, and \\n line breaks.
 """
 import os, sys, re
-sys.path.insert(0, '/tmp/pptx_deps')  # legacy location — /tmp cleanup can gut it
 sys.path.insert(0, os.path.expanduser('~/.local/lib/nsls-pydeps'))  # durable home, wins
 from docx import Document
 from docx.shared import Pt, RGBColor, Cm

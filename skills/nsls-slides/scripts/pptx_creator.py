@@ -50,6 +50,12 @@ import json
 import zipfile
 import argparse
 from pathlib import Path
+
+# Run me with `nsls-python` (the toolkit launcher) and these paths are already
+# set. They're repeated here as belt-and-braces so a bare `python3 pptx_creator.py`
+# still finds the libraries instead of dying on ImportError.
+sys.path.insert(0, os.path.expanduser('~/.local/lib/nsls-pydeps'))  # durable home, wins
+
 from lxml import etree
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
