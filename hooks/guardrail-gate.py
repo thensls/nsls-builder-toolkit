@@ -27,6 +27,7 @@ DESIGN RULES, in priority order:
     with no off-switch is a gate that gets uninstalled.
 """
 
+import glob
 import json
 import os
 import re
@@ -603,7 +604,7 @@ def _join_ps_continuations(cmd: str) -> str:
             continue
         line = pending + line
         pending = ""
-        m = re.search(r"`[ \t]*$", line)
+        m = re.search(r"`[ \t]*$", _ps_code_part(line))
         if m:
             pending = line[:m.start()] + " "
             continue
@@ -614,6 +615,25 @@ def _join_ps_continuations(cmd: str) -> str:
     if pending:
         out.append(pending)
     return "\n".join(out)
+
+
+def _ps_code_part(line: str) -> str:
+    """The line up to a PowerShell `#` comment, quotes respected.
+
+    A backtick at the end of a comment is comment text, not a continuation;
+    joining on it swallowed the next line - a real push - into the comment
+    (Macroscope). `#` starts a comment at the line start or after whitespace.
+    """
+    quote = None
+    for i, c in enumerate(line):
+        if quote:
+            if c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c == "#" and (i == 0 or line[i - 1].isspace()):
+            return line[:i]
+    return line
 
 
 def command_segments(cmd: str):
@@ -725,7 +745,12 @@ def _exe_name(tok: str) -> str:
     all run git on Windows (and `Git` on a case-insensitive Mac disk too),
     but only the first matched `== "git"`, so the rest walked past every gate.
     """
-    name = re.split(r"[\\/]", tok)[-1].lower()
+    name = re.split(r"[\\/]", tok)[-1]
+    # Fold case only where names are case-insensitive: PowerShell, and the
+    # default Mac and Windows disks Git Bash and zsh resolve against. On a
+    # case-sensitive Linux shell `Git` may be a different program (Macroscope).
+    if _POWERSHELL or sys.platform in ("darwin", "win32"):
+        name = name.lower()
     for ext in (".exe", ".cmd", ".bat"):
         if name.endswith(ext):
             return name[:-len(ext)]
@@ -736,32 +761,52 @@ def _exe_name(tok: str) -> str:
 _CD_COMMANDS = frozenset({"cd", "chdir", "set-location", "sl"})
 _PUSH_COMMANDS = frozenset({"pushd", "push-location"})
 _POP_COMMANDS = frozenset({"popd", "pop-location"})
-_PATH_PARAMS = ("-path", "-literalpath")
 
 
-def _location_target(args):
-    """The directory a location command names, or None.
+def _location_args(args):
+    """(target, literal, stack_name) for a location command's arguments.
 
-    PowerShell spells it `-Path X`, `-Path:X`, `-LiteralPath X` or positionally,
-    with switches such as -PassThru anywhere. Taking the first token after
-    dropping only `-Path` read `-PassThru` as the destination (Macroscope).
+    PowerShell spells the target `-Path X`, `-Path:X`, `-LiteralPath X` or
+    positionally, with switches such as -PassThru anywhere; -StackName names a
+    separate location stack. Taking the first token after a bare -Path read
+    -PassThru as the destination (Macroscope).
     """
-    i = 0
+    target, literal, stack_name, i = None, False, "", 0
     while i < len(args):
         a, low = args[i], args[i].lower()
-        if low in _PATH_PARAMS:
-            return args[i + 1] if i + 1 < len(args) else None
-        for prm in _PATH_PARAMS:
-            if low.startswith(prm + ":"):
-                return a[len(prm) + 1:] or None
-        if low == "-stackname":
-            i += 2
+        name, _, attached = low.partition(":")
+        if name in ("-path", "-literalpath", "-stackname"):
+            value = a[len(name) + 1:] if attached else (args[i + 1] if i + 1 < len(args) else None)
+            i += 1 if attached else 2
+            if name == "-stackname":
+                stack_name = value or ""
+            elif target is None:
+                target, literal = value, name == "-literalpath"
             continue
-        if a.startswith("-") and a != "-":
+        if a.startswith("-") and a not in ("-", "+"):
             i += 1
             continue
-        return a
-    return None
+        if target is None:
+            target = a
+        i += 1
+    return target, literal, stack_name
+
+
+def _resolve_dir(target, base, literal):
+    """The directory a location command lands in, or None if it would fail.
+
+    A failed cd leaves the shell where it was, so None means "unchanged".
+    PowerShell expands wildcards in -Path (not -LiteralPath) and moves only
+    when exactly one container matches; checking the literal `*` path left the
+    gate judging the old directory (Macroscope).
+    """
+    target = os.path.expanduser(target)
+    path = target if os.path.isabs(target) else os.path.join(base, target)
+    if _POWERSHELL and not literal and re.search(r"[*?\[]", target):
+        hits = [h for h in glob.glob(path) if os.path.isdir(h)]
+        return os.path.normpath(hits[0]) if len(hits) == 1 else None
+    path = os.path.normpath(path)
+    return path if os.path.isdir(path) else None
 
 
 def walk_segments(cmd: str):
@@ -770,40 +815,84 @@ def walk_segments(cmd: str):
     effective_cwd is None until a cd is seen (meaning: the hook's own cwd).
     Relative cd targets resolve against the previous effective cwd. `git -C
     <dir> …` is handled by the caller, since it scopes one invocation only.
+
+    The gates judge the repository a command runs in, so every way the shell
+    can move is followed: cd/Set-Location (wildcards included), the pushd/popd
+    stack and PowerShell's named stacks, bash's bare pushd swap, and `cd -` /
+    `cd +` history. A move the shell would refuse leaves the directory as it
+    was, which is exactly what the shell does.
     """
     segs = command_segments(cmd)
     if segs is None:
         return None
-    out, cwd, stack = [], None, []
+    out, cwd = [], None
+    stacks = {}            # PowerShell -StackName stacks; "" is the default
+    back, fwd = [], []     # `cd -` / `cd +` history (bash keeps one OLDPWD)
+
+    def move(new):
+        nonlocal cwd
+        back.append(cwd)
+        fwd.clear()
+        cwd = new
+
     for seg in segs:
         seg = strip_wrappers(seg)  # `MODE=prod cd dir` is still a cd
-        if seg and seg[0] in _POP_COMMANDS:
-            # popd returns to where the matching pushd left from; judging the
-            # next push against the pushed directory checked the wrong repo.
+        if not seg:
+            continue
+        verb = seg[0]
+        if verb in _POP_COMMANDS:
+            _, _, name = _location_args(seg[1:])
+            stack = stacks.get(name) or []
+            # popd returns to where the matching pushd left from; an empty
+            # stack is an error in both shells and leaves the directory alone.
             if stack:
-                cwd = stack.pop()
+                move(stack.pop())
             continue
-        if seg and (seg[0] in _CD_COMMANDS or seg[0] in _PUSH_COMMANDS):
-            pushing = seg[0] in _PUSH_COMMANDS
-            target = _location_target(seg[1:])
+        if verb not in _CD_COMMANDS and verb not in _PUSH_COMMANDS:
+            out.append((cwd, seg))
+            continue
+        target, literal, name = _location_args(seg[1:])
+        base = cwd or os.getcwd()
+        if verb in _PUSH_COMMANDS:
+            stack = stacks.setdefault(name, [])
             if target is None:
-                if not pushing:  # a bare pushd only saves the location
-                    cwd = str(Path.home())
-            else:
-                target = os.path.expanduser(target)
-                base = cwd or os.getcwd()
-                resolved = target if os.path.isabs(target) else os.path.normpath(
-                    os.path.join(base, target))
-                # A cd to a directory that doesn't exist FAILS in the shell —
-                # the next command runs in the OLD directory (`;`) or not at
-                # all (`&&`). Tracking the bogus target instead made
-                # repo_root("") come back empty and waved the push through.
-                if os.path.isdir(resolved):
-                    if pushing:
-                        stack.append(cwd)
-                    cwd = resolved
+                # Bash's bare pushd swaps the top two directories; PowerShell's
+                # only saves the current location.
+                if not _POWERSHELL and stack:
+                    top = stack.pop()
+                    stack.append(cwd)
+                    move(top)
+                elif _POWERSHELL:
+                    stack.append(cwd)
+                continue
+            new = _resolve_dir(target, base, literal)
+            if new is not None:
+                stack.append(cwd)
+                move(new)
             continue
-        out.append((cwd, seg))
+        if target is None:
+            move(str(Path.home()))
+        elif target == "-":
+            if back:
+                prev = back.pop()
+                if _POWERSHELL:
+                    fwd.append(cwd)
+                    cwd = prev
+                else:  # bash toggles with OLDPWD
+                    back.append(cwd)
+                    cwd = prev
+        elif target == "+" and _POWERSHELL:
+            if fwd:
+                back.append(cwd)
+                cwd = fwd.pop()
+        else:
+            # A cd to a directory that doesn't exist FAILS in the shell — the
+            # next command runs in the OLD directory (`;`) or not at all
+            # (`&&`). Tracking the bogus target instead made repo_root("")
+            # come back empty and waved the push through.
+            new = _resolve_dir(target, base, literal)
+            if new is not None:
+                move(new)
     return out
 
 

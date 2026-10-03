@@ -142,6 +142,26 @@ with tempfile.TemporaryDirectory() as tmp:
         r = call(start, env, "PowerShell", command, n)
         check(f"PowerShell, {label}: denied", denied(r), r.stdout[:200] or r.stderr[-200:])
 
+    print("\nlocation rules, round three (Macroscope)")
+    third = [
+        ("PowerShell", "a comment ending in a backtick, then a push",
+         f"# note `\ngit -C {repo} push origin main", neutral),
+        ("Bash", "bash's bare pushd swaps back into the personal repo",
+         f"pushd {neutral}; pushd; git push origin main", repo),
+        ("PowerShell", "Pop-Location -StackName pops the named stack, not the last push",
+         f"Push-Location -StackName A {neutral}; Push-Location -StackName B {parent}; "
+         f"Pop-Location -StackName A; git push origin main", repo),
+        ("PowerShell", "a wildcard Set-Location that matches one folder",
+         f"Set-Location {parent}/nsls\\th*; git push origin main", neutral),
+        ("PowerShell", "cd - returns to the personal repo",
+         f"Set-Location {repo}; Set-Location {neutral}; cd -; git push origin main", neutral),
+    ]
+    for n, (tool, label, command, start) in enumerate(third, start=60):
+        r = call(start, env, tool, command, n)
+        check(f"{tool}, {label}: denied", denied(r), r.stdout[:200] or r.stderr[-200:])
+    r = call(neutral, env, "PowerShell", f"Set-Location -LiteralPath {parent}/nsls\\th*; git push origin main", 70)
+    check("-LiteralPath never expands a wildcard, so no move and no repo", not denied(r), r.stdout[:200])
+
 print("\nthe deploy prefilter sees Windows spellings")
 for c in ("railway.exe up", '& "C:\\Tools\\railway.exe" up', "Railway up"):
     check(f"DEPLOY_RE matches {c!r}", bool(mod.DEPLOY_RE.search(c)))
