@@ -9,7 +9,7 @@ description: >-
   deck, society presentation, nsls deck, pptx
 category: nsls
 version: 2.0.0
-key_capabilities: pptx_creator.py, upload-and-convert
+key_capabilities: pptx_creator.py, gws upload to Google Slides
 when_to_use: Generating branded NSLS or Society slide decks, presentations, pitch decks
 ---
 
@@ -31,7 +31,7 @@ Pass `--brand nsls` or `--brand society` to `pptx_creator.py`.
 **Pipeline** (mirrors the `.docx` → Google Doc workflow exactly):
 1. Claude generates slide content as JSON
 2. `pptx_creator.py --brand {nsls|society}` builds a branded `.pptx`
-3. `drive_manager.rb upload-and-convert` uploads + converts to Google Slides
+3. `gws drive files create --upload` uploads the `.pptx` and converts it to Google Slides
 4. Returns the Google Slides URL
 
 ---
@@ -189,18 +189,18 @@ repairing and re-run the toolkit installer for them. See "Python environment" un
 ```bash
 # Society brand (default)
 echo '<json>' | ~/.local/bin/nsls-python \
-  ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
-  --brand society --output /tmp/presentation.pptx
+  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  --brand society --output ~/presentation.pptx
 
 # NSLS brand
 echo '<json>' | ~/.local/bin/nsls-python \
-  ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
-  --brand nsls --output /tmp/presentation.pptx
+  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  --brand nsls --output ~/presentation.pptx
 
 # Add --pdf for font-safe PDF export (works with either brand)
 echo '<json>' | ~/.local/bin/nsls-python \
-  ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
-  --brand society --output /tmp/presentation.pptx --pdf
+  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  --brand society --output ~/presentation.pptx --pdf
 ```
 
 **Font rendering by format:**
@@ -214,28 +214,43 @@ echo '<json>' | ~/.local/bin/nsls-python \
 **Use `--pdf` when sharing a link for viewing/presenting.** The PPTX is for editing.
 The `--pdf` flag uses Keynote to render and export — requires Keynote installed (it is).
 
-### Step 3 — Resolve target folder (optional)
+### Step 3 — Pick the Drive folder (optional)
 
-```bash
-~/.claude/skills/google-docs/scripts/drive_manager.rb resolve-folder \
-  --path "NSLS Presentations/2026"
-```
+No folder named? Skip this; the deck lands in My Drive. If the user wants it in a folder,
+ask for the folder's link: the ID is the part after `/folders/`. Pass it as `parents` in
+step 4.
 
 ### Step 4 — Upload and convert to Google Slides
 
+Runs on the toolkit's own `gws` profile, the same one `/gdoc-build` uses. If `gws` reports
+an auth error or a 403, run `/gdoc-build`'s step 0 (the gws doctor) and retry.
+
 ```bash
-~/.claude/skills/google-docs/scripts/drive_manager.rb upload-and-convert \
-  --file /tmp/presentation.pptx \
-  --folder-id {folder_id} \
-  --name "2026-03-02 - Presentation Title"
+export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"
+set -o pipefail
+cd ~ && gws drive files create \
+  --json '{"name":"2026-03-02 - Presentation Title","mimeType":"application/vnd.google-apps.presentation"}' \
+  --upload presentation.pptx \
+  --upload-content-type "application/vnd.openxmlformats-officedocument.presentationml.presentation" \
+  --format json | tail -10
 ```
 
-Returns JSON with `web_view_link` — share that link with Kevin.
+- **Build the deck in `~` and run `gws` from `~`.** `--upload` rejects a path outside the
+  current directory, so `/tmp/presentation.pptx` fails.
+- To upload into a folder, add `"parents":["<folder_id>"]` to the JSON.
+- The reply's `mimeType` must be `application/vnd.google-apps.presentation`. Give the user
+  `https://docs.google.com/presentation/d/<id>/edit`.
+- `pipefail` is load-bearing: without it `tail` hides a failed upload and the command still
+  exits 0.
+- **On Windows:** use `/gdoc-build`'s Windows upload recipe with two values swapped:
+  `"mimeType":"application/vnd.google-apps.presentation"` and the `.pptx` content type above.
+  It covers PowerShell 5.1's quote-stripping of `--json`. The script lives at
+  `$env:USERPROFILE\.claude\local-plugins\nsls-builder-toolkit\skills\nsls-slides\scripts\pptx_creator.py`.
 
 ### Step 5 — Clean up
 
 ```bash
-rm /tmp/presentation.pptx
+rm ~/presentation.pptx
 ```
 
 ## Setup Requirements
@@ -282,14 +297,14 @@ cp "/path/to/HW Cigars SemiBold.otf" ~/Library/Fonts/
 
 ### Drive credentials
 
-Uses the shared Google OAuth token from `~/.claude/.google/`. No additional setup
-needed if `drive_manager.rb` is already authorized.
+Uses the toolkit's `gws` profile (`~/.config/gws-profiles/nsls-gdocs-skill`), shared with
+`/gdoc-build` and `/gdoc-edit`. Set it up or repair it with `/gdoc-build`'s step 0.
 
 ## Example: Full End-to-End Run
 
 ```bash
 # 1. Generate slides JSON (Claude produces this based on Kevin's brief)
-cat > /tmp/slides.json <<'JSON'
+cat > ~/slides.json <<'JSON'
 {
   "slides": [
     {
@@ -312,17 +327,22 @@ cat > /tmp/slides.json <<'JSON'
 JSON
 
 # 2. Build .pptx
-~/.local/bin/nsls-python ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
-  --input /tmp/slides.json \
-  --output /tmp/q2-update.pptx
+~/.local/bin/nsls-python \
+  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  --input ~/slides.json \
+  --output ~/q2-update.pptx
 
 # 3. Upload to Drive as Google Slides
-~/.claude/skills/google-docs/scripts/drive_manager.rb upload-and-convert \
-  --file /tmp/q2-update.pptx \
-  --name "2026 Q2 - Society Update"
+export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"
+set -o pipefail
+cd ~ && gws drive files create \
+  --json '{"name":"2026 Q2 - Society Update","mimeType":"application/vnd.google-apps.presentation"}' \
+  --upload q2-update.pptx \
+  --upload-content-type "application/vnd.openxmlformats-officedocument.presentationml.presentation" \
+  --format json | tail -10
 
 # 4. Clean up
-rm /tmp/slides.json /tmp/q2-update.pptx
+rm ~/slides.json ~/q2-update.pptx
 ```
 
 ## Notes & Future Enhancements

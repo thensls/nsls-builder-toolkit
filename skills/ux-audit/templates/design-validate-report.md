@@ -93,7 +93,7 @@ What this change touches, top-to-bottom:
 
 ## 3 · Member-fit panel
 
-Personas selected from `~/.claude/skills/ux-audit/references/design-validate-personas.md` (8-archetype library). Render the panel below for each persona (3–6 total).
+Personas selected from `~/.claude/local-plugins/nsls-builder-toolkit/skills/ux-audit/references/design-validate-personas.md` (8-archetype library). Render the panel below for each persona (3–6 total).
 
 ### Persona: {{Persona name}}
 
