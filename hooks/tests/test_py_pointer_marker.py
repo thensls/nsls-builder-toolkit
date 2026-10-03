@@ -199,6 +199,29 @@ with tempfile.TemporaryDirectory() as td:
         copy.notice_own_skills()
     check("an org toolkit installed only as a plugin is still checked",
           "/brainstorm" in out.getvalue(), repr(out.getvalue()))
+with tempfile.TemporaryDirectory() as td:
+    # One toolkit's skills folder can't be read: the other is still handled.
+    cfg = fake_config(Path(td))
+    seed(cfg)
+    personal = cfg / "local-plugins" / "nsls-personal-toolkit" / "skills"
+    (personal / "x").mkdir(parents=True)
+    hook.CONFIG_DIR, hook.SKILLS_DIR = cfg, cfg / "skills"
+    hook.org_plugin_active = lambda: False
+    os.chmod(personal, 0)
+    try:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            try:
+                hook.sync_pointers()
+                hook.notice_own_skills()
+                raised = None
+            except Exception as e:
+                raised = e
+    finally:
+        os.chmod(personal, 0o755)
+    check("an unreadable toolkit folder does not stop the sync", raised is None, repr(raised))
+    check("the other toolkit's pointers still refresh", "NEW description of plan" in read(cfg, "plan"))
+    check("and its names are still flagged", "/brainstorm" in out.getvalue(), repr(out.getvalue()))
 check("every session runs it, right after the pointers are synced",
       "    sync_pointers()\n    notice_own_skills()\n" in (HOOKS / "session-start.py").read_text())
 

@@ -1545,7 +1545,13 @@ def sync_pointers():
         if not skills_src.is_dir():
             continue
 
-        for skill_dir in sorted(skills_src.iterdir()):
+        # An unreadable folder skips this toolkit, not the rest of session
+        # start: main() calls this bare, so the guardrails and ping follow it.
+        try:
+            skill_dirs = sorted(skills_src.iterdir())
+        except OSError:
+            continue
+        for skill_dir in skill_dirs:
             if not skill_dir.is_dir():
                 continue
             skill = skill_dir.name
@@ -1641,7 +1647,12 @@ def own_skills_over_toolkit():
     """
     names = set()
     for skills_src in _toolkit_skill_dirs():
-        for skill_dir in skills_src.iterdir():
+        # One unreadable toolkit folder must not hide the others' names.
+        try:
+            skill_dirs = list(skills_src.iterdir())
+        except OSError:
+            continue
+        for skill_dir in skill_dirs:
             dest_skill = SKILLS_DIR / skill_dir.name / "SKILL.md"
             if not (skill_dir / "SKILL.md").exists() or not dest_skill.exists():
                 continue
