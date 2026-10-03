@@ -514,11 +514,13 @@ function Parse-Frontmatter {
 # enough: a builder's own skill that credits or links the toolkit skill would
 # match that and be overwritten, and so would a pointer the builder extended
 # with notes of their own. Backslashes are turned forward first, so a pointer
-# naming a Windows path still counts.
+# naming a Windows path still counts. The front matter must be exactly what
+# the writers emit (a name line, a one-line folded description): a key of the
+# builder's own, or a body `---` passing for the closing one, makes it theirs.
 function Test-OwnPointer {
     param([string]$Text, [string]$OwnPath)
     $t = (($Text -replace '\\', '/') -replace "`r`n", "`n").TrimStart([char]0xFEFF)
-    $pattern = '\A---\n(?:[^\n]*\n)*?---\n\s*Read and follow the full skill at `(?:[^`\n]*/)?' +
+    $pattern = '\A---\nname:[^\n]*\ndescription: >-\n  [^\n]*\n---\n\s*Read and follow the full skill at `(?:[^`\n]*/)?' +
         [regex]::Escape($OwnPath) + '`\.\s*\z'
     return [regex]::IsMatch($t, $pattern)
 }
