@@ -27,6 +27,7 @@ DESIGN RULES, in priority order:
     with no off-switch is a gate that gets uninstalled.
 """
 
+import glob
 import json
 import os
 import re
@@ -580,6 +581,65 @@ def tracker_lookup(name: str):
 
 _SEG_BREAKS = frozenset({";", "&&", "||", "|", "&", "\n"})
 
+# Which shell will run the command being judged. normalize_call presents a
+# PowerShell call to the gates as Bash, because the command gates read one
+# shape; this is the one fact that must survive that, and main() sets it.
+_POWERSHELL = False
+
+
+def _join_ps_continuations(cmd: str) -> str:
+    """A trailing backtick continues a PowerShell line, so `git -C C:\\repo `
+    then `push origin main` on the next line is one command.
+
+    Never inside a here-string: its body is data, and a body line ending in a
+    backtick joined onto the closing '@ hid that delimiter, so everything after
+    it - a real push included - was read as here-string text (Macroscope).
+    """
+    out, here_end, pending = [], None, ""
+    for line in cmd.splitlines():
+        if here_end is not None:
+            out.append(line)
+            if line.lstrip().startswith(here_end):
+                here_end = None
+            continue
+        line = pending + line
+        pending = ""
+        m = re.search(r"`[ \t]*$", _ps_code_part(line))
+        if m:
+            pending = line[:m.start()] + " "
+            continue
+        out.append(line)
+        m_ps = re.search(r"""@(['"])\s*$""", line)
+        if m_ps:
+            here_end = m_ps.group(1) + "@"
+    if pending:
+        out.append(pending)
+    return "\n".join(out)
+
+
+def _ps_code_part(line: str) -> str:
+    """The line up to a PowerShell `#` comment, quotes respected.
+
+    A backtick at the end of a comment is comment text, not a continuation;
+    joining on it swallowed the next line - a real push - into the comment
+    (Macroscope). `#` starts a comment at the line start or after whitespace.
+    """
+    quote, escaped = None, False
+    for i, c in enumerate(line):
+        if escaped:  # a backtick escapes the next character, `" included
+            escaped = False
+            continue
+        if c == "`" and quote != "'":  # single quotes are literal in PowerShell
+            escaped = True
+        elif quote:
+            if c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c == "#" and (i == 0 or line[i - 1].isspace()):
+            return line[:i]
+    return line
+
 
 def command_segments(cmd: str):
     """Token lists for each independently-executed segment, quotes resolved.
@@ -587,6 +647,14 @@ def command_segments(cmd: str):
     Returns None when the command cannot be tokenized (unbalanced quotes,
     heredocs). Callers must then fall back to their old whole-string
     behaviour — degraded precision, never a crash.
+
+    A backslash is an escape in bash and an ordinary character in PowerShell.
+    Tokenizing a PowerShell command the bash way turned `git -C
+    C:\\Users\\x\\repo push origin main` into `C:Usersxrepo`, repo_root()
+    found nothing, and the gate let a real push through (PC test,
+    2026-09-30). The same unquoted path through the Bash tool is mangled by
+    Git Bash itself, so nothing is pushed there, and bash rules stay right
+    for Bash.
     """
     # Newlines separate commands exactly like semicolons, but shlex eats them
     # as whitespace — so a two-line command folded into ONE segment, and an
@@ -596,7 +664,16 @@ def command_segments(cmd: str):
     # conservative whole-string fallback.
     segments = []
     heredoc_end = None  # inside a heredoc: skip body lines until the delimiter
+    ps_here_end = None  # inside a PowerShell here-string: the same, for @' '@
+    if _POWERSHELL:
+        cmd = _join_ps_continuations(cmd)
     for line in cmd.splitlines():
+        if ps_here_end is not None:
+            stripped = line.lstrip()
+            if not stripped.startswith(ps_here_end):
+                continue  # here-string body is data, like a heredoc's
+            ps_here_end = None
+            line = stripped[2:]  # after the '@ or "@: `'@ | Out-File x` still runs
         if heredoc_end is not None:
             if line.strip() == heredoc_end:
                 heredoc_end = None
@@ -607,7 +684,13 @@ def command_segments(cmd: str):
         # matched, heredoc mode never exited, and every command after it was
         # skipped — silently disabling all four gates for the rest of the
         # command. A gate that can be switched off by a hyphen is not a gate.
-        m_here = re.search(r"""<<-?\s*(?:'([^']+)'|"([^"]+)"|([A-Za-z0-9_.+-]+))""", line)
+        if _POWERSHELL:
+            m_ps = re.search(r"""@(['"])\s*$""", line)
+            if m_ps:
+                ps_here_end = m_ps.group(1) + "@"
+                line = line[:m_ps.start()]  # `$x = @'` - the part before still counts
+        m_here = None if _POWERSHELL else re.search(
+            r"""<<-?\s*(?:'([^']+)'|"([^"]+)"|([A-Za-z0-9_.+-]+))""", line)
         if m_here:
             heredoc_end = m_here.group(1) or m_here.group(2) or m_here.group(3)
             line = line[:m_here.start()]  # the command part before << still counts
@@ -616,6 +699,8 @@ def command_segments(cmd: str):
         try:
             lex = shlex.shlex(line, posix=True, punctuation_chars=";|&")
             lex.whitespace_split = True
+            if _POWERSHELL:
+                lex.escape = "`"  # PowerShell escapes with a backtick, never "\"
             tokens = list(lex)
         except ValueError:
             return None
@@ -654,7 +739,79 @@ def strip_wrappers(seg):
             i += 1
         while i < len(seg) and _ASSIGN_RE.match(seg[i]):
             i += 1
-    return seg[i:]
+    rest = seg[i:]
+    return [_exe_name(rest[0])] + rest[1:] if rest else rest
+
+
+def _exe_name(tok: str) -> str:
+    """The command a token runs, as the gates compare it.
+
+    `git`, `Git`, `git.exe` and `& "C:\\Program Files\\Git\\cmd\\git.exe"`
+    all run git on Windows (and `Git` on a case-insensitive Mac disk too),
+    but only the first matched `== "git"`, so the rest walked past every gate.
+    """
+    name = re.split(r"[\\/]", tok)[-1]
+    # Fold case only where names are case-insensitive: PowerShell, and the
+    # default Mac and Windows disks Git Bash and zsh resolve against. On a
+    # case-sensitive Linux shell `Git` may be a different program (Macroscope).
+    if _POWERSHELL or sys.platform in ("darwin", "win32"):
+        name = name.lower()
+    for ext in (".exe", ".cmd", ".bat"):
+        if name.endswith(ext):
+            return name[:-len(ext)]
+    return name
+
+
+# PowerShell's ways of changing directory, beside plain cd (an alias there too).
+_CD_COMMANDS = frozenset({"cd", "chdir", "set-location", "sl"})
+_PUSH_COMMANDS = frozenset({"pushd", "push-location"})
+_POP_COMMANDS = frozenset({"popd", "pop-location"})
+
+
+def _location_args(args):
+    """(target, literal, stack_name) for a location command's arguments.
+
+    PowerShell spells the target `-Path X`, `-Path:X`, `-LiteralPath X` or
+    positionally, with switches such as -PassThru anywhere; -StackName names a
+    separate location stack. Taking the first token after a bare -Path read
+    -PassThru as the destination (Macroscope).
+    """
+    target, literal, stack_name, i = None, False, "", 0
+    while i < len(args):
+        a, low = args[i], args[i].lower()
+        name, _, attached = low.partition(":")
+        if name in ("-path", "-literalpath", "-stackname"):
+            value = a[len(name) + 1:] if attached else (args[i + 1] if i + 1 < len(args) else None)
+            i += 1 if attached else 2
+            if name == "-stackname":
+                stack_name = value or ""
+            elif target is None:
+                target, literal = value, name == "-literalpath"
+            continue
+        if a.startswith("-") and a not in ("-", "+"):
+            i += 1
+            continue
+        if target is None:
+            target = a
+        i += 1
+    return target, literal, stack_name
+
+
+def _resolve_dir(target, base, literal):
+    """The directory a location command lands in, or None if it would fail.
+
+    A failed cd leaves the shell where it was, so None means "unchanged".
+    PowerShell expands wildcards in -Path (not -LiteralPath) and moves only
+    when exactly one container matches; checking the literal `*` path left the
+    gate judging the old directory (Macroscope).
+    """
+    target = os.path.expanduser(target)
+    path = target if os.path.isabs(target) else os.path.join(base, target)
+    if _POWERSHELL and not literal and re.search(r"[*?\[]", target):
+        hits = [h for h in glob.glob(path) if os.path.isdir(h)]
+        return os.path.normpath(hits[0]) if len(hits) == 1 else None
+    path = os.path.normpath(path)
+    return path if os.path.isdir(path) else None
 
 
 def walk_segments(cmd: str):
@@ -663,29 +820,84 @@ def walk_segments(cmd: str):
     effective_cwd is None until a cd is seen (meaning: the hook's own cwd).
     Relative cd targets resolve against the previous effective cwd. `git -C
     <dir> …` is handled by the caller, since it scopes one invocation only.
+
+    The gates judge the repository a command runs in, so every way the shell
+    can move is followed: cd/Set-Location (wildcards included), the pushd/popd
+    stack and PowerShell's named stacks, bash's bare pushd swap, and `cd -` /
+    `cd +` history. A move the shell would refuse leaves the directory as it
+    was, which is exactly what the shell does.
     """
     segs = command_segments(cmd)
     if segs is None:
         return None
     out, cwd = [], None
+    stacks = {}            # PowerShell -StackName stacks; "" is the default
+    back, fwd = [], []     # `cd -` / `cd +` history (bash keeps one OLDPWD)
+
+    def move(new):
+        nonlocal cwd
+        back.append(cwd)
+        fwd.clear()
+        cwd = new
+
     for seg in segs:
         seg = strip_wrappers(seg)  # `MODE=prod cd dir` is still a cd
-        if seg and seg[0] == "cd":
-            if len(seg) == 1:
-                cwd = str(Path.home())
-            else:
-                target = os.path.expanduser(seg[1])
-                base = cwd or os.getcwd()
-                resolved = target if os.path.isabs(target) else os.path.normpath(
-                    os.path.join(base, target))
-                # A cd to a directory that doesn't exist FAILS in the shell —
-                # the next command runs in the OLD directory (`;`) or not at
-                # all (`&&`). Tracking the bogus target instead made
-                # repo_root("") come back empty and waved the push through.
-                if os.path.isdir(resolved):
-                    cwd = resolved
+        if not seg:
             continue
-        out.append((cwd, seg))
+        verb = seg[0]
+        if verb in _POP_COMMANDS:
+            _, _, name = _location_args(seg[1:])
+            stack = stacks.get(name) or []
+            # popd returns to where the matching pushd left from; an empty
+            # stack is an error in both shells and leaves the directory alone.
+            if stack:
+                move(stack.pop())
+            continue
+        if verb not in _CD_COMMANDS and verb not in _PUSH_COMMANDS:
+            out.append((cwd, seg))
+            continue
+        target, literal, name = _location_args(seg[1:])
+        base = cwd or os.getcwd()
+        if verb in _PUSH_COMMANDS:
+            stack = stacks.setdefault(name, [])
+            if target is None:
+                # Bash's bare pushd swaps the top two directories; PowerShell's
+                # only saves the current location.
+                if not _POWERSHELL and stack:
+                    top = stack.pop()
+                    stack.append(cwd)
+                    move(top)
+                elif _POWERSHELL:
+                    stack.append(cwd)
+                continue
+            new = _resolve_dir(target, base, literal)
+            if new is not None:
+                stack.append(cwd)
+                move(new)
+            continue
+        if target is None:
+            move(str(Path.home()))
+        elif target == "-":
+            if back:
+                prev = back.pop()
+                if _POWERSHELL:
+                    fwd.append(cwd)
+                    cwd = prev
+                else:  # bash toggles with OLDPWD
+                    back.append(cwd)
+                    cwd = prev
+        elif target == "+" and _POWERSHELL:
+            if fwd:
+                back.append(cwd)
+                cwd = fwd.pop()
+        else:
+            # A cd to a directory that doesn't exist FAILS in the shell — the
+            # next command runs in the OLD directory (`;`) or not at all
+            # (`&&`). Tracking the bogus target instead made repo_root("")
+            # come back empty and waved the push through.
+            new = _resolve_dir(target, base, literal)
+            if new is not None:
+                move(new)
     return out
 
 
@@ -726,11 +938,11 @@ def _git_invocation(seg):
 # Loose on purpose: `git -C <dir> push` and `git -c k=v push` put options
 # between the words, and the old tight form returned before the tokenizer ever
 # saw them. Precision lives in _git_invocation; this only has to not miss.
-PUSH_RE = re.compile(r"\bgit\b[^|;&\n]*\bpush\b")
+PUSH_RE = re.compile(r"\bgit\b[^|;&\n]*\bpush\b", re.I)  # `Git` runs git on Windows
 # A push that publishes nothing isn't the moment we care about. Matched only
 # within the push invocation itself (not across ; | &&) so an unrelated later
 # command can't wave the gate through. Codex review 2026-08-15.
-PUSH_HARMLESS_RE = re.compile(r"\bgit\s+push\b[^|;&]*?(--dry-run|--help|\s-n\b)")
+PUSH_HARMLESS_RE = re.compile(r"\bgit(?:\.exe)?\s+push\b[^|;&]*?(--dry-run|--help|\s-n\b)", re.I)
 
 
 def gate_personal_repo(tool: str, ti: dict):
@@ -813,13 +1025,16 @@ def gate_personal_repo(tool: str, ti: dict):
 # ---------------------------------------------------------------- gate 2
 
 DEPLOY_RE = re.compile(
-    r"\b(railway\s+up|railway\s+redeploy"
-    r"|netlify\s+deploy"
-    r"|vercel\s+(deploy\s+)?--prod"
-    r"|fly\s+deploy"
-    r"|gcloud\s+(run\s+deploy|functions\s+deploy)"
-    r"|serverless\s+deploy"
-    r"|eb\s+deploy)\b"
+    # (?:\.exe)? and [\s"']+: `railway.exe up` and `& "C:\...\railway.exe" up`
+    # are how Windows spells the same deploy (Macroscope).
+    r"\b(railway(?:\.exe)?[\s\"']+up|railway(?:\.exe)?[\s\"']+redeploy"
+    r"|netlify(?:\.exe)?[\s\"']+deploy"
+    r"|vercel(?:\.exe)?[\s\"']+(deploy\s+)?--prod"
+    r"|fly(?:\.exe)?[\s\"']+deploy"
+    r"|gcloud(?:\.exe)?[\s\"']+(run\s+deploy|functions\s+deploy)"
+    r"|serverless(?:\.exe)?[\s\"']+deploy"
+    r"|eb(?:\.exe)?[\s\"']+deploy)\b",
+    re.I,  # executable names are case-insensitive on Windows
 )
 # The first token a deploy segment must start with. Anchoring here is what
 # separates a command from a mention of one.
@@ -1354,6 +1569,12 @@ def main():
     if already_deciding(payload.get("tool_use_id")):
         allow()
 
+    global _POWERSHELL
+    _POWERSHELL = tool == "PowerShell"
+    if _POWERSHELL and isinstance(ti.get("command"), str):
+        # Join backtick continuations before any gate looks, so the cheap
+        # prefilters (PUSH_RE and friends) see `git ... push` on one line.
+        ti = dict(ti, command=_join_ps_continuations(ti["command"]))
     tool, ti = normalize_call(tool, ti)
 
     for gate in GATES:
