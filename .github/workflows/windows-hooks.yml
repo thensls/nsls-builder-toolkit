@@ -50,6 +50,9 @@ jobs:
       - name: A clean fork catches itself up; nothing of theirs, no operation in progress, no merge setting or hook changes that, under Windows PowerShell 5.1
         shell: powershell
         run: ./hooks/tests/windows/fork-ff-smoke.ps1
+      - name: The daily update keeps ignored files, neutralises merge settings, runs no hooks, and leaves an operation in progress alone, under Windows PowerShell 5.1
+        shell: powershell
+        run: ./hooks/tests/windows/daily-pull-smoke.ps1
       - name: Collector bootstrap launches once, hidden, and stays out when installed or opted out (PS 5.1)
         shell: powershell
         run: ./hooks/tests/windows/collector-bootstrap.ps1
