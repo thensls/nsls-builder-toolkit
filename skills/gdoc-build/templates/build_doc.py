@@ -2,8 +2,11 @@
 
 Usage:
     1. cp this file to ~/build_<short-name>.py and customize the BODY section.
-    2. PYTHONPATH="$HOME/.local/lib/nsls-pydeps:/tmp/pptx_deps" python3.12 ~/build_<short-name>.py
-       (deps missing? python3.12 -m pip install --upgrade python-docx --target ~/.local/lib/nsls-pydeps -q)
+    2. nsls-python ~/build_<short-name>.py
+       (`nsls-python` is the launcher install.sh writes to ~/.local/bin: the right
+        interpreter with the toolkit's libraries already importable. Don't name a
+        Python version — many Macs have no python3.12 and it fails for no reason.
+        Missing? Re-run the toolkit installer.)
     3. export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"
        set -o pipefail; cd ~ && gws drive files create \\
          --json '{"name":"<doc title>","mimeType":"application/vnd.google-apps.document"}' \\
