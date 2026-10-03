@@ -166,19 +166,39 @@ Claude drafts the slide structure as JSON. Work with Kevin to define:
 
 ### Step 2 — Generate the .pptx (and optionally a PDF)
 
+**Preflight first, and STOP if it fails:**
+
+Mac/Linux commands here call the launcher by its full path, `~/.local/bin/nsls-python`, so nothing
+depends on this session's `PATH`. On Windows, replace it with plain `nsls-python`.
+
+```bash
+~/.local/bin/nsls-python -c 'import pptx' && echo PREFLIGHT_OK
+```
+
+If you don't see `PREFLIGHT_OK`, don't run the build commands below — the builder would get a raw
+import traceback or `command not found`. Say in one plain sentence that the slide tooling needs
+repairing and re-run the toolkit installer for them. See "Python environment" under Setup Requirements.
+
+**Repair, by platform** (a launcher the installer just wrote isn't on this session's PATH yet):
+- *Mac/Linux:* `curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash`,
+  then preflight again.
+- *Windows:* `powershell -NoProfile -Command "iwr -useb https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.ps1 | iex"`,
+  then have the builder fully restart Claude Code (Task Manager → End task on every Claude entry,
+  reopen, say "back") and preflight again. Never run `install.sh` on Windows.
+
 ```bash
 # Society brand (default)
-echo '<json>' | /tmp/brand-env/bin/python3 \
+echo '<json>' | ~/.local/bin/nsls-python \
   ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
   --brand society --output /tmp/presentation.pptx
 
 # NSLS brand
-echo '<json>' | /tmp/brand-env/bin/python3 \
+echo '<json>' | ~/.local/bin/nsls-python \
   ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
   --brand nsls --output /tmp/presentation.pptx
 
 # Add --pdf for font-safe PDF export (works with either brand)
-echo '<json>' | /tmp/brand-env/bin/python3 \
+echo '<json>' | ~/.local/bin/nsls-python \
   ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
   --brand society --output /tmp/presentation.pptx --pdf
 ```
@@ -222,18 +242,29 @@ rm /tmp/presentation.pptx
 
 ### Python environment
 
-The `pptx_creator.py` script requires the `python-pptx` library. The venv at
-`/tmp/brand-env` has it installed. For persistence across reboots, reinstall:
+The `pptx_creator.py` script requires `python-pptx` (plus `pillow` and `lxml`).
+**The toolkit installer provisions all of it** into `~/.local/lib/nsls-pydeps` and
+writes the `nsls-python` launcher — the right interpreter with those libraries
+already importable. Run the script with `nsls-python`, as the commands above do.
+
+Nothing to set up on a machine that ran the installer. Verify with:
 
 ```bash
-python3 -m venv /tmp/brand-env
-/tmp/brand-env/bin/pip install python-pptx pillow -q
+~/.local/bin/nsls-python -c 'import pptx, PIL, lxml; print("slides deps OK")'
 ```
 
-Or install system-wide (if not in externally-managed env):
+If that fails, **re-run the toolkit installer** — it reinstalls the libraries and
+rewrites the launcher. Manual repair, if you need one:
+
 ```bash
-pip3 install python-pptx
+python3 -m pip install --upgrade python-pptx pillow --target ~/.local/lib/nsls-pydeps -q
 ```
+
+> The old pattern here was a venv at `/tmp/brand-env`. Don't go back to it: macOS
+> cleans `/tmp`, so those slides broke every few days and each fix looked like a
+> fresh Python problem to the builder. `~/.local/lib/nsls-pydeps` is durable.
+> Never invoke a pinned version like `python3.12` either — plenty of Macs don't
+> have it, and `python-pptx` runs on any 3.10-3.14.
 
 ### Fonts
 
@@ -281,7 +312,7 @@ cat > /tmp/slides.json <<'JSON'
 JSON
 
 # 2. Build .pptx
-/tmp/brand-env/bin/python3 ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
+~/.local/bin/nsls-python ~/.claude/skills/nsls-slides/scripts/pptx_creator.py \
   --input /tmp/slides.json \
   --output /tmp/q2-update.pptx
 

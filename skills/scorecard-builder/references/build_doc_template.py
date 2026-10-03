@@ -4,7 +4,7 @@ USAGE
   1. cp this file to ~/build_<name>_scorecard.py
   2. Fill the BODY section (marked ==== FILL THIS ====). Keep every uncertain
      value as a [bracket] — those are confirmed WITH the report, not by you.
-  3. PYTHONPATH="$HOME/.local/lib/nsls-pydeps:/tmp/pptx_deps" python3.12 ~/build_<name>_scorecard.py
+  3. PYTHONPATH="$HOME/.local/lib/nsls-pydeps" python3.12 ~/build_<name>_scorecard.py
      (if import fails: python3.12 -m pip install --upgrade --force-reinstall \
       python-docx --target ~/.local/lib/nsls-pydeps -q)
      The script derives the output filename from NAME (e.g. ~/chelsea_byers_scorecard.docx)
@@ -29,7 +29,6 @@ conversion. add_runs() parses mini-markdown inside any paragraph or table cell:
 **bold**, *italic*, `code`, and \\n line breaks.
 """
 import os, sys, re
-sys.path.insert(0, '/tmp/pptx_deps')  # legacy location — /tmp cleanup can gut it
 sys.path.insert(0, os.path.expanduser('~/.local/lib/nsls-pydeps'))  # durable home, wins
 from docx import Document
 from docx.shared import Pt, RGBColor, Cm

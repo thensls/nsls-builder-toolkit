@@ -33,14 +33,35 @@ The fastest path for a builder asking for a Google Doc:
    profile, validates the client, and runs the one-time consent if needed. A 403 naming a
    project other than `nsls-gdocs-skill`, or a gws exit 2, means run it (again).
 1. **Confirm branding.** "NSLS or Society?" Default NSLS unless the doc is for `thesociety.org` audiences.
-2. **Confirm install pattern.** Guard on a real import, not a directory — macOS `/tmp` cleanup guts old installs but leaves the dirs, so a `-d` check passes on a broken install weeks later:
+2. **Preflight the Python libraries — and STOP if it fails.** The installer provisions these, so this
+   is normally a 1-line no-op:
+   **Mac/Linux: always call the launcher by its full path, `~/.local/bin/nsls-python`**, as every
+   command below does, so nothing depends on this session's `PATH`. On Windows use plain `nsls-python`.
    ```bash
-   PYTHONPATH="$HOME/.local/lib/nsls-pydeps:/tmp/pptx_deps" python3.12 -c 'import docx' 2>/dev/null \
-     || python3.12 -m pip install --upgrade python-docx --target "$HOME/.local/lib/nsls-pydeps" -q
+   ~/.local/bin/nsls-python -c 'import docx' && echo PREFLIGHT_OK
    ```
-   (`~/.local/lib/nsls-pydeps` is the durable home; `/tmp/pptx_deps` stays on the path only as a legacy fallback for machines that already have it.)
+   **If you don't see `PREFLIGHT_OK`, do not continue to step 3.** Tell the builder in one plain
+   sentence that the document tooling needs repairing and re-run the toolkit installer for them.
+   **Repair, by platform** (a launcher the installer just wrote isn't on this session's PATH yet):
+   - *Mac/Linux:* `curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash`,
+     then preflight again.
+   - *Windows:* `powershell -NoProfile -Command "iwr -useb https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.ps1 | iex"`,
+     then have the builder fully restart Claude Code (Task Manager → End task on every Claude entry,
+     reopen, say "back") and preflight again. Never run `install.sh` on Windows. Never let the builder see a raw `ModuleNotFoundError`, an import traceback,
+   or a `command not found` — those are ours to catch here, and this preflight is the only thing
+   standing between them and one. Do not "try anyway and see."
+   `nsls-python` is the launcher `install.sh` writes to `~/.local/bin` — the right interpreter with
+   `~/.local/lib/nsls-pydeps` already on `PYTHONPATH`. **Use it instead of naming a Python version.**
+   Hardcoding `python3.12` is what used to break this skill: plenty of Macs ship only a newer 3.x, and
+   `python3.12: command not found` sent builders off to install Python for no reason. python-docx is
+   pure-Python and runs on 3.10-3.14, so the launcher just picks whatever is there.
+   *No `nsls-python` on this machine* (pre-launcher install): re-run the toolkit installer, or fall back to
+   `PYTHONPATH="$HOME/.local/lib/nsls-pydeps" python3 ...` with a
+   `python3 -m pip install --upgrade python-docx --target "$HOME/.local/lib/nsls-pydeps" -q` first.
+   Guard on a real import, never a directory — macOS `/tmp` cleanup guts old installs but leaves the dirs,
+   so a `-d` check passes on a broken install weeks later.
 3. **Copy the template.** `cp templates/build_doc.py ~/build_<short-name>.py` (must be in `~`, not `/tmp` — see gws cwd gotcha below). Customize content sections.
-4. **Build the docx.** `PYTHONPATH="$HOME/.local/lib/nsls-pydeps:/tmp/pptx_deps" python3.12 ~/build_<short-name>.py` → produces `~/<short-name>.docx`.
+4. **Build the docx.** `~/.local/bin/nsls-python ~/build_<short-name>.py` → produces `~/<short-name>.docx`.
 5. **Upload as Google Doc.** `export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"; set -o pipefail; cd ~ && gws drive files create --json '{"name":"<doc title>","mimeType":"application/vnd.google-apps.document"}' --upload <short-name>.docx --upload-content-type "application/vnd.openxmlformats-officedocument.wordprocessingml.document" --format json | tail -10` — the `pipefail` is load-bearing: without it `tail` swallows a failed upload and the command still exits 0.
 6. **Return the URL.** `https://docs.google.com/document/d/<id>/edit` — give the user that link.
 7. **Clean up local artifacts.** `rm ~/build_<short-name>.py ~/<short-name>.docx`
@@ -54,7 +75,7 @@ The fastest path for a builder asking for a Google Doc:
 >   never `python`/`python3.12`. Stock Win11 `python`/`python3` are Microsoft Store stubs
 >   that print "Python was not found" and **exit 0** — a naive check passes while nothing
 >   runs. `install.ps1` installs Python 3.12 to that path *and* `python-docx` into it, so
->   on a toolkit machine you usually don't need the `--target /tmp/pptx_deps` install at all.
+>   on a toolkit machine you usually don't need a `--target` install at all.
 > - **Deps dir:** if you do need a target install, use a durable user-owned dir —
 >   `$env:LOCALAPPDATA\nsls-pydeps` (not `$env:TEMP`, which Windows cleans the same way
 >   macOS cleans `/tmp`) — and set `PYTHONPATH` to it.
@@ -143,7 +164,7 @@ These are the wounds. Codified so we don't relive them.
 | `gws --upload` rejects `/tmp/foo.docx` | Error: `resolves to '/private/tmp/foo.docx' which is outside the current directory` | `cp /tmp/foo.docx ~/foo.docx && cd ~ && gws ...` |
 | `gws` mixes stderr into stdout | JSON parse fails on `Using keyring backend: keyring` line | Pipe through `tail -10` or `grep -v "keyring"` before parsing — **but put `set -o pipefail` first**, or the pipe hides gws failures (next row) |
 | A `gws` write "succeeds" but nothing changed | `\| tail`/`\| grep` makes the pipeline's exit status the *filter's* (always 0), so a 403/404 reads as success | `set -o pipefail` before any piped `gws` call, then verify by re-reading the resource. gws also returns a JSON `{"error":{...}}` body on **stdout** — check for an `error` key even on exit 0 |
-| `python3.14` venv broken on this machine | `pip install` succeeds but `import` fails | Use `python3.12 -m pip install --upgrade --target ~/.local/lib/nsls-pydeps`; run with `PYTHONPATH=~/.local/lib/nsls-pydeps python3.12 ...` (see MEMORY.md "Python / PPTX / DOCX Environment") |
+| A venv on this machine is broken | `pip install` succeeds but `import` fails | Don't fight the venv — `nsls-python` bypasses it entirely (installer-provisioned `--target` dir, no venv). If it's missing, re-run the toolkit installer (see MEMORY.md "Python / PPTX / DOCX Environment") |
 | Deps guard passes but the build explodes with `ImportError` | Guard tested `[ -d /tmp/pptx_deps/docx ]` — macOS `/tmp` cleanup deletes old *files* but leaves *dirs*, so the check passes on a gutted install | Guard on a real import (Quick Start step 2), and keep deps in the durable `~/.local/lib/nsls-pydeps` |
 | Custom brand fonts disappear after upload | Lexend / HW Cigars fall back to system default in Google Docs | Use Calibri for body. Brand expression comes from colors, not fonts. |
 | Table renders without borders in Google Docs | Cells lack explicit `w:tcBorders` — Google's importer **drops** the borders that `table.style` promises | The template's `add_table()` calls `set_cell_borders()` on every cell. If you build a table by hand, do the same — `table.style` alone will NOT survive import |
@@ -176,8 +197,9 @@ For runtime errors:
 
 | Error | Cause | Fix |
 |---|---|---|
-| `ModuleNotFoundError: No module named 'docx'` | `PYTHONPATH` not set or pkg not installed | `python3.12 -m pip install --upgrade python-docx --target ~/.local/lib/nsls-pydeps && PYTHONPATH=~/.local/lib/nsls-pydeps python3.12 build.py`. **`--upgrade` is load-bearing** — without it pip sees the (damaged) package already present in the target, exits 0 without writing, and the next build raises the same `ImportError`. |
-| `python3.12: command not found` | Older system Python | Check `ls /usr/local/bin/python3.1*`; install via `brew install python@3.12` if missing |
+| `ModuleNotFoundError: No module named 'docx'` | Ran a bare `python3`/`python3.12` instead of `nsls-python`, so `PYTHONPATH` was unset | Run the build with `nsls-python`. If `nsls-python` itself can't import it, re-run the toolkit installer (it reinstalls the libs and rewrites the launcher). Manual repair: `python3 -m pip install --upgrade python-docx python-pptx --target ~/.local/lib/nsls-pydeps`. **`--upgrade` is load-bearing** — without it pip sees the (damaged) package already present in the target, exits 0 without writing, and the next build raises the same `ImportError`. |
+| `python3.12: command not found` | A command hardcoded a Python version this machine doesn't have — the common case, not an edge case | Use `nsls-python`; it resolves the interpreter at install time. Never name a version in this skill's commands. Nothing needs installing — python-docx runs on any 3.10-3.14. |
+| `nsls-python: command not found` | Machine installed before the launcher existed, or `~/.local/bin` isn't on `PATH` | Re-run the toolkit installer. If it's on disk but not found, `export PATH="$HOME/.local/bin:$PATH"` (the installer adds this to your shell rc; it takes effect in new terminals). |
 | gws CLI returns 401/403 | Auth expired | Re-auth via the gws login flow (this is `/gws`'s problem, not this skill's) |
 | gws upload "Bad Request" | Wrong `--upload-content-type` | For `.docx`, use exactly `application/vnd.openxmlformats-officedocument.wordprocessingml.document` |
 
