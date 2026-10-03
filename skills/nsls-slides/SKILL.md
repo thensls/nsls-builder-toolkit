@@ -166,6 +166,13 @@ Claude drafts the slide structure as JSON. Work with Kevin to define:
 
 ### Step 2 — Generate the .pptx (and optionally a PDF)
 
+**Pick one unique filename per run** from the current date and time, such as
+`nsls-deck-20260302-1405.pptx`, and write that literal name into every command below
+(build, upload, clean-up). Never a fixed name like `presentation.pptx`: the deck is built
+in your home folder, so a fixed name could overwrite a file the user already has there, and
+step 5 would then delete it. (A shell variable won't carry it between commands, because each
+Bash tool call starts a fresh shell.)
+
 **Preflight first, and STOP if it fails:**
 
 Mac/Linux commands here call the launcher by its full path, `~/.local/bin/nsls-python`, so nothing
@@ -190,17 +197,17 @@ repairing and re-run the toolkit installer for them. See "Python environment" un
 # Society brand (default)
 echo '<json>' | ~/.local/bin/nsls-python \
   ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
-  --brand society --output ~/presentation.pptx
+  --brand society --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx
 
 # NSLS brand
 echo '<json>' | ~/.local/bin/nsls-python \
   ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
-  --brand nsls --output ~/presentation.pptx
+  --brand nsls --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx
 
 # Add --pdf for font-safe PDF export (works with either brand)
 echo '<json>' | ~/.local/bin/nsls-python \
   ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
-  --brand society --output ~/presentation.pptx --pdf
+  --brand society --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx --pdf
 ```
 
 **Font rendering by format:**
@@ -225,18 +232,20 @@ step 4.
 Runs on the toolkit's own `gws` profile, the same one `/gdoc-build` uses. If `gws` reports
 an auth error or a 403, run `/gdoc-build`'s step 0 (the gws doctor) and retry.
 
+Run it as ONE command, exactly as shown. Each Bash tool call starts a fresh shell, so an
+`export` sent on its own is gone by the next call, and `gws` would fall back to its default
+profile (a 403, or the wrong Google account).
+
 ```bash
-export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"
-set -o pipefail
-cd ~ && gws drive files create \
+export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"; set -o pipefail; cd ~ && gws drive files create \
   --json '{"name":"2026-03-02 - Presentation Title","mimeType":"application/vnd.google-apps.presentation"}' \
-  --upload presentation.pptx \
+  --upload nsls-deck-<YYYYMMDD-HHMM>.pptx \
   --upload-content-type "application/vnd.openxmlformats-officedocument.presentationml.presentation" \
   --format json | tail -10
 ```
 
 - **Build the deck in `~` and run `gws` from `~`.** `--upload` rejects a path outside the
-  current directory, so `/tmp/presentation.pptx` fails.
+  current directory, so a deck in `/tmp` fails.
 - To upload into a folder, add `"parents":["<folder_id>"]` to the JSON.
 - The reply's `mimeType` must be `application/vnd.google-apps.presentation`. Give the user
   `https://docs.google.com/presentation/d/<id>/edit`.
@@ -249,8 +258,10 @@ cd ~ && gws drive files create \
 
 ### Step 5 — Clean up
 
+Remove only this run's file, by its exact name:
+
 ```bash
-rm ~/presentation.pptx
+rm ~/nsls-deck-<YYYYMMDD-HHMM>.pptx
 ```
 
 ## Setup Requirements
@@ -304,7 +315,7 @@ Uses the toolkit's `gws` profile (`~/.config/gws-profiles/nsls-gdocs-skill`), sh
 
 ```bash
 # 1. Generate slides JSON (Claude produces this based on Kevin's brief)
-cat > ~/slides.json <<'JSON'
+cat > ~/nsls-deck-20260302-1405.json <<'JSON'
 {
   "slides": [
     {
@@ -329,20 +340,19 @@ JSON
 # 2. Build .pptx
 ~/.local/bin/nsls-python \
   ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
-  --input ~/slides.json \
-  --output ~/q2-update.pptx
+  --input ~/nsls-deck-20260302-1405.json \
+  --output ~/nsls-deck-20260302-1405.pptx
 
 # 3. Upload to Drive as Google Slides
-export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"
-set -o pipefail
-cd ~ && gws drive files create \
+# (one command: the profile export must share the gws call's shell)
+export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"; set -o pipefail; cd ~ && gws drive files create \
   --json '{"name":"2026 Q2 - Society Update","mimeType":"application/vnd.google-apps.presentation"}' \
-  --upload q2-update.pptx \
+  --upload nsls-deck-20260302-1405.pptx \
   --upload-content-type "application/vnd.openxmlformats-officedocument.presentationml.presentation" \
   --format json | tail -10
 
 # 4. Clean up
-rm ~/slides.json ~/q2-update.pptx
+rm ~/nsls-deck-20260302-1405.json ~/nsls-deck-20260302-1405.pptx
 ```
 
 ## Notes & Future Enhancements
