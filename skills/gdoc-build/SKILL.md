@@ -53,11 +53,11 @@ The fastest path for a builder asking for a Google Doc:
    `nsls-python` is the launcher `install.sh` writes to `~/.local/bin` — the right interpreter with
    `~/.local/lib/nsls-pydeps` already on `PYTHONPATH`. **Use it instead of naming a Python version.**
    Hardcoding `python3.12` is what used to break this skill: plenty of Macs ship only a newer 3.x, and
-   `python3.12: command not found` sent builders off to install Python for no reason. python-docx is
-   pure-Python and runs on 3.10-3.14, so the launcher just picks whatever is there.
-   *No `nsls-python` on this machine* (pre-launcher install): re-run the toolkit installer, or fall back to
-   `PYTHONPATH="$HOME/.local/lib/nsls-pydeps" python3 ...` with a
-   `python3 -m pip install --upgrade python-docx --target "$HOME/.local/lib/nsls-pydeps" -q` first.
+   `python3.12: command not found` sent builders off to install Python for no reason. python-docx runs
+   on 3.10-3.14, so the installer picks whatever is there and pins it in the launcher.
+   *No `nsls-python` on this machine* (pre-launcher install): re-run the toolkit installer (the repair
+   above). Never pip-install into `~/.local/lib/nsls-pydeps` with another Python: its compiled parts
+   (lxml) only load in the Python the launcher uses, so a mismatched install breaks every doc skill.
    Guard on a real import, never a directory — macOS `/tmp` cleanup guts old installs but leaves the dirs,
    so a `-d` check passes on a broken install weeks later.
 3. **Copy the template.** `cp templates/build_doc.py ~/build_<short-name>.py` (must be in `~`, not `/tmp` — see gws cwd gotcha below). Customize content sections.

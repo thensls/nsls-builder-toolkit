@@ -257,7 +257,7 @@ If that fails, **re-run the toolkit installer** — it reinstalls the libraries 
 rewrites the launcher. Manual repair, if you need one:
 
 ```bash
-python3 -m pip install --upgrade python-pptx pillow --target ~/.local/lib/nsls-pydeps -q
+~/.local/bin/nsls-python -m pip install --upgrade python-pptx pillow --target ~/.local/lib/nsls-pydeps -q
 ```
 
 > The old pattern here was a venv at `/tmp/brand-env`. Don't go back to it: macOS

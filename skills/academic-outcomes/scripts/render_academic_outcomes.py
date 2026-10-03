@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.12
+#!/usr/bin/env python3
 """
 Render an academic learner-outcomes document (.docx) from structured JSON.
 
@@ -8,15 +8,16 @@ single-track doc and a bundle (many tracks) from ONE document shape, so per-trac
 docs and the bundle never drift.
 
 Usage:
-    python3.12 render_academic_outcomes.py <document.json> <out.docx>
+    ~/.local/bin/nsls-python render_academic_outcomes.py <document.json> <out.docx>
 
 Then upload the .docx as a Google Doc with gdoc-build's `gws drive files create
 --upload ...` step (Society branding is already baked into this renderer).
 
-Requires python-docx. Guard on a real import, not a directory (macOS /tmp
-cleanup guts old installs but leaves the dirs):
-    PYTHONPATH="$HOME/.local/lib/nsls-pydeps" python3.12 -c 'import docx' 2>/dev/null \
-      || python3.12 -m pip install --upgrade python-docx --target "$HOME/.local/lib/nsls-pydeps" -q
+Requires python-docx, which the toolkit installer provides behind the nsls-python
+launcher. Check with a real import:
+    ~/.local/bin/nsls-python -c 'import docx' && echo PREFLIGHT_OK
+If that fails, re-run the toolkit installer. Never pip-install into nsls-pydeps with
+another Python: lxml's compiled parts only load in the launcher's Python.
 
 Document JSON shape — see references/outcomes-json-schema.md. In brief:
 {
