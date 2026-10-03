@@ -23,6 +23,9 @@ where these tests usually run, so the predicate is rebuilt here from the
 script's own pattern literal and exercised against real-shaped files; the
 static checks pin both scripts to it. The Windows CI job parses the scripts.
 """
+import contextlib
+import importlib.util
+import io
 import re
 import sys
 from pathlib import Path
@@ -56,7 +59,7 @@ check("session-start.ps1 defines Test-OwnPointer", bool(fn))
 check("install.ps1 carries the identical Test-OwnPointer", fn is not None and func_body(inst) == fn)
 check("session-start.ps1 gates the overwrite on it, for either toolkit's copy",
       "if (Test-OwnPointer -Text $existing -OwnPath $tkPath) { $ours = $true }" in src
-      and "if (-not $ours) { continue }" in src
+      and "if (-not $ours) { $script:OwnSkills[$skillFolder.Name] = $true; continue }" in src
       and '$tkPath = "local-plugins/$tk/skills/$($skillFolder.Name)/SKILL.md"' in src)
 calls = re.findall(r"^\$null = Sync-Pointers -PluginDir \$(\w+)$", src, re.M)
 check("the personal toolkit syncs first, so it wins a shared name",
@@ -82,6 +85,21 @@ check("an empty file cannot throw on the check",
 check("the pointer session-start.ps1 writes names that same path",
       '$pointerPath = "~/.claude/$ownPath"' in src)
 check("the pointer install.ps1 writes names that same path", '$ptr = "~/.claude/$ownPath"' in inst)
+check("a builder's own skill is remembered when it is skipped",
+      "if (-not $ours) { $script:OwnSkills[$skillFolder.Name] = $true; continue }" in src
+      and src.index("$script:OwnSkills = @{}") < src.index("$null = Sync-Pointers"))
+ps_notice = re.search(r'Write-Output \("(\[NSLS Builder Toolkit\] This builder has their own skill.*?)"\)', src)
+spec = importlib.util.spec_from_file_location("session_start_hook", HOOKS / "session-start.py")
+hook = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(hook)
+hook.own_skills_over_toolkit = lambda: ["brainstorm", "gws"]
+out = io.StringIO()
+with contextlib.redirect_stdout(out):
+    hook.notice_own_skills()
+ps_rendered = (ps_notice.group(1).replace("$listed", "/brainstorm, /gws")
+               .replace("$($names[0])", "brainstorm").replace('`"', '"')) if ps_notice else None
+check("and named each session in the same words as on Mac", ps_rendered == out.getvalue().strip(),
+      f"({ps_rendered!r} vs {out.getvalue().strip()!r})")
 for name, text in (("session-start.ps1", src), ("install.ps1", inst)):
     check(f"{name} is ASCII-only", all(ord(c) < 128 for c in text))
 

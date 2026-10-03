@@ -557,7 +557,8 @@ function Sync-Pointers {
                 $tkPath = "local-plugins/$tk/skills/$($skillFolder.Name)/SKILL.md"
                 if (Test-OwnPointer -Text $existing -OwnPath $tkPath) { $ours = $true }
             }
-            if (-not $ours) { continue }
+            # Not a pointer: the builder's own skill, and the one that runs.
+            if (-not $ours) { $script:OwnSkills[$skillFolder.Name] = $true; continue }
         }
         if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
         $pointerPath = "~/.claude/$ownPath"
@@ -587,8 +588,15 @@ if (-not (Test-Path $SkillsDir)) { New-Item -ItemType Directory -Path $SkillsDir
 # personal one wins (same order as POINTER_PRECEDENCE in session-start.py).
 $PointerPrecedence = @('nsls-personal-toolkit', 'nsls-builder-toolkit')
 $script:PointerWritten = @{}
+$script:OwnSkills = @{}
 $null = Sync-Pointers -PluginDir $PersonalDir
 $null = Sync-Pointers -PluginDir $BuilderDir
+# Same notice as notice_own_skills() in session-start.py.
+if ($script:OwnSkills.Count -gt 0) {
+    $names = @($script:OwnSkills.Keys | Sort-Object)
+    $listed = ($names | ForEach-Object { "/$_" }) -join ', '
+    Write-Output ("[NSLS Builder Toolkit] This builder has their own skill with the same name as a toolkit skill, so theirs is the one that runs: $listed. Each time they use one of these, say so in one short line before starting, e.g. `"Using your own /$($names[0]), not the NSLS toolkit's.`" Never change or remove their skill.")
+}
 
 # --- 2b. surface announcements stashed by the previous detached ping ---
 # session-ping.ps1 runs detached, so it can't print to session context itself;
