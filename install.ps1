@@ -334,15 +334,39 @@ if ($GwsResolved) {
 # --- Step 1: Clone / update the org toolkit ---
 Write-Host "Step 1: Installing org skills..."
 New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null
+# A failed update must say so: errors used to go to $null and "Done." printed regardless.
+# A failed FETCH changes nothing on disk, so warn and carry on. A failed RESET
+# may leave files half-updated, so that one stops rather than claim "unchanged".
 if (Test-Path (Join-Path $PluginDir '.git')) {
     Write-Host "  Updating existing installation..."
-    & git -C $PluginDir fetch origin $RepoBranch --quiet 2>$null
-    & git -C $PluginDir reset --hard "origin/$RepoBranch" --quiet 2>$null
+    $updOut = Invoke-Native 'git' @('-C', $PluginDir, 'fetch', 'origin', $RepoBranch, '--quiet')
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  WARNING: couldn't download the update, so your toolkit is UNCHANGED (still the version you had)."
+        ($updOut -split "`n" | Select-Object -Last 3) | ForEach-Object { Write-Host "    $_" }
+        Write-Host "  Check your internet connection, then re-run this installer."
+    } else {
+        $updOut = Invoke-Native 'git' @('-C', $PluginDir, 'reset', '--hard', "origin/$RepoBranch", '--quiet')
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  ERROR: the update stopped partway, so the toolkit may be incomplete."
+            ($updOut -split "`n" | Select-Object -Last 3) | ForEach-Object { Write-Host "    $_" }
+            Write-Host "  Re-run this installer to finish it."
+            if ($RunningFromFile) { exit 1 } else { return }
+        }
+        Write-Host "  Done."
+    }
 } else {
     Write-Host "  Cloning plugin..."
-    & git clone --branch $RepoBranch $RepoUrl $PluginDir --quiet
+    $null = Invoke-Native 'git' @('clone', '--branch', $RepoBranch, $RepoUrl, $PluginDir, '--quiet')
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  ERROR: couldn't download the toolkit. Check your internet connection, then re-run this installer."
+        if ($RunningFromFile) { exit 1 } else { return }
+    }
+    Write-Host "  Done."
 }
-Write-Host "  Done."
+# The receipt: which code is actually installed.
+$installed = Invoke-Native 'git' @('-C', $PluginDir, 'log', '-1', '--format=%h %s')
+if ($LASTEXITCODE -ne 0 -or -not $installed) { $installed = 'unknown' }
+Write-Host "  Installed commit: $installed"
 
 # --- Find the claude CLI (best-effort; several steps need it) ---
 $ClaudeBin = (Get-Command claude -ErrorAction SilentlyContinue).Source
