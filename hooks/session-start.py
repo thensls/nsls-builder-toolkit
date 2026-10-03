@@ -885,11 +885,14 @@ def _clean_to_fast_forward(git, plugin_dir):
 
 
 def _no_hooks(plugin_dir):
-    """`-c` that runs git with no hooks at all: a hooks directory that does not
-    exist. The builder's own hooks (often a global core.hooksPath) have no
-    business running on NSLS's checkout, and a post-merge hook runs after the
-    branch has already moved, and can hang."""
-    return ["-c", f"core.hooksPath={(plugin_dir / '.git' / 'nsls-no-hooks').as_posix()}"]  # never created
+    """`-c` that runs git with no hooks at all. The builder's own hooks (often a
+    global core.hooksPath) have no business running on NSLS's checkout, and a
+    post-merge hook runs after the branch has already moved, and can hang.
+
+    The hooks path is .git/HEAD: a file, so git can never find a hook "inside"
+    it, and in a linked worktree, where .git is itself a file, it cannot exist at
+    all. A folder that is merely never created could be created by someone."""
+    return ["-c", f"core.hooksPath={(plugin_dir / '.git' / 'HEAD').as_posix()}"]
 
 
 # A branch name that can sit inside a `-c branch.<name>.mergeOptions=` key and
@@ -1117,14 +1120,11 @@ def _update_checkout(plugin_dir, deadline):
 
     if left() <= 0:
         return None, ""
-    try:
-        fetched = subprocess.run(
-            ["git", "-C", str(plugin_dir), *_no_hooks(plugin_dir), "fetch", "--quiet"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            timeout=min(PULL_FETCH_TIMEOUT, left()), env=_git_env(),
-        ).returncode == 0
-    except Exception:
-        fetched = False
+    # Through _git_rc: a fetch that runs out of time is stopped with its whole
+    # process tree, network helper included, not just git itself.
+    rc, _ = _git_rc(plugin_dir, *_no_hooks(plugin_dir), "fetch", "--quiet",
+                    timeout=min(PULL_FETCH_TIMEOUT, left()))
+    fetched = rc == 0
     if left() <= 0:
         return None, ""
     # Read AFTER the fetch, immediately before the merge: the fetch can take
@@ -1157,9 +1157,10 @@ def _update_checkout(plugin_dir, deadline):
                              timeout=min(3, left()))
         stuck = rc == 0 and behind.isdigit() and int(behind) > 0
         return (UNGUARDABLE_BRANCH if stuck else None), ""
-    if left() < PULL_MERGE_MIN_LEFT_S:
-        return None, ""  # a write we might have to abandon is a write we do not begin
     with tempfile.TemporaryFile() as out:
+        # Checked here, the last step before the merge starts.
+        if left() < PULL_MERGE_MIN_LEFT_S:
+            return None, ""  # a write we might have to abandon is a write we do not begin
         code = _guarded_ff_merge(plugin_dir, "@{u}", branch, left(), output=out)
         if code is None:
             return None, ""  # still running: it finishes on its own

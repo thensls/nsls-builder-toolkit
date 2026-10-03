@@ -59,8 +59,9 @@ function Get-FastForwardArgs {
     #     `merge --ff-only` exit 0 with a merge commit that discards every incoming
     #     change; --squash stages the new tree without moving the branch - with
     #     --no-squash and --no-autostash stated outright;
-    #   * hooks, via a hooks directory that does not exist (forward slashes: a
-    #     backslash path would hand git the characters '\n');
+    #   * hooks, via a hooks path that is a file (.git/HEAD; in a linked worktree
+    #     .git is itself a file, so the path cannot exist) - forward slashes: a
+    #     backslash path would hand git the characters '\n';
     #   * background maintenance and auto-gc, which run after the move;
     #   * overwriting an ignored local file the update starts tracking.
     # Returns $null for a branch whose mergeOptions cannot be blanked, which is
@@ -68,10 +69,55 @@ function Get-FastForwardArgs {
     # -c at the first '=' (which a branch name may contain) and a non-ASCII name
     # may not survive the console code page. Same rule as _CONFIG_SAFE_BRANCH.
     if ($Branch -cnotmatch '^[\x21-\x3c\x3e-\x7e]+$') { return $null }
-    $noHooks = (Join-Path $Dir '.git/nsls-no-hooks') -replace '\\', '/'   # deliberately never created
+    $noHooks = (Join-Path $Dir '.git/HEAD') -replace '\\', '/'   # a file: no hook can live under it
     return @('-c', "core.hooksPath=$noHooks", '-c', 'maintenance.auto=false', '-c', 'gc.auto=0',
              '-c', "branch.$($Branch).mergeOptions=",
              'merge', '--ff-only', '--no-squash', '--no-autostash', '--no-overwrite-ignore', '--quiet', $Target)
+}
+
+function Invoke-GitBounded {
+    param([string]$Dir, [string[]]$GitArgs, [int]$TimeoutMs = 3000)
+    # Every git call in 1b, and the update's path list in 1, runs through here:
+    # a hard time limit (the
+    # direct `& git` form has none, and a fetch can hang for a minute on a captive
+    # portal; a rev-list walk has no natural bound either), the whole process
+    # TREE killed on timeout (git's HTTPS remote helper is a child that
+    # Process.Kill() alone leaves running the fetch after we release the lock),
+    # and output captured only for our own parsing. Everything this hook prints
+    # is the model's context and git echoes server-controlled text, so nothing
+    # captured here is ever surfaced - only our literals and a verified integer.
+    # Returns @{ Code = exit code (-1 on timeout or failure to start); Out = stdout }.
+    $result = @{ Code = -1; Out = '' }
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = 'git'
+        $parts = @('-C', $Dir) + $GitArgs
+        $psi.Arguments = (($parts | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' ')
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        # UTF-8, not the console code page: git writes paths as UTF-8, and a
+        # mis-decoded name never matches the file on disk.
+        $psi.StandardOutputEncoding = New-Object System.Text.UTF8Encoding $false
+        $psi.CreateNoWindow = $true
+        $psi.EnvironmentVariables['GIT_TERMINAL_PROMPT'] = '0'
+        $p = [System.Diagnostics.Process]::Start($psi)
+        # Drain both pipes while waiting - a chatty child deadlocks on a full pipe
+        # otherwise. stdout is kept (for the count); stderr is discarded.
+        $outTask = $p.StandardOutput.ReadToEndAsync()
+        $p.BeginErrorReadLine()
+        if (-not $p.WaitForExit($TimeoutMs)) {
+            try { & taskkill /T /F /PID $p.Id 2>$null | Out-Null } catch { }
+            try { $p.WaitForExit(3000) | Out-Null } catch { }
+            return $result
+        }
+        $p.WaitForExit()   # lets the async readers finish after a timed wait
+        $result.Code = $p.ExitCode
+        $result.Out = $outTask.Result.Trim()
+        return $result
+    } catch {
+        return $result
+    }
 }
 
 function Update-Checkout {
@@ -81,7 +127,7 @@ function Update-Checkout {
     # the one pull runs; '@{u}' is what pull merges. Same steps as
     # _update_checkout in the .py; the .py adds the 15s envelope, which this
     # section has never had - the merge is a local write and is never stopped.
-    $noHooks = (Join-Path $Dir '.git/nsls-no-hooks') -replace '\\', '/'   # deliberately never created
+    $noHooks = (Join-Path $Dir '.git/HEAD') -replace '\\', '/'   # a file: no hook can live under it
     & git -C $Dir -c "core.hooksPath=$noHooks" fetch --quiet 2>&1 | Out-Null
     $fetchCode = $LASTEXITCODE
     # Read AFTER the fetch, immediately before the merge: a branch switched or an
@@ -148,8 +194,11 @@ function Update-Checkout {
             # exists here as a file git does not show (ignored, typically), and
             # --no-overwrite-ignore refused rather than replace it. Counted from the
             # paths the update adds, never from git's error text.
-            $added = @(& git -C $Dir diff --name-only --no-renames --diff-filter=A HEAD '@{u}' 2>$null)
-            if ($LASTEXITCODE -eq 0) {
+            # NUL-separated and read as UTF-8: git quotes unusual names otherwise,
+            # and a quoted spelling never matches the file on disk.
+            $r = Invoke-GitBounded -Dir $Dir -GitArgs @('diff', '--name-only', '-z', '--no-renames', '--diff-filter=A', 'HEAD', '@{u}')
+            if ($r.Code -eq 0) {
+                $added = @($r.Out -split [char]0)
                 $hits = @($added | Where-Object { $_ -and (Test-Path -LiteralPath (Join-Path $Dir $_)) }).Count
                 if ($hits -gt 0) {
                     $blocker = "$hits ignored local file(s) that the update would replace"
@@ -230,47 +279,6 @@ function Test-CanonicalOrigin {
     if ($repoPath -match '\.git$') { $repoPath = $repoPath.Substring(0, $repoPath.Length - 4) }
     # -eq and -match are case-insensitive in PowerShell, which is what GitHub names need.
     return (($hostName -eq 'github.com') -and ($repoPath.TrimEnd('/') -eq 'thensls/nsls-personal-toolkit'))
-}
-
-function Invoke-GitBounded {
-    param([string]$Dir, [string[]]$GitArgs, [int]$TimeoutMs = 3000)
-    # EVERY git call in this block runs through here: a hard time limit (the
-    # direct `& git` form has none, and a fetch can hang for a minute on a captive
-    # portal; a rev-list walk has no natural bound either), the whole process
-    # TREE killed on timeout (git's HTTPS remote helper is a child that
-    # Process.Kill() alone leaves running the fetch after we release the lock),
-    # and output captured only for our own parsing. Everything this hook prints
-    # is the model's context and git echoes server-controlled text, so nothing
-    # captured here is ever surfaced - only our literals and a verified integer.
-    # Returns @{ Code = exit code (-1 on timeout or failure to start); Out = stdout }.
-    $result = @{ Code = -1; Out = '' }
-    try {
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = 'git'
-        $parts = @('-C', $Dir) + $GitArgs
-        $psi.Arguments = (($parts | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' ')
-        $psi.UseShellExecute = $false
-        $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError = $true
-        $psi.CreateNoWindow = $true
-        $psi.EnvironmentVariables['GIT_TERMINAL_PROMPT'] = '0'
-        $p = [System.Diagnostics.Process]::Start($psi)
-        # Drain both pipes while waiting - a chatty child deadlocks on a full pipe
-        # otherwise. stdout is kept (for the count); stderr is discarded.
-        $outTask = $p.StandardOutput.ReadToEndAsync()
-        $p.BeginErrorReadLine()
-        if (-not $p.WaitForExit($TimeoutMs)) {
-            try { & taskkill /T /F /PID $p.Id 2>$null | Out-Null } catch { }
-            try { $p.WaitForExit(3000) | Out-Null } catch { }
-            return $result
-        }
-        $p.WaitForExit()   # lets the async readers finish after a timed wait
-        $result.Code = $p.ExitCode
-        $result.Out = $outTask.Result.Trim()
-        return $result
-    } catch {
-        return $result
-    }
 }
 
 function Get-PullSourceUrl {

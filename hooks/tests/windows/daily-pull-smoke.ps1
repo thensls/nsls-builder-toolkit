@@ -15,7 +15,7 @@ $tokens = $null
 $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors)
 if ($errors.Count -gt 0) { throw "session-start.ps1 does not parse: $($errors[0].Message)" }
-$want = @('Clear-GitRepoEnv', 'Test-GitPath', 'Get-FastForwardArgs', 'Update-Checkout')
+$want = @('Clear-GitRepoEnv', 'Test-GitPath', 'Get-FastForwardArgs', 'Invoke-GitBounded', 'Update-Checkout')
 $fns = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $want -contains $n.Name }, $true)
 if ($fns.Count -ne $want.Count) { throw "expected $($want.Count) functions in session-start.ps1, found $($fns.Count)" }
 foreach ($f in $fns) { Invoke-Expression $f.Extent.Text }
@@ -107,6 +107,19 @@ Check 'an ignored file the update starts tracking is NOT overwritten' ((Get-Cont
 Check '...the checkout is left where it was' ((Head $w) -eq $before)
 Check '...and the refusal is announced with the ignored-file repair' (($out -match 'FROZEN') -and ($out -match '1 ignored local file\(s\) that the update would replace') -and ($out -match 'copy them somewhere safe') -and ($out -notmatch 'backup branch')) $out
 Check '...without echoing a path the update chose' ($out -notmatch 'harvest-exclude') $out
+
+# 1b. A name git would quote (non-ASCII) is still found on disk: read NUL-separated, as UTF-8.
+#     Built from a code point so this file stays ASCII for PowerShell 5.1.
+$w = New-World
+$uName = 'caf' + [char]0xE9 + '.env'
+Set-Content -Path (Join-Path $w.Plugin '.git\info\exclude') -Value "*.env`n" -NoNewline
+[System.IO.File]::WriteAllText((Join-Path $w.Plugin $uName), "HER KEYS`n")
+[System.IO.File]::WriteAllText((Join-Path $w.Seed $uName), "nsls template`n")
+TGit $w.Seed add -A | Out-Null
+TGit $w.Seed commit --quiet -m 'add a non-ASCII name' | Out-Null
+TGit $w.Seed push --quiet $w.Nsls 'HEAD:main' | Out-Null
+$out = Run $w
+Check 'an ignored file with a non-ASCII name is kept, and still counted in the warning' ((([System.IO.File]::ReadAllText((Join-Path $w.Plugin $uName))) -eq "HER KEYS`n") -and ($out -match '1 ignored local file\(s\)')) $out
 
 # 2. Merge settings are neutralised.
 $w = New-World

@@ -165,6 +165,18 @@ with tempfile.TemporaryDirectory() as tmp:
           "copy them somewhere safe" in out and "backup branch" not in out)
     check("...and without echoing a path NSLS's update chose", "harvest-exclude" not in out)
 
+with tempfile.TemporaryDirectory() as tmp:
+    # A name git would quote ("caf\303\251.env") is still found on disk: the
+    # paths are read NUL-separated, never quoted.
+    seed, nsls, plugin_dir = make_world(tmp)
+    (plugin_dir / ".git" / "info").mkdir(exist_ok=True)
+    (plugin_dir / ".git" / "info" / "exclude").write_text("*.env\n")
+    (plugin_dir / "café.env").write_text("HER KEYS\n")
+    ship(seed, nsls, "café.env", "nsls's template\n")
+    out = run()
+    check("an ignored file with a non-ASCII name is kept, and still counted in the warning",
+          (plugin_dir / "café.env").read_text() == "HER KEYS\n" and f"1 {hook.IGNORED_BLOCKER}" in out)
+
 # --------------------------------------------- 2. merge settings are neutralised
 with tempfile.TemporaryDirectory() as tmp:
     # "-s ours" in mergeOptions makes even `merge --ff-only` exit 0 with a merge
@@ -276,6 +288,8 @@ with tempfile.TemporaryDirectory() as tmp:
     check("...nor a reference-transaction hook, on the fetch or the merge", not ref_marker.exists())
     check(f"...so the update completes promptly ({took:.1f}s), fast-forwarded and silent",
           took < 10 and head(plugin_dir) == upstream(plugin_dir) and out == "")
+    hooks_path = Path(hook._no_hooks(plugin_dir)[1].split("=", 1)[1])
+    check("the hooks path is a file, so no hook can ever be planted under it", hooks_path.is_file())
 
 # ------------------------------------- 4. housekeeping stays off the merge
 with tempfile.TemporaryDirectory() as tmp:
@@ -317,18 +331,18 @@ with tempfile.TemporaryDirectory() as tmp:
     # seen: the check sits after the fetch, immediately before the merge.
     seed, nsls, plugin_dir = make_world(tmp)
     ship(seed, nsls, "skill2.md", "new\n")
-    real_run = subprocess.run
-    def run_then_bisect(args, *a, **k):
-        r = real_run(args, *a, **k)
-        if "fetch" in args and any("nsls-no-hooks" in str(x) for x in args):
-            real_run(["git", "-C", str(plugin_dir), "bisect", "start"], capture_output=True)
+    real_rc = hook._git_rc
+    def fetch_then_bisect(d, *args, **k):
+        r = real_rc(d, *args, **k)
+        if "fetch" in args:
+            git(plugin_dir, "bisect", "start")
         return r
     before = head(plugin_dir)
-    subprocess.run = run_then_bisect
+    hook._git_rc = fetch_then_bisect
     try:
         out = run()
     finally:
-        subprocess.run = real_run
+        hook._git_rc = real_rc
     check("a bisect started during the fetch is seen: the checkout is NOT moved",
           head(plugin_dir) == before and "unfinished git operation" in out)
 
@@ -370,11 +384,16 @@ with tempfile.TemporaryDirectory() as tmp:
     # A remote that never answers is cut off at the deadline, not after a minute.
     seed, nsls, plugin_dir = make_world(tmp)
     git(plugin_dir, "config", "protocol.ext.allow", "always")
-    git(plugin_dir, "remote", "set-url", "origin", "ext::sh -c sleep% 30")
+    # A duration unique to this run, so a helper left by some other run is never mistaken for ours.
+    nap = f"{30 + os.getpid() % 1000}.{time.time_ns() % 997}"
+    git(plugin_dir, "remote", "set-url", "origin", f"ext::sh -c sleep% {nap}")
     t0 = time.monotonic()
     out = run(deadline=time.monotonic() + 3)
     took = time.monotonic() - t0
     check(f"a wedged fetch is stopped inside the envelope ({took:.1f}s of 3s)", took < 4 and out == "")
+    time.sleep(0.3)
+    left_behind = subprocess.run(["pgrep", "-f", f"sleep {nap}"], capture_output=True).returncode == 0
+    check("...together with its remote helper: nothing it started is left running", not left_behind)
 
 with tempfile.TemporaryDirectory() as tmp:
     # The freeze diagnosis runs inside the envelope too: no time, no git, no guess.
