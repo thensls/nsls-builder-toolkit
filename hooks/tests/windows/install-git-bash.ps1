@@ -1,0 +1,62 @@
+# install.ps1's Git Bash check, run for real under Windows PowerShell 5.1.
+# It warned "Git Bash isn't callable from this shell ... the guardrails will
+# never fire" whenever Git's bin folder was off PATH, though Claude Code finds
+# Git Bash on its own and the hooks ran fine (PC test 4, 2026-10-03). The block
+# is lifted from install.ps1 between its own markers.
+$ErrorActionPreference = 'Continue'
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$src = Get-Content (Join-Path $repo 'install.ps1') -Raw
+$start = $src.IndexOf('$bashOk = $false')
+$end = $src.IndexOf('if ($Test) {', $start)
+if ($start -lt 0 -or $end -le $start) { Write-Host 'FAIL could not find the Git Bash block in install.ps1'; exit 1 }
+$block = $src.Substring($start, $end - $start)
+
+$script:failures = 0
+function Check([string]$Label, [bool]$Cond, [string]$Detail = '') {
+    if ($Cond) { Write-Host "ok   $Label" } else { Write-Host "FAIL $Label"; if ($Detail) { Write-Host "     saw: $Detail" }; $script:failures++ }
+}
+function Run-Block {
+    $global:bashOk = $null
+    $out = & { Invoke-Expression $block } 6>&1 | Out-String
+    return @{ out = $out; ok = $bashOk }
+}
+
+$saved = @{}
+foreach ($k in 'PATH', 'ProgramFiles', 'ProgramFiles(x86)', 'LOCALAPPDATA', 'CLAUDE_CODE_GIT_BASH_PATH') { $saved[$k] = [Environment]::GetEnvironmentVariable($k, 'Process') }
+$root = Join-Path ([IO.Path]::GetTempPath()) ('gitbash-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+New-Item -ItemType Directory -Path $root | Out-Null
+try {
+    # Nothing on PATH, no Git anywhere this block looks.
+    [Environment]::SetEnvironmentVariable('PATH', "$env:SystemRoot\System32", 'Process')
+    [Environment]::SetEnvironmentVariable('ProgramFiles', (Join-Path $root 'pf'), 'Process')
+    [Environment]::SetEnvironmentVariable('ProgramFiles(x86)', (Join-Path $root 'pf86'), 'Process')
+    [Environment]::SetEnvironmentVariable('LOCALAPPDATA', (Join-Path $root 'local'), 'Process')
+    [Environment]::SetEnvironmentVariable('CLAUDE_CODE_GIT_BASH_PATH', $null, 'Process')
+    # System32 can hold WSL's bash.exe; keep it out so "nothing installed" is real.
+    $wsl = Join-Path $env:SystemRoot 'System32\bash.exe'
+    if (Test-Path $wsl) { [Environment]::SetEnvironmentVariable('PATH', (Join-Path $root 'empty'), 'Process') }
+    $r = Run-Block
+    Check 'with no Git Bash anywhere, it warns' ($r.out -match "Git Bash isn't installed") $r.out
+
+    # Git for Windows installed, but its bin folder is not on PATH (the PC's case).
+    $bash = Join-Path $root 'pf\Git\bin\bash.exe'
+    New-Item -ItemType Directory -Path (Split-Path $bash) -Force | Out-Null
+    Set-Content -Path $bash -Value 'stub'
+    $r = Run-Block
+    Check 'Git Bash in Program Files, off PATH: no warning' (-not ($r.out -match 'Warning')) $r.out
+    Check 'and it says where it found it' ($r.out -match 'Git Bash: found at') $r.out
+    Remove-Item $bash
+
+    # CLAUDE_CODE_GIT_BASH_PATH pointing at a real file counts too.
+    $custom = Join-Path $root 'custom\bash.exe'
+    New-Item -ItemType Directory -Path (Split-Path $custom) -Force | Out-Null
+    Set-Content -Path $custom -Value 'stub'
+    [Environment]::SetEnvironmentVariable('CLAUDE_CODE_GIT_BASH_PATH', $custom, 'Process')
+    $r = Run-Block
+    Check 'CLAUDE_CODE_GIT_BASH_PATH is honoured' (-not ($r.out -match 'Warning')) $r.out
+} finally {
+    foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k], 'Process') }
+    Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+}
+if ($script:failures -gt 0) { Write-Host "$($script:failures) check(s) failed"; exit 1 }
+Write-Host 'all checks passed'

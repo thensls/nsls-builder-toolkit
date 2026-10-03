@@ -157,21 +157,38 @@ if ($bashCmd) {
         $bashOk = ($probe -eq 'NSLS-BASH-OK')
     } catch { $bashOk = $false }
 }
+# Claude Code does not need bash on PATH: the desktop app and the CLI find Git
+# Bash themselves, from CLAUDE_CODE_GIT_BASH_PATH or Git for Windows' own
+# folder. On PC test 4 (2026-10-03), with C:\Program Files\Git\bin off PATH, the
+# plugin's hooks and Claude's Bash tool ran fine while this warned on every run
+# that the guardrails would never fire - a false alarm that would send builders
+# to edit their PATH for nothing. So a Git Bash where Claude Code looks counts.
 if (-not $bashOk) {
-    $gitBash = Join-Path $env:ProgramFiles 'Git\bin\bash.exe'
+    $places = @()
+    if ($env:CLAUDE_CODE_GIT_BASH_PATH) { $places += $env:CLAUDE_CODE_GIT_BASH_PATH }
+    $gitCmd = Get-Command git -ErrorAction SilentlyContinue
+    if ($gitCmd -and $gitCmd.Source) {
+        # ...\Git\cmd\git.exe (or ...\Git\bin\git.exe) -> ...\Git\bin\bash.exe
+        $places += (Join-Path (Split-Path (Split-Path $gitCmd.Source)) 'bin\bash.exe')
+    }
+    if ($env:ProgramFiles) { $places += (Join-Path $env:ProgramFiles 'Git\bin\bash.exe') }
+    if (${env:ProgramFiles(x86)}) { $places += (Join-Path ${env:ProgramFiles(x86)} 'Git\bin\bash.exe') }
+    if ($env:LOCALAPPDATA) { $places += (Join-Path $env:LOCALAPPDATA 'Programs\Git\bin\bash.exe') }
+    $foundBash = $places | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+    if ($foundBash) {
+        $bashOk = $true
+        Write-Host "Git Bash: found at $foundBash (Claude Code finds it there on its own)."
+    }
+}
+if (-not $bashOk) {
     Write-Host ""
-    Write-Host "Warning: Git Bash isn't callable from this shell."
+    Write-Host "Warning: Git Bash isn't installed."
     Write-Host "  The toolkit's hooks run through it, so without it the guardrails and the"
     Write-Host "  work-credit logging will be installed but will never fire."
-    if (Test-Path $gitBash) {
-        Write-Host "  It IS installed at: $gitBash"
-        Write-Host "  Fix: add $(Split-Path $gitBash) to your PATH, then reopen PowerShell and re-run this installer."
-    } else {
-        Write-Host "  Fix: reinstall Git for Windows from https://git-scm.com/download/win,"
-        Write-Host "  accepting every default option, then reopen PowerShell and re-run this installer."
-    }
+    Write-Host "  Fix: reinstall Git for Windows from https://git-scm.com/download/win,"
+    Write-Host "  accepting every default option, then reopen PowerShell and re-run this installer."
     Write-Host "  Continuing - everything else installs normally, and the hooks start working"
-    Write-Host "  as soon as bash is on PATH."
+    Write-Host "  as soon as Git Bash is installed."
     Write-Host ""
 }
 
