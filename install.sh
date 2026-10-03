@@ -72,7 +72,9 @@ mkdir -p "$CONFIG_DIR/local-plugins"
 # A failed FETCH changes nothing on disk, so warn and carry on. A failed RESET
 # may leave files half-updated, so that one stops rather than claim "unchanged".
 # Only a real checkout counts as installed: an interrupted clone can leave a bare dir.
-if [ -d "$PLUGIN_DIR/.git" ]; then
+# -e, not -d: in a linked worktree .git is a file. (Not `git rev-parse`: that also
+# says yes for an empty folder that merely sits inside some other repo.)
+if [ -e "$PLUGIN_DIR/.git" ]; then
   echo "  Updating existing installation..."
   if ! UPD_ERR=$(git -C "$PLUGIN_DIR" fetch origin "$REPO_BRANCH" --quiet 2>&1); then
     echo "  WARNING: couldn't download the update, so your toolkit is UNCHANGED (still the version you had)."
