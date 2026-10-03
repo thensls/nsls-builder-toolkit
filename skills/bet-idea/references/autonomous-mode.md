@@ -32,7 +32,7 @@ theme brewing, report why. Abort is cheap; a junk bet is not.
   present to ground it.
 - **Materiality gate (step 1.5) is cite-or-abort.** Answer both legs
   strictly from the cluster's claims, citing the specific claims/quotes
-  that establish a path to ≥ $500K committed capital or ~$1M/yr revenue.
+  that establish a path to > $100K committed capital AND > $500K return.
   No citable path in the claims → ABORT: no `create_bet`, theme stays
   `brewing`, report states exactly what was missing. Never estimate around
   missing data — a plausible market number with no claim behind it is
