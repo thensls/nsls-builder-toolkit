@@ -588,8 +588,32 @@ _POWERSHELL = False
 
 def _join_ps_continuations(cmd: str) -> str:
     """A trailing backtick continues a PowerShell line, so `git -C C:\\repo `
-    then `push origin main` on the next line is one command."""
-    return re.sub(r"`[ \t]*\r?\n", " ", cmd)
+    then `push origin main` on the next line is one command.
+
+    Never inside a here-string: its body is data, and a body line ending in a
+    backtick joined onto the closing '@ hid that delimiter, so everything after
+    it - a real push included - was read as here-string text (Macroscope).
+    """
+    out, here_end, pending = [], None, ""
+    for line in cmd.splitlines():
+        if here_end is not None:
+            out.append(line)
+            if line.lstrip().startswith(here_end):
+                here_end = None
+            continue
+        line = pending + line
+        pending = ""
+        m = re.search(r"`[ \t]*$", line)
+        if m:
+            pending = line[:m.start()] + " "
+            continue
+        out.append(line)
+        m_ps = re.search(r"""@(['"])\s*$""", line)
+        if m_ps:
+            here_end = m_ps.group(1) + "@"
+    if pending:
+        out.append(pending)
+    return "\n".join(out)
 
 
 def command_segments(cmd: str):
@@ -709,7 +733,35 @@ def _exe_name(tok: str) -> str:
 
 
 # PowerShell's ways of changing directory, beside plain cd (an alias there too).
-_CD_COMMANDS = frozenset({"cd", "chdir", "pushd", "set-location", "sl", "push-location"})
+_CD_COMMANDS = frozenset({"cd", "chdir", "set-location", "sl"})
+_PUSH_COMMANDS = frozenset({"pushd", "push-location"})
+_POP_COMMANDS = frozenset({"popd", "pop-location"})
+_PATH_PARAMS = ("-path", "-literalpath")
+
+
+def _location_target(args):
+    """The directory a location command names, or None.
+
+    PowerShell spells it `-Path X`, `-Path:X`, `-LiteralPath X` or positionally,
+    with switches such as -PassThru anywhere. Taking the first token after
+    dropping only `-Path` read `-PassThru` as the destination (Macroscope).
+    """
+    i = 0
+    while i < len(args):
+        a, low = args[i], args[i].lower()
+        if low in _PATH_PARAMS:
+            return args[i + 1] if i + 1 < len(args) else None
+        for prm in _PATH_PARAMS:
+            if low.startswith(prm + ":"):
+                return a[len(prm) + 1:] or None
+        if low == "-stackname":
+            i += 2
+            continue
+        if a.startswith("-") and a != "-":
+            i += 1
+            continue
+        return a
+    return None
 
 
 def walk_segments(cmd: str):
@@ -722,15 +774,23 @@ def walk_segments(cmd: str):
     segs = command_segments(cmd)
     if segs is None:
         return None
-    out, cwd = [], None
+    out, cwd, stack = [], None, []
     for seg in segs:
         seg = strip_wrappers(seg)  # `MODE=prod cd dir` is still a cd
-        if seg and seg[0] in _CD_COMMANDS:
-            args = [a for a in seg[1:] if a.lower() not in ("-path", "-literalpath")]
-            if not args:
-                cwd = str(Path.home())
+        if seg and seg[0] in _POP_COMMANDS:
+            # popd returns to where the matching pushd left from; judging the
+            # next push against the pushed directory checked the wrong repo.
+            if stack:
+                cwd = stack.pop()
+            continue
+        if seg and (seg[0] in _CD_COMMANDS or seg[0] in _PUSH_COMMANDS):
+            pushing = seg[0] in _PUSH_COMMANDS
+            target = _location_target(seg[1:])
+            if target is None:
+                if not pushing:  # a bare pushd only saves the location
+                    cwd = str(Path.home())
             else:
-                target = os.path.expanduser(args[0])
+                target = os.path.expanduser(target)
                 base = cwd or os.getcwd()
                 resolved = target if os.path.isabs(target) else os.path.normpath(
                     os.path.join(base, target))
@@ -739,6 +799,8 @@ def walk_segments(cmd: str):
                 # all (`&&`). Tracking the bogus target instead made
                 # repo_root("") come back empty and waved the push through.
                 if os.path.isdir(resolved):
+                    if pushing:
+                        stack.append(cwd)
                     cwd = resolved
             continue
         out.append((cwd, seg))
@@ -869,13 +931,15 @@ def gate_personal_repo(tool: str, ti: dict):
 # ---------------------------------------------------------------- gate 2
 
 DEPLOY_RE = re.compile(
-    r"\b(railway\s+up|railway\s+redeploy"
-    r"|netlify\s+deploy"
-    r"|vercel\s+(deploy\s+)?--prod"
-    r"|fly\s+deploy"
-    r"|gcloud\s+(run\s+deploy|functions\s+deploy)"
-    r"|serverless\s+deploy"
-    r"|eb\s+deploy)\b",
+    # (?:\.exe)? and [\s"']+: `railway.exe up` and `& "C:\...\railway.exe" up`
+    # are how Windows spells the same deploy (Macroscope).
+    r"\b(railway(?:\.exe)?[\s\"']+up|railway(?:\.exe)?[\s\"']+redeploy"
+    r"|netlify(?:\.exe)?[\s\"']+deploy"
+    r"|vercel(?:\.exe)?[\s\"']+(deploy\s+)?--prod"
+    r"|fly(?:\.exe)?[\s\"']+deploy"
+    r"|gcloud(?:\.exe)?[\s\"']+(run\s+deploy|functions\s+deploy)"
+    r"|serverless(?:\.exe)?[\s\"']+deploy"
+    r"|eb(?:\.exe)?[\s\"']+deploy)\b",
     re.I,  # executable names are case-insensitive on Windows
 )
 # The first token a deploy segment must start with. Anchoring here is what

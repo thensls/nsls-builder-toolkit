@@ -127,6 +127,26 @@ with tempfile.TemporaryDirectory() as tmp:
     r = call(neutral, env, "PowerShell", "$msg = @'\ngit -C " + str(repo) + " push origin main\n'@", 30)
     check("a push that only appears inside a here-string is data, not a push", not denied(r), r.stdout[:200])
 
+    print("\nlocation commands and here-strings, round two (Macroscope)")
+    more = [
+        ("a here-string body line ending in a backtick, then a push",
+         f"$m = @'\nnote `\n'@\ngit -C {repo} push origin main", neutral),
+        ("Set-Location -PassThru first", f"Set-Location -PassThru {repo}; git push origin main", neutral),
+        ("Set-Location -Path:<dir> first", f"Set-Location -Path:{repo}; git push origin main", neutral),
+        ("pushd elsewhere, popd back into the personal repo, then push",
+         f"pushd {neutral}; popd; git push origin main", repo),
+        ("a bare pushd does not move, so the push is still from the personal repo",
+         "pushd; git push origin main", repo),
+    ]
+    for n, (label, command, start) in enumerate(more, start=40):
+        r = call(start, env, "PowerShell", command, n)
+        check(f"PowerShell, {label}: denied", denied(r), r.stdout[:200] or r.stderr[-200:])
+
+print("\nthe deploy prefilter sees Windows spellings")
+for c in ("railway.exe up", '& "C:\\Tools\\railway.exe" up', "Railway up"):
+    check(f"DEPLOY_RE matches {c!r}", bool(mod.DEPLOY_RE.search(c)))
+check("and still ignores a mention that is not a deploy", not mod.DEPLOY_RE.search("echo railway"))
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s): {', '.join(failures)}")
