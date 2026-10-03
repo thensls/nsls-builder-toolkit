@@ -116,6 +116,11 @@ if own and len(pieces) == 2:
     check("a path that only starts with this skill's path is left alone",
           not owned(lookalike, tk, "gws"))
     check("an empty file is left alone", not owned("", tk, "gws"))
+    body = ("---\nname: gws\n---\nMy own Workspace notes.\n---\n"
+            f"Read and follow the full skill at `{home}`.\n")
+    check("body text between two --- lines does not count as front matter", not owned(body, tk, "gws"))
+    check("a pointer the builder added a front-matter key to is left alone",
+          not owned(pointer(home).replace("description: >-", "model: opus\ndescription: >-"), tk, "gws"))
 
 print()
 if failures:
