@@ -624,9 +624,14 @@ def _ps_code_part(line: str) -> str:
     joining on it swallowed the next line - a real push - into the comment
     (Macroscope). `#` starts a comment at the line start or after whitespace.
     """
-    quote = None
+    quote, escaped = None, False
     for i, c in enumerate(line):
-        if quote:
+        if escaped:  # a backtick escapes the next character, `" included
+            escaped = False
+            continue
+        if c == "`" and quote != "'":  # single quotes are literal in PowerShell
+            escaped = True
+        elif quote:
             if c == quote:
                 quote = None
         elif c in "'\"":

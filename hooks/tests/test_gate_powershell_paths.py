@@ -103,7 +103,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print("\nother ways PowerShell runs the same push (Codex review)")
     spaced = parent / "nsls my\\thing"    # a space and a backslash in one name
-    spaced.mkdir()
+    spaced.mkdir(parents=True)               # on Windows the backslash nests a folder
     (spaced / "README.md").write_text("# NSLS tool\n")
     subprocess.run(["git", "init", "-q"], cwd=spaced, capture_output=True)
     subprocess.run(["git", "remote", "add", "origin",
@@ -159,6 +159,8 @@ with tempfile.TemporaryDirectory() as tmp:
     for n, (tool, label, command, start) in enumerate(third, start=60):
         r = call(start, env, tool, command, n)
         check(f"{tool}, {label}: denied", denied(r), r.stdout[:200] or r.stderr[-200:])
+    r = call(neutral, env, "PowerShell", 'Write-Host "a `" # not a comment" `\n' + f"; git -C {repo} push origin main", 71)
+    check("PowerShell, an escaped quote before a # does not start a comment: denied", denied(r), r.stdout[:200])
     r = call(neutral, env, "PowerShell", f"Set-Location -LiteralPath {parent}/nsls\\th*; git push origin main", 70)
     check("-LiteralPath never expands a wildcard, so no move and no repo", not denied(r), r.stdout[:200])
 
