@@ -27,7 +27,6 @@ DO NOT switch to pandoc-from-markdown. See SKILL.md "Common Mistakes."
 
 import os
 import sys
-sys.path.insert(0, '/tmp/pptx_deps')  # legacy location — /tmp cleanup can gut it
 sys.path.insert(0, os.path.expanduser('~/.local/lib/nsls-pydeps'))  # durable home, wins
 
 from docx import Document

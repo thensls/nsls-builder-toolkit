@@ -54,7 +54,7 @@ The fastest path for a builder asking for a Google Doc:
    `python3.12: command not found` sent builders off to install Python for no reason. python-docx is
    pure-Python and runs on 3.10-3.14, so the launcher just picks whatever is there.
    *No `nsls-python` on this machine* (pre-launcher install): re-run the toolkit installer, or fall back to
-   `PYTHONPATH="$HOME/.local/lib/nsls-pydeps:/tmp/pptx_deps" python3 ...` with a
+   `PYTHONPATH="$HOME/.local/lib/nsls-pydeps" python3 ...` with a
    `python3 -m pip install --upgrade python-docx --target "$HOME/.local/lib/nsls-pydeps" -q` first.
    Guard on a real import, never a directory — macOS `/tmp` cleanup guts old installs but leaves the dirs,
    so a `-d` check passes on a broken install weeks later.
@@ -73,7 +73,7 @@ The fastest path for a builder asking for a Google Doc:
 >   never `python`/`python3.12`. Stock Win11 `python`/`python3` are Microsoft Store stubs
 >   that print "Python was not found" and **exit 0** — a naive check passes while nothing
 >   runs. `install.ps1` installs Python 3.12 to that path *and* `python-docx` into it, so
->   on a toolkit machine you usually don't need the `--target /tmp/pptx_deps` install at all.
+>   on a toolkit machine you usually don't need a `--target` install at all.
 > - **Deps dir:** if you do need a target install, use a durable user-owned dir —
 >   `$env:LOCALAPPDATA\nsls-pydeps` (not `$env:TEMP`, which Windows cleans the same way
 >   macOS cleans `/tmp`) — and set `PYTHONPATH` to it.

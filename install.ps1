@@ -246,7 +246,9 @@ if defined PYTHONPATH (set "PYTHONPATH=$PyDeps;%PYTHONPATH%") else (set "PYTHONP
 "@
         # Must be BOM-less: cmd.exe treats a leading BOM as part of the first
         # line and the shim dies on "'ï»¿@echo' is not recognized".
-        Write-TextNoBom -Path $ShimPath -Content $shim
+        # Write then rename, so an interrupted write never leaves a truncated launcher.
+        Write-TextNoBom -Path "$ShimPath.tmp" -Content $shim
+        Move-Item -Force -Path "$ShimPath.tmp" -Destination $ShimPath
         # Claude Code runs commands through Git Bash, which does not apply PATHEXT,
         # so a bare `nsls-python` never finds the .cmd. Write an extensionless
         # sh wrapper beside it. LF endings only: a CR breaks the shebang line.
@@ -258,7 +260,9 @@ if defined PYTHONPATH (set "PYTHONPATH=$PyDeps;%PYTHONPATH%") else (set "PYTHONP
             "if [ -n `"`${PYTHONPATH:-}`" ]; then PYTHONPATH=`"`$PYDEPS;`$PYTHONPATH`"; else PYTHONPATH=`"`$PYDEPS`"; fi`n" +
             "export PYTHONPATH`n" +
             "exec '$PyExeFwd' `"`$@`"`n"
-        Write-TextNoBom -Path (Join-Path $ShimDir 'nsls-python') -Content $bashShim
+        $bashShimPath = Join-Path $ShimDir 'nsls-python'
+        Write-TextNoBom -Path "$bashShimPath.tmp" -Content $bashShim
+        Move-Item -Force -Path "$bashShimPath.tmp" -Destination $bashShimPath
         # Persistent user PATH + this session (exact-segment match, so a path
         # that merely CONTAINS the dir name doesn't suppress the append).
         Add-ToUserPath -Dir $ShimDir
