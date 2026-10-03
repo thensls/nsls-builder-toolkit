@@ -869,14 +869,17 @@ fi
 # The recorded interpreter is gone (uninstalled, or a brew upgrade moved it).
 # Re-apply the SAME gate the installer used rather than exec'ing blind: a stock
 # macOS stub or an ancient 3.x would otherwise produce a baffling error.
+# A replacement only counts if it can actually import the libraries: they were
+# built for the old Python, and compiled parts (lxml) won't load in a new one.
 for _c in python3.12 python3.13 python3.11 python3.14 python3.10 python3; do
   command -v "\$_c" >/dev/null 2>&1 || continue
-  if "\$_c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1; then
+  if "\$_c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1 \\
+     && "\$_c" -c 'import docx, pptx' >/dev/null 2>&1; then
     exec "\$_c" "\$@"
   fi
 done
-echo "nsls-python: the Python this was installed with is gone, and no Python 3.10+" >&2
-echo "replacement is on PATH. Re-run the NSLS toolkit installer to repair it." >&2
+echo "nsls-python: the Python this was installed with is gone, and no other Python" >&2
+echo "can load its libraries. Re-run the NSLS toolkit installer to repair it." >&2
 exit 127
 NSLSPYEOF
   } 2>/dev/null

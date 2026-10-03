@@ -42,7 +42,8 @@ The fastest path for a builder asking for a Google Doc:
    sentence that the document tooling needs repairing and re-run the toolkit installer for them.
    **Repair, by platform** (a launcher the installer just wrote isn't on this session's PATH yet):
    - *Mac/Linux:* `curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash`,
-     then preflight again using the full path `~/.local/bin/nsls-python`.
+     then preflight again using the full path `~/.local/bin/nsls-python`, and keep using that
+     full path for every later `nsls-python` command in this session.
    - *Windows:* `powershell -NoProfile -Command "iwr -useb https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.ps1 | iex"`,
      then have the builder fully restart Claude Code (Task Manager → End task on every Claude entry,
      reopen, say "back") and preflight again. Never run `install.sh` on Windows. Never let the builder see a raw `ModuleNotFoundError`, an import traceback,
