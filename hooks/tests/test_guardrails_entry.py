@@ -76,6 +76,9 @@ check("the notice interpolates only the toolkit-authored reason, never the raw d
       notice is not None and "$Reason" in notice.group(0) and "$Detail" not in notice.group(0)
       and "$clean" not in notice.group(0), f"({notice.group(0)[:120] if notice else None!r})")
 check("only its own stage is cleared on success", "if ($prev.stage -eq 'shim-python')" in PS1)
+ss = (HOOKS / "session-start.py").read_text(encoding="utf-8")
+check("the policy file is read as UTF-8, not the PC's code page",
+      '(guardrail_root / "CLAUDE.md").read_text(encoding="utf-8"' in ss)
 check("the record lives where Python keeps it (CLAUDE_CONFIG_DIR first)",
       "$ShimStateDir = if ([string]::IsNullOrWhiteSpace($env:CLAUDE_CONFIG_DIR))" in PS1
       and "$ShimStatus = Join-Path $ShimStateDir" in PS1)
