@@ -159,6 +159,49 @@ with tempfile.TemporaryDirectory() as td:
     hook.sync_pointers()
     check("a builder's own skill of that name still beats both", read(cfg, "personal-setup") == mine)
 
+print("a builder's own skill is flagged every session")
+import contextlib, io
+with tempfile.TemporaryDirectory() as td:
+    cfg = fake_config(Path(td))
+    seed(cfg)
+    hook.CONFIG_DIR, hook.SKILLS_DIR = cfg, cfg / "skills"
+    for active in (False, True):
+        hook.org_plugin_active = lambda: active
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            hook.sync_pointers()
+            hook.notice_own_skills()
+        text = out.getvalue()
+        check(f"their skill is named (org plugin active: {active})", "/brainstorm" in text, repr(text))
+        check(f"our own pointer is not (org plugin active: {active})", "/plan" not in text, repr(text))
+    hook.org_plugin_active = lambda: False
+    (cfg / "skills" / "brainstorm" / "SKILL.md").write_text(PLAIN)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        hook.notice_own_skills()
+    check("no notice when nothing of theirs shares a toolkit name", out.getvalue() == "", repr(out.getvalue()))
+with tempfile.TemporaryDirectory() as td:
+    # A marketplace install: the org toolkit is only at the plugin root.
+    cfg = Path(td) / ".claude"
+    (cfg / "skills" / "brainstorm").mkdir(parents=True)
+    (cfg / "skills" / "brainstorm" / "SKILL.md").write_text(MINE)
+    plugin_root = Path(td) / "plugin-cache" / "nsls-builder-toolkit"
+    (plugin_root / "skills" / "brainstorm").mkdir(parents=True)
+    (plugin_root / "skills" / "brainstorm" / "SKILL.md").write_text(FM + "Body.\n")
+    (plugin_root / "hooks").mkdir()
+    shutil.copy(HOOKS / "session-start.py", plugin_root / "hooks" / "session-start.py")
+    spec2 = importlib.util.spec_from_file_location("ss_plugin_copy", plugin_root / "hooks" / "session-start.py")
+    copy = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(copy)
+    copy.CONFIG_DIR, copy.SKILLS_DIR = cfg, cfg / "skills"
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        copy.notice_own_skills()
+    check("an org toolkit installed only as a plugin is still checked",
+          "/brainstorm" in out.getvalue(), repr(out.getvalue()))
+check("every session runs it, right after the pointers are synced",
+      "    sync_pointers()\n    notice_own_skills()\n" in (HOOKS / "session-start.py").read_text())
+
 print("hooks/sync-pointers.sh, for real")
 with tempfile.TemporaryDirectory() as td:
     cfg = fake_config(Path(td))

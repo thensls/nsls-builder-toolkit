@@ -1631,6 +1631,70 @@ def sync_pointers():
         print(f"{created} skill pointers synced", file=sys.stderr)
 
 
+def own_skills_over_toolkit():
+    """Names where the builder's own skill sits where a toolkit pointer would.
+
+    Their skill is never overwritten (see is_own_pointer), so it is the one
+    that runs. Checked for both toolkits, even when the org toolkit is an
+    active plugin and its pointers are no longer written: the bare /name is
+    still theirs.
+    """
+    names = set()
+    for skills_src in _toolkit_skill_dirs():
+        for skill_dir in skills_src.iterdir():
+            dest_skill = SKILLS_DIR / skill_dir.name / "SKILL.md"
+            if not (skill_dir / "SKILL.md").exists() or not dest_skill.exists():
+                continue
+            try:
+                existing = dest_skill.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            if not is_own_pointer(existing, skill_dir.name):
+                names.add(skill_dir.name)
+    return sorted(names)
+
+
+def _toolkit_skill_dirs():
+    """Every installed toolkit's skills folder, the org one wherever it runs from.
+
+    A marketplace install of the org toolkit has no local-plugins checkout, so
+    its skills are found from this running copy's own root, as in
+    emit_guardrails_context(); the clone is the fallback. __file__ is undefined
+    when the settings shim runs this file through `python3 -c`.
+    """
+    own_root = (Path(__file__).resolve().parent.parent
+                if "__file__" in globals() else PLUGIN_DIR)
+    candidates = [own_root / "skills"] + [
+        CONFIG_DIR / "local-plugins" / p / "skills" for p in POINTER_PRECEDENCE
+    ]
+    found = []
+    for d in candidates:
+        try:
+            if d.is_dir() and d.resolve() not in [x.resolve() for x in found]:
+                found.append(d)
+        except Exception:
+            continue
+    return found
+
+
+def notice_own_skills():
+    """Tell Claude to say, each time, when the builder's own version runs."""
+    try:
+        names = own_skills_over_toolkit()
+    except Exception:
+        return
+    if not names:
+        return
+    listed = ", ".join(f"/{n}" for n in names)
+    print(
+        f"[NSLS Builder Toolkit] This builder has their own skill with the same "
+        f"name as a toolkit skill, so theirs is the one that runs: {listed}. "
+        f"Each time they use one of these, say so in one short line before "
+        f"starting, e.g. \"Using your own /{names[0]}, not the NSLS toolkit's.\" "
+        f"Never change or remove their skill."
+    )
+
+
 def read_env(key):
     """Read a value from the personal toolkit .env file."""
     if not ENV_FILE.exists():
@@ -2366,6 +2430,7 @@ def main():
     if not stage_a:  # stage A spent this session's freshness budget
         ensure_plugin_fresh()
     sync_pointers()
+    notice_own_skills()
     emit_guardrails_context()
     replayed = replay_failed_ping()
     session_ping(replayed=replayed)
