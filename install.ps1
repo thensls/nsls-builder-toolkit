@@ -510,6 +510,27 @@ Write-Host "Step 2: Enabling plugin and registering hooks..."
 # Seed a fresh test config dir with an empty settings.json (BOM-less).
 if ($Test -and -not (Test-Path $Settings)) { Write-TextNoBom $Settings '{}' }
 
+# Hooks the toolkit plugin has already been seen running on this machine. The
+# migration retires those settings.json shims, and once session-start is proven
+# it retires the org pointer files too. Re-adding them here only undid it: every
+# re-install put the shims and 69 pointers back, and the next session start
+# removed them again (PC test 4, 2026-10-03). plugin_beacon.py decides, so the
+# installer and the migration use one definition of evidence.
+function Get-BeaconAnswer {
+    param([string]$Flag)
+    $beaconPy = Join-Path $HooksDir 'plugin_beacon.py'
+    $runner = if (Test-Path $PyExe) { $PyExe } elseif (Get-Command py -ErrorAction SilentlyContinue) { 'py' } else { $null }
+    if (-not $runner -or -not (Test-Path $beaconPy)) { return @() }
+    $savedCfg = $env:CLAUDE_CONFIG_DIR
+    try {
+        $env:CLAUDE_CONFIG_DIR = $ConfigDir
+        $beaconArgs = @($beaconPy, $Flag)
+        if ($runner -eq 'py') { $beaconArgs = @('-3') + $beaconArgs }
+        return @(& $runner @beaconArgs 2>$null | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+    } catch { return @() } finally { $env:CLAUDE_CONFIG_DIR = $savedCfg }
+}
+$Proven = @(Get-BeaconAnswer '--proven')
+
 $ssCmd = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$HooksDir\session-start.ps1`""
 $ptCmd = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$HooksDir\skill-event.ps1`""
 
@@ -543,10 +564,14 @@ function Without-Matching {
 # SessionStart timeout 90s: must clear git pull + a replayed ping + the live ping
 # on a Railway cold start (parity with install.sh, which was killed at 15s).
 $ss = @(Without-Matching $cfg.hooks.SessionStart 'session-start.ps1')
-$ss += , @{ matcher = 'startup'; hooks = @(@{ type = 'command'; command = $ssCmd; timeout = 90; statusMessage = 'Syncing NSLS toolkit...' }) }
+if ($Proven -notcontains 'session-start') {
+    $ss += , @{ matcher = 'startup'; hooks = @(@{ type = 'command'; command = $ssCmd; timeout = 90; statusMessage = 'Syncing NSLS toolkit...' }) }
+}
 
 $pt = @(Without-Matching $cfg.hooks.PreToolUse 'skill-event.ps1')
-$pt += , @{ matcher = 'Skill'; hooks = @(@{ type = 'command'; command = $ptCmd; timeout = 5; statusMessage = 'Logging skill use so you get NSLS credit (nothing else)...' }) }
+if ($Proven -notcontains 'skill-event') {
+    $pt += , @{ matcher = 'Skill'; hooks = @(@{ type = 'command'; command = $ptCmd; timeout = 5; statusMessage = 'Logging skill use so you get NSLS credit (nothing else)...' }) }
+}
 
 # Guardrail gate - same registration reasoning as the skill-event hook: bundled
 # plugin hooks don't reliably load, so without this the four hard gates never
@@ -555,7 +580,9 @@ $pt += , @{ matcher = 'Skill'; hooks = @(@{ type = 'command'; command = $ptCmd; 
 # the hook - the gate fails open by absence, matching its own design rules.
 $gateCmd = 'py -3 "' + (Join-Path $ConfigDir 'local-plugins\nsls-builder-toolkit\hooks\guardrail-gate.py') + '"'
 $pt = @(Without-Matching $pt 'guardrail-gate.py')
-$pt += , @{ matcher = 'Bash|PowerShell|Write|Edit'; hooks = @(@{ type = 'command'; command = $gateCmd; timeout = 10; statusMessage = 'Checking builder guardrails...' }) }
+if ($Proven -notcontains 'guardrail-gate') {
+    $pt += , @{ matcher = 'Bash|PowerShell|Write|Edit'; hooks = @(@{ type = 'command'; command = $gateCmd; timeout = 10; statusMessage = 'Checking builder guardrails...' }) }
+}
 
 $cfg.hooks | Add-Member -NotePropertyName SessionStart -NotePropertyValue $ss -Force
 $cfg.hooks | Add-Member -NotePropertyName PreToolUse  -NotePropertyValue $pt -Force
@@ -563,7 +590,11 @@ $cfg.hooks | Add-Member -NotePropertyName PreToolUse  -NotePropertyValue $pt -Fo
 # BOM-less write: PowerShell 5.1 `Set-Content -Encoding utf8` emits a BOM that
 # breaks json.load() for every downstream consumer of settings.json.
 Write-TextNoBom $Settings ($cfg | ConvertTo-Json -Depth 12)
-Write-Host "  Enabled plugin + registered SessionStart / PreToolUse(Skill) hooks."
+if ($Proven.Count -gt 0) {
+    Write-Host "  The toolkit plugin already runs these hooks here, so no shim was added: $($Proven -join ', ')."
+} else {
+    Write-Host "  Enabled plugin + registered SessionStart / PreToolUse(Skill) hooks."
+}
 
 # --- Step 2.5: Fire an install event to the Automation Tracker (best-effort) ---
 $InstallEmail = ""
@@ -651,7 +682,15 @@ if ($ClaudeBin) {
 Write-Host ""
 Write-Host "Step 3.5: Registering bundled MCP servers..."
 $McpJson = Join-Path $PluginDir '.mcp.json'
-if ($ClaudeBin -and (Test-Path $McpJson)) {
+# Once the toolkit plugin is installed it registers these servers itself. A
+# user-scope copy beside it is the duplicate the migration removes, and the
+# reason every session showed two "signal ... Connection closed" errors
+# (PC test, 2026-10-03). Step 3 above installs the plugin, so this check
+# comes after it.
+$PluginInstalled = (@(Get-BeaconAnswer '--installed') -contains 'installed')
+if ($PluginInstalled) {
+    Write-Host "  Skipped: the toolkit plugin registers its own MCP servers."
+} elseif ($ClaudeBin -and (Test-Path $McpJson)) {
     function Expand-Vars {
         param([string]$v)
         if ($null -eq $v) { return $v }
@@ -716,7 +755,12 @@ Write-Host ""
 Write-Host "Step 4: Creating slash-command pointers..."
 New-Item -ItemType Directory -Path $SkillsDir -Force | Out-Null
 $count = 0
-foreach ($skillFolder in Get-ChildItem (Join-Path $PluginDir 'skills') -Directory) {
+# Once the plugin's session start is proven, the plugin delivers these skills
+# itself and the migration retires the pointers; writing them again only put
+# every skill in the list twice until the next session start.
+$pointerSources = if ($Proven -contains 'session-start') { @() } else { @(Get-ChildItem (Join-Path $PluginDir 'skills') -Directory) }
+if ($Proven -contains 'session-start') { Write-Host "  Skipped: the toolkit plugin provides these skills on this machine." }
+foreach ($skillFolder in $pointerSources) {
     $src = Join-Path $skillFolder.FullName 'SKILL.md'
     if (-not (Test-Path $src)) { continue }
     $content = Get-Content $src -Raw -Encoding UTF8

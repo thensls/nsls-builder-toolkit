@@ -56,6 +56,9 @@ jobs:
       - name: The daily update keeps ignored files, neutralises merge settings, runs no hooks, and leaves an operation in progress alone, under Windows PowerShell 5.1
         shell: powershell
         run: ./hooks/tests/windows/daily-pull-smoke.ps1
+      - name: install.ps1 asks the plugin which hooks it already runs, and ignores a disabled plugin, under Windows PowerShell 5.1
+        shell: powershell
+        run: ./hooks/tests/windows/install-beacon-answer.ps1
       - name: Collector bootstrap launches once, hidden, and stays out when installed or opted out (PS 5.1)
         shell: powershell
         run: ./hooks/tests/windows/collector-bootstrap.ps1

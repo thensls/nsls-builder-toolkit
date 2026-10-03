@@ -149,6 +149,18 @@ MARKER = 'nsls-builder-toolkit/hooks/session-start.py'
 # written by an older PowerShell installer, and plain utf-8 would choke on it.
 with open(SETTINGS_PATH, encoding='utf-8-sig') as f: cfg = json.load(f)
 
+# Hooks the toolkit plugin has already been seen running here. The migration
+# retires those shims; re-adding them only undid it, and the next session start
+# removed them again. plugin_beacon decides, as it does for the migration.
+PROVEN = set()
+try:
+    os.environ['CLAUDE_CONFIG_DIR'] = CONFIG_DIR
+    sys.path.insert(0, os.path.join(CONFIG_DIR, 'local-plugins/nsls-builder-toolkit/hooks'))
+    import plugin_beacon
+    PROVEN = set(plugin_beacon.proven())
+except Exception:
+    PROVEN = set()
+
 # The toolkit is enabled by INSTALLING it: Step 3 runs the plugin install. This
 # used to also write nsls-builder-toolkit@local into enabledPlugins, which never
 # did anything -- there is no marketplace named local, so Claude Code cannot
@@ -180,7 +192,9 @@ if startup_entry is None:
 
 hook_list = startup_entry.setdefault('hooks', [])
 existing = next((h for h in hook_list if MARKER in h.get('command', '')), None)
-if existing is None:
+if 'session-start' in PROVEN:
+    print('  Session hook: the toolkit plugin already runs it here, so no shim added')
+elif existing is None:
     hook_list.insert(0, HOOK_ENTRY)
     print('  Registered session auto-update hook')
 elif existing.get('timeout', 0) < HOOK_ENTRY['timeout']:
@@ -215,7 +229,9 @@ skill_hooks = skill_entry.setdefault('hooks', [])
 # plainly what it does: a one-line ping so their skill use is credited.
 SKILL_STATUS = 'Logging skill use so you get NSLS credit (nothing else)…'
 existing_skill = next((h for h in skill_hooks if SKILL_MARKER in h.get('command', '')), None)
-if existing_skill is None:
+if 'skill-event' in PROVEN:
+    print('  Skill-event hook: the toolkit plugin already runs it here, so no shim added')
+elif existing_skill is None:
     skill_hooks.append({'type': 'command', 'command': SKILL_HOOK_CMD,
                         'timeout': 5, 'statusMessage': SKILL_STATUS})
     print('  Registered skill-event hook (PreToolUse:Skill)')
@@ -256,7 +272,9 @@ if gate_entry is None:
     gate_entry = {'matcher': 'Bash|PowerShell|Write|Edit', 'hooks': []}
     pre_tool_use.append(gate_entry)
 gate_hooks = gate_entry.setdefault('hooks', [])
-if next((h for h in gate_hooks if GATE_MARKER in h.get('command', '')), None) is None:
+if 'guardrail-gate' in PROVEN:
+    print('  Guardrail gate: the toolkit plugin already runs it here, so no shim added')
+elif next((h for h in gate_hooks if GATE_MARKER in h.get('command', '')), None) is None:
     gate_hooks.append({'type': 'command', 'command': GATE_HOOK_CMD,
                        'timeout': 10, 'statusMessage': GATE_STATUS})
     print('  Registered guardrail gate (PreToolUse:Bash|Write|Edit)')
@@ -530,7 +548,12 @@ fi
 echo ""
 echo "Step 3: Registering bundled MCP servers..."
 
-if [ -n "$CLAUDE_BIN" ] && [ -f "$PLUGIN_DIR/.mcp.json" ]; then
+# Once the toolkit plugin is installed it registers these servers itself; a
+# user-scope copy beside it is the duplicate the migration removes. Step 2
+# above installs the plugin, so this check comes after it.
+if CLAUDE_CONFIG_DIR="$CONFIG_DIR" python3 "$PLUGIN_DIR/hooks/plugin_beacon.py" --installed 2>/dev/null | grep -qx 'installed'; then
+  echo "  Skipped: the toolkit plugin registers its own MCP servers."
+elif [ -n "$CLAUDE_BIN" ] && [ -f "$PLUGIN_DIR/.mcp.json" ]; then
   # Guard against set -e: a Python exception here (bad CLAUDE_BIN, malformed
   # .mcp.json) must not abort the installer and skip Steps 4-5, which don't
   # depend on MCP registration. Matches the || pattern used in Step 2.
@@ -960,6 +983,14 @@ echo ""
 echo "Step 4: Creating slash-command pointers..."
 SKILLS_DIR="$CONFIG_DIR/skills"
 mkdir -p "$SKILLS_DIR"
+# Once the plugin's session start is proven here, the plugin delivers these
+# skills and the migration retires the pointers. Writing them again only put
+# every skill in the list twice until the next session start.
+PLUGIN_SERVES_SKILLS=""
+if CLAUDE_CONFIG_DIR="$CONFIG_DIR" python3 "$PLUGIN_DIR/hooks/plugin_beacon.py" --proven 2>/dev/null | grep -qx 'session-start'; then
+  PLUGIN_SERVES_SKILLS=1
+  echo "  Skipped: the toolkit plugin provides these skills on this machine."
+fi
 
 # True only if file $1 is exactly the toolkit's pointer to skill $2. Anything
 # else may be a skill the builder wrote, even one that mentions a toolkit path.
@@ -980,6 +1011,7 @@ PYEOF
 
 count=0
 for skill_dir in "$PLUGIN_DIR/skills"/*/; do
+  [ -n "$PLUGIN_SERVES_SKILLS" ] && break
   skill=$(basename "$skill_dir")
   dest="$SKILLS_DIR/$skill"
   src="$skill_dir/SKILL.md"
