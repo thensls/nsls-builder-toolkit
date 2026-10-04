@@ -8,6 +8,8 @@ description: >-
 
 Run the NSLS Builder Toolkit onboarding skill with the Skill tool:
 `Skill(nsls-builder-toolkit:nsls-setmeup)`. On an install where that name isn't
-found, use `Skill(nsls-setmeup)`. If neither loads, read
-`~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-setmeup/SKILL.md` and
-follow it.
+found, use `Skill(nsls-setmeup)`. If neither loads, read the skill file and follow it:
+`${CLAUDE_PLUGIN_ROOT}/skills/nsls-setmeup/SKILL.md` on a plugin install (Claude Code
+fills in that path). Otherwise use
+`$CLAUDE_CONFIG_DIR/local-plugins/nsls-builder-toolkit/skills/nsls-setmeup/SKILL.md`,
+where `$CLAUDE_CONFIG_DIR` defaults to `~/.claude`.
