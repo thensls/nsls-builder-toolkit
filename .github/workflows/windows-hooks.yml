@@ -38,6 +38,9 @@ jobs:
       - name: Parse every hook script under PowerShell 7
         shell: pwsh
         run: ./hooks/tests/windows/parse-hooks.ps1
+      - name: install.ps1 finds the claude CLI a Store-installed Claude app hides, under Windows PowerShell 5.1
+        shell: powershell
+        run: ./hooks/tests/windows/install-find-cli.ps1
       - name: The hook's Python step runs, and says so when it cannot, under the exact settings.json command (PS 5.1)
         shell: powershell
         run: ./hooks/tests/windows/shim-python-step.ps1

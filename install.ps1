@@ -483,14 +483,24 @@ if (-not $ClaudeBin) {
 # (confirmed on a real Windows box; also try the -vm variant). Not on PATH and
 # not in the list above, which is why Steps 3 / 3.5 were silently skipping.
 # Pick the highest version.
+# The Microsoft Store app keeps the real copy under its package's LocalCache:
+# a Store (MSIX) install virtualises %APPDATA%\Claude for the app alone, so
+# from this shell the APPDATA path is empty and every run said "Could not find
+# the 'claude' CLI" and skipped Steps 3 and 3.5 (PC test 4, 2026-10-03). Same
+# search as session-start.py's _find_claude: both roots, highest version wins.
 if (-not $ClaudeBin) {
-    foreach ($sub in @('claude-code', 'claude-code-vm')) {
-        $glob = Join-Path $env:APPDATA "Claude\$sub\*\claude.exe"
-        $cand = Get-ChildItem -Path $glob -ErrorAction SilentlyContinue |
-                Sort-Object -Property @{ Expression = { try { [version]$_.Directory.Name } catch { [version]'0.0.0' } } } |
-                Select-Object -Last 1
-        if ($cand) { $ClaudeBin = $cand.FullName; break }
+    $roots = @(Join-Path $env:APPDATA 'Claude')
+    $roots += @(Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA 'Packages\Claude_*') -Directory -ErrorAction SilentlyContinue |
+                ForEach-Object { Join-Path $_.FullName 'LocalCache\Roaming\Claude' })
+    $cands = foreach ($root in $roots) {
+        foreach ($sub in @('claude-code', 'claude-code-vm')) {
+            Get-ChildItem -Path (Join-Path $root "$sub\*\claude.exe") -ErrorAction SilentlyContinue
+        }
     }
+    $cand = $cands |
+            Sort-Object -Property @{ Expression = { try { [version]$_.Directory.Name } catch { [version]'0.0.0' } } } |
+            Select-Object -Last 1
+    if ($cand) { $ClaudeBin = $cand.FullName }
 }
 
 # --- Step 2: Enable plugin + register hooks in settings.json ---
