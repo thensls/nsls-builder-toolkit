@@ -100,8 +100,16 @@ ps_rendered = (ps_notice.group(1).replace("$listed", "/brainstorm, /gws")
                .replace("$($names[0])", "brainstorm").replace('`"', '"')) if ps_notice else None
 check("and named each session in the same words as on Mac", ps_rendered == out.getvalue().strip(),
       f"({ps_rendered!r} vs {out.getvalue().strip()!r})")
-for name, text in (("session-start.ps1", src), ("install.ps1", inst)):
-    check(f"{name} is ASCII-only", all(ord(c) < 128 for c in text))
+# Every .ps1 in the repo, not two named files: Windows PowerShell 5.1 reads a
+# BOM-less script as ANSI, so a stray UTF-8 character (an em dash in a comment
+# arrived this way in #211) is mis-decoded on a builder's PC.
+_repo = Path(__file__).resolve().parents[2]
+for _ps1 in sorted(_repo.rglob("*.ps1")):
+    if ".git" in _ps1.parts:
+        continue
+    _bad = [(n, l.strip()[:60]) for n, l in enumerate(_ps1.read_text(encoding="utf-8").splitlines(), 1)
+            if any(ord(c) >= 128 for c in l)]
+    check(f"{_ps1.relative_to(_repo)} is ASCII-only", not _bad, f"(first: line {_bad[0][0]}: {_bad[0][1]!r})" if _bad else "")
 
 # The pattern, from the script's own literals. .NET's \z is Python's \Z.
 pieces = re.findall(r"'((?:[^']|'')*)'", re.search(r"\$pattern = (.*?)\n\s*return", fn or "", re.S).group(1)) if fn else []
