@@ -111,7 +111,10 @@ function Invoke-Native {
     param([string]$Exe, [string[]]$CmdArgs)
     $prev = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { $out = (& $Exe @CmdArgs 2>&1 | Out-String) } catch { $out = '' }
+    # ForEach-Object { "$_" } turns each stderr ErrorRecord back into git's own line. Without
+    # it, Windows PowerShell 5.1 renders stderr as a NativeCommandError dump ("+ CategoryInfo
+    # ..."), so a builder saw PowerShell noise instead of git's message (PC Test 4).
+    try { $out = (& $Exe @CmdArgs 2>&1 | ForEach-Object { "$_" } | Out-String) } catch { $out = '' }
     finally { $ErrorActionPreference = $prev }
     return $out.Trim()
 }
@@ -440,6 +443,7 @@ if (Test-Path (Join-Path $PluginDir '.git')) {
         Write-Host "  WARNING: couldn't download the update, so your toolkit is UNCHANGED (still the version you had)."
         ($updOut -split "`n" | Select-Object -Last 3) | ForEach-Object { Write-Host "    $_" }
         Write-Host "  Check your internet connection, then re-run this installer."
+        if ($env:NSLS_TOOLKIT_BRANCH) { Write-Host "  (You set NSLS_TOOLKIT_BRANCH=$($env:NSLS_TOOLKIT_BRANCH): check that branch exists.)" }
     } else {
         $updOut = Invoke-Native 'git' @('-C', $PluginDir, 'reset', '--hard', "origin/$RepoBranch", '--quiet')
         if ($LASTEXITCODE -ne 0) {
