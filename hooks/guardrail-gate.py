@@ -1557,7 +1557,14 @@ def main():
         allow()
 
     try:
-        payload = json.load(sys.stdin)
+        # Bytes, decoded as UTF-8 here. json.load(sys.stdin) used the ANSI code
+        # page on Windows: a user folder with an accented letter came out
+        # garbled, so the repo lookup missed and the gate allowed; a byte
+        # cp1252 has no character for (in an emoji, say) raised, and the gate
+        # allowed.
+        raw = getattr(sys.stdin, "buffer", None)
+        raw = raw.read() if raw is not None else sys.stdin.read().encode("utf-8")
+        payload = json.loads(raw.decode("utf-8", "replace"))
     except Exception:
         allow()
 
