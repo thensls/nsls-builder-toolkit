@@ -3,8 +3,8 @@
 NSLS/Society brand PowerPoint creator.
 
 Usage:
-  echo '{"slides":[...]}' | python3 pptx_creator.py --output /tmp/out.pptx
-  python3 pptx_creator.py --input slides.json --output /tmp/out.pptx
+  echo '{"slides":[...]}' | python3 pptx_creator.py --brand society --output /tmp/out.pptx
+  python3 pptx_creator.py --brand nsls --input slides.json --output /tmp/out.pptx
 
 Input JSON schema:
   {
@@ -611,10 +611,10 @@ def main():
     )
     parser.add_argument("--input",  "-i", help="JSON input file (default: stdin)")
     parser.add_argument("--output", "-o", required=True, help="Output .pptx path")
-    parser.add_argument("--brand", "-b", choices=["society", "nsls"], default="society",
+    parser.add_argument("--brand", "-b", choices=["society", "nsls"], required=True,
                         help="Brand: 'society' (Cigars+Inter, cream/yellow) or 'nsls' (Lexend Deca+Avenir, navy/teal/gold)")
     parser.add_argument("--pdf", action="store_true",
-                        help="Also export a PDF via Keynote (fonts render correctly everywhere)")
+                        help="Mac only: also export a PDF via Keynote (fonts render correctly everywhere)")
     args = parser.parse_args()
 
     set_brand(args.brand)
