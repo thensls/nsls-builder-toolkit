@@ -30,3 +30,6 @@ if ($out -notmatch "couldn't find remote ref no-such-branch") { $fail += "git's 
 if ($out -match 'NativeCommandError|CategoryInfo|FullyQualifiedErrorId') { $fail += 'output is a PowerShell error dump' }
 if ($fail) { $fail | ForEach-Object { Write-Host "FAIL: $_" }; exit 1 }
 Write-Host 'PASS: Invoke-Native returns git''s own message'
+# Explicit: the deliberately failed fetch left `$LASTEXITCODE` at 128, and the CI
+# shell wrapper would report that as this step's result.
+exit 0
