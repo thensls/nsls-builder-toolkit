@@ -50,6 +50,9 @@ jobs:
       - name: Collector evidence silences the skill hook, under Windows PowerShell 5.1
         shell: powershell
         run: ./hooks/tests/windows/collector-evidence.ps1
+      - name: The session that updates the hook runs the new copy, not the old one, under Windows PowerShell 5.1
+        shell: powershell
+        run: ./hooks/tests/windows/rerun-after-update.ps1
       - name: A clean fork catches itself up; nothing of theirs, no operation in progress, no merge setting or hook changes that, under Windows PowerShell 5.1
         shell: powershell
         run: ./hooks/tests/windows/fork-ff-smoke.ps1
