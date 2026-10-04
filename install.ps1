@@ -87,9 +87,27 @@ function Test-OwnPointer {
     return [regex]::IsMatch($t, $pattern)
 }
 
+# Whole-file swap: write beside the target, then move it into place. Writing in
+# place meant an install stopped mid-write left a truncated settings.json.
 function Write-TextNoBom {
     param([string]$Path, [string]$Content)
-    [System.IO.File]::WriteAllText($Path, $Content, $Utf8NoBom)
+    $tmp = "$Path.nsls-tmp"
+    [System.IO.File]::WriteAllText($tmp, $Content, $Utf8NoBom)
+    Move-Item -Force -LiteralPath $tmp -Destination $Path
+}
+
+# settings.json is UTF-8 with no BOM, and Windows PowerShell 5.1 reads a
+# BOM-less file as ANSI unless told otherwise. Any non-ASCII text Claude Code
+# had saved there (a folder under an accented user name, a permission rule) was
+# read as mojibake and written back that way, for good, on every re-run. A copy
+# of the file as it was goes beside it first, because this rewrites it whole.
+function Read-SettingsJson {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return [pscustomobject]@{} }
+    Copy-Item -Force -LiteralPath $Path -Destination "$Path.pre-nsls-install"
+    $parsed = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($null -eq $parsed) { return [pscustomobject]@{} }
+    return $parsed
 }
 
 # Add a directory to the persistent user PATH (and this session), idempotently.
@@ -556,11 +574,7 @@ $Proven = @(Get-BeaconAnswer '--proven')
 $ssCmd = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$HooksDir\session-start.ps1`""
 $ptCmd = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$HooksDir\skill-event.ps1`""
 
-if (Test-Path $Settings) {
-    $cfg = Get-Content $Settings -Raw | ConvertFrom-Json
-} else {
-    $cfg = [pscustomobject]@{}
-}
+$cfg = Read-SettingsJson $Settings
 
 # No `nsls-builder-toolkit@local` key. It named a marketplace that does not
 # exist, so it never enabled anything; what it did do was look like a second
@@ -573,14 +587,24 @@ if (-not ($cfg.PSObject.Properties.Name -contains 'hooks') -or $null -eq $cfg.ho
 
 # Drop any prior NSLS entries for an event (matched by script filename) so
 # re-running never duplicates and stale registrations get replaced; non-NSLS
-# hooks are kept. @(...) forces an array (PS unrolls a single match to a scalar).
+# hooks are kept. Entry by entry, not group by group: a builder's own hook in
+# the same matcher group as ours used to go with it, on every re-install. A
+# group left with no entries is dropped. @(...) forces an array (PS unrolls a
+# single match to a scalar).
 function Without-Matching {
     param($EventArray, [string]$Needle)
     if ($null -eq $EventArray) { return @() }
-    @($EventArray | Where-Object {
-        $cmds = (@($_.hooks | ForEach-Object { $_.command })) -join "`n"
-        $cmds -notlike "*$Needle*"
-    })
+    $kept = @()
+    foreach ($group in @($EventArray)) {
+        $entries = @($group.hooks)
+        $rest = @($entries | Where-Object { "$($_.command)" -notlike "*$Needle*" })
+        if ($rest.Count -eq $entries.Count) { $kept += $group; continue }
+        if ($rest.Count -gt 0) {
+            $group.hooks = $rest
+            $kept += $group
+        }
+    }
+    @($kept)
 }
 
 # SessionStart timeout 90s: must clear git pull + a replayed ping + the live ping
