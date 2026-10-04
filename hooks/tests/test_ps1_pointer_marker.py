@@ -61,7 +61,7 @@ check("session-start.ps1 gates the overwrite on it, for either toolkit's copy",
       "if (Test-OwnPointer -Text $existing -OwnPath $tkPath) { $ours = $true }" in src
       and "if (-not $ours) { $script:OwnSkills[$skillFolder.Name] = $true; continue }" in src
       and '$tkPath = "local-plugins/$tk/skills/$($skillFolder.Name)/SKILL.md"' in src)
-calls = re.findall(r"^\$null = Sync-Pointers -PluginDir \$(\w+)$", src, re.M)
+calls = re.findall(r"^\$null = Sync-Pointers -PluginDir \$(\w+)\b", src, re.M)
 check("the personal toolkit syncs first, so it wins a shared name",
       calls == ["PersonalDir", "BuilderDir"], f"({calls})")
 check("in the same order as POINTER_PRECEDENCE in session-start.py",

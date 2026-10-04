@@ -629,8 +629,28 @@ function Test-OwnPointer {
     return [regex]::IsMatch($t, $pattern)
 }
 
+# Installed AND not switched off by the builder: same rule as org_plugin_active()
+# in session-start.py. A disabled plugin can't deliver skills, so that builder
+# keeps the pointer files.
+function Test-OrgPluginActive {
+    try {
+        $reg = Get-Content (Join-Path $ClaudeDir 'plugins\installed_plugins.json') -Raw -ErrorAction Stop | ConvertFrom-Json
+        $installed = @($reg.plugins.PSObject.Properties.Name | Where-Object { $_ -like 'nsls-builder-toolkit@*' }).Count -gt 0
+    } catch { return $false }
+    if (-not $installed) { return $false }
+    try {
+        $cfg = Get-Content (Join-Path $ClaudeDir 'settings.json') -Raw -ErrorAction Stop | ConvertFrom-Json
+        foreach ($prop in $cfg.enabledPlugins.PSObject.Properties) {
+            if ($prop.Name -like 'nsls-builder-toolkit@*' -and $prop.Value -eq $false) { return $false }
+        }
+    } catch { }
+    return $true
+}
+
 function Sync-Pointers {
-    param([string]$PluginDir)
+    # -NoteOnly: write nothing, only note the builder's own skills that sit where
+    # a toolkit pointer would (the notice below still needs them).
+    param([string]$PluginDir, [switch]$NoteOnly)
     $skillsRoot = Join-Path $PluginDir 'skills'
     if (-not (Test-Path $skillsRoot)) { return 0 }
     $count = 0
@@ -664,6 +684,7 @@ function Sync-Pointers {
             # Not a pointer: the builder's own skill, and the one that runs.
             if (-not $ours) { $script:OwnSkills[$skillFolder.Name] = $true; continue }
         }
+        if ($NoteOnly) { continue }
         if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
         $pointerPath = "~/.claude/$ownPath"
         $pointer = @"
@@ -694,7 +715,12 @@ $PointerPrecedence = @('nsls-personal-toolkit', 'nsls-builder-toolkit')
 $script:PointerWritten = @{}
 $script:OwnSkills = @{}
 $null = Sync-Pointers -PluginDir $PersonalDir
-$null = Sync-Pointers -PluginDir $BuilderDir
+# Once the toolkit is an active plugin, the plugin delivers its skills and the
+# migration retires these pointers. Writing them again (as session-start.py has
+# long since stopped doing) put every skill in the list twice, and in the
+# session where both this shim and the plugin ran, the migration's second pass
+# removed 58 pointers this had just rewritten (PC test, 2026-10-03).
+$null = Sync-Pointers -PluginDir $BuilderDir -NoteOnly:(Test-OrgPluginActive)
 # Same notice as notice_own_skills() in session-start.py.
 if ($script:OwnSkills.Count -gt 0) {
     $names = @($script:OwnSkills.Keys | Sort-Object)
