@@ -19,10 +19,10 @@ def check(name, cond):
 
 before = PS1.index("$ownBefore = (Get-FileHash")
 update = PS1.index("    Update-Checkout -Dir $dir")
-rerun = PS1.index("if ($ownBefore -and $env:NSLS_SESSION_START_RERUN -ne '1')")
+rerun = PS1.index("if ($ownBefore -and -not $isRerun)")
 check("the script is hashed before the update and compared after it", before < update < rerun)
 check("the guard is set before the new copy starts, so it can never start a third",
-      PS1.index("$env:NSLS_SESSION_START_RERUN = '1'") < PS1.index("[System.Diagnostics.Process]::Start($psi)", rerun))
+      PS1.index('$env:NSLS_SESSION_START_RERUN = "$PID"') < PS1.index("[System.Diagnostics.Process]::Start($psi)", rerun))
 check("the new copy's output passes through as raw bytes",
       "$proc.StandardOutput.BaseStream.CopyTo($stdout)" in PS1)
 check("this copy stops after the new one finishes", "exit $proc.ExitCode" in PS1)
@@ -33,7 +33,11 @@ check("a copy that has started is never followed by this one doing the work agai
       "$started = $true" in PS1 and "if ($started) { exit 0 }" in PS1
       and PS1.index("$started = $true") > PS1.index("[System.Diagnostics.Process]::Start($psi)", PS1.index("$started = $false")))
 check("the re-run copy does not pull again",
-      "if ($env:NSLS_SESSION_START_RERUN -ne '1') {\n    foreach ($dir in @($BuilderDir, $PersonalDir))" in PS1)
+      "if (-not $isRerun) {\n    foreach ($dir in @($BuilderDir, $PersonalDir))" in PS1)
+check("the marker only counts when it names this process's parent, so an inherited one cannot stop updates",
+      '$isRerun = ("$parentPid" -eq $env:NSLS_SESSION_START_RERUN)' in PS1
+      and "if (-not $isRerun) { Remove-Item Env:NSLS_SESSION_START_RERUN" in PS1
+      and PS1.index("$isRerun = $false") < PS1.index("Update-Checkout -Dir $dir"))
 
 print()
 if failures:

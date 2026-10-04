@@ -234,21 +234,34 @@ function Update-Checkout {
 $ownBefore = $null
 if ($PSCommandPath) { try { $ownBefore = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash } catch { } }
 
+# The copy that starts a re-run sets this to its own process id. Only a process
+# whose parent has that id is the re-run; a value inherited from anywhere else
+# is dropped, so it can never stop a normal session from updating.
+$isRerun = $false
+if ($env:NSLS_SESSION_START_RERUN) {
+    try {
+        $parentPid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop).ParentProcessId
+        $isRerun = ("$parentPid" -eq $env:NSLS_SESSION_START_RERUN)
+    } catch { }
+    if (-not $isRerun) { Remove-Item Env:NSLS_SESSION_START_RERUN -ErrorAction SilentlyContinue }
+}
+
 # The re-run copy skips the update: this session already pulled, and pulling
 # again would only repeat the fetches and any "frozen" warning.
-if ($env:NSLS_SESSION_START_RERUN -ne '1') {
+if (-not $isRerun) {
     foreach ($dir in @($BuilderDir, $PersonalDir)) {
         if (-not (Test-Path $dir)) { continue }
         Update-Checkout -Dir $dir
     }
 }
 
-if ($ownBefore -and $env:NSLS_SESSION_START_RERUN -ne '1') {
+if ($ownBefore -and -not $isRerun) {
     $ownAfter = $null
     try { $ownAfter = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash } catch { }
     if ($ownAfter -and $ownAfter -ne $ownBefore) {
-        # Inherited by the new copy, so it can never start a third.
-        $env:NSLS_SESSION_START_RERUN = '1'
+        # Inherited by the new copy, which checks it names its parent, so it
+        # can never start a third.
+        $env:NSLS_SESSION_START_RERUN = "$PID"
         $started = $false
         try {
             $psi = New-Object System.Diagnostics.ProcessStartInfo

@@ -13,7 +13,7 @@ function Check([string]$Label, [bool]$Cond, [string]$Detail = '') {
     if ($Cond) { Write-Host "ok   $Label" } else { Write-Host "FAIL $Label"; if ($Detail) { Write-Host "     saw: $Detail" }; $script:failures++ }
 }
 function TGit { $d = $args[0]; $rest = @($args | Select-Object -Skip 1); & git -C $d @rest 2>$null | Out-Null; if ($LASTEXITCODE -ne 0) { throw "git $($rest -join ' ') failed in $d" } }
-function Run-Hook([string]$HomeDir) {
+function Run-Hook([string]$HomeDir, [string]$Inherited = '') {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = 'powershell.exe'
     $hook = Join-Path $HomeDir '.claude\local-plugins\nsls-builder-toolkit\hooks\session-start.ps1'
@@ -22,6 +22,7 @@ function Run-Hook([string]$HomeDir) {
     $psi.EnvironmentVariables['USERPROFILE'] = $HomeDir
     $psi.EnvironmentVariables['NSLS_COLLECTOR_OPTOUT'] = '1'
     $psi.EnvironmentVariables.Remove('NSLS_SESSION_START_RERUN')
+    if ($Inherited) { $psi.EnvironmentVariables['NSLS_SESSION_START_RERUN'] = $Inherited }
     $p = [System.Diagnostics.Process]::Start($psi)
     $e = $p.StandardError.ReadToEndAsync(); $o = $p.StandardOutput.ReadToEnd(); $p.WaitForExit(); $null = $e.Result
     return $o
@@ -57,6 +58,14 @@ try {
 
     $out = Run-Hook $homeDir
     Check 'with nothing new, it runs once, as before' (([regex]::Matches($out, 'NSLS-VERSION-B')).Count -eq 1) $out
+
+    # A marker inherited from elsewhere is not this session's re-run: it must
+    # neither stop the update nor stop the new copy running.
+    Set-Content -Path $hookPath -Value ($real + "`r`nWrite-Output 'NSLS-VERSION-C'`r`n") -Encoding ASCII -NoNewline
+    TGit $seed commit --quiet -am c
+    TGit $seed push --quiet $bare main
+    $out = Run-Hook $homeDir '1'
+    Check 'an inherited marker does not stop the update or the re-run' ((([regex]::Matches($out, 'NSLS-VERSION-C')).Count -eq 1) -and -not ($out -match 'NSLS-VERSION-B')) $out
 } finally {
     Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
 }
