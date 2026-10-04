@@ -27,6 +27,7 @@ New-Item -ItemType Directory -Path $HooksDir, (Join-Path $cache 'hooks') -Force 
 Copy-Item (Join-Path $repo 'hooks\plugin_beacon.py') $HooksDir
 $PyExe = (Get-Command python).Source
 
+[System.IO.File]::WriteAllText((Join-Path $cache '.mcp.json'), '{"mcpServers": {}}', (New-Object System.Text.UTF8Encoding $false))
 $reg = @{ plugins = @{ 'nsls-builder-toolkit@nsls-toolkit' = @(@{ installPath = $cache }) } } | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText((Join-Path $ConfigDir 'plugins\installed_plugins.json'), $reg, $utf8)
 $settings = Join-Path $ConfigDir 'settings.json'

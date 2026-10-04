@@ -44,6 +44,7 @@ def machine(tmp, prove, installed=True):
     cache.mkdir(parents=True)
     (cfg / "settings.json").write_text(json.dumps({"enabledPlugins": {}, "hooks": {}}))
     if installed:
+        (cache.parent / ".mcp.json").write_text('{"mcpServers": {}}')
         (cfg / "plugins" / "installed_plugins.json").write_text(json.dumps(
             {"plugins": {"nsls-builder-toolkit@nsls-toolkit": [{"installPath": str(cache.parent)}]}}))
     if prove:
@@ -96,6 +97,15 @@ with tempfile.TemporaryDirectory() as tmp:
     cfg = machine(tmp, ["session-start"])
     (cfg / "settings.json").write_text("{not json")
     check("unreadable settings prove nothing", ask(cfg, "--proven") == [])
+with tempfile.TemporaryDirectory() as tmp:
+    cfg = machine(tmp, ["session-start"])
+    root = cfg / "plugins" / "cache" / "nsls-toolkit" / "nsls-builder-toolkit" / "3.16.5"
+    (root / ".mcp.json").unlink()
+    check("a plugin copy without its .mcp.json is not counted as serving the MCP servers",
+          ask(cfg, "--installed") == [])
+    shutil.rmtree(root)
+    check("a registry entry whose copy is gone proves nothing", ask(cfg, "--proven") == [] and
+          ask(cfg, "--installed") == [])
 
 print("\ninstall.sh's settings step, run for real")
 lines = (REPO / "install.sh").read_text().splitlines()
@@ -162,12 +172,15 @@ with tempfile.TemporaryDirectory() as tmp:
     inst = cfg / "plugins" / "cache" / "nsls-toolkit" / "nsls-builder-toolkit" / "3.16.5"
     (cfg / "plugins" / "installed_plugins.json").write_text(json.dumps(
         {"plugins": {"nsls-builder-toolkit@nsls-toolkit": [{"installPath": str(inst)}]}}))
+    (inst / ".mcp.json").write_text('{"mcpServers": {}}')
     check("and says installed with it", ask() == "installed")
 check("install.sh skips its MCP step once the plugin is installed",
       'python3 "$PLUGIN_DIR/hooks/plugin_beacon.py" --installed' in sh)
 skill = (REPO / "skills" / "signal-setup" / "SKILL.md").read_text()
 check("/signal-setup no longer adds a user-scope signal beside the plugin's",
-      "If it is, the plugin registers signal itself: do **not** add a user-scope entry" in skill)
+      "If it is enabled, the plugin registers signal itself: do **not** add a user-scope entry" in skill)
+check("but a disabled plugin is not treated as registering it",
+      "If it is installed but disabled, it registers nothing" in skill)
 
 print()
 if failures:

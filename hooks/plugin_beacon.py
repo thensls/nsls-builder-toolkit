@@ -187,7 +187,11 @@ def active() -> bool:
     settings cannot be read the answer is no: a re-added shim costs a duplicate
     for one session, a skipped one costs the hooks entirely.
     """
-    if not _installed_root():
+    root = _installed_root()
+    # The registry can outlive the copy it names: a removed cache directory
+    # runs no hooks and registers no servers, whatever installed_plugins.json
+    # still says.
+    if not root or not Path(root).is_dir():
         return False
     try:
         settings = json.loads((_CONFIG_DIR / "settings.json").read_text(encoding="utf-8-sig"))
@@ -202,6 +206,11 @@ def active() -> bool:
     except Exception:
         return False
     return True
+
+
+def serves_mcp() -> bool:
+    """True when the active plugin copy carries the MCP config it registers."""
+    return active() and (Path(_installed_root()) / ".mcp.json").is_file()
 
 
 def proven() -> list:
@@ -227,7 +236,8 @@ if __name__ == "__main__":
     elif sys.argv[1:] == ["--installed"]:
         # The plugin registers its own MCP servers; a user-scope copy beside it
         # is the duplicate the migration removes. A disabled plugin registers
-        # nothing, so it does not count.
-        if active():
+        # nothing, so it does not count, and nor does a copy without the
+        # .mcp.json that declares the servers.
+        if serves_mcp():
             print("installed")
 
