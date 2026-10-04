@@ -35,6 +35,9 @@ jobs:
       - name: Parse every hook script under Windows PowerShell 5.1
         shell: powershell
         run: ./hooks/tests/windows/parse-hooks.ps1
+      - name: The skill-event hook proves itself from a Windows path, so stage B can finish on a PC
+        shell: pwsh
+        run: python hooks/tests/test_skill_event_beacon_windows.py
       - name: Parse every hook script under PowerShell 7
         shell: pwsh
         run: ./hooks/tests/windows/parse-hooks.ps1

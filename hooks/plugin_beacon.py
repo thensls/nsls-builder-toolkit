@@ -25,6 +25,7 @@ plugin hook fired" are genuinely different claims.
 
 import json
 import os
+import re
 import time
 import tempfile
 from pathlib import Path
@@ -141,6 +142,19 @@ def record(hook: str, running_file) -> bool:
         return False
 
 
+def _native(path: str, windows=None) -> str:
+    """A Git Bash path (/c/Users/...) the way Windows spells it (C:/Users/...).
+
+    skill-event.sh is bash, and a bash `pwd` on a PC answers in MSYS form, which
+    Windows Python resolves to C:\\c\\Users\\... and never finds.
+    """
+    if windows is None:
+        windows = os.name == "nt"
+    if windows and re.match(r"^/[A-Za-z](/|$)", path):
+        return path[1].upper() + ":" + (path[2:] or "/")
+    return path
+
+
 def fired(hook: str) -> bool:
     """True when the PLUGIN copy of this hook has been seen running here.
 
@@ -160,7 +174,7 @@ def fired(hook: str) -> bool:
         data = json.loads((BEACON_DIR / f"{hook}.json").read_text(encoding="utf-8"))
         if not isinstance(data, dict) or data.get("hook") != hook:
             return False
-        recorded = str(data.get("root") or "")
+        recorded = _native(str(data.get("root") or ""))
         if not recorded:
             return False
         root = Path(recorded).resolve()
