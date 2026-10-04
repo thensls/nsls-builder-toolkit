@@ -26,7 +26,7 @@ and upload them to Google Drive as native Google Slides.
 - **NSLS** — the honor society brand (nsls.org). Navy/teal/gold, Lexend Deca + Avenir.
 - **Society** — the new brand (Society by the NSLS). Cream/yellow, HW Cigars + Inter.
 
-Pass `--brand nsls` or `--brand society` to `pptx_creator.py`.
+Pass `--brand nsls` or `--brand society` to `pptx_creator.py`. There is no default: the script refuses to run without one, so never guess the brand.
 
 **Pipeline** (mirrors the `.docx` → Google Doc workflow exactly):
 1. Claude generates slide content as JSON
@@ -38,7 +38,7 @@ Pass `--brand nsls` or `--brand society` to `pptx_creator.py`.
 
 ## Brand Tokens
 
-### Society Brand (default — `--brand society`)
+### Society Brand (`--brand society`)
 
 #### Colors
 
@@ -60,7 +60,7 @@ Pass `--brand nsls` or `--brand society` to `pptx_creator.py`.
 | Logotype  | HW Cigars SemiBold| —     |
 | Body      | Inter Regular     | 10pt  |
 
-**Fonts**: HW Cigars — purchased from Heavyweight type foundry, installed at `~/Library/Fonts/`. Inter — free Google font.
+**Fonts**: HW Cigars — purchased from Heavyweight type foundry, installed on the machine (see Fonts below). Inter — free Google font.
 
 **Valid `bg` values**: `cream`, `yellow`, `lavender`, `pink`, `green`, `taupe`, `espresso`
 
@@ -159,7 +159,7 @@ Large centered quote in Cigars Medium on brand color background.
 
 ### Step 1 — Generate JSON content
 
-Claude drafts the slide structure as JSON. Work with Kevin to define:
+Claude drafts the slide structure as JSON. Work with the builder to define:
 - Number and order of slides
 - Layout for each slide
 - Specific copy per slide
@@ -194,7 +194,7 @@ repairing and re-run the toolkit installer for them. See "Python environment" un
   reopen, say "back") and preflight again. Never run `install.sh` on Windows.
 
 ```bash
-# Society brand (default)
+# Society brand
 echo '<json>' | ~/.local/bin/nsls-python \
   ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
   --brand society --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx
@@ -204,7 +204,7 @@ echo '<json>' | ~/.local/bin/nsls-python \
   ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
   --brand nsls --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx
 
-# Add --pdf for font-safe PDF export (works with either brand)
+# Mac only: add --pdf for a font-safe PDF export (needs Keynote; works with either brand)
 echo '<json>' | ~/.local/bin/nsls-python \
   ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
   --brand society --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx --pdf
@@ -219,7 +219,8 @@ echo '<json>' | ~/.local/bin/nsls-python \
 | PDF in Google Drive viewer | ✓ embedded by Keynote | ✓ |
 
 **Use `--pdf` when sharing a link for viewing/presenting.** The PPTX is for editing.
-The `--pdf` flag uses Keynote to render and export — requires Keynote installed (it is).
+**`--pdf` is Mac-only:** it uses Keynote to render and export. On Windows, or a Mac without
+Keynote, skip `--pdf` and share the Google Slides link instead.
 
 ### Step 3 — Pick the Drive folder (optional)
 
@@ -294,13 +295,16 @@ rewrites the launcher. Manual repair, if you need one:
 
 ### Fonts
 
-HW Cigars fonts must be installed at `~/Library/Fonts/`:
+HW Cigars fonts must be installed on the machine that builds the deck:
 - `HW Cigars Medium.otf`
 - `HW Cigars SemiBold.otf`
 
+On a Mac they go in `~/Library/Fonts/` (below). On Windows, right-click each `.otf` and choose
+**Install**. Without them, Society decks fall back to a default font; NSLS decks don't use them.
+
 Source files: `/tmp/nsls-cigars-font/HW Cigars/Opentype/` (session temp; back up to permanent location).
 
-To reinstall:
+To reinstall on a Mac:
 ```bash
 cp "/path/to/HW Cigars Medium.otf" ~/Library/Fonts/
 cp "/path/to/HW Cigars SemiBold.otf" ~/Library/Fonts/
@@ -314,7 +318,7 @@ Uses the toolkit's `gws` profile (`~/.config/gws-profiles/nsls-gdocs-skill`), sh
 ## Example: Full End-to-End Run
 
 ```bash
-# 1. Generate slides JSON (Claude produces this based on Kevin's brief)
+# 1. Generate slides JSON (Claude produces this from the builder's brief)
 cat > ~/nsls-deck-20260302-1405.json <<'JSON'
 {
   "slides": [
@@ -340,6 +344,7 @@ JSON
 # 2. Build .pptx
 ~/.local/bin/nsls-python \
   ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  --brand society \
   --input ~/nsls-deck-20260302-1405.json \
   --output ~/nsls-deck-20260302-1405.pptx
 
