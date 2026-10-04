@@ -59,6 +59,9 @@ jobs:
       - name: Collector bootstrap launches once, hidden, and stays out when installed or opted out (PS 5.1)
         shell: powershell
         run: ./hooks/tests/windows/collector-bootstrap.ps1
+      - name: Stage B retires only exact toolkit pointers and never deletes a builder skill, on a real PC
+        shell: pwsh
+        run: python hooks/tests/test_stage_b_keeps_builder_skills.py
       - name: A push through the PowerShell tool is judged by PowerShell's rules, on a real PC
         shell: pwsh
         run: python hooks/tests/test_gate_powershell_paths.py

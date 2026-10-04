@@ -1317,6 +1317,9 @@ def run_plugin_migration():
             # location at all, so on a PC — where the CLI is routinely off the
             # hook's PATH — stage A never found it and the plugin never installed.
             "_NSLS_FIND_CLAUDE": _find_claude,
+            # The exact-pointer test, so stage B retires only real toolkit
+            # pointers and never a skill a builder wrote.
+            "_NSLS_IS_OWN_POINTER": is_own_pointer,
         })
     except Exception:
         pass
