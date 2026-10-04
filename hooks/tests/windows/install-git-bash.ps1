@@ -2,7 +2,8 @@
 # It warned "Git Bash isn't callable from this shell ... the guardrails will
 # never fire" whenever Git's bin folder was off PATH, though Claude Code finds
 # Git Bash on its own and the hooks ran fine (PC test 4, 2026-10-03). The block
-# is lifted from install.ps1 between its own markers.
+# is lifted from install.ps1 between its own markers. A candidate must answer
+# a probe, so the positive cases use the runner's real Git for Windows.
 $ErrorActionPreference = 'Continue'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $src = Get-Content (Join-Path $repo 'install.ps1') -Raw
@@ -38,20 +39,28 @@ try {
     $r = Run-Block
     Check 'with no Git Bash anywhere, it warns' ($r.out -match "Git Bash isn't installed") $r.out
 
-    # Git for Windows installed, but its bin folder is not on PATH (the PC's case).
+    # Something at the path that is not a working bash does not count.
     $bash = Join-Path $root 'pf\Git\bin\bash.exe'
     New-Item -ItemType Directory -Path (Split-Path $bash) -Force | Out-Null
     Set-Content -Path $bash -Value 'stub'
     $r = Run-Block
+    Check 'a stub file where bash.exe should be still warns' ($r.out -match "Git Bash isn't installed") $r.out
+    Remove-Item $bash
+    New-Item -ItemType Directory -Path $bash -Force | Out-Null
+    $r = Run-Block
+    Check 'so does a folder named bash.exe' ($r.out -match "Git Bash isn't installed") $r.out
+
+    # The runner's real Git for Windows, with its bin folder off PATH (the PC's case).
+    $real = Join-Path $saved['ProgramFiles'] 'Git\bin\bash.exe'
+    if (-not (Test-Path $real)) { Check 'this runner has Git for Windows' $false $real }
+    [Environment]::SetEnvironmentVariable('ProgramFiles', $saved['ProgramFiles'], 'Process')
+    $r = Run-Block
     Check 'Git Bash in Program Files, off PATH: no warning' (-not ($r.out -match 'Warning')) $r.out
     Check 'and it says where it found it' ($r.out -match 'Git Bash: found at') $r.out
-    Remove-Item $bash
 
-    # CLAUDE_CODE_GIT_BASH_PATH pointing at a real file counts too.
-    $custom = Join-Path $root 'custom\bash.exe'
-    New-Item -ItemType Directory -Path (Split-Path $custom) -Force | Out-Null
-    Set-Content -Path $custom -Value 'stub'
-    [Environment]::SetEnvironmentVariable('CLAUDE_CODE_GIT_BASH_PATH', $custom, 'Process')
+    # CLAUDE_CODE_GIT_BASH_PATH pointing at a working bash counts too.
+    [Environment]::SetEnvironmentVariable('ProgramFiles', (Join-Path $root 'pf'), 'Process')
+    [Environment]::SetEnvironmentVariable('CLAUDE_CODE_GIT_BASH_PATH', $real, 'Process')
     $r = Run-Block
     Check 'CLAUDE_CODE_GIT_BASH_PATH is honoured' (-not ($r.out -match 'Warning')) $r.out
 } finally {

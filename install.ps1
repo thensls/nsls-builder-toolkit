@@ -174,7 +174,12 @@ if (-not $bashOk) {
     if ($env:ProgramFiles) { $places += (Join-Path $env:ProgramFiles 'Git\bin\bash.exe') }
     if (${env:ProgramFiles(x86)}) { $places += (Join-Path ${env:ProgramFiles(x86)} 'Git\bin\bash.exe') }
     if ($env:LOCALAPPDATA) { $places += (Join-Path $env:LOCALAPPDATA 'Programs\Git\bin\bash.exe') }
-    $foundBash = $places | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+    # A file at the path is not proof: a folder, a stub or a broken install
+    # would silence the warning with nothing able to run the hooks. Same
+    # sentinel probe as the PATH check above, tried one place at a time.
+    $foundBash = $places | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Where-Object {
+        try { (& $_ -c 'printf NSLS-BASH-OK' 2>$null) -eq 'NSLS-BASH-OK' } catch { $false }
+    } | Select-Object -First 1
     if ($foundBash) {
         $bashOk = $true
         Write-Host "Git Bash: found at $foundBash (Claude Code finds it there on its own)."
