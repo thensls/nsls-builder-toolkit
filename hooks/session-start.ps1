@@ -224,9 +224,73 @@ function Update-Checkout {
     }
 }
 
-foreach ($dir in @($BuilderDir, $PersonalDir)) {
-    if (-not (Test-Path $dir)) { continue }
-    Update-Checkout -Dir $dir
+# PowerShell parses this whole file before running a line of it, so when the
+# update below changes this script, everything after it would still run the OLD
+# code for the rest of the session. On the PC test (2026-10-03) the session that
+# pulled the quoting fix ran the broken copy and printed nothing; the fix only
+# took effect a session later, and "open a second session" is not something to
+# ask staff. So the file is hashed before the update and, if the update changed
+# it, the new copy is run once in this same session and this copy stops.
+$ownBefore = $null
+if ($PSCommandPath) { try { $ownBefore = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash } catch { } }
+
+# The copy that starts a re-run sets this to its own process id. Only a process
+# whose parent has that id is the re-run; a value inherited from anywhere else
+# is dropped, so it can never stop a normal session from updating.
+$isRerun = $false
+if ($env:NSLS_SESSION_START_RERUN) {
+    try {
+        $parentPid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop).ParentProcessId
+        $isRerun = ("$parentPid" -eq $env:NSLS_SESSION_START_RERUN)
+    } catch { }
+    if (-not $isRerun) { Remove-Item Env:NSLS_SESSION_START_RERUN -ErrorAction SilentlyContinue }
+}
+
+# The re-run copy skips the update: this session already pulled, and pulling
+# again would only repeat the fetches and any "frozen" warning.
+if (-not $isRerun) {
+    foreach ($dir in @($BuilderDir, $PersonalDir)) {
+        if (-not (Test-Path $dir)) { continue }
+        Update-Checkout -Dir $dir
+    }
+}
+
+if ($ownBefore -and -not $isRerun) {
+    $ownAfter = $null
+    try { $ownAfter = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash } catch { }
+    if ($ownAfter -and $ownAfter -ne $ownBefore) {
+        # Inherited by the new copy, which checks it names its parent, so it
+        # can never start a third.
+        $env:NSLS_SESSION_START_RERUN = "$PID"
+        $started = $false
+        try {
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = 'powershell.exe'
+            $psi.Arguments = ('-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $PSCommandPath)
+            $psi.UseShellExecute = $false
+            $psi.CreateNoWindow = $true
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $proc = [System.Diagnostics.Process]::Start($psi)
+            $started = $true
+            $errTask = $proc.StandardError.ReadToEndAsync()
+            # Bytes straight through: the new copy writes UTF-8 for the policy, and
+            # decoding it here would garble it through the console code page.
+            [Console]::Out.Flush()
+            $stdout = [Console]::OpenStandardOutput()
+            $proc.StandardOutput.BaseStream.CopyTo($stdout)
+            $stdout.Flush()
+            $proc.WaitForExit()
+            $null = $errTask.Result
+            exit $proc.ExitCode
+        } catch {
+            # Once the new copy has started it is doing this session's work, so a
+            # failure relaying its output must not let this copy do it all again
+            # (a second ping, a second policy). Only a copy that never started
+            # hands back to this one.
+            if ($started) { exit 0 }
+        }
+    }
 }
 
 # --- 1b. personal-toolkit forks: measured against NSLS, not against their own copy ---
