@@ -48,6 +48,7 @@ Safety properties:
 """
 
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -353,10 +354,14 @@ def _windows_cli():
 
 
 def _version_tuple(text):
-    try:
-        return tuple(int(x) for x in str(text).strip().split("."))
-    except ValueError:
-        return (0,)
+    """Numeric parts of a version, ignoring any suffix: 3.17.3-beta is (3, 17, 3)."""
+    parts = []
+    for piece in str(text).strip().split("."):
+        m = re.match(r"\d+", piece)
+        if not m:
+            break
+        parts.append(int(m.group()))
+    return tuple(parts) or (0,)
 
 
 # Cumulative wall-clock ceiling for this whole migration run.
@@ -823,6 +828,12 @@ def _remove_user_scope_signal():
     clean=False so the done-marker is withheld and the next session retries.
     """
     ok, out = _claude(["mcp", "get", "signal"], timeout=15)
+    if not ok and out in (_BUDGET_EXHAUSTED, _TIMED_OUT, _NOT_FOUND):
+        # We never got an answer: the run's time ran out, the CLI hung, or
+        # there is no CLI. That is not "absent", and reading it as absent let
+        # the permanent done marker go down with the user-scope entry still
+        # registered. Not clean; the next session asks again.
+        return False, False
     if not ok or "nsls-builder-toolkit" not in out:
         return False, True  # absent or not ours — nothing to migrate
     removed, _ = _claude(["mcp", "remove", "signal", "-s", "user"], timeout=15)

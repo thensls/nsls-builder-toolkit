@@ -124,6 +124,25 @@ with tempfile.TemporaryDirectory() as tmp:
     cfg, calls, g = run(tmp, installed="3.16.10", clone="3.16.9")
     check("the comparison is numeric (3.16.10 is newer than 3.16.9)", calls == [], f"({calls})")
 
+with tempfile.TemporaryDirectory() as tmp:
+    cfg, calls, g = run(tmp, installed="3.16.2", clone="3.17.3-beta")
+    check("a suffixed checkout version still counts as newer (3.17.3-beta > 3.16.2)",
+          calls[:1] == ["plugin update nsls-builder-toolkit@nsls-toolkit"], f"({calls})")
+
+print("\nstage B never takes 'no answer' for 'no signal entry'")
+with tempfile.TemporaryDirectory() as tmp:
+    cfg, script, log, roaming, local = machine(tmp)
+    g, saved = load(cfg, script, roaming, local, lambda: None)
+    try:
+        for out in (g["_BUDGET_EXHAUSTED"], g["_TIMED_OUT"], g["_NOT_FOUND"]):
+            g["_claude"] = lambda args, timeout, out=out: (False, out)
+            check(f"'{out}' leaves stage B not clean, so the done marker waits",
+                  g["_remove_user_scope_signal"]() == (False, False))
+        g["_claude"] = lambda args, timeout: (False, "No MCP server found with name: signal")
+        check("a real 'not registered' answer is still clean", g["_remove_user_scope_signal"]() == (False, True))
+    finally:
+        restore(saved)
+
 print("\nwhen the update itself fails")
 with tempfile.TemporaryDirectory() as tmp:
     cfg, calls, g = run(tmp, cli_fails=True)
