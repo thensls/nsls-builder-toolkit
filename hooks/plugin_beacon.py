@@ -174,3 +174,70 @@ def fired(hook: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def active() -> bool:
+    """True when the plugin is installed here and the builder has not disabled it.
+
+    The installers consult this before treating any evidence as current. A
+    beacon outlives the plugin it describes: after `claude plugin disable` (or
+    an uninstall that leaves the cache behind) the migration stops running and
+    no plugin hook fires, so a re-install that still skipped shims, pointers and
+    MCP entries on the old evidence left a machine with none of them. When the
+    settings cannot be read the answer is no: a re-added shim costs a duplicate
+    for one session, a skipped one costs the hooks entirely.
+    """
+    root = _installed_root()
+    # The registry can outlive the copy it names: a removed cache directory
+    # runs no hooks and registers no servers, whatever installed_plugins.json
+    # still says.
+    if not root or not Path(root).is_dir():
+        return False
+    try:
+        settings = json.loads((_CONFIG_DIR / "settings.json").read_text(encoding="utf-8-sig"))
+    except FileNotFoundError:
+        return True
+    except Exception:
+        return False
+    try:
+        for key, enabled in (settings.get("enabledPlugins") or {}).items():
+            if str(key).startswith(_PLUGIN + "@") and enabled is False:
+                return False
+    except Exception:
+        return False
+    return True
+
+
+def serves_mcp() -> bool:
+    """True when the active plugin copy carries the MCP config it registers."""
+    return active() and (Path(_installed_root()) / ".mcp.json").is_file()
+
+
+def proven() -> list:
+    """The hooks the installers may leave to the plugin: proven, and still active."""
+    if not active():
+        return []
+    return [h for h in _HOOKS if fired(h)]
+
+
+# For the installers: which hooks the plugin has already proven here, one per
+# line. They ask rather than re-implement fired(), so the two installers and
+# stage B can never disagree on what counts as evidence. A file, run as
+# `python plugin_beacon.py --proven`, never an inline -c: Windows PowerShell 5.1
+# strips quotes from inline programs.
+_HOOKS = ("session-start", "skill-event", "guardrail-gate")
+
+if __name__ == "__main__":
+    import sys
+
+    if sys.argv[1:] == ["--proven"]:
+        for _hook in proven():
+            print(_hook)
+    elif sys.argv[1:] == ["--installed"]:
+        # The plugin registers its own MCP servers; a user-scope copy beside it
+        # is the duplicate the migration removes. A disabled plugin registers
+        # nothing, so it does not count, and nor does a copy without the
+        # .mcp.json that declares the servers.
+        if serves_mcp():
+            print("installed")
+

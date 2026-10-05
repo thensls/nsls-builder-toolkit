@@ -48,6 +48,8 @@ If this prints a version ≥ v20, continue. If it errors (`command not found` / 
 
 This is the #1 reason `signal_*` tools never appear even when Node and the token are perfect. The toolkit is *locally enabled* (an `enabledPlugins` entry), not marketplace-installed. Local enable loads skills/commands/hooks but does **not** register a plugin's bundled `.mcp.json` MCP server — so `signal` is absent from `/mcp` and `claude mcp list`, not failed, just never loaded.
 
+**First, check whether the toolkit is installed and enabled as a plugin** (`claude plugin list` shows `nsls-builder-toolkit` and does not mark it disabled). If it is enabled, the plugin registers signal itself: do **not** add a user-scope entry, because a second `signal` beside the plugin's is exactly the duplicate the toolkit's migration removes, and it shows as two "Connection closed" errors. Skip to Step 2. If it is installed but disabled, it registers nothing: ask the builder whether to enable it (`claude plugin enable nsls-builder-toolkit@nsls-toolkit`) and skip to Step 2 if they do. Only a machine without an enabled plugin needs the registration below.
+
 Fix it by registering the server explicitly at user scope, pointing at the absolute path of this plugin (the directory this skill loaded from — `$CLAUDE_PLUGIN_ROOT`, e.g. `~/.claude/local-plugins/nsls-builder-toolkit`). Substitute the real path; don't rely on `$CLAUDE_PLUGIN_ROOT` being exported into a plain terminal (it usually isn't). `claude mcp add` is idempotent — if it's already registered it prints "already exists" and changes nothing, so it's always safe to run.
 
 First check whether it's already there:
@@ -72,7 +74,7 @@ claude mcp add signal --scope user `
 
 This writes to `~/.claude.json`. Verify with `claude mcp get signal` (expect `Scope: User config`). Reversible with `claude mcp remove signal -s user`. The server points at the same local-plugins path the auto-update hook git-pulls, so future updates to `signal-mcp.js` flow through on the next session. Tools bind at session start, so they appear after the restart in the final step — not immediately.
 
-> New installs already do this automatically (`install.sh` registers every server in `.mcp.json`). This step is the self-heal for anyone who installed before that landed, or whose registration got removed.
+> On a machine without the plugin, the installers do this automatically. With the plugin installed they skip it, because the plugin registers its servers itself. This step is the self-heal for a plugin-less machine whose registration got removed.
 
 ### Step 2 — Check existing state
 
