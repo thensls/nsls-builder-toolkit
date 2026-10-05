@@ -54,7 +54,7 @@ Then open Claude Code and say `/nsls-setmeup` to connect your tools and optional
 | **/pydoc-pipeline** | Generate documentation from Python code |
 | **/web-research** | Structured web research |
 | **/interrogate** | Deep-dive investigation skill |
-| **/second-opinion** | One independent, read-only check before risky work goes out (production data writes, logins, money, member data, unattended automations, facts headed to leadership or members). One reviewer, one round, plain one-line report. |
+| **/second-opinion** | An independent, read-only check before work goes out, offered (or automatic, if you choose) for risky work like production data writes, logins, money, member data, unattended automations, and numbers for leadership or members. You pick the reviewer and when it runs; say "change my second-opinion settings" any time. One reviewer, one round, plain one-line report. |
 | **/signal-setup** | Wire Claude Code into Signal — query Quick Notes, wins, friction, team summaries. Managers + execs only. |
 | **/society-invite-llm-email-prompt** | Build the LLM-node prompt for personalized Society member-invitation emails — NSLS data fields and fill rates, life-stage resolution, voice rules, and the failure catalogue from real testing |
 | **/llm-email-workflow** | The pipeline around an LLM email — data profiling, audience segmentation, node wiring, safety nodes, sandbox-to-live rollout |
@@ -233,7 +233,7 @@ They form a cycle: `/data-model-discovery` explores a new system → maps it aga
 | **web-research** | Web research with AI overview extraction |
 | **macroscope** | Turn a Macroscope review bot's PR comments into one root-cause fix pass — fix the class, not each comment |
 | **interrogate** | Scope a new project through structured conversation |
-| **second-opinion** | One independent check before risky work goes out — one reviewer, one round |
+| **second-opinion** | An independent check before work goes out, on your terms. You choose when it runs and who reviews. |
 | **society-invite-llm-email-prompt** | LLM-node prompt for Society member-invitation emails — NSLS fields, life-stage buckets, tested failure catalogue |
 | **llm-email-workflow** | End-to-end pipeline for LLM-generated emails — data, audience, node wiring, guardrails, rollout |
 | **kw:brainstorm / kw:plan / kw:review / kw:compound** | Strategy & knowledge-work pipeline (non-software) |
