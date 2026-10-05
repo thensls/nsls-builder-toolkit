@@ -273,7 +273,7 @@ def _find_claude():
             return list(found)
     found = shutil.which("claude")
     if found:
-        return [found]
+        return _cli_argv(Path(found))
     for candidate in (
         _CONFIG_DIR / "local" / "claude",
         Path("/usr/local/bin/claude"),
@@ -281,7 +281,82 @@ def _find_claude():
     ):
         if candidate.exists():
             return [str(candidate)]
+    found = _windows_cli()
+    return _cli_argv(found) if found else None
+
+
+def _cli_argv(path):
+    if path.suffix.lower() == ".ps1":
+        return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(path)]
+    return [str(path)]
+
+
+def _windows_cli():
+    """The claude CLI in the places a Windows hook can't see on PATH, or None.
+
+    This file's own fallback, for when the running session-start.py hands over
+    no finder or one that comes back empty. That is exactly the state of a PC
+    stuck on an old plugin copy: its finder predates the Store app's
+    <version>\\<hash>\\claude.exe layout, so it finds nothing, and the clone's
+    copy of this file is the only new code that machine runs (PC Test Round 5).
+    Same places as session-start.py's _find_claude: the npm shim, the profile
+    installs, then the desktop app's bundled CLI in %APPDATA% and the Store
+    package's LocalCache, both layouts, highest version first.
+    """
+    env = os.environ
+    simple = []
+    if env.get("APPDATA"):
+        simple += [Path(env["APPDATA"]) / "npm" / "claude.cmd",
+                   Path(env["APPDATA"]) / "npm" / "claude.ps1"]
+    if env.get("USERPROFILE"):
+        simple += [Path(env["USERPROFILE"]) / ".local" / "bin" / "claude.exe",
+                   Path(env["USERPROFILE"]) / ".claude" / "bin" / "claude.exe"]
+    if env.get("LOCALAPPDATA"):
+        simple.append(Path(env["LOCALAPPDATA"]) / "Programs" / "claude" / "claude.exe")
+    for c in simple:
+        try:
+            if c.is_file():
+                return c
+        except OSError:
+            continue
+    roots = []
+    if env.get("APPDATA"):
+        roots.append(Path(env["APPDATA"]) / "Claude")
+    if env.get("LOCALAPPDATA"):
+        try:
+            roots += sorted((Path(env["LOCALAPPDATA"]) / "Packages").glob(
+                "Claude_*/LocalCache/Roaming/Claude"))
+        except OSError:
+            pass
+    for sub in ("claude-code", "claude-code-vm"):
+        best = None
+        for root in roots:
+            folder = root / sub
+            for pattern in ("*/claude.exe", "*/*/claude.exe"):
+                try:
+                    hits = list(folder.glob(pattern))
+                except OSError:
+                    continue
+                for exe in hits:
+                    try:
+                        if not exe.is_file():
+                            continue
+                        vdir = exe.parent if exe.parent.parent == folder else exe.parent.parent
+                        key = (_version_tuple(vdir.name), exe.stat().st_mtime)
+                    except OSError:
+                        continue
+                    if best is None or key > best[0]:
+                        best = (key, exe)
+        if best:
+            return best[1]
     return None
+
+
+def _version_tuple(text):
+    try:
+        return tuple(int(x) for x in str(text).strip().split("."))
+    except ValueError:
+        return (0,)
 
 
 # Cumulative wall-clock ceiling for this whole migration run.
@@ -469,7 +544,22 @@ def _clean_detail(out):
     return " ".join(text.split())[:200]
 
 
-def _report_stuck(out):
+_UPDATE_STATUS = _CONFIG_DIR / ".nsls-plugin-update-status"
+_MESSAGES = {
+    "a": ("[NSLS Builder Toolkit] Setup could not finish on this machine: "
+          "{reason}, so the toolkit plugin and its guardrails are not "
+          "installed here yet. It retries every session. Mention this to "
+          "the user once, in one plain sentence, and suggest they tell the "
+          "NSLS AI team if it keeps happening."),
+    "update": ("[NSLS Builder Toolkit] The toolkit could not update itself on "
+               "this machine: {reason}, so it is still running an older "
+               "version. It retries every session. Mention this to the user "
+               "once, in one plain sentence, and suggest they tell the NSLS AI "
+               "team if it keeps happening."),
+}
+
+
+def _report_stuck(out, stage="a"):
     """Say once a day that setup is stuck, and always record why.
 
     Stage A used to return without a word when its first CLI call failed; both
@@ -491,9 +581,10 @@ def _report_stuck(out):
     So budget cuts are counted, recorded every time, and said out loud once
     they have happened _CUTS_BEFORE_STUCK sessions in a row.
     """
+    status = _UPDATE_STATUS if stage == "update" else _STATUS
     prev = {}
     try:
-        prev = json.loads(_STATUS.read_text(encoding="utf-8"))
+        prev = json.loads(status.read_text(encoding="utf-8"))
         if not isinstance(prev, dict):
             prev = {}
     except Exception:
@@ -517,25 +608,21 @@ def _report_stuck(out):
         cuts = 0
         loud = True
     speak = loud and now - noticed >= _NOTICE_EVERY
-    record = {"at": now, "stage": "a", "reason": reason, "cuts": cuts,
+    record = {"at": now, "stage": stage, "reason": reason, "cuts": cuts,
               "detail": _clean_detail(out), "noticed": now if speak else noticed}
     try:
-        tmp = _STATUS.with_suffix(".tmp")
+        tmp = status.with_suffix(".tmp")
         tmp.write_text(json.dumps(record) + "\n", encoding="utf-8")
-        os.replace(tmp, _STATUS)
+        os.replace(tmp, status)
     except Exception:
         pass
     if speak:
-        print("[NSLS Builder Toolkit] Setup could not finish on this machine: "
-              f"{reason}, so the toolkit plugin and its guardrails are not "
-              "installed here yet. It retries every session. Mention this to "
-              "the user once, in one plain sentence, and suggest they tell the "
-              "NSLS AI team if it keeps happening.")
+        print(_MESSAGES.get(stage, _MESSAGES["a"]).format(reason=reason))
 
 
-def _clear_stuck():
+def _clear_stuck(stage="a"):
     try:
-        _STATUS.unlink()
+        (_UPDATE_STATUS if stage == "update" else _STATUS).unlink()
     except OSError:
         pass
 
@@ -565,6 +652,82 @@ def _stage_a():
         "The old wiring will be cleaned up automatically in a later session — "
         "nothing to do."
     )
+
+
+_UPDATE_MARKER = _CONFIG_DIR / ".nsls-plugin-update-check"
+
+
+def _installed_version():
+    """The installed plugin's version, from the CLI's registry, or None."""
+    try:
+        reg = _read_json(_CONFIG_DIR / "plugins" / "installed_plugins.json")
+        for key, entries in (reg.get("plugins") or {}).items():
+            if not str(key).startswith("nsls-builder-toolkit@"):
+                continue
+            for entry in ([entries] if isinstance(entries, dict) else entries or []):
+                entry = entry or {}
+                ver = entry.get("version") or (Path(entry["installPath"]).name
+                                               if entry.get("installPath") else None)
+                if ver:
+                    return str(ver)
+    except Exception:
+        pass
+    return None
+
+
+def _clone_version():
+    """The version of the checkout this file runs from, or None."""
+    try:
+        here = Path(globals()["__file__"]).resolve().parent.parent
+        return str(_read_json(here / ".claude-plugin" / "plugin.json").get("version") or "") or None
+    except Exception:
+        return None
+
+
+def _catch_up_plugin():
+    """Update a plugin whose own copy can no longer update itself.
+
+    session-start.py's ensure_plugin_fresh runs `plugin update` once a day, but
+    with the CLI finder of whatever plugin copy is installed. When that finder
+    goes blind (the Store app moved its CLI into a hash folder on 2026-10-03),
+    the copy can never fetch the release that fixes it: the test PC sat on
+    3.16.2 for days while its checkout was on 3.16.13 (PC Test Round 5). This
+    file is read from the checkout every session, so it is the one place a fix
+    can reach such a machine.
+
+    It only acts when the running copy's finder comes back empty, the checkout
+    is ahead of the installed plugin, and the shared daily marker is stale; a
+    healthy copy keeps doing its own update. The marker is touched once a CLI
+    is found, so a hung update is not retried every session, and the copy's own
+    check stays quiet for the day.
+    """
+    injected = globals().get("_NSLS_FIND_CLAUDE")
+    if callable(injected):
+        try:
+            if injected():
+                return
+        except Exception:
+            pass
+    installed, clone = _installed_version(), _clone_version()
+    if not installed or not clone or _version_tuple(installed) >= _version_tuple(clone):
+        return
+    try:
+        if time.time() - _UPDATE_MARKER.stat().st_mtime < 86400:
+            return
+    except OSError:
+        pass
+    if not _find_claude():
+        _report_stuck(_NOT_FOUND, stage="update")
+        return
+    try:
+        _UPDATE_MARKER.touch()
+    except OSError:
+        pass
+    ok, out = _claude(["plugin", "update", _PLUGIN_ID], timeout=20)
+    if ok:
+        _clear_stuck(stage="update")
+    else:
+        _report_stuck(out, stage="update")
 
 
 def _remove_settings_hooks(only=None):
@@ -813,8 +976,11 @@ def run_migration():
             # However it got here — an earlier session, or by hand — an
             # installed plugin means nothing is stuck any more.
             _clear_stuck()
-            if not _plugin_disabled_by_user() and _stage_b_reason():
-                _stage_b()
+            if not _plugin_disabled_by_user():
+                # First: a newer plugin brings every other fix with it.
+                _catch_up_plugin()
+                if _stage_b_reason():
+                    _stage_b()
     except Exception:
         pass  # fail-open: shims still work; retry next session
     finally:
