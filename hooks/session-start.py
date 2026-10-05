@@ -1574,20 +1574,41 @@ def _find_claude():
         best = None
         for root in roots:
             try:
-                for exe in (root / sub).glob("*/claude.exe"):
-                    if not exe.is_file():
-                        continue
-                    try:
-                        ver = tuple(int(x) for x in exe.parent.name.split("."))
-                    except ValueError:
-                        ver = (0,)
-                    if best is None or ver > best[0]:
-                        best = (ver, exe)
+                for key, exe in _bundled_clis(root / sub):
+                    if best is None or key > best[0]:
+                        best = (key, exe)
             except Exception:
                 continue
         if best:
             return _claude_argv(best[1])
     return None
+
+
+def _bundled_clis(folder):
+    """(sort key, path) for every CLI the desktop app keeps under `folder`.
+
+    Two layouts: <version>\\claude.exe, and <version>\\<hash>\\claude.exe, which
+    the Store app moved to on 2026-10-03. Searching only the first left the
+    daily plugin update finding no CLI on a Store PC, so it skipped itself every
+    session and the PC stayed on 3.16.2 (PC Test Round 5). The version is the
+    folder directly under claude-code in both, compared numerically; the newest
+    file breaks a tie between two hash folders of one version.
+    """
+    found = []
+    for pattern in ("*/claude.exe", "*/*/claude.exe"):
+        for exe in folder.glob(pattern):
+            try:
+                if not exe.is_file():
+                    continue
+                vdir = exe.parent if exe.parent.parent == folder else exe.parent.parent
+                try:
+                    ver = tuple(int(x) for x in vdir.name.split("."))
+                except ValueError:
+                    ver = (0,)
+                found.append(((ver, exe.stat().st_mtime), exe))
+            except OSError:
+                continue
+    return found
 
 
 def _claude_argv(path):

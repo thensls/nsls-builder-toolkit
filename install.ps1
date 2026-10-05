@@ -557,13 +557,19 @@ if (-not $ClaudeBin) {
     $roots = @(Join-Path $env:APPDATA 'Claude')
     $roots += @(Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA 'Packages\Claude_*') -Directory -ErrorAction SilentlyContinue |
                 ForEach-Object { Join-Path $_.FullName 'LocalCache\Roaming\Claude' })
+    # Two layouts: <version>\claude.exe, and <version>\<hash>\claude.exe, which
+    # the Store app moved to on 2026-10-03. The version is the folder directly
+    # under claude-code either way; the newest file breaks a tie.
     $cands = foreach ($root in $roots) {
         foreach ($sub in @('claude-code', 'claude-code-vm')) {
             Get-ChildItem -Path (Join-Path $root "$sub\*\claude.exe") -ErrorAction SilentlyContinue
+            Get-ChildItem -Path (Join-Path $root "$sub\*\*\claude.exe") -ErrorAction SilentlyContinue
         }
     }
     $cand = $cands |
-            Sort-Object -Property @{ Expression = { try { [version]$_.Directory.Name } catch { [version]'0.0.0' } } } |
+            Sort-Object -Property @{ Expression = {
+                $vdir = if ($_.Directory.Parent.Name -like 'claude-code*') { $_.Directory } else { $_.Directory.Parent }
+                try { [version]$vdir.Name } catch { [version]'0.0.0' } } }, LastWriteTime |
             Select-Object -Last 1
     if ($cand) { $ClaudeBin = $cand.FullName }
 }

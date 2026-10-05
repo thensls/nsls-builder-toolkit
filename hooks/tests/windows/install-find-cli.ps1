@@ -38,6 +38,22 @@ try {
     $ClaudeBin = $null
     Invoke-Expression $block
     Check 'the newest version wins across both locations' ($ClaudeBin -eq $appdata) "$ClaudeBin"
+
+    # The Store app's newer layout: <version>\<hash>\claude.exe (PC Test Round 5).
+    $hashed = Join-Path $env:LOCALAPPDATA 'Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude-code\2.1.400\635c1867224a\claude.exe'
+    Exe $hashed
+    $ClaudeBin = $null
+    Invoke-Expression $block
+    Check 'a CLI inside a hash folder is found, and its version counts' ($ClaudeBin -eq $hashed) "$ClaudeBin"
+
+    # Two hash folders of one version: the newer file wins.
+    $twin = Join-Path $env:LOCALAPPDATA 'Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude-code\2.1.400\bbbbbbbbbbbb\claude.exe'
+    Exe $twin
+    (Get-Item $hashed).LastWriteTime = (Get-Date).AddDays(-2)
+    (Get-Item $twin).LastWriteTime = (Get-Date).AddDays(-1)
+    $ClaudeBin = $null
+    Invoke-Expression $block
+    Check 'two hash folders of one version: the newer file wins' ($ClaudeBin -eq $twin) "$ClaudeBin"
 } finally {
     foreach ($k in $saved.Keys) { Set-Item -Path "Env:$k" -Value $saved[$k] }
     Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
