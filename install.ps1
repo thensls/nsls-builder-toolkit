@@ -104,7 +104,16 @@ function Write-TextNoBom {
             Move-Item -Force -LiteralPath $tmp -Destination $Path
         }
     } finally {
-        if (Test-Path -LiteralPath $tmp) { Remove-Item -Force -LiteralPath $tmp -ErrorAction SilentlyContinue }
+        if (Test-Path -LiteralPath $tmp) {
+            # ReplaceFile can fail after removing the original (it documents
+            # this), leaving only the new copy here. Put it in place rather than
+            # delete the only settings.json there is.
+            if (-not (Test-Path -LiteralPath $Path)) {
+                Move-Item -Force -LiteralPath $tmp -Destination $Path -ErrorAction SilentlyContinue
+            } else {
+                Remove-Item -Force -LiteralPath $tmp -ErrorAction SilentlyContinue
+            }
+        }
     }
 }
 

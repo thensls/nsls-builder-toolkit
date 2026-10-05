@@ -34,6 +34,10 @@ check("writes go to a temp file and are swapped into place, keeping the file's p
       and "Move-Item -Force -LiteralPath $tmp -Destination $Path" in ps)
 check("each write uses its own temp name and cleans it up",
       "$tmp = \"$Path.$([guid]::NewGuid().ToString('N')).nsls-tmp\"" in ps and "Remove-Item -Force -LiteralPath $tmp" in ps)
+fn_w = ps[ps.index("function Write-TextNoBom"):]
+fn_w = fn_w[:fn_w.index("\n}\n")]
+check("a failed swap that took the original away puts the new copy in place, never deletes it",
+      fn_w.index("if (-not (Test-Path -LiteralPath $Path))") < fn_w.index("Remove-Item -Force -LiteralPath $tmp"))
 check("the copy gets the original's permissions", "Set-Acl -LiteralPath $bak -AclObject (Get-Acl -LiteralPath $Path)" in ps)
 fn = ps[ps.index("function Without-Matching"):]
 fn = fn[:fn.index("\n}\n")]
