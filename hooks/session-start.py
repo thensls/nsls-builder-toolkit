@@ -2627,8 +2627,23 @@ def _record_beacon():
         pass
 
 
+def _utf8_stdio():
+    """Write this hook's output as UTF-8, whatever the console says.
+
+    Windows Python writes a pipe in the ANSI code page, strictly, and the
+    guardrail policy holds characters cp1252 cannot encode: the print raised,
+    and main() died before the ping or the collector ran. run-hook.sh also sets
+    UTF-8 mode, but this file is run by other routes too, so it says so itself.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def main():
-    _record_beacon()
+    _utf8_stdio()
     git_pull()
     stage_a = run_plugin_migration()
     if not stage_a:  # stage A spent this session's freshness budget
@@ -2639,6 +2654,10 @@ def main():
     replayed = replay_failed_ping()
     session_ping(replayed=replayed)
     bootstrap_collector()
+    # Last, so the beacon means this copy ran to the end. Recorded first, a
+    # copy that crashed halfway still proved itself, and stage B retired the
+    # shim that was doing the work (the cp1252 crash above, on every PC).
+    _record_beacon()
 
 
 # Entry point for the PowerShell hook, which needs ONLY the guardrails context
@@ -2650,6 +2669,7 @@ if __name__ == "__guardrails__":
     # its own retirement. Only the plugin runtime's own invocation counts, and
     # plugin_beacon.record() checks the path it is running from for exactly
     # this reason.
+    _utf8_stdio()
     try:
         emit_guardrails_context()
     except Exception:

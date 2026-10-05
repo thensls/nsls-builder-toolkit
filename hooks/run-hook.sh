@@ -178,6 +178,14 @@ fi
 # design rules say, and the builder sees nothing.
 [ -n "$py" ] || exit 0
 
+# UTF-8 on every pipe. Claude Code speaks UTF-8 both ways, but Windows Python
+# reads and writes a pipe in the ANSI code page (cp1252), and strictly. The
+# session-start hook prints the guardrail policy, whose arrows cp1252 cannot
+# encode, so on a PC the plugin copy died before the policy or the credit ping
+# went out; the gate read the payload in cp1252 too. The settings.json shim
+# always set this for its child; the plugin path never did.
+export PYTHONUTF8=1 PYTHONIOENCODING=utf-8
+
 if [ -n "$flag" ]; then
   "$py" "$flag" "$script"
 else
