@@ -29,8 +29,10 @@ check("through one function, used for the hooks step", "$cfg = Read-SettingsJson
 check("no read of settings.json is left without an encoding",
       "Get-Content $Settings -Raw | ConvertFrom-Json" not in ps)
 check("a copy is kept before the rewrite", '"$Path.pre-nsls-install"' in ps)
-check("writes go to a temp file and are moved into place",
-      "Move-Item -Force -LiteralPath $tmp -Destination $Path" in ps)
+check("writes go to a temp file and are swapped into place, keeping the file's permissions",
+      "[System.IO.File]::Replace($tmp, $Path, [NullString]::Value)" in ps
+      and "Move-Item -Force -LiteralPath $tmp -Destination $Path" in ps)
+check("the copy gets the original's permissions", "Set-Acl -LiteralPath $bak -AclObject (Get-Acl -LiteralPath $Path)" in ps)
 fn = ps[ps.index("function Without-Matching"):]
 fn = fn[:fn.index("\n}\n")]
 check("the hook filter works entry by entry", "$group.hooks = $rest" in fn and "-join" not in fn)

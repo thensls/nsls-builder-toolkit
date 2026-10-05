@@ -33,6 +33,13 @@ $original = '{"permissions":{"additionalDirectories":["C:\\Users\\' + $jose + '\
     '{"type":"command","command":"my-own-hook.cmd"}]},' +
     '{"matcher":"resume","hooks":[{"type":"command","command":"powershell -File C:\\x\\session-start.ps1"}]}]}}'
 [System.IO.File]::WriteAllText($Settings, $original, $Utf8NoBom)
+# Lock it down: no inherited permissions, the current user only.
+$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$acl = Get-Acl -LiteralPath $Settings
+$acl.SetAccessRuleProtection($true, $false)
+foreach ($rule in @($acl.Access)) { $null = $acl.RemoveAccessRule($rule) }
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($me, 'FullControl', 'Allow')))
+Set-Acl -LiteralPath $Settings -AclObject $acl
 
 $cfg = Read-SettingsJson $Settings
 $ss = @(Without-Matching $cfg.hooks.SessionStart 'session-start.ps1')
@@ -49,6 +56,9 @@ Check 'a group left empty is dropped' (@($back.hooks.SessionStart).Count -eq 1) 
 $bak = "$Settings.pre-nsls-install"
 Check 'a copy of the file as it was is kept beside it' ((Test-Path $bak) -and ([System.IO.File]::ReadAllText($bak) -eq $original))
 Check 'no temp file is left behind' (-not (Test-Path "$Settings.nsls-tmp"))
+function Locked([string]$P) { $a = Get-Acl -LiteralPath $P; return ($a.AreAccessRulesProtected -and @($a.Access).Count -eq 1 -and "$(@($a.Access)[0].IdentityReference)" -eq $me) }
+Check 'the rewritten file keeps its locked-down permissions' (Locked $Settings) (Get-Acl -LiteralPath $Settings).Sddl
+Check 'and so does the copy' (Locked $bak) (Get-Acl -LiteralPath $bak).Sddl
 Check 'the file has no BOM' ([System.IO.File]::ReadAllBytes($Settings)[0] -eq [byte][char]'{')
 
 $missing = Join-Path $scratch 'absent.json'

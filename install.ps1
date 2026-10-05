@@ -87,13 +87,19 @@ function Test-OwnPointer {
     return [regex]::IsMatch($t, $pattern)
 }
 
-# Whole-file swap: write beside the target, then move it into place. Writing in
-# place meant an install stopped mid-write left a truncated settings.json.
+# Whole-file swap: write beside the target, then swap it in. Writing in place
+# meant an install stopped mid-write left a truncated settings.json. File.Replace
+# keeps the existing file's permissions and attributes on the new copy; a plain
+# move would hand a locked-down file the folder's inherited permissions.
 function Write-TextNoBom {
     param([string]$Path, [string]$Content)
     $tmp = "$Path.nsls-tmp"
     [System.IO.File]::WriteAllText($tmp, $Content, $Utf8NoBom)
-    Move-Item -Force -LiteralPath $tmp -Destination $Path
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        [System.IO.File]::Replace($tmp, $Path, [NullString]::Value)
+    } else {
+        Move-Item -Force -LiteralPath $tmp -Destination $Path
+    }
 }
 
 # settings.json is UTF-8 with no BOM, and Windows PowerShell 5.1 reads a
@@ -104,7 +110,11 @@ function Write-TextNoBom {
 function Read-SettingsJson {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return [pscustomobject]@{} }
-    Copy-Item -Force -LiteralPath $Path -Destination "$Path.pre-nsls-install"
+    $bak = "$Path.pre-nsls-install"
+    Copy-Item -Force -LiteralPath $Path -Destination $bak
+    # The copy holds the same settings, so it gets the same permissions, not
+    # the folder's defaults.
+    try { Set-Acl -LiteralPath $bak -AclObject (Get-Acl -LiteralPath $Path) } catch { }
     $parsed = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($null -eq $parsed) { return [pscustomobject]@{} }
     return $parsed
