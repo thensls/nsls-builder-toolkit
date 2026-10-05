@@ -128,7 +128,7 @@ EVIDENCE (fact-checks only): <claim → the quoted evidence → where it came fr
   still call the whole thing reviewed.
 - **Strip secrets.** Name the file that uses a key rather than pasting the key.
 
-## Step 4 — One lens, one reviewer
+## Step 4 — The right lens, one reviewer
 
 | The work is | Launch with the Agent tool |
 |---|---|
@@ -137,9 +137,10 @@ EVIDENCE (fact-checks only): <claim → the quoted evidence → where it came fr
 | Numbers that need checking against NSLS systems | `nsls-builder-toolkit:second-opinion-reviewer`, packet headed `LENS: data`, with your query results under EVIDENCE |
 | A plan, when the user asks for the full plan gate | Run `/kw:review` instead (it has its own two reviewers), and don't also run this skill |
 
-- **Mixed work** (a slide or memo with figures): if it has numbers, use
-  `LENS: data` with the text under READ. Use `LENS: writing` only when it has
-  none.
+- **Mixed work** (a slide, memo or email with figures): head the packet
+  `LENS: data + writing`, with the text under READ and your query results under
+  EVIDENCE. The reviewer applies both checklists. Use `LENS: writing` alone only
+  when there are no numbers.
 
 - **Model:** use their reviewer setting, passed as the Agent tool's `model`:
 

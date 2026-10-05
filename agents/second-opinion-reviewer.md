@@ -76,6 +76,12 @@ Find what would actually hurt, and ignore the rest.
 - **Baseline stated:** "+32%" says from what.
 - **Consistent:** the same metric has the same value everywhere it appears.
 
+## Two lenses at once
+
+If the packet says `LENS: data + writing` (a slide, memo or email with
+figures), apply both checklists above. Check the numbers against EVIDENCE, and
+check how the claims read to their audience. Report both in one output.
+
 ## Output — exactly this shape, from your first line; nothing before VERDICT
 
 ```
