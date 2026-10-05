@@ -121,7 +121,7 @@
     "manages": []
   },
   {
-    "name": "Alexis Scott",
+    "name": "Alexis Strauss",
     "title": "Chapter Success Manager (Gold)",
     "manager": "James Corriveau",
     "email": "ascott@nsls.org",
@@ -213,7 +213,7 @@
     "slack": "U096ZFUQU7M",
     "department": "Client Services",
     "manages": [
-      "Alexis Scott",
+      "Alexis Strauss",
       "Alyssa Placeres",
       "Arianne Stinson",
       "Brielle Jones",
@@ -229,15 +229,6 @@
     "manager": "Kevin Prentiss",
     "email": "davowood@nsls.org",
     "slack": "U0B2B0L7858",
-    "department": "Product",
-    "manages": []
-  },
-  {
-    "name": "Tyler Lagaly",
-    "title": "Senior Product Designer",
-    "manager": "Kevin Prentiss",
-    "email": "tlagaly@nsls.org",
-    "slack": "U09CYKGQZB2",
     "department": "Product",
     "manages": []
   },
@@ -656,15 +647,6 @@
     "manages": []
   },
   {
-    "name": "Colorado Coberly",
-    "title": "Contractor",
-    "manager": "Kevin Prentiss",
-    "email": "kcoberly@nsls.org",
-    "slack": "U0B286J7NUE",
-    "department": "Unknown",
-    "manages": []
-  },
-  {
     "name": "Samantha Montas",
     "title": "Membership Experience Specialist",
     "manager": "Alejandro Gabriel",
@@ -724,17 +706,14 @@
     "department": "Member Experience",
     "manages": [
       "Aicel Tavares",
-      "Elian Castro",
       "Franklin Ortega",
       "Jennifer Arias",
       "Jose Perdomo",
       "Maikel Berbi",
       "Malvin Vital",
-      "Mia Vasquez",
       "Naomi Ariza",
       "Patricia Pi\u00f1a",
       "Rauly Villar",
-      "Reiny Garcia",
       "Samantha Montas",
       "Saray Rosado",
       "Sofia Fader",
@@ -765,15 +744,6 @@
     "manager": "Alejandro Gabriel",
     "email": "skurtenbach@nsls.org",
     "slack": "U0B1NBN7UN9",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Elian Castro",
-    "title": "Membership Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "ecastro@nsls.org",
-    "slack": "U0B1NBFJACD",
     "department": "Member Experience",
     "manages": []
   },
@@ -818,15 +788,6 @@
     ]
   },
   {
-    "name": "Reiny Garcia",
-    "title": "Membership Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "rcalderon@nsls.org",
-    "slack": "U0B1KCAN9SP",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
     "name": "ELIANA VALLEJO",
     "title": "Workforce and AI Operations Analyst",
     "manager": "Kimberly Campbell",
@@ -854,15 +815,6 @@
     "manages": []
   },
   {
-    "name": "Mia Vasquez",
-    "title": "Member Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "mvasquez@nsls.org",
-    "slack": "U0B720AV5U7",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
     "name": "Saray Rosado",
     "title": "Membership Experience Specialist",
     "manager": "Alejandro Gabriel",
@@ -885,14 +837,12 @@
       "Brandon Evans",
       "Chelsea Byers",
       "Christophre Munns",
-      "Colorado Coberly",
       "David Adams",
       "David Wood",
       "Jana Amsellem",
       "Juan Maggi",
       "Thomas Krieglstein",
-      "Trina Limpert",
-      "Tyler Lagaly"
+      "Trina Limpert"
     ]
   },
   {
@@ -990,7 +940,7 @@
   },
   {
     "name": "Joanne Sandoval",
-    "title": "Early Talent Acquisition Specialist",
+    "title": "Talent & HR Partner",
     "manager": "Jenna Fontanez",
     "email": "jsandoval@nsls.org",
     "slack": "U04UQR9SBFH",
