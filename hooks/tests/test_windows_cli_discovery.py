@@ -128,6 +128,65 @@ with tempfile.TemporaryDirectory() as tmp:
     check("the claude-code-vm variant is found in the Store location too",
           found == [str(vm)], f"({found})")
 
+print("\nthe Store app's newer layout, <version>\\<hash>\\claude.exe (PC Test Round 5)")
+with tempfile.TemporaryDirectory() as tmp:
+    t = Path(tmp)
+    cfg, home, prof, roaming = t / "cfg", t / "home", t / "prof", t / "Roaming"
+    for d in (cfg, home, prof, roaming):
+        d.mkdir()
+    local = t / "Local"
+    store = (local / "Packages" / "Claude_pzs8sxrjxfjjc" / "LocalCache" / "Roaming"
+             / "Claude" / "claude-code")
+    # The PC's exact shape: two versions, each in a hash folder, nothing at
+    # <version>\claude.exe. 2.1.9 again proves the comparison is numeric.
+    exe(store / "2.1.284" / "3f4bed3e44ad" / "claude.exe")
+    exe(store / "2.1.286" / "635c1867224a" / "claude.exe")
+    exe(store / "2.1.9" / "aaaaaaaaaaaa" / "claude.exe")
+    ss = load_session_start(cfg)
+    run = lambda: ss._find_claude()
+    with env(APPDATA=str(roaming), LOCALAPPDATA=str(local), USERPROFILE=str(prof),
+             HOME=str(home), PATH="/usr/bin:/bin"):
+        found = run()
+    check("a CLI inside a hash folder is found, newest version",
+          found == [str(store / "2.1.286" / "635c1867224a" / "claude.exe")], f"({found})")
+    exe(roaming / "Claude" / "claude-code" / "2.1.300" / "claude.exe")
+    with env(APPDATA=str(roaming), LOCALAPPDATA=str(local), USERPROFILE=str(prof),
+             HOME=str(home), PATH="/usr/bin:/bin"):
+        found = run()
+    check("and the newest version still wins across both layouts",
+          found == [str(roaming / "Claude" / "claude-code" / "2.1.300" / "claude.exe")], f"({found})")
+
+with tempfile.TemporaryDirectory() as tmp:
+    t = Path(tmp)
+    cfg, home, prof, roaming = t / "cfg", t / "home", t / "prof", t / "Roaming"
+    for d in (cfg, home, prof, roaming):
+        d.mkdir()
+    local = t / "Local"
+    base = local / "Packages" / "Claude_pzs8sxrjxfjjc" / "LocalCache" / "Roaming" / "Claude"
+    old = exe(base / "claude-code" / "2.1.286" / "aaaaaaaaaaaa" / "claude.exe")
+    new = exe(base / "claude-code" / "2.1.286" / "bbbbbbbbbbbb" / "claude.exe")
+    os.utime(old, (1_000_000, 1_000_000))
+    os.utime(new, (2_000_000, 2_000_000))
+    ss = load_session_start(cfg)
+    with env(APPDATA=str(roaming), LOCALAPPDATA=str(local), USERPROFILE=str(prof),
+             HOME=str(home), PATH="/usr/bin:/bin"):
+        found = ss._find_claude()
+    check("two hash folders of one version: the newer file wins", found == [str(new)], f"({found})")
+
+with tempfile.TemporaryDirectory() as tmp:
+    t = Path(tmp)
+    cfg, home, prof, roaming = t / "cfg", t / "home", t / "prof", t / "Roaming"
+    for d in (cfg, home, prof, roaming):
+        d.mkdir()
+    local = t / "Local"
+    vm = exe(local / "Packages" / "Claude_pzs8sxrjxfjjc" / "LocalCache" / "Roaming" / "Claude"
+             / "claude-code-vm" / "2.2.0" / "cccccccccccc" / "claude.exe")
+    ss = load_session_start(cfg)
+    with env(APPDATA=str(roaming), LOCALAPPDATA=str(local), USERPROFILE=str(prof),
+             HOME=str(home), PATH="/usr/bin:/bin"):
+        found = ss._find_claude()
+    check("the claude-code-vm variant is found in a hash folder too", found == [str(vm)], f"({found})")
+
 print("\nthe migration uses that same finder, and calls it as an argv prefix")
 with tempfile.TemporaryDirectory() as tmp:
     cfg = Path(tmp)
