@@ -32,6 +32,8 @@ check("a copy is kept before the rewrite", '"$Path.pre-nsls-install"' in ps)
 check("writes go to a temp file and are swapped into place, keeping the file's permissions",
       "[System.IO.File]::Replace($tmp, $Path, [NullString]::Value)" in ps
       and "Move-Item -Force -LiteralPath $tmp -Destination $Path" in ps)
+check("each write uses its own temp name and cleans it up",
+      "$tmp = \"$Path.$([guid]::NewGuid().ToString('N')).nsls-tmp\"" in ps and "Remove-Item -Force -LiteralPath $tmp" in ps)
 check("the copy gets the original's permissions", "Set-Acl -LiteralPath $bak -AclObject (Get-Acl -LiteralPath $Path)" in ps)
 fn = ps[ps.index("function Without-Matching"):]
 fn = fn[:fn.index("\n}\n")]

@@ -55,7 +55,7 @@ Check 'our entries are gone' (-not ($cmds -like '*session-start.ps1*')) ($cmds -
 Check 'a group left empty is dropped' (@($back.hooks.SessionStart).Count -eq 1) "$(@($back.hooks.SessionStart).Count) groups"
 $bak = "$Settings.pre-nsls-install"
 Check 'a copy of the file as it was is kept beside it' ((Test-Path $bak) -and ([System.IO.File]::ReadAllText($bak) -eq $original))
-Check 'no temp file is left behind' (-not (Test-Path "$Settings.nsls-tmp"))
+Check 'no temp file is left behind' (@(Get-ChildItem -LiteralPath $scratch -Filter '*.nsls-tmp').Count -eq 0)
 function Locked([string]$P) { $a = Get-Acl -LiteralPath $P; return ($a.AreAccessRulesProtected -and @($a.Access).Count -eq 1 -and "$(@($a.Access)[0].IdentityReference)" -eq $me) }
 Check 'the rewritten file keeps its locked-down permissions' (Locked $Settings) (Get-Acl -LiteralPath $Settings).Sddl
 Check 'and so does the copy' (Locked $bak) (Get-Acl -LiteralPath $bak).Sddl

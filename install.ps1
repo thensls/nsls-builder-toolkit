@@ -93,12 +93,18 @@ function Test-OwnPointer {
 # move would hand a locked-down file the folder's inherited permissions.
 function Write-TextNoBom {
     param([string]$Path, [string]$Content)
-    $tmp = "$Path.nsls-tmp"
-    [System.IO.File]::WriteAllText($tmp, $Content, $Utf8NoBom)
-    if (Test-Path -LiteralPath $Path -PathType Leaf) {
-        [System.IO.File]::Replace($tmp, $Path, [NullString]::Value)
-    } else {
-        Move-Item -Force -LiteralPath $tmp -Destination $Path
+    # One temp name per write, so two installs at once cannot swap in each
+    # other's half-written file; and none is left behind if the swap fails.
+    $tmp = "$Path.$([guid]::NewGuid().ToString('N')).nsls-tmp"
+    try {
+        [System.IO.File]::WriteAllText($tmp, $Content, $Utf8NoBom)
+        if (Test-Path -LiteralPath $Path -PathType Leaf) {
+            [System.IO.File]::Replace($tmp, $Path, [NullString]::Value)
+        } else {
+            Move-Item -Force -LiteralPath $tmp -Destination $Path
+        }
+    } finally {
+        if (Test-Path -LiteralPath $tmp) { Remove-Item -Force -LiteralPath $tmp -ErrorAction SilentlyContinue }
     }
 }
 
