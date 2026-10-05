@@ -19,9 +19,16 @@ set -uo pipefail
 # hook, the one whose silent loss costs builders the record of their work.
 # Only a copy running from the plugin cache may write it: the shim must not be
 # able to certify its own retirement.
-case "${BASH_SOURCE[0]:-$0}" in
+# On Windows, Claude Code hands bash this script as C:\Users\...\hooks/skill-event.sh,
+# backslashes and all, which never matched the pattern below: the beacon was
+# never written on a PC, so stage B never finished there. Forward slashes first.
+# Then `pwd -W` (Git Bash) for the root: plain `pwd` answers /c/Users/..., which
+# Windows Python reads as C:\c\Users\... and fired() can never find.
+_nsls_src="${BASH_SOURCE[0]:-$0}"
+_nsls_src="${_nsls_src//\\//}"
+case "$_nsls_src" in
   */plugins/cache/*)
-    _nsls_root=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd) || _nsls_root=""
+    _nsls_root=$(cd "$(dirname "$_nsls_src")/.." 2>/dev/null && { pwd -W 2>/dev/null || pwd; }) || _nsls_root=""
     if [ -n "$_nsls_root" ]; then
       _nsls_beacons="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.nsls-plugin-beacons"
       # Escape before interpolating. A root path containing a quote, a
