@@ -179,6 +179,8 @@ def test_windows_schedule_check_asks_schtasks_and_trusts_it_only_when_it_answers
         assert cb.schedule_registered("win32", {}) is False
         cb.subprocess.run = fake_run(exc=FileNotFoundError("schtasks"))
         assert cb.schedule_registered("win32", {}) is True
+        cb.subprocess.run = fake_run(exc=subprocess.TimeoutExpired("schtasks", 3))
+        assert cb.schedule_registered("win32", {}) is True
     finally:
         cb.subprocess.run = real
 

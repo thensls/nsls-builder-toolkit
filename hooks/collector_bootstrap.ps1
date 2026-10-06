@@ -25,12 +25,26 @@
 # session context. ASCII only, PowerShell 5.1 compatible, no BOM.
 
 # Whether the collector's scheduled task exists. Can't tell -> yes: a reinstall
-# on a guess is worse than none. Native-command errors must not throw here.
+# on a guess is worse than none. Bounded: a stalled Task Scheduler costs session
+# start at most 3 seconds, and schtasks output never reaches session context.
 function Test-CollectorTaskRegistered {
-    $ErrorActionPreference = 'Continue'
+    param([string]$TaskName = 'NSLS Collector', [int]$TimeoutMs = 3000)
     try {
-        & schtasks.exe /Query /TN 'NSLS Collector' *> $null
-        return ($LASTEXITCODE -eq 0)
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = 'schtasks.exe'
+        $psi.Arguments = '/Query /TN "' + $TaskName + '"'
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $p = [System.Diagnostics.Process]::Start($psi)
+        $null = $p.StandardOutput.ReadToEndAsync()
+        $null = $p.StandardError.ReadToEndAsync()
+        if (-not $p.WaitForExit($TimeoutMs)) {
+            try { $p.Kill() } catch { }
+            return $true
+        }
+        return ($p.ExitCode -eq 0)
     } catch {
         return $true
     }

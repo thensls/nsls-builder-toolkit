@@ -87,7 +87,8 @@ def install_command(platform, base):
 
 def schedule_registered(platform, env):
     """Whether the collector's schedule exists. When it can't be told (no
-    schtasks), say yes: a reinstall on a guess is worse than none."""
+    schtasks, or no answer within 3 seconds), say yes: a reinstall on a guess
+    is worse than none, and session start must not wait on Task Scheduler."""
     if platform == "darwin":
         home = env.get("HOME")
         return bool(home) and (
@@ -96,7 +97,7 @@ def schedule_registered(platform, env):
         try:
             r = subprocess.run(["schtasks", "/Query", "/TN", WINDOWS_TASK],
                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL, timeout=10,
+                               stderr=subprocess.DEVNULL, timeout=3,
                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             return r.returncode == 0
         except Exception:
