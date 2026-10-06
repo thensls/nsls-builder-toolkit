@@ -62,11 +62,18 @@ The fastest path for a builder asking for a Google Doc:
    so a `-d` check passes on a broken install weeks later.
 3. **Copy the template.** `cp templates/build_doc.py ~/build_<short-name>.py` (must be in `~`, not `/tmp` — see gws cwd gotcha below). Customize content sections.
 4. **Build the docx.** `~/.local/bin/nsls-python ~/build_<short-name>.py` → produces `~/<short-name>.docx`.
-5. **Upload as Google Doc.** `export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"; set -o pipefail; cd ~ && gws drive files create --json '{"name":"<doc title>","mimeType":"application/vnd.google-apps.document"}' --upload <short-name>.docx --upload-content-type "application/vnd.openxmlformats-officedocument.wordprocessingml.document" --format json | tail -10` — the `pipefail` is load-bearing: without it `tail` swallows a failed upload and the command still exits 0.
+5. **Upload as Google Doc.** `export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="${USERPROFILE:-$HOME}/.config/gws-profiles/nsls-gdocs-skill"; set -o pipefail; cd ~ && gws drive files create --json '{"name":"<doc title>","mimeType":"application/vnd.google-apps.document"}' --upload <short-name>.docx --upload-content-type "application/vnd.openxmlformats-officedocument.wordprocessingml.document" --format json | tail -10` — the `pipefail` is load-bearing: without it `tail` swallows a failed upload and the command still exits 0.
 6. **Return the URL.** `https://docs.google.com/document/d/<id>/edit` — give the user that link.
 7. **Clean up local artifacts.** `rm ~/build_<short-name>.py ~/<short-name>.docx`
 
 > **On Windows** — the Quick Start commands above are macOS/Linux-shaped. Translations:
+> - **Run every `gws` command that takes `--json` or `--params` with the Bash tool** (Git
+>   Bash, which Claude Code on Windows always has), exactly as the macOS command above.
+>   Git Bash passes single-quoted JSON intact, and `${USERPROFILE:-$HOME}` in the profile
+>   line gives `gws` a Windows path. Don't run them through PowerShell: Claude Code's
+>   PowerShell tool is PowerShell 7 whenever it's installed, and PowerShell 7 splits the
+>   JSON at every space even with the `--%` recipe below (`unexpected argument '-' found`,
+>   PC test 2026-10-06). The `--%` recipe works only in Windows PowerShell 5.1.
 > - **Write env vars as `$env:VAR`, never `%VAR%`.** PowerShell passes CMD-style
 >   `%VAR%` through literally, so a path built that way arrives at `gws`/`Copy-Item`
 >   containing the text `%USERPROFILE%` and resolves to nothing. `%VAR%` appears below
@@ -83,7 +90,8 @@ The fastest path for a builder asking for a Google Doc:
 >   (`%USERPROFILE%`) and run `gws` from there — `--upload` rejects paths outside the cwd.
 > - Home paths: `~/build_<name>.py` → `$env:USERPROFILE\build_<name>.py`.
 >
-> On a toolkit Windows machine the whole flow is:
+> In **Windows PowerShell 5.1 only** (a Start-menu window, not Claude's PowerShell tool),
+> the whole flow is:
 > ```powershell
 > $env:GOOGLE_WORKSPACE_CLI_CONFIG_DIR = "$env:USERPROFILE\.config\gws-profiles\nsls-gdocs-skill"
 > $py = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
@@ -173,7 +181,7 @@ These are the wounds. Codified so we don't relive them.
 | Bullet list renders as plain paragraphs | Wrong style name | Use exact built-ins: `'List Bullet'` and `'List Number'` (case-sensitive, space included) |
 | Literal `"` inside a content string breaks the build | `SyntaxError: invalid syntax. Perhaps you forgot a comma?` on an `add_para`/`add_bullet`/`add_table` line | A straight `"` inside the Python string closes it early. Use curly quotes `“ ”` for quotes inside content (they render better in Google Docs anyway) or escape as `\"`. Easy to hit when content quotes a phrase, e.g. the `"school-official"` exception. |
 | `gws` upload fails (401 / no creds) and gws can't be set up | `Access denied. No credentials` from `gws`, and `gws auth setup` dies on GCP org-permission walls | Don't conclude you can't make a Doc. Use the Drive MCP connector + `text/html` → native Google Doc (see "If `gws` auth is unavailable" above). Don't go down the docx/base64 path. |
-| PowerShell 5.1 mangles `--json '{...}'` | `key must be a string at line 1 column 2` (quotes stripped), or `unexpected argument '...' found` once quotes are escaped (arg splits at spaces) | Never pass JSON to gws inline in PS 5.1 — quote-escaping alone still splits on spaces. Use the env-var + `--%` stop-parsing form from the Windows block above. Git Bash doesn't have the bug — which is exactly why it hides it. |
+| PowerShell mangles `--json '{...}'` (5.1 and 7, differently) | `key must be a string at line 1 column 2` (quotes stripped), or `unexpected argument '...' found` once quotes are escaped (arg splits at spaces) | In Claude Code, run the gws command with the Bash tool instead (Git Bash keeps single-quoted JSON intact). The `--%` recipe is Windows PowerShell 5.1 only; PowerShell 7 splits it at spaces. Never pass JSON to gws inline in PS 5.1 — quote-escaping alone still splits on spaces. Use the env-var + `--%` stop-parsing form from the Windows block above. Git Bash doesn't have the bug — which is exactly why it hides it. |
 | Pandoc-from-markdown was used | Tables look fine raw, render without borders / banding once in Google Docs | Don't. Build with python-docx. See `feedback_docx_pipeline` memory. |
 | Old draft URL piles up after iterations | Drive fills with `DRAFT v1`, `DRAFT v2`, etc. | Trash old drafts: `gws drive files update --params '{"fileId":"<old_id>"}' --json '{"trashed":true}'` |
 | Replacing canonical doc directly breaks shared link history | Shared URL changes if you delete + recreate | NEVER replace canonical content automatically. Always create a new draft, give the user the URL, let them copy-paste into the existing canonical doc. |

@@ -177,6 +177,9 @@ Bash tool call starts a fresh shell.)
 
 Mac/Linux commands here call the launcher by its full path, `~/.local/bin/nsls-python`, so nothing
 depends on this session's `PATH`. On Windows, replace it with plain `nsls-python`.
+The script path uses `${CLAUDE_PLUGIN_ROOT}`, which Claude Code fills in with the folder
+this skill loaded from, so the script always matches the skill. On an older install where
+it isn't filled in, use `~/.claude/local-plugins/nsls-builder-toolkit` instead.
 
 ```bash
 ~/.local/bin/nsls-python -c 'import pptx' && echo PREFLIGHT_OK
@@ -196,17 +199,17 @@ repairing and re-run the toolkit installer for them. See "Python environment" un
 ```bash
 # Society brand
 echo '<json>' | ~/.local/bin/nsls-python \
-  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  "${CLAUDE_PLUGIN_ROOT}/skills/nsls-slides/scripts/pptx_creator.py" \
   --brand society --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx
 
 # NSLS brand
 echo '<json>' | ~/.local/bin/nsls-python \
-  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  "${CLAUDE_PLUGIN_ROOT}/skills/nsls-slides/scripts/pptx_creator.py" \
   --brand nsls --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx
 
 # Mac only: add --pdf for a font-safe PDF export (needs Keynote; works with either brand)
 echo '<json>' | ~/.local/bin/nsls-python \
-  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  "${CLAUDE_PLUGIN_ROOT}/skills/nsls-slides/scripts/pptx_creator.py" \
   --brand society --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx --pdf
 ```
 
@@ -238,7 +241,7 @@ Run it as ONE command, exactly as shown. Each Bash tool call starts a fresh shel
 profile (a 403, or the wrong Google account).
 
 ```bash
-export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"; set -o pipefail; cd ~ && gws drive files create \
+export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="${USERPROFILE:-$HOME}/.config/gws-profiles/nsls-gdocs-skill"; set -o pipefail; cd ~ && gws drive files create \
   --json '{"name":"2026-03-02 - Presentation Title","mimeType":"application/vnd.google-apps.presentation"}' \
   --upload nsls-deck-<YYYYMMDD-HHMM>.pptx \
   --upload-content-type "application/vnd.openxmlformats-officedocument.presentationml.presentation" \
@@ -252,10 +255,10 @@ export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-sk
   `https://docs.google.com/presentation/d/<id>/edit`.
 - `pipefail` is load-bearing: without it `tail` hides a failed upload and the command still
   exits 0.
-- **On Windows:** use `/gdoc-build`'s Windows upload recipe with two values swapped:
-  `"mimeType":"application/vnd.google-apps.presentation"` and the `.pptx` content type above.
-  It covers PowerShell 5.1's quote-stripping of `--json`. The script lives at
-  `$env:USERPROFILE\.claude\local-plugins\nsls-builder-toolkit\skills\nsls-slides\scripts\pptx_creator.py`.
+- **On Windows:** run this exact command with the **Bash tool** (Git Bash), not
+  PowerShell. Claude Code's PowerShell tool is PowerShell 7 when installed, and it splits
+  `--json` at every space; Git Bash keeps it intact, and `${USERPROFILE:-$HOME}` gives
+  `gws` a Windows path (PC test 2026-10-06).
 
 ### Step 5 — Clean up
 
@@ -343,14 +346,14 @@ JSON
 
 # 2. Build .pptx
 ~/.local/bin/nsls-python \
-  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  "${CLAUDE_PLUGIN_ROOT}/skills/nsls-slides/scripts/pptx_creator.py" \
   --brand society \
   --input ~/nsls-deck-20260302-1405.json \
   --output ~/nsls-deck-20260302-1405.pptx
 
 # 3. Upload to Drive as Google Slides
 # (one command: the profile export must share the gws call's shell)
-export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws-profiles/nsls-gdocs-skill"; set -o pipefail; cd ~ && gws drive files create \
+export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="${USERPROFILE:-$HOME}/.config/gws-profiles/nsls-gdocs-skill"; set -o pipefail; cd ~ && gws drive files create \
   --json '{"name":"2026 Q2 - Society Update","mimeType":"application/vnd.google-apps.presentation"}' \
   --upload nsls-deck-20260302-1405.pptx \
   --upload-content-type "application/vnd.openxmlformats-officedocument.presentationml.presentation" \
