@@ -189,6 +189,8 @@ If a token is compromised or the user just wants a fresh one:
 
 **`signal` is connected but no `signal_*` tools appear** → there's no token, or the token file is empty. The server starts quietly without one, on purpose, so sessions show no error. Confirm the file exists at `~/.config/nsls/signal-token` and isn't empty, then start a new session. (The server resolves this path with `os.homedir()`, so it's the same location on every OS.)
 
+**`signal-mcp: could not read …/signal-token`** in MCP server logs → the token file exists but can't be read: wrong permissions, or a folder where the file should be. Fix the permissions, or delete it and re-run /signal-setup.
+
 **`node: command not found` / `'node' is not recognized`, or the `signal` server silently never appears** → Node isn't installed or isn't on the PATH. This is the #1 Windows failure. Re-run Step 0; on Windows, install Node from nodejs.org and fully restart Claude Code so the PATH refreshes.
 
 **`401 unknown token`** → the token was rotated somewhere else (e.g. the user clicked the button again from a different browser). Re-mint and re-run setup.

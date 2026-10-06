@@ -15461,8 +15461,12 @@ function loadToken() {
   let raw;
   try {
     raw = fs.readFileSync(tokenFile, "utf8");
-  } catch {
-    return null;
+  } catch (error2) {
+    if (error2.code === "ENOENT") return null;
+    console.error(
+      `signal-mcp: could not read ${tokenFile}: ${error2.message} (run /signal-setup in Claude Code).`
+    );
+    process.exit(1);
   }
   return raw.trim() || null;
 }
