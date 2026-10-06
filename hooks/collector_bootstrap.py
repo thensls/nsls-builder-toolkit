@@ -15,8 +15,8 @@ Checks, cheapest first; any failure means "skip silently":
      the collector's config.json exists in its home
      (~/Library/Application Support/nsls-collector on a Mac,
      %LOCALAPPDATA%\\nsls-collector on Windows) AND its schedule is
-     registered (the LaunchAgent plist on a Mac, the "NSLS Collector" task on
-     Windows). The installers write config.json before they register the
+     registered (on a Mac the LaunchAgent plist exists and launchd has the job
+     loaded; on Windows the "NSLS Collector" task exists). The installers write config.json before they register the
      schedule, so config.json alone can be a half-finished install that never
      runs; this repairs it.
   4. Throttle, via <CLAUDE_CONFIG_DIR or ~/.claude>/.nsls-collector/bootstrap.json
@@ -85,14 +85,26 @@ def install_command(platform, base):
     return ["/bin/bash", "-c", f"curl -fsSL {base}/api/collector/dist/install.sh | bash"]
 
 
+def _launch_agent_loaded():
+    """launchd's own answer for this user's GUI session: a plist left behind by
+    a failed `launchctl bootstrap` exists but isn't loaded."""
+    try:
+        r = subprocess.run(["launchctl", "print", f"gui/{os.getuid()}/{LAUNCH_AGENT}"],
+                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=3)
+        return r.returncode == 0
+    except Exception:
+        return True
+
+
 def schedule_registered(platform, env):
     """Whether the collector's schedule exists. When it can't be told (no
-    schtasks, or no answer within 3 seconds), say yes: a reinstall on a guess
-    is worse than none, and session start must not wait on Task Scheduler."""
+    launchctl or schtasks, or no answer within 3 seconds), say yes: a reinstall
+    on a guess is worse than none, and session start must not wait on it."""
     if platform == "darwin":
         home = env.get("HOME")
-        return bool(home) and (
-            Path(home) / "Library" / "LaunchAgents" / f"{LAUNCH_AGENT}.plist").is_file()
+        plist = Path(home) / "Library" / "LaunchAgents" / f"{LAUNCH_AGENT}.plist" if home else None
+        return bool(plist and plist.is_file()) and _launch_agent_loaded()
     if platform == "win32":
         try:
             r = subprocess.run(["schtasks", "/Query", "/TN", WINDOWS_TASK],

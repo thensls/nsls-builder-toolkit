@@ -139,15 +139,63 @@ def _plist(box):
     (agents / "org.nsls.collector.plist").write_text("<plist/>")
 
 
+def _launchd_says(loaded):
+    real = cb._launch_agent_loaded
+    cb._launch_agent_loaded = lambda: loaded
+    return real
+
+
 @boxed
 def test_installed_config_and_schedule_mean_no_launch(box):
     home = box.collector_home()
     home.mkdir(parents=True)
     (home / "config.json").write_text("{}")
     _plist(box)
-    assert box.run() == "installed"
+    real = _launchd_says(True)
+    try:
+        assert box.run() == "installed"
+    finally:
+        cb._launch_agent_loaded = real
     assert box.popen.calls == []
     assert not box.marker.exists()
+
+
+@boxed
+def test_plist_that_launchd_has_not_loaded_is_a_half_install(box):
+    home = box.collector_home()
+    home.mkdir(parents=True)
+    (home / "config.json").write_text("{}")
+    _plist(box)
+    real = _launchd_says(False)
+    try:
+        assert box.run() == "launched"
+    finally:
+        cb._launch_agent_loaded = real
+
+
+def test_mac_schedule_check_asks_launchd_for_this_user():
+    import os
+    calls = []
+
+    def fake_run(code=None, exc=None):
+        def run(args, **kw):
+            calls.append(args)
+            if exc:
+                raise exc
+            return subprocess.CompletedProcess(args, code)
+        return run
+
+    real = cb.subprocess.run
+    try:
+        cb.subprocess.run = fake_run(code=0)
+        assert cb._launch_agent_loaded() is True
+        assert calls[-1] == ["launchctl", "print", f"gui/{os.getuid()}/org.nsls.collector"]
+        cb.subprocess.run = fake_run(code=113)
+        assert cb._launch_agent_loaded() is False
+        cb.subprocess.run = fake_run(exc=subprocess.TimeoutExpired("launchctl", 3))
+        assert cb._launch_agent_loaded() is True
+    finally:
+        cb.subprocess.run = real
 
 
 @boxed
