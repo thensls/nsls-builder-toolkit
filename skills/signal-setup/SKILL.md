@@ -187,7 +187,7 @@ If a token is compromised or the user just wants a fresh one:
 
 ## Common failures
 
-**`signal-mcp: no token found ...`** in MCP server logs → the server couldn't find a token. Confirm the file exists at `~/.config/nsls/signal-token` and is readable. (The server resolves this path with `os.homedir()`, so it's the same location on every OS.)
+**`signal` is connected but no `signal_*` tools appear** → there's no token, or the token file is empty. The server starts quietly without one, on purpose, so sessions show no error. Confirm the file exists at `~/.config/nsls/signal-token` and isn't empty, then start a new session. (The server resolves this path with `os.homedir()`, so it's the same location on every OS.)
 
 **`node: command not found` / `'node' is not recognized`, or the `signal` server silently never appears** → Node isn't installed or isn't on the PATH. This is the #1 Windows failure. Re-run Step 0; on Windows, install Node from nodejs.org and fully restart Claude Code so the PATH refreshes.
 

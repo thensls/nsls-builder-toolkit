@@ -15462,17 +15462,9 @@ function loadToken() {
   try {
     raw = fs.readFileSync(tokenFile, "utf8");
   } catch {
-    console.error(
-      `signal-mcp: no token found. Set SIGNAL_API_TOKEN or create ${tokenFile} (run /signal-setup in Claude Code).`
-    );
-    process.exit(1);
+    return null;
   }
-  const token = raw.trim();
-  if (!token) {
-    console.error(`signal-mcp: token file at ${tokenFile} is empty (run /signal-setup in Claude Code).`);
-    process.exit(1);
-  }
-  return token;
+  return raw.trim() || null;
 }
 var TOKEN = SELFTEST ? "selftest-no-token" : loadToken();
 async function call(path, params = {}) {
@@ -15591,15 +15583,16 @@ var tools = [
     })
   }
 ];
+var activeTools = TOKEN ? tools : [];
 var server = new Server(
   { name: "signal-mcp", version: "0.1.0" },
   { capabilities: { tools: {} } }
 );
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }))
+  tools: activeTools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }))
 }));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const tool = tools.find((t) => t.name === request.params.name);
+  const tool = activeTools.find((t) => t.name === request.params.name);
   if (!tool) {
     return {
       content: [{ type: "text", text: `Unknown tool: ${request.params.name}` }],
