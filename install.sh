@@ -74,15 +74,19 @@ mkdir -p "$CONFIG_DIR/local-plugins"
 # Only a real checkout counts as installed: an interrupted clone can leave a bare dir.
 # -e, not -d: in a linked worktree .git is a file. (Not `git rev-parse`: that also
 # says yes for an empty folder that merely sits inside some other repo.)
+UPDATE_FAILED=0   # read by the closing banner, so it does not claim success
 if [ -e "$PLUGIN_DIR/.git" ]; then
   echo "  Updating existing installation..."
   if ! UPD_ERR=$(git -C "$PLUGIN_DIR" fetch origin "$REPO_BRANCH" --quiet 2>&1); then
     echo "  WARNING: couldn't download the update, so your toolkit is UNCHANGED (still the version you had)."
     printf '%s\n' "$UPD_ERR" | tail -3 | sed 's/^/    /'
-    echo "  Check your internet connection, then re-run this installer."
+    # Name the likely cause: a test branch override beats "check your internet".
     if [ -n "${NSLS_TOOLKIT_BRANCH:-}" ]; then
-      echo "  (You set NSLS_TOOLKIT_BRANCH=$NSLS_TOOLKIT_BRANCH: check that branch exists.)"
+      echo "  (You set NSLS_TOOLKIT_BRANCH=$NSLS_TOOLKIT_BRANCH: check that branch exists, then re-run this installer.)"
+    else
+      echo "  Check your internet connection, then re-run this installer."
     fi
+    UPDATE_FAILED=1
   elif ! UPD_ERR=$(git -C "$PLUGIN_DIR" reset --hard "origin/$REPO_BRANCH" --quiet 2>&1); then
     echo "  ERROR: the update stopped partway, so the toolkit may be incomplete."
     printf '%s\n' "$UPD_ERR" | tail -3 | sed 's/^/    /'
@@ -1131,7 +1135,11 @@ fi
 
 echo ""
 echo "==============================="
-echo "  NSLS Builder Toolkit installed!"
+if [ "$UPDATE_FAILED" = 1 ]; then
+  echo "  NSLS Builder Toolkit set up, but NOT updated (see the WARNING above)."
+else
+  echo "  NSLS Builder Toolkit installed!"
+fi
 echo "==============================="
 echo ""
 echo "What you got:"
