@@ -18,6 +18,11 @@ was a grind, did anything click, and what tool or skill do you wish you'd had?* 
 skill drafts that answer from evidence, so nobody has to rebuild the week from memory.
 It only ever drafts. **The person pastes it into Signal themselves — never send it.**
 
+If the person already runs `/close-week` each Friday, its Quick Notes block is built
+from their daily notes and is already their note: say so, and only carry on if they
+want a second take. This skill is for everyone else, and for weeks the daily notes
+missed.
+
 Talk to the person plainly. No file paths, script names or tool names in what you say
 to them unless something breaks and they need it to get unstuck.
 
@@ -114,16 +119,19 @@ Rules:
 
 - **A bullet or a win, never both.** Is there meaningful work left? Yes → a bullet with
   a percentage (rounded to 10; `BLOCKED` when waiting on someone). No → a `WIN:` line.
-- **One `WIN:` per line, two to five of them.** Signal counts each `WIN:` line as one
-  win; a heading with bullets under it is read as a single win.
+- **One `WIN:` per line, up to five — only wins the evidence supports.** A quiet week
+  can have none. Signal counts each `WIN:` line as one win; a heading with bullets
+  under it is read as a single win.
 - **Outcomes, not activity.** "Shipped X so Y can stop doing Z" beats "worked on X".
 - **Name the people.** Signal readers respond to names. Only the person's own wins.
 - **Never state hours or time spent**, in any form.
 - **Leave out** admin, housekeeping, tool setup, access requests, one-off messages,
   anything personal, and anything confidential.
-- **Leave out empty sections.** No invented challenges, growth or wishes.
-- **Five to eight bullets.** Merge related sessions into one item rather than listing
-  every session; a busy week still reads in thirty seconds.
+- **Nothing invented, anywhere.** Fewer bullets, no wins, or an empty section is better
+  than padding — a manager reads this note.
+- **At most eight bullets, as many as the evidence supports.** Merge related sessions
+  into one item rather than listing every session; a busy week still reads in thirty
+  seconds.
 - Lead with what matters most. No headers, no emojis, no sign-off.
 
 ## Step 5 — Hand it over
