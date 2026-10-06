@@ -43,11 +43,16 @@ If they pick Google Calendar, use **only their work calendar** — the one on th
 personal appointment is not work, and it has no place in a note their manager reads.
 
 If they pick Daily notes, find the vault: the `OBSIDIAN_VAULT_PATH` environment
-variable, else the personal toolkit's `.env`, else ask once. Save:
+variable, else the personal toolkit's `.env`, else ask once. Save the values you
+actually resolved — their real calendar address and the real vault path — never the
+placeholders in this example. `vault` stays `null` only when Daily notes wasn't chosen:
 
 ```json
-{"sources": ["claude_sessions", "calendar", "slack"], "calendars": ["name@nsls.org"], "vault": null, "created": "YYYY-MM-DD"}
+{"sources": ["claude_sessions", "calendar", "daily_notes"], "calendars": ["jdoe@nsls.org"], "vault": "/Users/jdoe/Obsidian/Work", "created": "YYYY-MM-DD"}
 ```
+
+On later runs, if a chosen source's saved value is missing (no calendar, or Daily notes
+with no vault), resolve it once more and save it rather than skipping the source.
 
 Say in one line what you saved and that "change my quicknote sources" redoes it.
 
@@ -82,7 +87,8 @@ which sources actually ran.
   also returns colleagues' calls they weren't in — skip those); read at most five
   summaries. Decisions and commitments beat attendance.
 - **Asana** — tasks the person completed or moved forward in the window.
-- **Daily notes** — the vault's dated notes for the window (commonly `01-daily/`).
+- **Daily notes** — the dated notes for the window in the vault saved in settings
+  (commonly its `01-daily/` folder).
   These include what open-day and close-day wrote, if the person uses them.
 
 ## Step 3 — Screen the evidence before writing
