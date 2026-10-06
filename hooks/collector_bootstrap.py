@@ -46,6 +46,7 @@ LOCK_STALE_SECONDS = 600
 MAX_MARKER_BYTES = 4096
 
 LAUNCH_AGENT = "org.nsls.collector"
+SCHEDULE_PROBE_SECONDS = 1
 WINDOWS_TASK = "NSLS Collector"
 
 _ORIGIN = re.compile(r"https?://[A-Za-z0-9.-]+(?::[0-9]{1,5})?")
@@ -91,16 +92,17 @@ def _launch_agent_loaded():
     try:
         r = subprocess.run(["launchctl", "print", f"gui/{os.getuid()}/{LAUNCH_AGENT}"],
                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL, timeout=3)
+                           stderr=subprocess.DEVNULL, timeout=SCHEDULE_PROBE_SECONDS)
         return r.returncode == 0
     except Exception:
         return True
 
 
 def schedule_registered(platform, env):
-    """Whether the collector's schedule exists. When it can't be told (no
-    launchctl or schtasks, or no answer within 3 seconds), say yes: a reinstall
-    on a guess is worse than none, and session start must not wait on it."""
+    """Whether the collector's schedule exists. It runs only when the evidence
+    file is stale, answers in tens of milliseconds, and costs session start at
+    most SCHEDULE_PROBE_SECONDS if launchd or Task Scheduler stalls. When it
+    can't be told, say yes: a reinstall on a guess is worse than none."""
     if platform == "darwin":
         home = env.get("HOME")
         plist = Path(home) / "Library" / "LaunchAgents" / f"{LAUNCH_AGENT}.plist" if home else None
@@ -109,7 +111,7 @@ def schedule_registered(platform, env):
         try:
             r = subprocess.run(["schtasks", "/Query", "/TN", WINDOWS_TASK],
                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL, timeout=3,
+                               stderr=subprocess.DEVNULL, timeout=SCHEDULE_PROBE_SECONDS,
                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             return r.returncode == 0
         except Exception:

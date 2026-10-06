@@ -192,7 +192,7 @@ def test_mac_schedule_check_asks_launchd_for_this_user():
         assert calls[-1] == ["launchctl", "print", f"gui/{os.getuid()}/org.nsls.collector"]
         cb.subprocess.run = fake_run(code=113)
         assert cb._launch_agent_loaded() is False
-        cb.subprocess.run = fake_run(exc=subprocess.TimeoutExpired("launchctl", 3))
+        cb.subprocess.run = fake_run(exc=subprocess.TimeoutExpired("launchctl", 1))
         assert cb._launch_agent_loaded() is True
     finally:
         cb.subprocess.run = real
@@ -227,7 +227,7 @@ def test_windows_schedule_check_asks_schtasks_and_trusts_it_only_when_it_answers
         assert cb.schedule_registered("win32", {}) is False
         cb.subprocess.run = fake_run(exc=FileNotFoundError("schtasks"))
         assert cb.schedule_registered("win32", {}) is True
-        cb.subprocess.run = fake_run(exc=subprocess.TimeoutExpired("schtasks", 3))
+        cb.subprocess.run = fake_run(exc=subprocess.TimeoutExpired("schtasks", 1))
         assert cb.schedule_registered("win32", {}) is True
     finally:
         cb.subprocess.run = real
