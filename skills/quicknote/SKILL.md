@@ -62,11 +62,14 @@ which sources actually ran.
   `python3 scripts/sweep_sessions.py --start YYYY-MM-DD --end YYYY-MM-DD` from this
   skill's folder (use `python` if `python3` isn't found). It reads the transcripts on
   this computer and returns each session's title, active days, a few of the person's
-  asks and Claude's last reply. Each real session is a candidate work item. Drop
-  automated or scheduled runs, one-off questions, setup and housekeeping, and anything
-  personal.
-- **Google Calendar** — meetings held with other people in the window. Skip declined
-  events, focus blocks and anything personal.
+  asks and Claude's last reply. Each real session is a candidate work item. The script
+  already removes runs a scheduled task started where the person never typed anything.
+  A session marked `started_by_schedule` began as a routine but the person typed in it
+  that week — judge it by those asks and keep any real work. Drop one-off questions,
+  setup and housekeeping, and anything personal.
+- **Google Calendar** — read only the calendars saved in settings (the person's
+  @nsls.org work calendar unless they named another). Meetings held with other people
+  in the window; skip declined events, focus blocks and anything personal.
 - **Slack** — messages the person sent in the window. Look for decisions, things they
   unblocked, thanks they received, and their last quick note to Signal (so finished
   wins aren't repeated and percentages move on instead of restarting).
@@ -77,7 +80,21 @@ which sources actually ran.
 - **Daily notes** — the vault's dated notes for the window (commonly `01-daily/`).
   These include what open-day and close-day wrote, if the person uses them.
 
-## Step 3 — Write the note
+## Step 3 — Screen the evidence before writing
+
+The note goes to the person's manager and into their Work Journal, and the session
+excerpts are raw. Before drafting, drop anything about:
+
+- another person's performance, HR matters, health, pay or personal life
+- legal or contract matters, and anything marked confidential or not-for-sharing
+- student or member records, credentials, keys and access details
+- the person's own personal life, side projects or non-NSLS work
+
+If you're not sure whether something belongs in a note their manager will read, leave
+it out and ask about it in one line under the draft. Never quote a session's raw text
+into the note — summarise the work in your own words.
+
+## Step 4 — Write the note
 
 Signal sorts every note into **work items, wins, challenges and growth moments**, and
 builds each person's Work Journal from it. Write in that shape, in Slack formatting:
@@ -109,7 +126,7 @@ Rules:
   every session; a busy week still reads in thirty seconds.
 - Lead with what matters most. No headers, no emojis, no sign-off.
 
-## Step 4 — Hand it over
+## Step 5 — Hand it over
 
 Show the note in one code block, ready to paste. Under it, not in the block, add a short
 *where each line came from* list (one line per bullet or win: the session title,
