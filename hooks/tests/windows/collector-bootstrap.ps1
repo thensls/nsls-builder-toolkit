@@ -2,7 +2,8 @@
 # installer never runs. Proves under Windows PowerShell 5.1 that
 # Invoke-CollectorBootstrap (hooks/collector_bootstrap.ps1): launches once
 # when the collector is missing, writing the marker first; stays out when it
-# is installed, when evidence is fresh, or when the builder opted out; holds
+# is installed (config.json plus its scheduled task), when evidence is fresh,
+# or when the builder opted out; repairs a config.json with no task; holds
 # to one attempt per 24h and stops after 5; stands down while another session
 # holds the lock; and that session-start.ps1 wires it with its output
 # discarded. Run by .github/workflows/windows-hooks.yml. ASCII only.
@@ -26,6 +27,11 @@ function Start-Process {
 
 . (Join-Path $hooks 'collector_bootstrap.ps1')
 
+# The real task check, kept for one live probe; then a stub the boxes control.
+$realTaskCheck = ${function:Test-CollectorTaskRegistered}
+$script:taskRegistered = $true
+function Test-CollectorTaskRegistered { return $script:taskRegistered }
+
 $inv = [System.Globalization.CultureInfo]::InvariantCulture
 $utf8 = New-Object System.Text.UTF8Encoding $false
 $t0 = [DateTime]::new(2026, 9, 26, 12, 0, 0, [DateTimeKind]::Utc)
@@ -42,6 +48,7 @@ function New-Box {
     $script:marker = Join-Path $env:CLAUDE_CONFIG_DIR '.nsls-collector\bootstrap.json'
     $script:launches = @()
     $script:markerAtLaunch = $null
+    $script:taskRegistered = $true
     return $root
 }
 
@@ -85,8 +92,22 @@ try {
     New-Item -ItemType Directory -Path $h -Force | Out-Null
     [System.IO.File]::WriteAllText((Join-Path $h 'config.json'), '{}', $utf8)
     $r = Invoke-CollectorBootstrap -Now $t0
-    Check 'config.json present -> installed' ($r -eq 'installed') "$r"
+    Check 'config.json + task -> installed' ($r -eq 'installed') "$r"
     Check 'no launch, no marker' (($script:launches.Count -eq 0) -and -not (Test-Path -LiteralPath $script:marker))
+
+    # Half-finished install: config.json but no scheduled task -> repaired.
+    $roots += New-Box
+    $h = Join-Path $env:LOCALAPPDATA 'nsls-collector'
+    New-Item -ItemType Directory -Path $h -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $h 'config.json'), '{}', $utf8)
+    $script:taskRegistered = $false
+    $r = Invoke-CollectorBootstrap -Now $t0
+    Check 'config.json without task -> launched' ($r -eq 'launched') "$r"
+    Check 'half install: one launch' ($script:launches.Count -eq 1) "$($script:launches.Count)"
+
+    # The real check runs schtasks without throwing; no such task on a runner.
+    $probe = & $realTaskCheck
+    Check 'real task check: no task on this runner -> false' ($probe -eq $false) "$probe"
 
     # Installed via fresh evidence.
     $roots += New-Box

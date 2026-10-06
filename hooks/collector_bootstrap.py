@@ -11,10 +11,14 @@ Checks, cheapest first; any failure means "skip silently":
 
   1. NSLS_COLLECTOR_OPTOUT=1 (or true/yes)  -> never install, write nothing.
   2. Platform: macOS and Windows only. Linux has no supported scheduler.
-  3. Installed = the collector's config.json exists in its home
+  3. Installed = its evidence file is fresh (collector_evidence.fresh()), or
+     the collector's config.json exists in its home
      (~/Library/Application Support/nsls-collector on a Mac,
-     %LOCALAPPDATA%\\nsls-collector on Windows), or its evidence file is fresh
-     (collector_evidence.fresh()).
+     %LOCALAPPDATA%\\nsls-collector on Windows) AND its schedule is
+     registered (the LaunchAgent plist on a Mac, the "NSLS Collector" task on
+     Windows). The installers write config.json before they register the
+     schedule, so config.json alone can be a half-finished install that never
+     runs; this repairs it.
   4. Throttle, via <CLAUDE_CONFIG_DIR or ~/.claude>/.nsls-collector/bootstrap.json
      = {attempted_at, attempts}: at most one attempt per 24 hours, and none
      after 5 (logged once). The marker is written BEFORE the launch, under a
@@ -40,6 +44,9 @@ THROTTLE = timedelta(hours=24)
 MAX_ATTEMPTS = 5
 LOCK_STALE_SECONDS = 600
 MAX_MARKER_BYTES = 4096
+
+LAUNCH_AGENT = "org.nsls.collector"
+WINDOWS_TASK = "NSLS Collector"
 
 _ORIGIN = re.compile(r"https?://[A-Za-z0-9.-]+(?::[0-9]{1,5})?")
 _ISO = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})Z")
@@ -78,19 +85,39 @@ def install_command(platform, base):
     return ["/bin/bash", "-c", f"curl -fsSL {base}/api/collector/dist/install.sh | bash"]
 
 
+def schedule_registered(platform, env):
+    """Whether the collector's schedule exists. When it can't be told (no
+    schtasks), say yes: a reinstall on a guess is worse than none."""
+    if platform == "darwin":
+        home = env.get("HOME")
+        return bool(home) and (
+            Path(home) / "Library" / "LaunchAgents" / f"{LAUNCH_AGENT}.plist").is_file()
+    if platform == "win32":
+        try:
+            r = subprocess.run(["schtasks", "/Query", "/TN", WINDOWS_TASK],
+                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, timeout=10,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            return r.returncode == 0
+        except Exception:
+            return True
+    return False
+
+
 def installed(platform, env, config_dir):
-    home = collector_home(platform, env)
-    if home is not None and (home / "config.json").is_file():
-        return True
     try:
         here = str(Path(__file__).resolve().parent)
         if here not in sys.path:
             sys.path.insert(0, here)
         import collector_evidence
 
-        return bool(collector_evidence.fresh(config_dir=config_dir))
+        if collector_evidence.fresh(config_dir=config_dir):
+            return True
     except Exception:
-        return False
+        pass
+    home = collector_home(platform, env)
+    return bool(home is not None and (home / "config.json").is_file()
+                and schedule_registered(platform, env))
 
 
 def _iso(dt):
