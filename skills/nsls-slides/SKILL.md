@@ -177,9 +177,6 @@ Bash tool call starts a fresh shell.)
 
 Mac/Linux commands here call the launcher by its full path, `~/.local/bin/nsls-python`, so nothing
 depends on this session's `PATH`. On Windows, replace it with plain `nsls-python`.
-The script path uses `${CLAUDE_PLUGIN_ROOT}`, which Claude Code fills in with the folder
-this skill loaded from, so the script always matches the skill. On an older install where
-it isn't filled in, use `~/.claude/local-plugins/nsls-builder-toolkit` instead.
 
 ```bash
 ~/.local/bin/nsls-python -c 'import pptx' && echo PREFLIGHT_OK
@@ -199,17 +196,17 @@ repairing and re-run the toolkit installer for them. See "Python environment" un
 ```bash
 # Society brand
 echo '<json>' | ~/.local/bin/nsls-python \
-  "${CLAUDE_PLUGIN_ROOT}/skills/nsls-slides/scripts/pptx_creator.py" \
+  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
   --brand society --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx
 
 # NSLS brand
 echo '<json>' | ~/.local/bin/nsls-python \
-  "${CLAUDE_PLUGIN_ROOT}/skills/nsls-slides/scripts/pptx_creator.py" \
+  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
   --brand nsls --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx
 
 # Mac only: add --pdf for a font-safe PDF export (needs Keynote; works with either brand)
 echo '<json>' | ~/.local/bin/nsls-python \
-  "${CLAUDE_PLUGIN_ROOT}/skills/nsls-slides/scripts/pptx_creator.py" \
+  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
   --brand society --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx --pdf
 ```
 
@@ -258,7 +255,10 @@ export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="${USERPROFILE:-$HOME}/.config/gws-profil
 - **On Windows:** run this exact command with the **Bash tool** (Git Bash), not
   PowerShell. Claude Code's PowerShell tool is PowerShell 7 when installed, and it splits
   `--json` at every space; Git Bash keeps it intact, and `${USERPROFILE:-$HOME}` gives
-  `gws` a Windows path (PC test 2026-10-06).
+  `gws` a Windows path (PC test 2026-10-06). If this session has no Bash tool, use
+  `/gdoc-build`'s Windows PowerShell 5.1 recipe in a PowerShell window opened from the Start
+  menu, with `"mimeType":"application/vnd.google-apps.presentation"` and the `.pptx` content
+  type above.
 
 ### Step 5 — Clean up
 
@@ -346,7 +346,7 @@ JSON
 
 # 2. Build .pptx
 ~/.local/bin/nsls-python \
-  "${CLAUDE_PLUGIN_ROOT}/skills/nsls-slides/scripts/pptx_creator.py" \
+  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
   --brand society \
   --input ~/nsls-deck-20260302-1405.json \
   --output ~/nsls-deck-20260302-1405.pptx
