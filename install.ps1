@@ -501,14 +501,17 @@ New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null
 # A failed update must say so: errors used to go to $null and "Done." printed regardless.
 # A failed FETCH changes nothing on disk, so warn and carry on. A failed RESET
 # may leave files half-updated, so that one stops rather than claim "unchanged".
+$UpdateFailed = $false   # read by the closing banner, so it doesn't claim success
 if (Test-Path (Join-Path $PluginDir '.git')) {
     Write-Host "  Updating existing installation..."
     $updOut = Invoke-Native 'git' @('-C', $PluginDir, 'fetch', 'origin', $RepoBranch, '--quiet')
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  WARNING: couldn't download the update, so your toolkit is UNCHANGED (still the version you had)."
         ($updOut -split "`n" | Select-Object -Last 3) | ForEach-Object { Write-Host "    $_" }
-        Write-Host "  Check your internet connection, then re-run this installer."
-        if ($env:NSLS_TOOLKIT_BRANCH) { Write-Host "  (You set NSLS_TOOLKIT_BRANCH=$($env:NSLS_TOOLKIT_BRANCH): check that branch exists.)" }
+        # Name the likely cause: a test branch override beats "check your internet".
+        if ($env:NSLS_TOOLKIT_BRANCH) { Write-Host "  (You set NSLS_TOOLKIT_BRANCH=$($env:NSLS_TOOLKIT_BRANCH): check that branch exists, then re-run this installer.)" }
+        else { Write-Host "  Check your internet connection, then re-run this installer." }
+        $UpdateFailed = $true
     } else {
         $updOut = Invoke-Native 'git' @('-C', $PluginDir, 'reset', '--hard', "origin/$RepoBranch", '--quiet')
         if ($LASTEXITCODE -ne 0) {
@@ -878,7 +881,8 @@ if ($PrereqReport.Count) {
 }
 Write-Host ""
 Write-Host "==============================="
-Write-Host "  NSLS Builder Toolkit installed!"
+if ($UpdateFailed) { Write-Host "  NSLS Builder Toolkit set up, but NOT updated (see the WARNING above)." }
+else { Write-Host "  NSLS Builder Toolkit installed!" }
 Write-Host "==============================="
 Write-Host ""
 if ($ClaudeBin) {
