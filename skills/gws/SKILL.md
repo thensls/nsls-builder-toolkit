@@ -109,7 +109,13 @@ if (($u -split ';') -notcontains $dir) { [Environment]::SetEnvironmentVariable('
 
 This installs the latest release from https://github.com/googleworkspace/cli.
 
-> ⚠️ **Windows PowerShell 5.1 and `--json`:** every `--json '{...}'` example in
+> ⚠️ **On Windows in Claude Code, run `gws` commands that take `--json` or `--params`
+> with the Bash tool** (Git Bash): the bash examples in this skill work there as written.
+> Don't use Claude's PowerShell tool for them. It's PowerShell 7 when installed, and
+> PowerShell 7 splits the JSON at every space, even with the `--%` recipe below
+> (`unexpected argument '-' found`, PC test 2026-10-06).
+>
+> ⚠️ **Windows PowerShell 5.1 and `--json`** (a Start-menu window): every `--json '{...}'` example in
 > this skill is bash-shaped. PS 5.1 strips the embedded double quotes at the
 > native-command boundary, so gws receives `{key:value}` and fails with
 > `key must be a string at line 1 column 2`. Escaping the quotes alone does NOT
@@ -125,9 +131,9 @@ This installs the latest release from https://github.com/googleworkspace/cli.
 > ```
 > After `--%` everything on the line is literal except cmd-style `%VAR%`
 > expansion — no `$vars`, pipes, or `;` there, so put every dynamic value in an
-> env var. Same behavior on PS 5.1 and PS 7. (Git Bash passes single-quoted
-> JSON fine, which is why the bug hides there. `--params` takes JSON too — same
-> rule.)
+> env var. **This recipe is Windows PowerShell 5.1 only:** PowerShell 7 passes the
+> escaped quotes through and splits at spaces. (Git Bash passes single-quoted JSON
+> fine, which is why the bug hides there. `--params` takes JSON too — same rule.)
 
 > ⚠️ **Windows needs the MS Visual C++ x64 runtime.** Without it `gws.exe` exits with
 > `0xC0000135` and **prints nothing at all** — near-impossible to debug blind. Install it

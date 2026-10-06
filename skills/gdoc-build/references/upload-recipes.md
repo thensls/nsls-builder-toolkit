@@ -2,7 +2,12 @@
 
 Copy-paste shell snippets for the upload flow. Tested 2026-05-01 on the builder-toolkit onboarding doc rebuild.
 
-> **On Windows** the snippets below are macOS/Linux-shaped. Translate: `cd ~` →
+> **On Windows, in Claude Code: run these snippets with the Bash tool (Git Bash), as
+> written,** with the profile line set to
+> `export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="${USERPROFILE:-$HOME}/.config/gws-profiles/nsls-gdocs-skill"`.
+> Claude Code's PowerShell tool is PowerShell 7 when installed, and PowerShell 7 splits
+> `--json` at every space, even with the `--%` recipe below (PC test 2026-10-06).
+> The PowerShell translation below is for **Windows PowerShell 5.1 only**. Translate: `cd ~` →
 > `cd $env:USERPROFILE`; `~/foo.docx` → `$env:USERPROFILE\foo.docx`; `tail -10` →
 > `Select-Object -Last 10`. Use `$env:VAR`, **not** `%VAR%` — CMD-style `%VAR%` is
 > passed through literally by PowerShell, so `gws --upload` gets a path containing
