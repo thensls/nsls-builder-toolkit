@@ -49,6 +49,7 @@ Then open Claude Code and say `/nsls-setmeup` to connect your tools and optional
 | **/google-slides-api** | Edit existing Google Slides via API |
 | **/gws** | Google Workspace Sheets CLI |
 | **/netlify-deploy** | Deploy and preview static pages |
+| **/publish-public-page** | Publish a public marketing page to docs.nsls.org/<slug> with a person-bound publishing token (no AWS) |
 | **/deployment-guide** | How to deploy to Railway, Airtable, GAS, Cloudflare |
 | **/nsls-auth** | Wire "Sign in with NSLS" SSO into any NSLS-controlled app via auth.nsls.org (web, mobile, Netlify static sites) |
 | **/pydoc-pipeline** | Generate documentation from Python code |
@@ -226,6 +227,7 @@ They form a cycle: `/data-model-discovery` explores a new system → maps it aga
 | **google-drive** | Google Drive file management |
 | **google-slides-api** | Edit existing Google Slides via API |
 | **netlify-deploy** | Deploy and preview static pages |
+| **publish-public-page** | Publish a public marketing page to docs.nsls.org with a publishing token |
 | **pydoc-pipeline** | Generate documentation from Python code |
 | **gws** | Google Workspace Sheets CLI |
 | **deployment-guide** | How to deploy to Railway, Airtable, GAS, Cloudflare |
