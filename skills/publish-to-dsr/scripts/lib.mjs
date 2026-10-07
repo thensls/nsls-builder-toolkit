@@ -12,7 +12,16 @@ export const RESERVED_SLUGS = new Set(["ph"]);
 export const TITLE_MAX = 200;
 export const DESCRIPTION_MAX = 2000;
 export const URL_MAX = 2048;
-export const MAX_BYTES = 25 * 1024 * 1024;
+/**
+ * The dashboard runs on OpenNext/Lambda behind CloudFront: the real hard bound is
+ * ~6 MB per REQUEST, and base64 inflates binary content ~33% (a PDF over ~4 MB
+ * will not fit once encoded). The server's own 25 MB document cap is unreachable
+ * through this API, so we refuse locally past ~5.5 MB.
+ */
+export const MAX_REQUEST_BYTES = Math.floor(5.5 * 1024 * 1024);
+export const MAX_BYTES = MAX_REQUEST_BYTES;
+export const TOO_LARGE_MSG =
+  "the content is too large to publish over the token API (~6MB request limit); a PDF over ~4MB won't fit once encoded";
 
 export const TARGETS = ["public", "library", "room"];
 export const KINDS = ["html", "pdf", "link", "built"];
@@ -53,7 +62,7 @@ export function parseArgs(argv) {
       value = argv[++i];
       if (value === undefined || value.startsWith("--")) throw new UsageError(`--${name} needs a value`);
     } else {
-      throw new UsageError(`Unexpected argument "${arg}"`);
+      throw new UsageError("Unexpected positional argument (did you forget a --flag name?)");
     }
     if (!VALUE_FLAGS.includes(name)) throw new UsageError(`Unknown flag --${name}`);
     out[camel(name)] = value;
@@ -95,7 +104,7 @@ export function validateUrl(url) {
 
 export function validateSize(sizeBytes) {
   if (sizeBytes > MAX_BYTES) {
-    return `File is ${(sizeBytes / 1048576).toFixed(1)} MB; the maximum is ${MAX_BYTES / 1048576} MB.`;
+    return `File is ${(sizeBytes / 1048576).toFixed(1)} MB: ${TOO_LARGE_MSG}.`;
   }
   return null;
 }
@@ -149,12 +158,32 @@ export function resolveStage(stage = "staging", allowProduction = false) {
   return { ok: true, stage, baseUrl: BASE_URLS[stage] };
 }
 
+/** Refuse a serialized request body that would not fit the real ~6 MB request limit. */
+export function checkPayload(json) {
+  const n = Buffer.byteLength(json, "utf8");
+  return n > MAX_REQUEST_BYTES ? `Request is ${(n / 1048576).toFixed(1)} MB once encoded: ${TOO_LARGE_MSG}.` : null;
+}
+
+/**
+ * The deck role that will actually be sent: --deck-role wins, else config.artifact.
+ * Enforced on this EFFECTIVE value so a config FILE saying "presenter" cannot
+ * bypass the staff-visibility rule. Returns an error string or null.
+ */
+export function validateEffectiveDeckRole({ config, deckRole, visibility }) {
+  const role = deckRole ?? config?.artifact;
+  if (role === undefined) return null;
+  if (role === "presenter" && visibility !== "staff") return "A presenter deck (config.artifact / --deck-role presenter) carries rep-only notes and requires --visibility staff.";
+  if (role === "prospect" && visibility === "staff") return "A prospect deck (config.artifact / --deck-role prospect) cannot be --visibility staff.";
+  return null;
+}
+
 /**
  * Pure flag validation, BEFORE any file or network I/O. Returns an error string or null.
  * `args` is the parseArgs output (target/kind default applied by the caller via normalize()).
  */
 export function validateArgs(raw) {
   const a = normalize(raw);
+  if (a.target === undefined) return `--target is required (${TARGETS.join(" | ")}); it is never defaulted, so nothing is published world-readable by accident.`;
   if (!TARGETS.includes(a.target)) return `--target must be one of ${TARGETS.join(" | ")} (got "${a.target}").`;
   if (!a.kind) return `--kind is required for --target ${a.target} (one of ${KINDS.join(" | ")}).`;
   if (!KINDS.includes(a.kind)) return `--kind must be one of ${KINDS.join(" | ")} (got "${a.kind}").`;
@@ -189,6 +218,7 @@ export function validateArgs(raw) {
     return forbid(["institution", "groupId", "visibility", "alsoLibrary", ...builtOnly], "only apply to --target room.");
   }
   // room
+  if (a.institution !== undefined && !a.institution.trim()) return "--institution must not be empty.";
   if (a.institution && a.groupId) return "Give --institution OR --group-id, not both.";
   if (!a.institution && !a.groupId) return "--target room needs --institution <name> or --group-id <uuid>.";
   if (a.groupId && !UUID_RE.test(a.groupId)) return `--group-id must be a uuid (got "${a.groupId}").`;
@@ -233,14 +263,14 @@ export function validateArgs(raw) {
   return null;
 }
 
-/** Apply defaults: target defaults to public; kind defaults to html for public only. */
+/** Apply defaults: kind defaults to html for public only. --target is never defaulted. */
 export function normalize(a) {
-  const target = a.target ?? "public";
+  const target = a.target;
   const kind = a.kind ?? (target === "public" ? "html" : undefined);
   return { ...a, target, kind };
 }
 
-/** Merge --notes / --deck-role into the build config (pilot's buildDeckConfig). */
+/** Build config sent to the server: --notes OVERRIDES config.notes; --deck-role sets config.artifact. */
 export function buildDeckConfig({ config, notes, deckRole }) {
   const out = { ...config, notes: notes ?? config.notes ?? {} };
   if (deckRole) out.artifact = deckRole;
@@ -292,6 +322,9 @@ export function describeResponse(status, body) {
   const detail = raw ? ` (${raw})` : "";
   switch (status) {
     case 200: {
+      if (body === null || typeof body !== "object" || Array.isArray(body)) {
+        return { ok: false, message: "UNVERIFIED: the server returned success but no details — check docs.nsls.org / the library / the institution's room before assuming it published (and before retrying)." };
+      }
       const parts = ["Published."];
       if (body?.publicUrl) parts.push(body.publicUrl);
       if (body?.institutionName) parts.push(`Room: ${body.institutionName}.`);

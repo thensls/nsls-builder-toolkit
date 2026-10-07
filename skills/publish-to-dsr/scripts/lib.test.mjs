@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parseArgs, validateArgs, validateSlug, validateMeta, validateHtml, validatePdf, validateUrl,
-  resolveToken, describeResponse, resolveStage, buildBody, buildDeckConfig, UsageError, BASE_URLS,
+  resolveToken, describeResponse, checkPayload, validateEffectiveDeckRole, MAX_REQUEST_BYTES, resolveStage, buildBody, buildDeckConfig, UsageError, BASE_URLS,
 } from "./lib.mjs";
 
 const U1 = "11111111-1111-4111-8111-111111111111";
@@ -31,13 +31,13 @@ test("html + pdf + url checks", () => {
 });
 
 test("public: defaults, slug, file", () => {
-  assert.equal(v({ title: "T", slug: "ok", file: "p.html" }), null);
-  assert.match(v({ title: "T", file: "p.html" }), /slug/);
-  assert.match(v({ title: "T", slug: "Bad", file: "p.html" }), /invalid/);
-  assert.match(v({ title: "T", slug: "ph", file: "p.html" }), /reserved/);
-  assert.match(v({ title: "T", slug: "ok" }), /--file/);
+  assert.equal(v({ target: "public", title: "T", slug: "ok", file: "p.html" }), null);
+  assert.match(v({ target: "public", title: "T", file: "p.html" }), /slug/);
+  assert.match(v({ target: "public", title: "T", slug: "Bad", file: "p.html" }), /invalid/);
+  assert.match(v({ target: "public", title: "T", slug: "ph", file: "p.html" }), /reserved/);
+  assert.match(v({ target: "public", title: "T", slug: "ok" }), /--file/);
   assert.match(v({ target: "public", kind: "pdf", title: "T", slug: "ok", file: "p" }), /only supports --kind html/);
-  assert.match(v({ title: "T", slug: "ok", file: "p.html", visibility: "room" }), /not allowed here/);
+  assert.match(v({ target: "public", title: "T", slug: "ok", file: "p.html", visibility: "room" }), /not allowed here/);
 });
 
 test("library: pdf/link only; html and built rejected", () => {
@@ -119,11 +119,12 @@ test("parseArgs", () => {
   assert.throws(() => parseArgs(["--title"]), UsageError);
   assert.throws(() => parseArgs(["--title", "--stage"]), UsageError);
   assert.throws(() => parseArgs(["stray"]), UsageError);
+  assert.throws(() => parseArgs(["SECRET-POSITIONAL-TOKEN"]), (e) => e instanceof UsageError && !e.message.includes("SECRET-POSITIONAL-TOKEN") && /positional/.test(e.message));
   assert.throws(() => parseArgs(["--__proto__", "x"]), UsageError);
 });
 
 test("buildBody: public html as text", () => {
-  const b = buildBody({ title: " T ", slug: "ok", description: "d" }, "tok", { text: "<html>" });
+  const b = buildBody({ target: "public", title: " T ", slug: "ok", description: "d" }, "tok", { text: "<html>" });
   assert.deepEqual(b, { token: "tok", target: "public", kind: "html", title: "T", description: "d", slug: "ok", html: "<html>" });
 });
 test("buildBody: pdf is base64", () => {
@@ -165,7 +166,7 @@ test("status messages", () => {
   assert.match(describeResponse(409, { error: "slug taken" }).message, /slug or title/);
   assert.match(describeResponse(502, {}).message, /BEFORE retrying/);
   assert.equal(describeResponse(500, undefined).ok, false);
-  assert.equal(describeResponse(200, undefined).ok, true);
+  assert.equal(describeResponse(200, undefined).ok, false);
 });
 
 test("token never appears in any message", () => {
@@ -174,4 +175,44 @@ test("token never appears in any message", () => {
   msgs.push(resolveStage("production", false).message, validateArgs({ target: "library", kind: "html", title: "T", token: TOKEN }));
   for (const m of msgs) assert.ok(!String(m).includes(TOKEN));
   assert.throws(() => parseArgs(["--token"]), (e) => !e.message.includes(TOKEN));
+});
+
+test("--target is required, never defaulted", () => {
+  assert.match(v({ kind: "html", title: "T", slug: "ok", file: "p.html" }), /--target is required/);
+  assert.match(v({ title: "T", slug: "ok", file: "p.html" }), /--target is required/);
+});
+
+test("--institution trimmed / non-empty", () => {
+  assert.match(v({ ...room, institution: "   ", kind: "pdf", file: "a" }), /must not be empty/);
+  assert.match(v({ ...room, institution: "", kind: "pdf", file: "a" }), /must not be empty/);
+  assert.equal(buildBody({ ...room, institution: "  UW  ", kind: "link", url: "https://a.com" }, "t").institution, "UW");
+});
+
+test("oversized payload refused locally", () => {
+  assert.equal(checkPayload("x".repeat(1000)), null);
+  const big = JSON.stringify({ file: Buffer.alloc(MAX_REQUEST_BYTES).toString("base64") });
+  assert.match(checkPayload(big), /~6MB request limit/);
+  assert.match(checkPayload(big), /PDF over ~4MB/);
+  // a ~4.5MB PDF is ~6MB once base64'd
+  const pdf = buildBody({ target: "library", kind: "pdf", title: "T" }, "t", { bytes: Buffer.alloc(4.5 * 1024 * 1024) });
+  assert.ok(checkPayload(JSON.stringify(pdf)));
+  assert.match(validateHtml("<html>", MAX_REQUEST_BYTES + 1), /~6MB/);
+});
+
+test("200 with a non-object body is unverified", () => {
+  for (const b of [undefined, null, "ok", [1], 7]) {
+    const r = describeResponse(200, b);
+    assert.equal(r.ok, false); assert.match(r.message, /UNVERIFIED/);
+  }
+  assert.equal(describeResponse(200, {}).ok, true);
+});
+
+test("effective config.artifact enforces presenter => staff", () => {
+  assert.match(validateEffectiveDeckRole({ config: { artifact: "presenter" }, visibility: "room" }), /staff/);
+  assert.equal(validateEffectiveDeckRole({ config: { artifact: "presenter" }, visibility: "staff" }), null);
+  assert.match(validateEffectiveDeckRole({ config: {}, deckRole: "presenter", visibility: "room" }), /staff/);
+  assert.match(validateEffectiveDeckRole({ config: { artifact: "prospect" }, visibility: "staff" }), /cannot be/);
+  // flag overrides the file
+  assert.equal(validateEffectiveDeckRole({ config: { artifact: "presenter" }, deckRole: "prospect", visibility: "room" }), null);
+  assert.equal(validateEffectiveDeckRole({ config: {}, visibility: "room" }), null);
 });

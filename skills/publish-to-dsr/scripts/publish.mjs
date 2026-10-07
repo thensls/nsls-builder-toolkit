@@ -10,12 +10,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   parseArgs, validateArgs, normalize, validateHtml, validatePdf, validateSize, resolveToken,
-  buildBody, describeResponse, resolveStage, UsageError, ENDPOINT_PATH,
+  buildBody, checkPayload, validateEffectiveDeckRole, describeResponse, resolveStage, UsageError, ENDPOINT_PATH,
 } from "./lib.mjs";
 
 const TOKEN_FILE = join(homedir(), ".config", "nsls", "publish-token");
 
-const USAGE = `Usage: node publish.mjs --target public|library|room --kind html|pdf|link|built --title <t> [options]
+const USAGE = `Usage: node publish.mjs --target public|library|room (required) --kind html|pdf|link|built --title <t> [options]
 
   public : --kind html --slug <slug> --file <page.html>
   library: --kind pdf --file <doc.pdf>   |   --kind link --url <https://...>
@@ -29,7 +29,9 @@ const USAGE = `Usage: node publish.mjs --target public|library|room --kind html|
 
 Defaults to STAGING. Production requires BOTH --stage production and --allow-production.
 Token: --token, else $NSLS_PUBLISH_TOKEN, else ${TOKEN_FILE}
-Slug:  lowercase letters/digits/single hyphens, max 80, "ph" reserved. Max file 25 MB.
+Slug:  lowercase letters/digits/single hyphens, max 80, "ph" reserved.
+Size:  ~6MB per request in practice (base64 inflates ~33%): a PDF over ~4MB is too big.
+--target is REQUIRED (never defaulted).
 Library does not take html/built: use --target room ... --also-library.`;
 
 function fail(msg, code = 1) {
@@ -119,8 +121,15 @@ async function main() {
     );
   }
 
+  const roleErr = a.kind === "built"
+    ? validateEffectiveDeckRole({ config: inputs.config, deckRole: a.deckRole, visibility: a.visibility })
+    : null;
+  if (roleErr) fail(roleErr, 2);
+
   const body = buildBody(args, resolved.token, inputs);
   const json = JSON.stringify(body);
+  const sizeErr = checkPayload(json);
+  if (sizeErr) fail(sizeErr);
   if (st.stage === "production") console.warn("\nPRODUCTION: publishing to the live site.\n");
   console.log(`publish-to-dsr — stage: ${st.stage}, target: ${a.target}, kind: ${a.kind}, ${(bytes / 1024).toFixed(1)} KB (token from ${resolved.source})`);
 
@@ -131,6 +140,7 @@ async function main() {
       headers: { "content-type": "application/json" },
       body: json,
       signal: AbortSignal.timeout(120_000),
+      redirect: "error", // the token is in the body: never re-send it to a redirect host
     });
   } catch (e) {
     fail(`Network error: ${e.message}\nThe request may or may not have reached the server — check the destination (docs.nsls.org / library / room) before retrying.`);
