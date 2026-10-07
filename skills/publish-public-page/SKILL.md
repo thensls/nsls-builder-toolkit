@@ -25,25 +25,30 @@ is the wrong skill — this one is for public pages only.)
 3. The page as a single HTML file. External `https:` resources (fonts, images,
    scripts) are allowed on public pages.
 
+**Tokens are per environment.** A staging token does not work against production, and the single `~/.config/nsls/publish-token` file holds only one. Use the matching token for each `--stage` (pass `--token` or set `NSLS_PUBLISH_TOKEN` per run).
+
 Token lookup order: `--token <t>`, then `NSLS_PUBLISH_TOKEN`, then the file
 `~/.config/nsls/publish-token` (chmod 600). Prefer the env var or file; a flag
 lands in shell history. **Never echo, print or paste the token** in chat.
 
 ## Usage
 
-Run from this skill's directory (`${CLAUDE_PLUGIN_ROOT}/skills/publish-public-page`):
+Run from the user's own directory (where the page lives), invoking the script by
+its plugin path and giving `--file` as an absolute path:
 
 ```bash
-# Staging first (the default) — dry-run the real flow
-node scripts/publish.mjs --file ./page.html --slug fall-2026-launch \
+# Staging first (the default)
+node "${CLAUDE_PLUGIN_ROOT}/skills/publish-public-page/scripts/publish.mjs" \
+  --file /abs/path/to/page.html --slug fall-2026-launch \
   --title "Fall 2026 Launch" --description "Optional summary"
 
 # Production — requires BOTH flags, and the user's explicit go-ahead in chat
-node scripts/publish.mjs --file ./page.html --slug fall-2026-launch \
+node "${CLAUDE_PLUGIN_ROOT}/skills/publish-public-page/scripts/publish.mjs" \
+  --file /abs/path/to/page.html --slug fall-2026-launch \
   --title "Fall 2026 Launch" --stage production --allow-production
 ```
 
-`node scripts/publish.mjs --help` prints usage.
+Add `--help` for usage.
 
 **Always publish to staging first and show the user the URL**, then publish to
 production only after they say so. Say which stage you are targeting before
@@ -72,4 +77,4 @@ the dashboard Marketing Pages page; do not ask them to paste the token into chat
 
 ## Tests
 
-`node --test scripts/` (logic lives in `scripts/lib.mjs`).
+`node --test "${CLAUDE_PLUGIN_ROOT}/skills/publish-public-page/scripts/"` (logic lives in `scripts/lib.mjs`).

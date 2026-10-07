@@ -92,13 +92,35 @@ export function resolveToken({ flag, env, fileContents }) {
   return null;
 }
 
+/**
+ * Resolve --stage and enforce the production guard.
+ * Returns { ok: true, stage, baseUrl } or { ok: false, message }.
+ * Default staging; production needs BOTH stage=production and allowProduction.
+ */
+export function resolveStage(stage = "staging", allowProduction = false) {
+  if (typeof stage !== "string" || !Object.hasOwn(BASE_URLS, stage)) {
+    return { ok: false, message: `--stage must be "staging" or "production" (got "${stage}").` };
+  }
+  if (stage === "production" && !allowProduction) {
+    return {
+      ok: false,
+      message:
+        "REFUSING to publish to production.\n" +
+        "This puts a page live on the public docs.nsls.org. If you really mean it, re-run with BOTH:\n" +
+        "  --stage production --allow-production",
+    };
+  }
+  return { ok: true, stage, baseUrl: BASE_URLS[stage] };
+}
+
 export function describeResponse(status, body) {
-  const detail = body && typeof body === "object" && typeof body.error === "string" ? ` (${body.error})` : "";
+  const raw = body && typeof body === "object" ? (typeof body.error === "string" ? body.error : typeof body.detail === "string" ? body.detail : "") : "";
+  const detail = raw ? ` (${raw})` : "";
   switch (status) {
     case 200:
       return { ok: true, message: `Published.${body?.publicUrl ? ` ${body.publicUrl}` : ""}` };
     case 401:
-      return { ok: false, message: "Token rejected: invalid, expired, or revoked. Generate a new one from the dashboard Marketing Pages page." };
+      return { ok: false, message: "Token rejected: invalid, expired, or revoked, or you no longer have publish permission. Tokens are per environment (staging vs production). Generate a new one from the dashboard Marketing Pages page." };
     case 400:
       return { ok: false, message: `The server rejected the request as malformed${detail}. Check the slug, title and HTML.` };
     case 413:
@@ -106,7 +128,7 @@ export function describeResponse(status, body) {
     case 409:
       return { ok: false, message: "That slug is already taken. Check docs.nsls.org/<slug> first — if it is your page from an earlier attempt, it already published. Otherwise choose a different slug." };
     case 502:
-      return { ok: false, message: "Upstream error. The page MAY ALREADY BE PUBLISHED — open docs.nsls.org/<slug> and check BEFORE retrying (a retry would 409 for a page that did publish)." };
+      return { ok: false, message: "Upstream error. The page MAY ALREADY BE PUBLISHED — open docs.nsls.org/<slug> and check BEFORE retrying (a retry would 409 for a page that did publish). If the server says it could not verify the token, that is a transient failure and a retry is safe."+(raw ? ` Server said: ${raw}` : "") };
     default:
       return { ok: false, message: `Unexpected response ${status}${detail}. Do not retry blindly; check docs.nsls.org/<slug> first.` };
   }

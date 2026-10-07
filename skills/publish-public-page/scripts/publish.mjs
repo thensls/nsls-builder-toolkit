@@ -10,13 +10,13 @@
  * Token order: --token, then NSLS_PUBLISH_TOKEN, then ~/.config/nsls/publish-token.
  * The token is never printed or logged.
  */
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import {
   parseArgs, validateSlug, validateMeta, validateHtml, resolveToken,
-  describeResponse, UsageError, BASE_URLS, ENDPOINT_PATH,
+  describeResponse, resolveStage, UsageError, ENDPOINT_PATH,
 } from "./lib.mjs";
 
 const TOKEN_FILE = join(homedir(), ".config", "nsls", "publish-token");
@@ -51,15 +51,8 @@ async function main() {
   const metaErr = validateMeta(args);
   if (metaErr) fail(metaErr, 2);
 
-  if (!(args.stage in BASE_URLS)) fail(`--stage must be "staging" or "production" (got "${args.stage}").`, 2);
-  if (args.stage === "production" && !args.allowProduction) {
-    fail(
-      "REFUSING to publish to production.\n" +
-      "This puts a page live on the public docs.nsls.org. If you really mean it, re-run with BOTH:\n" +
-      "  --stage production --allow-production",
-      2,
-    );
-  }
+  const st = resolveStage(args.stage, args.allowProduction);
+  if (!st.ok) fail(st.message, 2);
 
   let html, size;
   try {
@@ -93,10 +86,11 @@ async function main() {
 
   let res;
   try {
-    res = await fetch(BASE_URLS[args.stage] + ENDPOINT_PATH, {
+    res = await fetch(st.baseUrl + ENDPOINT_PATH, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120_000),
     });
   } catch (e) {
     fail(`Network error: ${e.message}\nThe request may or may not have reached the server — check docs.nsls.org/${args.slug} before retrying.`);
@@ -108,6 +102,8 @@ async function main() {
   console.log(`\n${result.message}\n`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+let isMain = false;
+try { isMain = realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]); } catch { /* not a CLI run */ }
+if (isMain) {
   main().catch((e) => fail(`Unexpected error: ${e.message}`));
 }
