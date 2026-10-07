@@ -128,8 +128,63 @@ def gws(args, params=None, body=None):
 
 # ---------- document structure helpers ----------
 
-def get_doc(doc):
-    return gws(["docs", "documents", "get"], params={"documentId": doc})
+# --suggestions choice -> the Docs API suggestionsViewMode value.
+#
+# DANGER: the two PREVIEW modes return text with suggestions resolved, so every
+# character index shifts relative to the live document. An edit computed against
+# previewed text would land in the wrong place. Only `read` may pass a mode;
+# every editing action calls get_doc() with the default and gets the live doc.
+SUGGESTION_VIEWS = {
+    "inline": "SUGGESTIONS_INLINE",
+    "accepted": "PREVIEW_SUGGESTIONS_ACCEPTED",
+    "rejected": "PREVIEW_WITHOUT_SUGGESTIONS",
+}
+
+
+def get_doc(doc, suggestions="inline"):
+    params = {"documentId": doc}
+    view = SUGGESTION_VIEWS.get(suggestions)
+    # Send the parameter only for a non-default view: an unknown-but-harmless
+    # param is still a behaviour change to every caller, and every editing
+    # action goes through here.
+    if view and suggestions != "inline":
+        params["suggestionsViewMode"] = view
+    return gws(["docs", "documents", "get"], params=params)
+
+
+def count_suggestions(docjson):
+    """(insertions, deletions) — text runs carrying pending suggestion ids.
+
+    Counts RUNS, not suggestions: one person's edit can be split across several
+    runs, so the number is "at least this much is pending", which is all the
+    warning needs to claim. Walks table cells too, because a redline inside a
+    table is exactly as misleading as one in a paragraph.
+
+    Only meaningful under SUGGESTIONS_INLINE. The preview modes resolve
+    suggestions away and strip the ids, so both counts come back zero there --
+    which is correct, not a miss: nothing in that output is ambiguous.
+    """
+    ins = dele = 0
+
+    def walk(content):
+        nonlocal ins, dele
+        for el in content:
+            if "paragraph" in el:
+                for e in el["paragraph"].get("elements", []):
+                    run = e.get("textRun")
+                    if not run:
+                        continue
+                    if run.get("suggestedInsertionIds"):
+                        ins += 1
+                    if run.get("suggestedDeletionIds"):
+                        dele += 1
+            elif "table" in el:
+                for row in el["table"].get("tableRows", []):
+                    for cell in row.get("tableCells", []):
+                        walk(cell.get("content", []))
+
+    walk(docjson.get("body", {}).get("content", []))
+    return ins, dele
 
 
 def _para_text(paragraph):
@@ -533,6 +588,11 @@ def main():
     ap.add_argument("--find")
     ap.add_argument("--replace")
     ap.add_argument("--regex", action="store_true", help="treat --find as a regex (default: literal)")
+    ap.add_argument("--suggestions", choices=["inline", "accepted", "rejected"], default="inline",
+                    help="read: how to render pending suggestions. inline (default) shows the "
+                         "redline as it stands; accepted previews them applied; rejected previews "
+                         "them discarded. Ignored by the editing actions, which always use the "
+                         "live document.")
     ap.add_argument("--title")
     ap.add_argument("--anchor", action="append", help="repeatable; line/section anchor substring")
     ap.add_argument("--text")
@@ -550,7 +610,23 @@ def main():
         sys.exit(a.action + " needs --doc")
 
     if a.action == "read":
-        sys.stdout.write(full_text(get_doc(a.doc)))
+        d = get_doc(a.doc, a.suggestions)
+        if a.suggestions == "inline":
+            ins, dele = count_suggestions(d)
+            if ins or dele:
+                # First line of stdout, deliberately -- not stderr. The failure
+                # this prevents is a reader (human or agent) treating a redline
+                # as settled text, and a warning that a pipe or a log can drop
+                # does not prevent it. A doc with no suggestions prints exactly
+                # what it printed before, byte for byte.
+                print(f"\u26a0\ufe0f  PENDING SUGGESTIONS: {ins} inserted and {dele} deleted "
+                      f"text run(s) below are UNACCEPTED edits, shown inline. What follows "
+                      f"is a redline, not the live document. Re-run with "
+                      f"--suggestions accepted (or rejected) to see one resolved version.")
+        else:
+            print(f"\u2139\ufe0f  Showing this document with suggestions {a.suggestions.upper()} "
+                  f"-- a preview, not what the document says right now.")
+        sys.stdout.write(full_text(d))
 
     elif a.action == "comments":
         print(json.dumps(do_comments(a.doc), indent=2, ensure_ascii=False))
