@@ -116,6 +116,8 @@ def main():
     for k, n in MAX_BULLETS.items():
         if len(spec[k]) > n:
             fail(f"'{k}' has {len(spec[k])} bullets; the template caps it at {n}")
+    # Resolve fallbacks BEFORE the FINAL check so it scans what the Doc will show.
+    spec["nice_to_haves"] = spec.get("nice_to_haves") or ["[Add nice-to-haves, or delete this section]"]
     status = spec.get("status", "DRAFT").upper()
     if status == "FINAL":
         # Check the text the Doc will show, not json.dumps(spec): serialized
@@ -152,7 +154,7 @@ def main():
     set_list([p for p in cell.paragraphs if is_list(p)], spec["responsibilities"])
 
     set_list(bullets_after(doc, "Qualifications"), spec["qualifications"])
-    set_list(bullets_after(doc, "Nice To Haves"), spec.get("nice_to_haves") or ["[none]"])
+    set_list(bullets_after(doc, "Nice To Haves"), spec["nice_to_haves"])
     set_list(bullets_after(doc, "Who You Are"), spec["who_you_are"])
     set_list(bullets_after(doc, "How We Work"), spec.get("how_we_work") or default_how_we_work())
 
