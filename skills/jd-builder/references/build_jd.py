@@ -30,11 +30,13 @@ import sys
 sys.path.insert(0, os.path.expanduser('~/.local/lib/nsls-pydeps'))  # toolkit's durable deps home
 from docx import Document
 from docx.oxml.ns import qn
+from docx.shared import Pt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "jd-template-2025.docx")
 HOW_WE_WORK = os.path.join(HERE, "how-we-work.md")
 
+BODY_FONT, BODY_SIZE = "Arial", Pt(10)  # the template's body text
 MAX_BULLETS = {"responsibilities": 10, "qualifications": 10}
 
 
@@ -157,6 +159,18 @@ def main():
     set_list(bullets_after(doc, "Nice To Haves"), spec["nice_to_haves"])
     set_list(bullets_after(doc, "Who You Are"), spec["who_you_are"])
     set_list(bullets_after(doc, "How We Work"), spec.get("how_we_work") or default_how_we_work())
+
+    # The template's empty bullet placeholders carry no font, so copied bullets
+    # inherited none and Google Docs showed them in Times New Roman. Give every
+    # run the template's body font and size unless it already has one.
+    doc.styles["Normal"].font.name = BODY_FONT
+    for p in list(doc.paragraphs) + [p for t in doc.tables for c in t._cells for p in c.paragraphs]:
+        for r in p.runs:
+            if r.font.name is None:
+                r.font.name = BODY_FONT
+                r._element.get_or_add_rPr().get_or_add_rFonts().set(qn("w:cs"), BODY_FONT)
+            if r.font.size is None:
+                r.font.size = BODY_SIZE
 
     leftover = [p.text for p in doc.paragraphs if re.search(r"\((title|insert|include|high level|this )", p.text, re.I)]
     leftover += [p.text for p in cell.paragraphs if p.text.startswith("(")]
