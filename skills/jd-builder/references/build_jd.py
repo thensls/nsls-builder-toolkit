@@ -116,9 +116,17 @@ def main():
     for k, n in MAX_BULLETS.items():
         if len(spec[k]) > n:
             fail(f"'{k}' has {len(spec[k])} bullets; the template caps it at {n}")
+    # Resolve fallbacks BEFORE the FINAL check so it scans what the Doc will show.
+    spec["nice_to_haves"] = spec.get("nice_to_haves") or ["[Add nice-to-haves, or delete this section]"]
     status = spec.get("status", "DRAFT").upper()
-    if status == "FINAL" and re.search(r"\[[^\]]+\]", json.dumps(spec)):
-        fail("status FINAL but [brackets] are still open")
+    if status == "FINAL":
+        # Check the text the Doc will show, not json.dumps(spec): serialized
+        # lists are themselves wrapped in [ ], so that check rejected every FINAL.
+        texts = [v for v in spec.values() if isinstance(v, str)]
+        texts += [s for v in spec.values() if isinstance(v, list) for s in v if isinstance(s, str)]
+        open_brackets = [t for t in texts if re.search(r"\[[^\]]+\]", t)]
+        if open_brackets:
+            fail(f"status FINAL but [brackets] are still open: {open_brackets[:3]}")
 
     title = spec["title"].strip()
     doc = Document(TEMPLATE)
@@ -146,7 +154,7 @@ def main():
     set_list([p for p in cell.paragraphs if is_list(p)], spec["responsibilities"])
 
     set_list(bullets_after(doc, "Qualifications"), spec["qualifications"])
-    set_list(bullets_after(doc, "Nice To Haves"), spec.get("nice_to_haves") or ["[none]"])
+    set_list(bullets_after(doc, "Nice To Haves"), spec["nice_to_haves"])
     set_list(bullets_after(doc, "Who You Are"), spec["who_you_are"])
     set_list(bullets_after(doc, "How We Work"), spec.get("how_we_work") or default_how_we_work())
 
