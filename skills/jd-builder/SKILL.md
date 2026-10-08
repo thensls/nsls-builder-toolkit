@@ -140,8 +140,8 @@ The share note says: role title, who built it, DRAFT or FINAL, and in revise mod
 `jfontanez@nsls.org` → Commenter.
 
 **FINAL:** when brackets are resolved, set `"status": "FINAL"` and re-render (the renderer refuses if brackets
-remain). Upload as a new Doc, or retitle `(DRAFT)` → `(FINAL)` with `gws drive files update`. Confirm the new
-name by re-reading it before telling HR.
+remain), then **upload the new render as a new Doc**. Never just retitle the DRAFT: a rename keeps the old
+draft content, brackets included. Confirm the new Doc's name by re-reading it before telling HR.
 
 ## Diagnostics
 

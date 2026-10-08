@@ -117,8 +117,14 @@ def main():
         if len(spec[k]) > n:
             fail(f"'{k}' has {len(spec[k])} bullets; the template caps it at {n}")
     status = spec.get("status", "DRAFT").upper()
-    if status == "FINAL" and re.search(r"\[[^\]]+\]", json.dumps(spec)):
-        fail("status FINAL but [brackets] are still open")
+    if status == "FINAL":
+        # Check the text the Doc will show, not json.dumps(spec): serialized
+        # lists are themselves wrapped in [ ], so that check rejected every FINAL.
+        texts = [v for v in spec.values() if isinstance(v, str)]
+        texts += [s for v in spec.values() if isinstance(v, list) for s in v if isinstance(s, str)]
+        open_brackets = [t for t in texts if re.search(r"\[[^\]]+\]", t)]
+        if open_brackets:
+            fail(f"status FINAL but [brackets] are still open: {open_brackets[:3]}")
 
     title = spec["title"].strip()
     doc = Document(TEMPLATE)
