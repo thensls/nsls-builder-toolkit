@@ -59,8 +59,12 @@ check("matching is exact and case-sensitive",
 check('it adds "shell": "powershell"', "'\"shell\"' + $sep + '\"powershell\"'" in body)
 check("a hook with a shell of its own is never a match", "$_.Name -ieq 'shell'" in body)
 check("it writes only after the re-parse proof", body.index("ConvertTo-Json -Depth 100") < body.index("[System.IO.File]::Open($tmp"))
-check("a file changed since it was read wins",
-      body.index("$now = [System.IO.File]::ReadAllBytes($Settings)") < body.index("[System.IO.File]::Replace($tmp, $Settings"))
+hold = body.index("$hold = [System.IO.File]::Open($Settings")
+check("a file changed since it was read wins, checked through the handle that holds it",
+      hold < body.index("$hold.CopyTo($ms)") < body.index("[System.IO.File]::Replace($tmp, $Settings") < body.index("$hold.Dispose()"))
+check("that handle lets others read and the swap delete, but nobody write",
+      "([System.IO.FileShare]::Read -bor [System.IO.FileShare]::Delete)" in body[hold:hold + 300]
+      and "FileShare]::Write" not in body and "FileShare]::ReadWrite" not in body)
 check("a BOM is kept", "if ($bom) { $fs.Write($data, 0, 3) }" in body)
 check("a linked settings.json is left alone", "[System.IO.FileAttributes]::ReparsePoint" in body)
 check("nothing reaches stdout, the model's context", not re.search(r"Write-(Output|Host)|\becho\b", body, re.I))

@@ -412,11 +412,25 @@ function Update-PersonalPullHook {
         }
         # Anything that wrote settings.json since it was read here (Claude Code,
         # an installer, an editor) wins: this write is dropped, the next session
-        # tries again.
-        $now = [System.IO.File]::ReadAllBytes($Settings)
-        if ([System.Convert]::ToBase64String($now) -cne [System.Convert]::ToBase64String($data)) { return }
-        [System.IO.File]::Replace($tmp, $Settings, [NullString]::Value)
-        $tmp = $null
+        # tries again. The check and the swap happen while this handle holds the
+        # file shared for reading and deleting only, so nothing can write into it
+        # in between (and if something has it open for writing now, the open
+        # fails and this session leaves it). Delete has to be shared, or
+        # File.Replace could not swap it either - so a writer that swaps in a
+        # whole new file in that instant can still lose its change. Nothing else
+        # that writes settings.json takes a lock this could share, and this runs
+        # once per machine.
+        $hold = [System.IO.File]::Open($Settings, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read,
+            ([System.IO.FileShare]::Read -bor [System.IO.FileShare]::Delete))
+        try {
+            $ms = New-Object System.IO.MemoryStream
+            $hold.CopyTo($ms)
+            if ([System.Convert]::ToBase64String($ms.ToArray()) -cne [System.Convert]::ToBase64String($data)) { return }
+            [System.IO.File]::Replace($tmp, $Settings, [NullString]::Value)
+            $tmp = $null
+        } finally {
+            $hold.Dispose()
+        }
         [Console]::Error.WriteLine('personal-toolkit update hook now ignores git variables from the calling repository')
     } catch {
     } finally {

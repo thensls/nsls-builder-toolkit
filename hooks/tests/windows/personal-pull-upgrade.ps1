@@ -7,7 +7,8 @@
 #   2. anything else is left byte for byte: an edited command, a Git Bash
 #      path, another user's path, a hook with a shell of its own, the string
 #      under another event too, broken JSON, a linked settings.json, a rerun;
-#   3. the file keeps its permissions, and no temp file is left;
+#   3. the file keeps its permissions, no temp file is left, and a file another
+#      program has open for writing is left until it lets go;
 #   4. the new entry, run by PowerShell with GIT_DIR and GIT_INDEX_FILE aimed at
 #      a project (git sets both for its hooks), updates the toolkit and leaves
 #      the project alone - and the old entry, the control, does not.
@@ -116,6 +117,17 @@ try {
     $once = Bytes $settings
     Update-PersonalPullHook -Settings $settings -PluginDir $pd
     Check 'a second run changes nothing' ((Bytes $settings) -eq $once)
+
+    # Something holding settings.json open for writing (Node opens it sharing
+    # everything) makes this session leave it; once that lets go, the next
+    # session upgrades it.
+    Put $settings $Tpl.Replace('@CMD@', (J $legacy))
+    $was = Bytes $settings
+    $writer = [System.IO.File]::Open($settings, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+    try { Update-PersonalPullHook -Settings $settings -PluginDir $pd } finally { $writer.Dispose() }
+    Check 'left alone while another program has it open for writing' (((Bytes $settings) -eq $was) -and (NoTemp $dir))
+    Update-PersonalPullHook -Settings $settings -PluginDir $pd
+    Check 'and upgraded once it lets go' ((Bytes $settings) -eq [System.Convert]::ToBase64String($Utf8.GetBytes($TplUpgraded.Replace('@CMD@', (J $newCmd)))))
 
     # BOM, CRLF, an accented home, and the unset form a Git Bash install leaves.
     $pdA = Join-Path $root ('Users\Jos' + [char]0x00E9 + '\.claude\local-plugins\nsls-personal-toolkit')
