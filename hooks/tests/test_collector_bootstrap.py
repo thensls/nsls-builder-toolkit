@@ -133,14 +133,104 @@ def test_not_installed_launches_detached_with_marker_written_first(box):
     assert box.state() == {"attempted_at": iso(NOW), "attempts": 1}
 
 
+def _plist(box):
+    agents = box.home / "Library" / "LaunchAgents"
+    agents.mkdir(parents=True, exist_ok=True)
+    (agents / "org.nsls.collector.plist").write_text("<plist/>")
+
+
+def _launchd_says(loaded):
+    real = cb._launch_agent_loaded
+    cb._launch_agent_loaded = lambda: loaded
+    return real
+
+
 @boxed
-def test_installed_config_means_no_launch(box):
+def test_installed_config_and_schedule_mean_no_launch(box):
     home = box.collector_home()
     home.mkdir(parents=True)
     (home / "config.json").write_text("{}")
-    assert box.run() == "installed"
+    _plist(box)
+    real = _launchd_says(True)
+    try:
+        assert box.run() == "installed"
+    finally:
+        cb._launch_agent_loaded = real
     assert box.popen.calls == []
     assert not box.marker.exists()
+
+
+@boxed
+def test_plist_that_launchd_has_not_loaded_is_a_half_install(box):
+    home = box.collector_home()
+    home.mkdir(parents=True)
+    (home / "config.json").write_text("{}")
+    _plist(box)
+    real = _launchd_says(False)
+    try:
+        assert box.run() == "launched"
+    finally:
+        cb._launch_agent_loaded = real
+
+
+def test_mac_schedule_check_asks_launchd_for_this_user():
+    import os
+    calls = []
+
+    def fake_run(code=None, exc=None):
+        def run(args, **kw):
+            calls.append(args)
+            if exc:
+                raise exc
+            return subprocess.CompletedProcess(args, code)
+        return run
+
+    real = cb.subprocess.run
+    try:
+        cb.subprocess.run = fake_run(code=0)
+        assert cb._launch_agent_loaded() is True
+        assert calls[-1] == ["launchctl", "print", f"gui/{os.getuid()}/org.nsls.collector"]
+        cb.subprocess.run = fake_run(code=113)
+        assert cb._launch_agent_loaded() is False
+        cb.subprocess.run = fake_run(exc=subprocess.TimeoutExpired("launchctl", 1))
+        assert cb._launch_agent_loaded() is True
+    finally:
+        cb.subprocess.run = real
+
+
+@boxed
+def test_config_without_schedule_is_a_half_install_and_is_repaired(box):
+    home = box.collector_home()
+    home.mkdir(parents=True)
+    (home / "config.json").write_text("{}")
+    assert box.run() == "launched"
+    assert len(box.popen.calls) == 1
+
+
+def test_windows_schedule_check_asks_schtasks_and_trusts_it_only_when_it_answers():
+    calls = []
+
+    def fake_run(code=None, exc=None):
+        def run(args, **kw):
+            calls.append(args)
+            if exc:
+                raise exc
+            return subprocess.CompletedProcess(args, code)
+        return run
+
+    real = cb.subprocess.run
+    try:
+        cb.subprocess.run = fake_run(code=0)
+        assert cb.schedule_registered("win32", {}) is True
+        assert calls[-1] == ["schtasks", "/Query", "/TN", "NSLS Collector"]
+        cb.subprocess.run = fake_run(code=1)
+        assert cb.schedule_registered("win32", {}) is False
+        cb.subprocess.run = fake_run(exc=FileNotFoundError("schtasks"))
+        assert cb.schedule_registered("win32", {}) is True
+        cb.subprocess.run = fake_run(exc=subprocess.TimeoutExpired("schtasks", 1))
+        assert cb.schedule_registered("win32", {}) is True
+    finally:
+        cb.subprocess.run = real
 
 
 @boxed

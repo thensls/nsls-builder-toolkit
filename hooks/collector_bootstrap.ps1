@@ -7,8 +7,11 @@
 # via Signal, and that DM is the notice.
 #
 #   1. NSLS_COLLECTOR_OPTOUT=1 (or true/yes) -> never install, write nothing.
-#   2. Installed = %LOCALAPPDATA%\nsls-collector\config.json exists, or the
-#      collector evidence file is fresh (collector_evidence.ps1).
+#   2. Installed = the collector evidence file is fresh (collector_evidence.ps1),
+#      or %LOCALAPPDATA%\nsls-collector\config.json exists AND the "NSLS
+#      Collector" task is registered. The installer writes config.json before
+#      it registers the task, so config.json alone can be a half-finished
+#      install that never runs; this repairs it.
 #   3. Throttle via <CLAUDE_CONFIG_DIR or %USERPROFILE%\.claude>\.nsls-collector\
 #      bootstrap.json = {attempted_at, attempts}: one attempt per 24 hours, none
 #      after 5 (logged once). Written BEFORE the launch under a short
@@ -21,6 +24,33 @@
 # unsupported, error). Callers must discard it: session-start stdout is
 # session context. ASCII only, PowerShell 5.1 compatible, no BOM.
 
+# Whether the collector's scheduled task exists. Can't tell -> yes: a reinstall
+# on a guess is worse than none. Runs only when the evidence is stale; schtasks
+# answers in well under a second, and a stalled Task Scheduler costs session
+# start at most 1 second. Its output never reaches session context.
+function Test-CollectorTaskRegistered {
+    param([string]$TaskName = 'NSLS Collector', [int]$TimeoutMs = 1000)
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = 'schtasks.exe'
+        $psi.Arguments = '/Query /TN "' + $TaskName + '"'
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $p = [System.Diagnostics.Process]::Start($psi)
+        $null = $p.StandardOutput.ReadToEndAsync()
+        $null = $p.StandardError.ReadToEndAsync()
+        if (-not $p.WaitForExit($TimeoutMs)) {
+            try { $p.Kill() } catch { }
+            return $true
+        }
+        return ($p.ExitCode -eq 0)
+    } catch {
+        return $true
+    }
+}
+
 function Invoke-CollectorBootstrap {
     param([object]$Now = $null)
     $ErrorActionPreference = 'Stop'
@@ -29,12 +59,12 @@ function Invoke-CollectorBootstrap {
         if (@('1', 'true', 'yes') -contains $optout) { return 'optout' }
         if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { return 'unsupported' }
         $home_ = Join-Path $env:LOCALAPPDATA 'nsls-collector'
-        if (Test-Path -LiteralPath (Join-Path $home_ 'config.json') -PathType Leaf) { return 'installed' }
         $evidence = Join-Path $PSScriptRoot 'collector_evidence.ps1'
         if (Test-Path -LiteralPath $evidence) {
             . $evidence
             if (Test-CollectorEvidenceFresh) { return 'installed' }
         }
+        if ((Test-Path -LiteralPath (Join-Path $home_ 'config.json') -PathType Leaf) -and (Test-CollectorTaskRegistered)) { return 'installed' }
 
         $base = "$env:NSLS_COLLECTOR_BASE_URL".Trim()
         if (-not $base) { $base = 'https://signal.nsls.org' }
