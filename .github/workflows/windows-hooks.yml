@@ -59,6 +59,9 @@ jobs:
       - name: Collector evidence silences the skill hook, under Windows PowerShell 5.1
         shell: powershell
         run: ./hooks/tests/windows/collector-evidence.ps1
+      - name: The hook makes the personal toolkit's old pull entry safe from a git hook's variables, and touches nothing else (PS 5.1)
+        shell: powershell
+        run: ./hooks/tests/windows/personal-pull-upgrade.ps1
       - name: The session that updates the hook runs the new copy, not the old one, under Windows PowerShell 5.1
         shell: powershell
         run: ./hooks/tests/windows/rerun-after-update.ps1

@@ -13,7 +13,7 @@ $tokens = $null
 $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors)
 if ($errors.Count -gt 0) { throw "session-start.ps1 does not parse: $($errors[0].Message)" }
-$want = @('Clear-GitRepoEnv', 'Report-PersonalForkDrift', 'Get-PullSourceUrl', 'Test-CanonicalOrigin', 'Test-StampFresh', 'Claim-Lock', 'Release-Lock', 'Invoke-GitBounded',
+$want = @('Get-GitRepoEnv', 'Clear-GitRepoEnv', 'Report-PersonalForkDrift', 'Get-PullSourceUrl', 'Test-CanonicalOrigin', 'Test-StampFresh', 'Claim-Lock', 'Release-Lock', 'Invoke-GitBounded',
           'Test-GitPath', 'Get-FastForwardArgs', 'Test-CleanToFastForward', 'Invoke-FastForwardDetached', 'Get-CheckoutState', 'Invoke-ForkCatchUp')
 $fns = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $want -contains $n.Name }, $true)
 if ($fns.Count -ne $want.Count) { throw "expected $($want.Count) functions in session-start.ps1, found $($fns.Count)" }

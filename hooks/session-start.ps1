@@ -24,12 +24,16 @@ $PersonalDir = Join-Path $LocalDir  'nsls-personal-toolkit'
 # git reads these ahead of -C, so a session launched from inside a git hook (git
 # exports GIT_DIR and GIT_INDEX_FILE to its hooks) would aim every git call below
 # at that repository instead of the toolkit. git's own list, from
-# `git rev-parse --local-env-vars`. Same reason as _git_env in the .py.
+# `git rev-parse --local-env-vars`. Same reason as _git_env in the .py. The
+# personal toolkit's pull entry clears the same list, in the same order (1a).
+function Get-GitRepoEnv {
+    return @('GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_CONFIG', 'GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT',
+             'GIT_OBJECT_DIRECTORY', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_IMPLICIT_WORK_TREE', 'GIT_GRAFT_FILE',
+             'GIT_INDEX_FILE', 'GIT_NO_REPLACE_OBJECTS', 'GIT_REPLACE_REF_BASE', 'GIT_PREFIX',
+             'GIT_INTERNAL_SUPER_PREFIX', 'GIT_SHALLOW_FILE', 'GIT_COMMON_DIR')
+}
 function Clear-GitRepoEnv {
-    foreach ($v in @('GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_CONFIG', 'GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT',
-                     'GIT_OBJECT_DIRECTORY', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_IMPLICIT_WORK_TREE', 'GIT_GRAFT_FILE',
-                     'GIT_INDEX_FILE', 'GIT_NO_REPLACE_OBJECTS', 'GIT_REPLACE_REF_BASE', 'GIT_PREFIX',
-                     'GIT_INTERNAL_SUPER_PREFIX', 'GIT_SHALLOW_FILE', 'GIT_COMMON_DIR')) {
+    foreach ($v in (Get-GitRepoEnv)) {
         Remove-Item -Path "Env:$v" -ErrorAction SilentlyContinue
     }
 }
@@ -292,6 +296,147 @@ if ($ownBefore -and -not $isRerun) {
         }
     }
 }
+
+# --- 1a. the personal toolkit's own pull entry, made safe where install.ps1 wrote it ---
+# The personal toolkit's install.ps1 registered its update in settings.json as a
+# bare `git -C "<toolkit>" pull --ff-only --quiet`. git reads the variables in
+# Get-GitRepoEnv ahead of -C, so a session started from inside a git hook pulled
+# the builder's PROJECT, mid-commit, instead of the toolkit. That installer now
+# writes `Remove-Item Env:<that list> -ErrorAction Ignore; <the pull>` with
+# "shell": "powershell", and upgrades its old entry when it re-runs - but nobody
+# re-runs an installer, and on Windows none of the personal toolkit's own hook
+# code runs (its session-start.py does this on Macs). This hook runs every
+# session, so it makes the change, once:
+#   * only that exact command, or its `unset <list>; ` form, as the command of a
+#     SessionStart hook with no shell of its own - built the way install.ps1
+#     builds it, so an entry anyone has edited no longer matches and is left be;
+#   * by splicing that one JSON string and putting "shell" right after it, so
+#     every other byte of settings.json - a BOM, line endings, layout - stays;
+#   * written only when re-parsing proves that is the whole change, and dropped
+#     if settings.json changed after it was read here.
+# After the re-run above, so only the newest copy of this hook ever writes.
+# Nothing on stdout (it is the model's context); never throws.
+function Update-PersonalPullHook {
+    param([string]$Settings, [string]$PluginDir)
+    $tmp = $null
+    try {
+        $item = Get-Item -LiteralPath $Settings -Force -ErrorAction Stop
+        # A link stays a link: leave that file to the installer.
+        if ($item.PSIsContainer -or ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) { return }
+        $data = [System.IO.File]::ReadAllBytes($Settings)
+        $bom = ($data.Length -ge 3 -and $data[0] -eq 0xEF -and $data[1] -eq 0xBB -and $data[2] -eq 0xBF)
+        $skip = 0
+        if ($bom) { $skip = 3 }
+        # Strict: a byte that is not UTF-8 throws, and nothing is written.
+        $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
+        $raw = $utf8.GetString($data, $skip, $data.Length - $skip)
+        if (-not $raw.Contains('pull --ff-only --quiet')) { return }
+
+        $vars   = @(Get-GitRepoEnv)
+        $legacy = 'git -C "' + $PluginDir + '" pull --ff-only --quiet'
+        $unset  = 'unset ' + ($vars -join ' ') + '; '
+        $guard  = 'Remove-Item ' + (($vars | ForEach-Object { 'Env:' + $_ }) -join ',') + ' -ErrorAction Ignore; '
+
+        # Text: each "command": "<string>" whose value is one of the two. The new
+        # string is the old one with $guard in place of its start, so the path
+        # keeps whatever escaping it had ($guard itself needs none). "shell"
+        # follows it, on a line of its own when "command" has one.
+        $rx = New-Object System.Text.RegularExpressions.Regex('(?<ws>\r?\n[ \t]*)?"command"(?<sep>\s*:\s*)(?<lit>"(?:[^"\\]|\\.)*")')
+        $sb = New-Object System.Text.StringBuilder
+        $at = 0
+        $spliced = 0
+        foreach ($m in $rx.Matches($raw)) {
+            $lit = $m.Groups['lit']
+            if (-not $lit.Value.Contains('pull --ff-only --quiet')) { continue }
+            $val = $null
+            try { $val = ('{"v":' + $lit.Value + '}' | ConvertFrom-Json).v } catch { continue }
+            if ($val -ceq $legacy) { $rest = $lit.Value.Substring(1) }
+            elseif ($val -ceq ($unset + $legacy) -and $lit.Value.StartsWith('"' + $unset, [System.StringComparison]::Ordinal)) {
+                $rest = $lit.Value.Substring(1 + $unset.Length)
+            } else { continue }
+            $sep = $m.Groups['sep'].Value
+            $lead = $m.Groups['ws'].Value
+            if (-not $lead -and $sep.Contains(' ')) { $lead = ' ' }
+            [void]$sb.Append($raw, $at, $lit.Index - $at)
+            [void]$sb.Append('"' + $guard + $rest + ',' + $lead + '"shell"' + $sep + '"powershell"')
+            $at = $lit.Index + $lit.Length
+            $spliced++
+        }
+        if ($spliced -eq 0) { return }
+        [void]$sb.Append($raw, $at, $raw.Length - $at)
+        $text = $sb.ToString()
+
+        # Proof: in the new tree, undo exactly the change meant - each such hook
+        # back to its old command, its "shell" taken out. What is left must be
+        # the old tree, or nothing is written: a string spelt or placed any other
+        # way (another event, a hook that has a shell) fails here.
+        $before = $raw | ConvertFrom-Json
+        $after  = $text | ConvertFrom-Json
+        $undone = 0
+        $oldSs = @($before.hooks.SessionStart)
+        $newSs = @($after.hooks.SessionStart)
+        if ($oldSs.Count -ne $newSs.Count) { return }
+        for ($e = 0; $e -lt $oldSs.Count; $e++) {
+            if ($null -eq $oldSs[$e] -or $null -eq $newSs[$e]) { continue }
+            $oldHs = @($oldSs[$e].hooks)
+            $newHs = @($newSs[$e].hooks)
+            if ($oldHs.Count -ne $newHs.Count) { return }
+            for ($i = 0; $i -lt $oldHs.Count; $i++) {
+                $o = $oldHs[$i]
+                $n = $newHs[$i]
+                if ($null -eq $o -or $null -eq $n) { continue }
+                $oc = @($o.PSObject.Properties | Where-Object { $_.Name -ceq 'command' })
+                if ($oc.Count -ne 1 -or $oc[0].Value -isnot [string]) { continue }
+                if (-not ($oc[0].Value -ceq $legacy -or $oc[0].Value -ceq ($unset + $legacy))) { continue }
+                if (@($o.PSObject.Properties | Where-Object { $_.Name -ieq 'shell' }).Count -gt 0) { continue }
+                $ns = @($n.PSObject.Properties | Where-Object { $_.Name -ceq 'shell' })
+                if (-not ($n.command -ceq ($guard + $legacy)) -or $ns.Count -ne 1 -or -not ($ns[0].Value -ceq 'powershell')) { return }
+                $n.command = $oc[0].Value
+                $n.PSObject.Properties.Remove('shell')
+                $undone++
+            }
+        }
+        if ($undone -ne $spliced) { return }
+        if (($after | ConvertTo-Json -Depth 100 -Compress) -cne ($before | ConvertTo-Json -Depth 100 -Compress)) { return }
+
+        # Beside the file, then swapped in: File.Replace keeps its permissions,
+        # and a session stopped mid-write leaves the old file whole.
+        $out = $utf8.GetBytes($text)
+        $tmp = "$Settings.$([guid]::NewGuid().ToString('N')).nsls-tmp"
+        $fs = [System.IO.File]::Open($tmp, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write)
+        try {
+            if ($bom) { $fs.Write($data, 0, 3) }
+            $fs.Write($out, 0, $out.Length)
+        } finally {
+            $fs.Dispose()
+        }
+        # Anything that wrote settings.json since it was read here (Claude Code,
+        # an installer, an editor) wins: this write is dropped, the next session
+        # tries again.
+        $now = [System.IO.File]::ReadAllBytes($Settings)
+        if ([System.Convert]::ToBase64String($now) -cne [System.Convert]::ToBase64String($data)) { return }
+        [System.IO.File]::Replace($tmp, $Settings, [NullString]::Value)
+        $tmp = $null
+        [Console]::Error.WriteLine('personal-toolkit update hook now ignores git variables from the calling repository')
+    } catch {
+    } finally {
+        if ($tmp -and (Test-Path -LiteralPath $tmp)) {
+            # ReplaceFile can fail after removing the original (it documents
+            # this), leaving only the new copy. Put it in place rather than
+            # delete the only settings.json there is. Same as install.ps1.
+            if (-not (Test-Path -LiteralPath $Settings)) {
+                Move-Item -Force -LiteralPath $tmp -Destination $Settings -ErrorAction SilentlyContinue
+            } else {
+                Remove-Item -Force -LiteralPath $tmp -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+# Settings from $ClaudeDir (USERPROFILE), the file Claude Code reads; the
+# toolkit path from $HOME, exactly as the personal install.ps1 builds it. They
+# differ only on a redirected home, where that installer's entry went to a file
+# Claude Code never read.
+Update-PersonalPullHook -Settings (Join-Path $ClaudeDir 'settings.json') -PluginDir (Join-Path $HOME '.claude\local-plugins\nsls-personal-toolkit')
 
 # --- 1b. personal-toolkit forks: measured against NSLS, not against their own copy ---
 # The block above speaks only when a pull FAILS. A fork's pull succeeds - the
