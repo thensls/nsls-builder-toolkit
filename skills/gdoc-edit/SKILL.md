@@ -104,6 +104,7 @@ S=~/.claude/local-plugins/nsls-builder-toolkit/skills/gdoc-edit/scripts/gdoc.py
 DOC=<google-doc-id>                       # the part of the URL after /document/d/
 
 python3 $S read   --doc $DOC              # full text (use to plan exact edits)
+python3 $S read   --doc $DOC --suggestions accepted   # preview with suggestions applied
 python3 $S comments --doc $DOC            # reviewer comments (address them; don't orphan)
 python3 $S replace --doc $DOC --find "old text" --replace "new text"   # literal by default
 python3 $S insert-top --doc $DOC --title "Changelog — v2.3" --text-file /tmp/changelog.txt
@@ -129,6 +130,39 @@ client-side, since the Docs API has no regex replace). `insert-after`/`remove` t
 anchors. To ADD a section that needs tables, hyperlinks or real bullets, use `append-rich`
 (it goes at the end of the doc — an appendix, a new section, a sources list). Editing an
 EXISTING table still means `/gdoc-build` or index-level work.
+
+## Suggestion mode — a redline is not the document
+
+Docs in **suggestion mode** carry edits nobody has accepted yet. By default the
+API returns them inline, so a proposed deletion and the text replacing it both
+appear, and the output reads as though the document says both things at once. On
+2026-10-06 that made a pending deletion in a privacy policy look like a live,
+contradictory sentence.
+
+`read` now says so. If anything is pending it prints one line first:
+
+```
+⚠️  PENDING SUGGESTIONS: 3 inserted and 1 deleted text run(s) below are UNACCEPTED
+    edits, shown inline. What follows is a redline, not the live document.
+```
+
+It counts text **runs**, not suggestions — one person's edit often spans several —
+so read it as "at least this much is pending". A document with nothing pending
+prints exactly what it always did, with no extra line.
+
+To see one resolved version instead:
+
+| Flag | Shows |
+|---|---|
+| `--suggestions inline` | default — the redline as it stands |
+| `--suggestions accepted` | every suggestion applied |
+| `--suggestions rejected` | every suggestion discarded |
+
+**The two previews are for reading only.** They return text with suggestions
+resolved, so every character index shifts against the live document — an edit
+planned on previewed text would land in the wrong place. The editing actions
+ignore the flag and always work from the live document. When you need to change
+a doc that has pending suggestions, plan the edit from a default `read`.
 
 ## The reliable pattern: read → batch → verify
 
