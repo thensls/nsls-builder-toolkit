@@ -43,6 +43,10 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code
       - name: Install main, then this branch on top
         shell: bash
+        # CLAUDE_KIT_TEST_DIR, not CLAUDE_CONFIG_DIR: a builder's test install
+        # doesn't set CLAUDE_CONFIG_DIR, so the installer must. Setting it here
+        # hid install.ps1 sending the claude CLI to the real .claude (2026-10-15).
         run: |
-          export CLAUDE_CONFIG_DIR="$RUNNER_TEMP/kit"
+          export CLAUDE_KIT_TEST_DIR="$RUNNER_TEMP/kit"
+          unset CLAUDE_CONFIG_DIR
           python .github/scripts/install_check.py
