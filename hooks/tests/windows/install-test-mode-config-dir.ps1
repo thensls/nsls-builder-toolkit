@@ -31,9 +31,13 @@ $ascii = New-Object System.Text.ASCIIEncoding
 [IO.File]::WriteAllText((Join-Path $bin 'gws.cmd'), "@echo gws 0.0.0-stand-in`r`n", $ascii)
 
 # The toolkit to clone: this checkout's commit, as branch main of a local repo.
+# CI's checkout is shallow, and a fetch from it drops the branch ("shallow roots
+# are not allowed to be updated") yet exits 0, so --update-shallow, and check
+# the branch is there rather than the exit code.
 $src = Join-Path $scratch 'src.git'
 & git init -q --bare $src 2>$null
-& git -C $src fetch -q $repo 'HEAD:refs/heads/main' 2>$null
+& git -C $src fetch -q --update-shallow $repo 'HEAD:refs/heads/main' 2>$null
+& git -C $src rev-parse -q --verify refs/heads/main 2>$null | Out-Null
 if ($LASTEXITCODE -ne 0) { Write-Host 'FAIL could not make a local copy of this checkout to install from'; exit 1 }
 
 $gitDir = Split-Path (Get-Command git).Source
