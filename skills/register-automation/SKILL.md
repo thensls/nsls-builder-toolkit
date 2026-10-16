@@ -103,8 +103,9 @@ Tier 2, `Company-wide` = Tier 3, and **both `Customer Facing` scopes
 (`Advisors`, `Members`) = Tier 3** — they exist in the tracker and are the most
 consequential builds there are; leaving them unmapped let member-facing work
 skip every Tier 3 requirement. Four fields hang off the tier. Send them inside
-`automation` under these exact JSON keys: the proxy drops any key it doesn't
-know without saying so, so a misspelled key means an empty field.
+`automation` under these exact JSON keys: the proxy skips any key it doesn't
+know, so a misspelled key means an empty field. The response names the skipped
+keys in `ignored_keys`; Step 4 says what to do with them.
 
 | Field | JSON key | When to set |
 |---|---|---|
@@ -184,6 +185,25 @@ From the response, show:
 
 **Always:**
 > Registered **[Name]** at [Stage]. You're listed as owner/maintainer.
+
+**If `ignored_keys` is not empty, say so next, before anything else.** Those
+keys were not saved, so their fields are still empty on the record. Tell the
+builder plainly what didn't save, by field name where you can tell which one
+was meant:
+> Heads-up: the tracker didn't save the reviewer or the platform; I sent them
+> under the wrong names. Fixing that now.
+
+Then fix it. When a key is a near-miss of one this skill names (`reviewer` →
+`reviewer_email`, `platform` → `platform_used`), call
+`/register-automation-with-builder` again with only `name` and the corrected
+keys, and no `previous_stage`, so no points are counted twice. Check that the
+new response's `ignored_keys` is empty. When there's no clear match, tell the
+builder what didn't save and ask what they meant; don't guess. While a
+guardrail key (the four in Step 2) is in the list at Tier 2 or 3, the
+registration is not finished, so don't close on the line above.
+
+A response with no `ignored_keys` field at all comes from an older proxy that
+can't tell you; send only the exact keys this skill names.
 
 **If checklist items were updated:**
 > Updated org-owned checklist: README, CLAUDE.md, GitHub repo confirmed.
@@ -359,7 +379,7 @@ dispute count as the system working, not failing.
 | POST | `/similar` | Rank existing registry rows by similarity to a proposed build (name + description). Top 3, score ≥ 0.5; `from_idea_backlog` flags claimable Idea rows. Read-only. |
 | POST | `/find` | Search automations by name |
 | POST | `/find-builder` | Find builder by email/Slack ID/GitHub |
-| POST | `/register-automation-with-builder` | Main smart endpoint |
+| POST | `/register-automation-with-builder` | Main smart endpoint. The reply's `ignored_keys` lists automation keys it did not save. |
 | GET | `/automations` | List all (optional `?stage=` or `?department=`) |
 | GET | `/builder-stats/{email}` | Builder's automation portfolio |
 | POST | `/builder` | Register a new builder |
