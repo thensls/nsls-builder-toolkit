@@ -25,7 +25,8 @@ It clones the repo itself (Step 1) before needing any file from it, so it never
 depends on $PSScriptRoot. Also runs from a local checkout.
 
 Idempotent: re-running updates the clone and no-ops anything already in place.
-  -Test   install into a throwaway $HOME\.claude-kit-test (or $env:CLAUDE_CONFIG_DIR)
+  -Test   install into a throwaway $HOME\.claude-kit-test (or $env:CLAUDE_KIT_TEST_DIR;
+          an $env:CLAUDE_CONFIG_DIR already set wins), the claude CLI's plugins included
 #>
 param([switch]$Test)
 $ErrorActionPreference = 'Stop'
@@ -52,6 +53,21 @@ if ($env:CLAUDE_CONFIG_DIR) {
 } else {
     $ConfigDir = Join-Path $env:USERPROFILE '.claude'
 }
+
+# A test install must reach the claude CLI too (install.sh exports the same).
+# Without this, Step 3 put the plugins into the real .claude while the rest
+# went to the test dir, and the installer's own reads of the plugin registry
+# looked in the test dir and found nothing. A pasted `iwr | iex` runs in the
+# builder's own window, so the variable must not outlive the script: the
+# `try` below runs to the end of the file, and its `finally` takes the variable
+# back off on every way out (the end, an early stop, an error, Ctrl+C). The body
+# is deliberately not indented under it.
+$SetConfigDirForTest = $false
+if ($Test -and -not $env:CLAUDE_CONFIG_DIR) {
+    $env:CLAUDE_CONFIG_DIR = $ConfigDir
+    $SetConfigDirForTest = $true
+}
+try {
 
 $LocalDir  = Join-Path $ConfigDir 'local-plugins'
 $PluginDir = Join-Path $LocalDir  'nsls-builder-toolkit'
@@ -958,6 +974,7 @@ if ($Test) {
     Write-Host "  Everything went into: $ConfigDir (your real .claude was NOT touched)."
     Write-Host "  NOTE: -Test is only usable from the terminal via CLAUDE_CONFIG_DIR; the"
     Write-Host "  desktop app always launches against your real .claude."
+    Write-Host "  Try it with: `$env:CLAUDE_CONFIG_DIR = `"$ConfigDir`"; claude"
     Write-Host "  Reset with:  Remove-Item -Recurse -Force `"$ConfigDir`""
 } else {
     Write-Host "=== NEXT STEP ==="
@@ -975,3 +992,8 @@ Write-Host ""
 # would close the user's window, so just return.
 # A known failure exits 1, so a wrapper or CI can tell.
 if ($RunningFromFile) { if ($InstallFailed.Count) { exit 1 } else { exit 0 } } else { return }
+
+} finally {
+    # Opened right after the config dir is chosen; see the comment there.
+    if ($SetConfigDirForTest) { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue }
+}
