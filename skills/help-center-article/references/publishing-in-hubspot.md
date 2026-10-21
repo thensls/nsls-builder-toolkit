@@ -75,13 +75,12 @@ Send the MEX lead this message (Slack DM or email). The skill fills it in:
 
 1. Run `python3 scripts/check_article.py --live <slug>`. It checks the live page loads, the body passes the rules, and the contact block is there.
 2. Open the live URL and the category page in a normal browser window. The home page and category pages can take about 2 minutes to update; article pages occasionally longer.
-3. The article reaches the help.nsls.org portal on the next Monday sync. If it should be featured there (Popular Help or a guide section), ask Julia Botz.
-4. If it should be on the home page doors, or it replaced or removed an article that has a door card, send RevOps the request in `categories-and-home-page.md`.
-5. Delete nothing from the drafts folder: it's the record of what was published and when.
+3. If it should be on the home page doors, or it replaced or removed an article that has a door card, send RevOps the request in `categories-and-home-page.md`.
+4. Delete nothing from the drafts folder: it's the record of what was published and when.
 
 ## Unpublishing or retiring an article
 
-Don't delete articles. Ask the MEX lead to unpublish it (Actions > Unpublish in the article list) and tell RevOps (door cards, links) and Julia Botz (the help.nsls.org portal) the slug so nothing points at it. If another article replaces it, ask RevOps for a redirect from the old URL.
+Don't delete articles. Ask the MEX lead to unpublish it (Actions > Unpublish in the article list) and tell RevOps the slug so door cards and links can be updated. If another article replaces it, ask RevOps for a redirect from the old URL.
 
 ## Troubleshooting
 

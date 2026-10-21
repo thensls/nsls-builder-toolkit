@@ -1,6 +1,6 @@
 ---
 name: help-center-article
-description: Use when someone on Member Experience wants to write a new member-facing help article, update or fix the wording of an existing one, or check an article's copy and formatting for the NSLS Help Center knowledge base in HubSpot (info.nsls.org/help). Trigger phrases include write a help article, new help center article, update a help article, member FAQ article, fix this help article, check this help article, publish to the help center. Not for curating the help.nsls.org portal (Popular Help, guide sections, sync): that is /help-center.
+description: Use when someone on Member Experience wants to write a new member-facing help article, update or fix the wording of an existing one, or check an article's copy and formatting for the NSLS Help Center knowledge base in HubSpot (info.nsls.org/help). Trigger phrases include write a help article, new help center article, update a help article, member FAQ article, fix this help article, check this help article, publish to the help center.
 ---
 
 # Help Center Article
@@ -43,7 +43,7 @@ The writer and the approver are never the same person for the same article. Send
 - **Site:** https://info.nsls.org/help, branded **NSLS Help Center**. Public, no login.
 - **HubSpot:** portal 5345251, knowledge base "NSLS Help Center". In HubSpot, the Knowledge base dropdown at the top of the article list must say **NSLS Help Center**; the other knowledge base is the staff-only internal one.
 - **Layout:** home page with three "doors" (Thinking about joining / Already a member / I'm an advisor) that link to specific articles, then ten topic cards. Article pages show a date, the title, an optional subtitle, then the body, with a category sidebar on the left.
-- **Where articles also appear:** HubSpot is the source of truth. Published articles also sync every Monday to the self-help portal at help.nsls.org, where Julia Botz curates what's surfaced (Popular Help, guide sections). Write for both: the clean HTML rules here keep articles rendering well in either place. Questions about where an article shows on the portal go to Julia, through the `/help-center` skill's process, not this one.
+- **This is the member-facing Help Center.** Since October 21, 2026, info.nsls.org/help itself carries the design members see, so articles are written, published and read here. They are **not** pushed to the marketing site or the help.nsls.org portal any more, and the `/help-center` skill (portal curation) is not part of this process.
 - **Ten categories** (exact names): Joining the NSLS; Membership, benefits & programs; Account & login; Orders & shipping; Payments, receipts & charges; Society by the NSLS; About the NSLS; Induction steps; Events; Bring the NSLS to your campus. Society by the NSLS has subcategories, listed in `references/categories-and-home-page.md`.
 
 ## Questions to ask the writer
@@ -182,6 +182,5 @@ When something doesn't look right: check the live page or preview, find which ru
 ## Related
 
 - Internal staff-only articles (process docs, HubSpot how-tos) use `/kb-article`, not this one.
-- Curating the help.nsls.org portal (Popular Help order, guide sections, synonyms, sync): `/help-center`.
 - How the Help Center design is built and maintained: internal KB article "Maintaining the External Help Center Design" (info.nsls.org/internal/maintaining-the-external-help-center-design).
 - For deeper brand voice work, `/nsls-copywriter-skill` if installed. Its em dash allowance does not apply here.

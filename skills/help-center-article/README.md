@@ -22,8 +22,12 @@ Given what members are asking, it:
 The skill never creates, edits or publishes anything in HubSpot. Scripts use the
 Python standard library and read only the public Help Center.
 
-Related: `/help-center` curates the help.nsls.org portal that these articles sync
-to every Monday; `/kb-article` is for the staff-only internal knowledge base.
+Since October 21, 2026 the HubSpot Help Center (info.nsls.org/help) carries the
+member-facing design itself, so articles are published and read there. They are no
+longer pushed to the marketing site or the help.nsls.org portal, and the
+`/help-center` portal-curation skill is not part of this process.
+
+Related: `/kb-article` is for the staff-only internal knowledge base.
 
 **To use:** say something like *"write a help center article about updating your
 kit mailing address"* or *"check the help article how-can-i-track-my-order"*.
