@@ -48,6 +48,7 @@ Then open Claude Code and say `/nsls-setmeup` to connect your tools and optional
 | **/google-drive** | Google Drive file management |
 | **/google-slides-api** | Edit existing Google Slides via API |
 | **/gws** | Google Workspace Sheets CLI |
+| **/help-center-article** | Write, check, preview and publish member-facing articles for the NSLS Help Center (info.nsls.org/help). Built for Member Experience: answer-first articles in the Help Center design, a checker that blocks dashes, double spaces, pasted formatting and typed lists, a true-to-life preview, and a draft → MEX lead review → publish path in HubSpot. Never changes HubSpot itself |
 | **/quicknote** | Draft your weekly Signal quick note from what you actually did — your Claude sessions first, plus the calendar, Slack, email, Fathom, Asana and daily notes you choose |
 | **/write-like-me** | Learn how you change Claude's writing — from your corrections and from what you actually sent on Slack, email or Google Docs — and save a named style guide you approve, so Claude drafts like you next time |
 | **/netlify-deploy** | Deploy and preview static pages |
@@ -229,6 +230,7 @@ They form a cycle: `/data-model-discovery` explores a new system → maps it aga
 | **nsls-slides** | Create branded NSLS/Society presentations |
 | **frontend-slides** | Build HTML presentations |
 | **gdoc-build** | Build nicely-formatted NSLS/Society Google Docs (real tables, branded headers) |
+| **help-center-article** | Write, check and preview Help Center articles; draft → MEX lead → publish in HubSpot |
 | **google-drive** | Google Drive file management |
 | **google-slides-api** | Edit existing Google Slides via API |
 | **quicknote** | Draft your weekly Signal quick note from your Claude sessions, calendar, Slack, email, Fathom, Asana and daily notes |
