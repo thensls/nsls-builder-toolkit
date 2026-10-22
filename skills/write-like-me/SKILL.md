@@ -31,7 +31,9 @@ on Windows), use `python` for all of them. Run them from this skill's folder.
 - **Purpose.** If they named one ("student responses", "reports"), use it. Otherwise
   propose one in Step 7 from what was found.
 - **Existing guides.** Look for `my-*-style` folders in `~/.claude/skills/`. "Update
-  my <name> style" means update mode: go to Step 9.
+  my <name> style" means update mode: go to Step 9. If they already have a hand-made
+  style skill for the same writing (a `slack-message` skill, say), offer in Step 7 to
+  merge into it instead of adding a second guide that Claude would also load.
 - **Window.** The last 30 days, ending today. If Step 4 finds fewer than 5 usable
   items, widen to 90 days once.
 
@@ -141,9 +143,33 @@ break.
   the style. If an example can't be made safe, drop it.
 - **Name it** from the purpose and the destination: "Slack asks" becomes the folder
   `my-slack-asks-style`.
-- **Show the exact text that will be saved,** in the Step 8 format, and ask: *"Keep,
-  change or drop any rule? And is the name right?"* Apply their edits. Nothing is saved
-  until they say yes.
+- **Let them tick the rules to keep.** Use the AskUserQuestion tool, with
+  `multiSelect: true` and up to 4 questions in one call:
+  - One question per group of up to 4 rules (Sound, then Shape), worded *"Tick the
+    rules to keep. You can reword any of them in the next step."*, plus one question
+    for the Maybe list, worded *"Tick any you'd like added as rules."*
+  - Each option's `label` is the rule in 5 words or fewer ("No exclamation marks").
+    Its `description` is the full rule, then on a new line, in brackets, its
+    evidence and short before → after: `Drop exclamation marks.\n(4 of 7 items ·
+    "Hi [name]!" → "Hi [name].")`
+  - A `header` of 12 characters at most: "Sound", "Shape 1/2", "Maybe".
+  - More than 12 options in total: ask in a second call.
+  - Unticked rules are dropped. Don't rely on the tool's own "Other" box for
+    rewording, because it can't say which rule an edit belongs to.
+  - Without the tool, list the rules with numbers and ask them to reply with what to
+    drop or reword.
+- **Show the exact text that will be saved,** in the Step 8 format, built from their
+  ticks, with the rules numbered. Then ask one more AskUserQuestion, *"Save this as
+  `my-<slug>-style`?"*, with three options:
+  - "Save it".
+  - "Reword a rule first". When they pick this, ask them to type in the chat the
+    number and the new wording ("3: open with the ask"), apply it, show the text
+    again, and ask again.
+  - "Not yet".
+
+  If Step 1 found a hand-made guide for the same writing, put "Merge into <that
+  skill>" first: add only the rules it doesn't already have, plus the Measurements
+  table. Nothing is saved until they pick "Save it" or "Merge".
 
 ## Step 8: Save the guide
 
@@ -163,10 +189,12 @@ Check every <destination> draft against these rules before showing it. Facts com
 from the request, never from this guide.
 
 ## Sound
-- <rule> (<n> of <N> items). <before> → <after>
+1. <rule>
+   (<n> of <N> items · <before> → <after>)
 
 ## Shape
-- <rule> (<n> of <N> items). <before> → <after>
+2. <rule>
+   (<n> of <N> items · <before> → <after>)
 
 ## Examples
 <2 or 3 redacted before → after pairs>
@@ -181,7 +209,8 @@ from the request, never from this guide.
 ```
 
 If a folder with that name exists and isn't this guide, choose another name. If it is
-this guide, show the changes before saving. Never touch any other skill.
+this guide, show the changes before saving. Never touch any other skill, except a
+hand-made guide they chose to merge into.
 
 Then run `python3 scripts/pairs.py clean` to delete the working files. Tell them where
 the guide lives, that Claude uses it automatically from their next new session, and
