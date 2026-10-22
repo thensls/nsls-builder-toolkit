@@ -16,7 +16,8 @@ Given what members are asking, it:
   a missing contact block, and fixes the purely mechanical problems itself,
 - previews it inside a real Help Center page (`scripts/preview.py`),
 - hands the writer click-by-click HubSpot steps to save it as a **draft**, plus a
-  filled-in review message for the MEX lead (Kimberly Campbell or Kara Klimuszko),
+  filled-in review message for the MEX lead (Kimberly Campbell, Kara
+  Klimuszko or Atrayu Polhemus),
   who publishes.
 
 The skill never creates, edits or publishes anything in HubSpot. Scripts use the

@@ -33,7 +33,7 @@ Members land on the Help Center when they're stuck, usually on a phone, often st
 | Role | Person | Does |
 |---|---|---|
 | Writer | Any Member Experience teammate | Drafts with this skill, pastes into a HubSpot draft, clicks **Save**, sends for review |
-| Approver | MEX lead: **Kimberly Campbell** (kcampbell@nsls.org, Director of Member Experience) or **Kara Klimuszko** (kklimuszko@nsls.org) | Reviews the draft in HubSpot, clicks **Publish** (new) or **Update** (edit) |
+| Approver | MEX lead: **Kimberly Campbell** (kcampbell@nsls.org, Director of Member Experience), **Kara Klimuszko** (kklimuszko@nsls.org) or **Atrayu Polhemus** (apolhemus@nsls.org, Member Experience Specialist) | Reviews the draft in HubSpot, clicks **Publish** (new) or **Update** (edit) |
 | Help Center owner | Royce Rowan, RevOps (rrowan@nsls.org) | Categories, home page door cards, header, footer, theme, anything that looks broken across many articles |
 
 The writer and the approver are never the same person for the same article. Send the review message to whichever approver is available; if more approvers are added later, update this table.
