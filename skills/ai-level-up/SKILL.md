@@ -1,11 +1,11 @@
 ---
 name: ai-level-up
 description: >-
-  A private AI check-in. Looks at how you've been working with Claude (Claude
+  A personal AI check-in. Looks at how you've been working with Claude (Claude
   Code and Cowork sessions on this computer, or your claude.ai chats when run
   there), shows your NSLS Builder stage and its next unlock, how you work on
-  each Claude surface, and up to three things to try next week. Self-coaching
-  only: nothing is sent to NSLS or anyone else. What it can see depends on
+  each Claude surface, and up to three things to try next week. From the second
+  check-in on, it estimates the time saved by what you put into practice. What it can see depends on
   where it runs: in Claude Code, every Claude Code project plus Cowork tasks
   saved on that computer; in claude.ai, chats outside projects, or one
   project's chats when asked inside that project. Use when someone says "how am I
@@ -16,7 +16,7 @@ description: >-
 
 # AI Level Up
 
-A coach, not a grader. The person learns where they are and what to try next. Nobody else learns anything.
+A coach, not a grader. The person learns where they are and what to try next.
 
 **Read before judging anything:**
 
@@ -45,11 +45,10 @@ Where the skill runs decides what it can see. claude.ai chat search can't reach 
 
 ## Promises (keep every one)
 
-1. **Self-coaching only.**
-   - Never write to the Automation Tracker, Slack, email or any shared place.
+1. **Coaching, not reporting.**
+   - Never write to the Automation Tracker, Slack, email or any shared place yourself.
    - Never offer to share the report.
-   - The one outbound call is a *read* of the person's own Builder stage.
-   - If this skill came through the NSLS Builder Toolkit (its folder path contains `nsls-builder-toolkit`), the toolkit notes *that* it ran (its name only), never what it found. Say this once, on the first run.
+   - Make no claims about what NSLS can or can't see. Don't promise that nothing is sent; the toolkit's install notice covers that.
 2. **Only the person's own data.**
    - Never read another user's folders or chats.
    - In claude.ai, if this chat is inside a project, ask once: "Is this project just yours?"
@@ -72,7 +71,8 @@ Where the skill runs decides what it can see. claude.ai chat search can't reach 
    - Experiments go *up* a level only when a "move up" sign actually showed.
    - Otherwise suggest "same way, add the check", or a step *down* for something risky.
    - Never push a non-technical person past Autopilot, except a read-only scheduled brief (see `levels.md`).
-7. **Never assign or imply a Builder stage.** Show the stage on record, Kevin's next unlock, and which of this week's work could become that evidence.
+7. **The time-saved number is an estimate.** Take the low end, call it an estimate everywhere, and never present it as a measurement.
+8. **Never assign or imply a Builder stage.** Show the stage on record, Kevin's next unlock, and which of this week's work could become that evidence.
 
 ## Step 0 — Which kind of run is this?
 
@@ -149,7 +149,21 @@ Then roll up:
 - **Per surface used:** the usual range of levels; one task at the right level; one that wasn't. Judge each surface against its own range (the table in `levels.md`).
 - **Across all sessions:** 2 strengths and 2 things worth growing. Check for the artifact paradox.
 - **Right tool for the job:** only when a task clearly belonged on another surface.
-- **Since last time:** compare with `previous_run` or the found summary. Check whether last time's experiments were tried (name the session), and credit anything that stuck, such as a correction turned into a standing rule.
+- **Since last time:** compare with `previous_run` or the found summary. Credit anything that stuck, such as a correction turned into a standing rule.
+
+**What they put into practice (from the second check-in on).** When `previous_run` (or the found summary) lists experiments:
+
+- **For each of last time's suggestions** (up to 3), judge from this window's sessions whether they put it into practice: `adopted` (clearly doing it), `partly` (tried it once, or half of it), or `not yet`. Name the session that shows it in `evidence`. Count only what you can see.
+- **Estimate how much more productive that makes them**, as a whole-number percentage of their time working with Claude. Take the low end:
+  - nothing adopted: 0;
+  - a habit that saves a correction round in a few sessions: 1–3;
+  - a change that removes a manual step from recurring work: 3–8;
+  - a new routine that takes over a repeated task: 8–15;
+  - never above 25.
+- **Copy `hours_with_claude`** from the scan: the sum of each surface's `hours_per_week`, the hours a week they spent typing into Claude. The page works out the time saved from the two numbers.
+- Write it all as `practice`, with `why`: one plain sentence on how you reached the estimate.
+
+**First check-in (nothing to compare yet).** Estimate the same way for this week's suggestions if they become habits, and write it as `potential`. The page shows it as the upside; nothing is logged.
 - **Builder stage:** the stage on record, Kevin's next unlock, and one real task this week that could become that evidence. If nothing points that way, say so in one line.
 
 **Experiments (up to 3).** Each one:
@@ -188,6 +202,9 @@ Write the findings as JSON in the private state folder: `report-draft.json` in `
   "stage": "Maker or null", "unlock": "Kevin's wording; for Steward: 'Next: make what you built runnable by others, and take on more.'", "toward_unlock": "one real task + the one action",
   "previous": "copy previous_run from the digest as-is (chat mode: the found summary), or leave out",
   "since_last": ["up to 4 short lines"],
+  "practice": {"tried": [{"title": "last time's suggestion", "status": "adopted | partly | not yet", "evidence": "7 Oct · session title"}],
+               "productivity_pct": 3, "hours_with_claude": 12.5, "why": "one plain sentence"},
+  "potential": {"productivity_pct": 5, "hours_with_claude": 12.5, "why": "first check-in only"},
   "surfaces": [{"name": "Claude Code", "summary": "plain sentences",
                 "points": [{"label": "Right level:", "text": "…", "quote": "their own words", "ref": "24 Sep"}]}],
   "strengths": [{"text": "…", "quote": "…", "ref": "…"}],
@@ -209,6 +226,7 @@ Write the findings as JSON in the private state folder: `report-draft.json` in `
 
 - **What the page draws from these:**
   - `stage` is a five-stop track.
+  - `practice` becomes a "What you put into practice" card with the estimated time saved; `potential` becomes one upside line above this week's suggestions.
   - `tasks` become one bar per level, coloured by fit. Clicking a bar's count opens its sessions with their `why`.
   - `behaviours` become you-vs-typical bars, grouped into ahead, to improve and about typical. Clicking a habit opens what it means, an example, and its `habit_notes` line.
   - Three score tiles, each compared with last time:
@@ -221,7 +239,7 @@ Write the findings as JSON in the private state folder: `report-draft.json` in `
 - **Chat mode:**
   - If you can run code, render the same way with `--no-record` and show the page.
   - Otherwise, write the same sections as a plain message.
-- **Reply with the scope line, then five lines at most** (on a first run, Step 4's question follows):
+- **Reply with the scope line, then five lines at most** (on a first run, Step 4's question follows). From the second check-in on, in local mode, `render` prints "end your reply with this exact line: …". Copy that line exactly as the very last line of your reply, with nothing after it:
   - stage and next unlock
   - one strength
   - one thing to grow
