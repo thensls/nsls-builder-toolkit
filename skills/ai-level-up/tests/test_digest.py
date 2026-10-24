@@ -541,6 +541,7 @@ class Render(Home):
             self.report(previous=last, practice={"tried": [{"title": "Paste one you liked", "status": "adopted"}],
                                                  "productivity_pct": 2.5, "hours_with_claude": 10})  # whole percent only
         self.assertEqual(digest.estimate({"productivity_pct": 7, "hours_with_claude": 10}), (7, 0.7))
+        self.assertEqual(digest.estimate({"productivity_pct": 5, "hours_with_claude": 84}), (5, 4.2))  # a heavy week still counts
 
     def test_first_check_in_shows_the_upside_and_logs_nothing(self):
         main = self.report(potential={"productivity_pct": 5, "hours_with_claude": 20}).split("<main", 1)[1]

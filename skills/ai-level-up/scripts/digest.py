@@ -74,6 +74,7 @@ HABIT_HELP = [  # (what it means, a quick example), in BEHAVIOURS order
 NEAR = 10                 # points either side of typical that count as "about typical"
 PRACTICE = ("adopted", "partly", "not yet")
 MAX_GAIN_PCT = 25         # the most a week's changes can be estimated to add, in percent
+WEEK_HOURS = 168          # hours_with_claude can't exceed the hours in a week
 LOGGED_LINE = "Estimated time saved: about %s h a week · about %d%% more productive (logged)"  # usage collector parses this
 BIG_GAP = 15              # points below typical that get flagged as a big gap (top 3 at most)
 PLACEHOLDER = re.compile(r"<[^<>\n]{1,60}>|\{[^{}\n]{1,60}\}|\[(?!(?:email|ssn|phone|id|number|REDACTED)\b)[a-z][^\[\]\n]{1,60}\]")
@@ -821,7 +822,7 @@ def clean_run(run):
     out["scores"] = {k: "%d/%d" % ratio(sc[k]) for k in ("right_level", "checks", "habits_ahead") if ratio(sc.get(k))}
     saved = run.get("practice") if isinstance(run.get("practice"), dict) else {}
     est = estimate(saved)
-    if not est and number(saved.get("pct"), 0, MAX_GAIN_PCT) is not None and number(saved.get("hours_saved"), 0, 80) is not None:
+    if not est and number(saved.get("pct"), 0, MAX_GAIN_PCT) is not None and number(saved.get("hours_saved"), 0, WEEK_HOURS) is not None:
         est = (int(saved["pct"]), float(saved["hours_saved"]))  # a history line read back
     out["practice"] = {"pct": est[0], "hours_saved": est[1]} if est else None
     return out
@@ -1216,7 +1217,7 @@ def estimate(block):
     Low end by construction: whole percent, hours rounded down to one decimal."""
     if not isinstance(block, dict):
         return None
-    pct, hours = number(block.get("productivity_pct"), 0, MAX_GAIN_PCT), number(block.get("hours_with_claude"), 0, 80)
+    pct, hours = number(block.get("productivity_pct"), 0, MAX_GAIN_PCT), number(block.get("hours_with_claude"), 0, WEEK_HOURS)
     if pct is None or hours is None or not pct.is_integer():
         return None
     saved = hours * pct / 100.0                      # e.g. 12.5 h at 3% = 0.375 h
