@@ -41,6 +41,13 @@ Find what would actually hurt, and ignore the rest.
   run, or a false or unsupported claim in front of its audience. Drop style
   nits, low-confidence speculation and duplicates. If many findings share one
   cause, report the pattern once, but list every instance that is a blocker.
+- **Name the trigger.** Every BLOCKER or SHOULD FIX says who hits it and how:
+  which person, machine or run, doing what. If you can't name a plausible
+  trigger, it isn't a finding. Drop it.
+- **Deliberate isn't a defect.** Behavior the packet says is intended, or that
+  the work's own comments explain, is not a finding unless it causes harm the
+  packet doesn't acknowledge. Rollout advice, wording preferences, and ways to
+  strengthen a test that isn't wrong are not BLOCKERS or SHOULD FIX.
 
 ## Lens: code
 
