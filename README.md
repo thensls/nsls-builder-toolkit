@@ -293,9 +293,9 @@ session ping (`hooks/session-start.ps1`) so Windows builders are covered too.
 ## Claude Usage Reporter (collector)
 
 The NSLS Claude usage collector reports a summary of each session (for
-example the app, models, timing, token counts, skill and tool names, and
-branch name) from this machine to Signal. It never reports prompts,
-responses or files. You can
+example the app, models, timing, token counts, and skill and tool
+names) from this machine to Signal. It never reports your prompts or
+files. You can
 see what it has sent at [signal.nsls.org/me/machines](https://signal.nsls.org/me/machines).
 
 **Installed for you.** When a session starts on a Mac or a Windows PC and
