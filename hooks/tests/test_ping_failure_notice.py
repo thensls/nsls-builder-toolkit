@@ -10,6 +10,7 @@ and the hook told the builder the tracker had been unreachable "for your last
 3 sessions" and to raise it in #builders.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import io
 import json

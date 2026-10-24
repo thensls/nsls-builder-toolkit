@@ -10,6 +10,7 @@ plain sentences Claude passes on. A fake `claude` on PATH records each call and
 moves the registry the way the real CLI does. No network, no real install.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import json
 import os
 import subprocess

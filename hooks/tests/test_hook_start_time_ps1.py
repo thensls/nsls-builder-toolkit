@@ -12,6 +12,7 @@ seconds is kept and anything else is replaced. The block between the
 "hook start time" markers runs under every PowerShell found (`powershell` and
 `pwsh` on the Windows runner; NSLS_TEST_PWSH or `pwsh` elsewhere).
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import os
 import re
 import shutil
