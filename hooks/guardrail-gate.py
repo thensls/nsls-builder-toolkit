@@ -36,6 +36,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -72,15 +73,28 @@ NSLS_ORGS = ("thensls",)
 PERSONAL_MARKER = ".personal-repo"
 
 # The hook's total budget is 10s (hooks.json). Every subprocess and socket here
-# has to fit inside it *cumulatively*, because a gate can chain several: repo
-# lookup, then a tracker lookup, then the event POST on the way out. Blowing the
-# budget means the harness kills the hook mid-decision and the block is lost —
-# the gate silently fails to fire. These numbers are picked so the worst path
-# (gate 2: repo_root + tracker_get + emit) lands near 6s, leaving headroom on a
-# slow network. Raise them and redo that arithmetic.
+# has to fit inside it *cumulatively*, because a gate can chain several: git
+# lookups, then a tracker lookup. (The event POST on the way out is detached
+# and costs nothing.) Blowing the budget means the harness kills the hook
+# mid-decision and the block is lost — the gate silently fails to fire.
 GIT_TIMEOUT = 2
-NET_TIMEOUT = 3
-EMIT_TIMEOUT = 1.5
+
+# The tracker lookup must be over LOOKUP_DEADLINE seconds after this module
+# loads, and gets whatever is left of that: slow git lookups shorten its
+# allowance instead of running the hook out of time, and 2s of the hook's 10
+# stay free for interpreter start (before _STARTED) and the block on the way
+# out. A lookup that misses it is "unknown", gates 2 and 4 allow, and the check
+# is skipped without a word.
+#
+# It was a 3s urllib timeout, which bounds each socket operation, not the call:
+# the check was skipped whenever the tracker itself took over 3s to answer, and
+# a reply that kept trickling bytes was read past the hook's 10s. Timed live on
+# 2026-10-24 (GET /automations, 181 rows read from two Airtable pages), the
+# tracker took 1.4s p50 and 3.2s at worst to answer; the whole call took 1.8s
+# p50, 4.9s p95 and 5.9s at worst, most of the tail in connection setup. Each
+# further 100 registrations adds an Airtable page, about 0.5s.
+LOOKUP_DEADLINE = 8
+_STARTED = time.monotonic()
 
 
 # Appended to every block. Some gates will misfire in situations we could not
@@ -483,15 +497,37 @@ def _tracker_store(path: str, page, fetched_at: float = 0.0):
 
 def _http_get(url: str):
     """Raw bytes from the tracker, or None. A seam so the evidence rules below
-    can be tested without a network."""
+    can be tested without a network.
+
+    The limit is enforced on the clock, not by urllib. urlopen's timeout bounds
+    each socket operation separately, so a reply that kept trickling bytes was
+    read for as long as it trickled, past the hook's own 10s. The fetch runs on
+    a daemon thread instead, abandoned when the limit passes.
+    """
+    limit = LOOKUP_DEADLINE - (time.monotonic() - _STARTED)
+    if limit <= 0:
+        return None
+    body = []
+
+    def fetch():
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url),
+                                        timeout=limit) as r:
+                body.append(r.read(MAX_BODY))
+        except Exception:
+            pass
+
     try:
+        # Imported here, not in the thread: an import inside a thread can wait
+        # on the import lock, and that wait would count against the limit.
         import urllib.request
 
-        with urllib.request.urlopen(urllib.request.Request(url),
-                                    timeout=NET_TIMEOUT) as r:
-            return r.read(MAX_BODY)
+        t = threading.Thread(target=fetch, daemon=True)
+        t.start()
+        t.join(limit)
     except Exception:
         return None
+    return body[0] if body else None
 
 
 def tracker_page(path: str):
