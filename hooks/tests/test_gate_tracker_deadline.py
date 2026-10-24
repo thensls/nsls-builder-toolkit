@@ -6,15 +6,18 @@ Plain stdlib, no pytest: run with `python3 hooks/tests/test_gate_tracker_deadlin
 
 Gates 2 and 4 look a repo up with GET /automations. A reply that misses the
 limit is "unknown", and both gates then allow the command: the check is skipped
-and nothing says so. The limit was urllib's 3s timeout. Timed against the live
-tracker on 2026-10-24 the reply took 1.7s p50 and 3.1s p95, with 3 of 30 calls
-over 3s and one earlier call at 6.8s, because the list is now every row, read
-from two Airtable pages. About one deploy check in seven was being skipped.
+and nothing says so.
 
-urllib's timeout was also never a limit on the lookup as a whole. It bounds
-each socket operation separately, so a reply that keeps trickling bytes is read
-for as long as it trickles, past the hook's own 10s, and the harness then kills
-the hook mid-decision.
+The limit was urllib's 3s timeout, which bounds each socket operation, not the
+lookup. So the check was skipped whenever the tracker itself took over 3s to
+answer, and a reply that kept trickling bytes was read for as long as it
+trickled, past the hook's own 10s, where the harness kills the hook
+mid-decision. Timed live on 2026-10-24 (181 rows, two Airtable pages), the
+tracker took up to 3.2s to answer and whole calls up to 5.9s; every further
+100 registrations adds a page, about 0.5s.
+
+The lookup now gets whatever is left of an 8s budget counted from when the gate
+starts, on the clock.
 
 A local server stands in for the tracker; each case says how slowly it answers.
 """
@@ -117,9 +120,15 @@ status, took = timed_lookup(gate, ("delay", 4.0))
 check("a reply 4s late is still read (it was skipped at 3s)",
       status == "found", f"got {status} after {took:.1f}s")
 
+def budget_left(gate, seconds):
+    """Pretend the gate has already spent all but `seconds` of its budget."""
+    deadline = getattr(gate, "LOOKUP_DEADLINE", 8)
+    gate._STARTED = time.monotonic() - (deadline - seconds)
+
+
 print("\nthe limit covers the whole lookup, not each read")
 gate = load_gate()
-gate.NET_TIMEOUT = 1.5
+budget_left(gate, 1.5)
 status, took = timed_lookup(gate, ("trickle", 5.0))
 check("a reply still trickling at the limit is abandoned", status == "unknown",
       f"got {status}")
@@ -127,14 +136,13 @@ check("... at the limit, not when the trickle ends", took < 2.5, f"took {took:.1
 
 print("\ntime already spent comes out of the tracker's allowance")
 gate = load_gate()
-deadline = getattr(gate, "LOOKUP_DEADLINE", 8)
-gate._STARTED = time.monotonic() - (deadline - 1.0)  # 1s of budget left
+budget_left(gate, 1.0)
 status, took = timed_lookup(gate, ("delay", 2.5))
 check("a gate that started late waits only for what is left",
       status == "unknown" and took < 2.0, f"got {status} after {took:.1f}s")
 
 gate = load_gate()
-gate._STARTED = time.monotonic() - (deadline + 1.0)  # budget already gone
+budget_left(gate, -1.0)
 before = len(requests_seen)
 status, took = timed_lookup(gate, ("delay", 0.0))
 check("a gate with no budget left does not call the tracker at all",
@@ -147,13 +155,14 @@ hooks = json.loads((HOOKS / "hooks.json").read_text(encoding="utf-8"))
 hook_timeout = next(
     h.get("timeout") for entries in hooks["hooks"].values() for m in entries
     for h in m["hooks"] if h.get("command", "").rstrip().endswith(" gate"))
+deadline = getattr(gate, "LOOKUP_DEADLINE", None)
 check("the lookup ends 2s before the harness would kill the hook",
-      getattr(gate, "LOOKUP_DEADLINE", 99) + 2 <= hook_timeout,
-      f"deadline {getattr(gate, 'LOOKUP_DEADLINE', None)}, hook {hook_timeout}")
-check("a git lookup at its full timeout still leaves the tracker its full limit",
-      gate.GIT_TIMEOUT + gate.NET_TIMEOUT <= getattr(gate, "LOOKUP_DEADLINE", 0))
-check("the limit clears the measured p95 (3.1s) by a wide margin",
-      gate.NET_TIMEOUT >= 5, f"NET_TIMEOUT {gate.NET_TIMEOUT}")
+      deadline is not None and deadline + 2 <= hook_timeout,
+      f"deadline {deadline}, hook {hook_timeout}")
+# The slowest whole call timed live was 5.9s.
+check("after a git lookup at its full timeout, the tracker still gets 6s",
+      deadline is not None and deadline - gate.GIT_TIMEOUT >= 6,
+      f"deadline {deadline}, git {gate.GIT_TIMEOUT}")
 
 server.shutdown()
 print(f"\n{'FAILED: ' + ', '.join(failures) if failures else 'all passed'}")

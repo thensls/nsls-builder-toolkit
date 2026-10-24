@@ -77,20 +77,22 @@ PERSONAL_MARKER = ".personal-repo"
 # lookups, then a tracker lookup. (The event POST on the way out is detached
 # and costs nothing.) Blowing the budget means the harness kills the hook
 # mid-decision and the block is lost — the gate silently fails to fire.
-#
-# NET_TIMEOUT is the tracker lookup's wall-clock limit, and a lookup that misses
-# it is "unknown": gates 2 and 4 allow, and the check is skipped. It was 3s.
-# Timed against the live tracker on 2026-10-24 the reply took 1.7s p50 and
-# 3.1s p95 (3 of 30 over 3s, one earlier call 6.8s), since the list became
-# every row from two Airtable pages: about one deploy check in seven skipped.
-#
-# LOOKUP_DEADLINE caps everything up to the end of that lookup, counted from
-# when this module loads. A slow git lookup, or several chained, then shortens
-# the tracker's allowance instead of running the hook out of time, and 2s stay
-# free for interpreter start (before _STARTED) and the block on the way out.
-# A git lookup at its full timeout still leaves the tracker its full limit.
 GIT_TIMEOUT = 2
-NET_TIMEOUT = 6
+
+# The tracker lookup must be over LOOKUP_DEADLINE seconds after this module
+# loads, and gets whatever is left of that: slow git lookups shorten its
+# allowance instead of running the hook out of time, and 2s of the hook's 10
+# stay free for interpreter start (before _STARTED) and the block on the way
+# out. A lookup that misses it is "unknown", gates 2 and 4 allow, and the check
+# is skipped without a word.
+#
+# It was a 3s urllib timeout, which bounds each socket operation, not the call:
+# the check was skipped whenever the tracker itself took over 3s to answer, and
+# a reply that kept trickling bytes was read past the hook's 10s. Timed live on
+# 2026-10-24 (GET /automations, 181 rows read from two Airtable pages), the
+# tracker took 1.4s p50 and 3.2s at worst to answer; the whole call took 1.8s
+# p50, 4.9s p95 and 5.9s at worst, most of the tail in connection setup. Each
+# further 100 registrations adds an Airtable page, about 0.5s.
 LOOKUP_DEADLINE = 8
 _STARTED = time.monotonic()
 
@@ -502,7 +504,7 @@ def _http_get(url: str):
     read for as long as it trickled, past the hook's own 10s. The fetch runs on
     a daemon thread instead, abandoned when the limit passes.
     """
-    limit = min(NET_TIMEOUT, LOOKUP_DEADLINE - (time.monotonic() - _STARTED))
+    limit = LOOKUP_DEADLINE - (time.monotonic() - _STARTED)
     if limit <= 0:
         return None
     body = []
