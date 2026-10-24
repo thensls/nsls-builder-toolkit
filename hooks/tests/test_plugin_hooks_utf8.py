@@ -15,6 +15,7 @@ plugin's own hooks (hooks.json -> run-hook.sh -> python) never did. So on a PC:
     garbled and the repo lookup missed, and an emoji raised; both allowed.
 PYTHONIOENCODING=cp1252 reproduces a Windows pipe on any OS.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import ast
 import json
 import os

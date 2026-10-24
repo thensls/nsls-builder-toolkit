@@ -24,6 +24,7 @@ Every subprocess here runs with a dead tracker URL and an empty git identity:
 `memory record` reports a decline to the tracker, and a test that forgets this
 writes a real row under the developer's own name.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import json
 import os
 import re

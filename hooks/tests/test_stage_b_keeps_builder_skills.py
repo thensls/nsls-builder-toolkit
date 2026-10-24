@@ -13,6 +13,7 @@ has run on Macs since 12 Aug. Stage B now asks session-start.py's
 is_own_pointer, requires the folder to hold nothing but the pointer, and moves
 what it retires under ~/.claude/.nsls-removed-skills instead of deleting it.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import os
 import sys

@@ -15,6 +15,7 @@ Every subprocess runs sandboxed: its own config dir, no git identity, and a dead
 tracker URL, because `offer` and `accept` talk to the tracker and a test that
 forgets that writes real rows under the developer's name.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import json
 import os
 import re

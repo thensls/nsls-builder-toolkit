@@ -11,7 +11,13 @@ Checks, cheapest first; any failure means "skip silently":
 
   1. NSLS_COLLECTOR_OPTOUT=1 (or true/yes)  -> never install, write nothing.
   2. Platform: macOS and Windows only. Linux has no supported scheduler.
-  3. Installed = its evidence file is fresh (collector_evidence.fresh()), or
+  3. The home is the account's own (own_home()): HOME on a Mac, USERPROFILE
+     and LOCALAPPDATA on Windows, against the path the OS has on record for
+     the signed-in account. A test or tool that runs session start with a
+     scratch home must never install: the schedule is one per account, so the
+     installer would point the builder's real schedule at the scratch folder,
+     and every run fails once that folder is deleted.
+  4. Installed = its evidence file is fresh (collector_evidence.fresh()), or
      the collector's config.json exists in its home
      (~/Library/Application Support/nsls-collector on a Mac,
      %LOCALAPPDATA%\\nsls-collector on Windows) AND its schedule is
@@ -19,7 +25,7 @@ Checks, cheapest first; any failure means "skip silently":
      loaded; on Windows the "NSLS Collector" task exists). The installers write config.json before they register the
      schedule, so config.json alone can be a half-finished install that never
      runs; this repairs it.
-  4. Throttle, via <CLAUDE_CONFIG_DIR or ~/.claude>/.nsls-collector/bootstrap.json
+  5. Throttle, via <CLAUDE_CONFIG_DIR or ~/.claude>/.nsls-collector/bootstrap.json
      = {attempted_at, attempts}: at most one attempt per 24 hours, and none
      after 5 (logged once). The marker is written BEFORE the launch, under a
      short O_EXCL lock, so two sessions starting together launch once.
@@ -67,6 +73,82 @@ def collector_home(platform, env):
         local = env.get("LOCALAPPDATA")
         return Path(local) / "nsls-collector" if local else None
     return None
+
+
+def account_home(platform):
+    """The signed-in account's home as the OS records it, never as this
+    process's environment says. None when it can't be told."""
+    try:
+        if platform == "win32":
+            return _windows_profile_dir()
+        import pwd
+
+        home = pwd.getpwuid(os.getuid()).pw_dir
+        return Path(home) if home else None
+    except Exception:
+        return None
+
+
+def _windows_profile_dir():
+    """GetUserProfileDirectoryW for this process's token: the profile Windows
+    keeps on record for the account (ProfileList), not %USERPROFILE%."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    userenv = ctypes.WinDLL("userenv", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD,
+                                          ctypes.POINTER(wintypes.HANDLE)]
+    advapi32.OpenProcessToken.restype = wintypes.BOOL
+    userenv.GetUserProfileDirectoryW.argtypes = [wintypes.HANDLE, wintypes.LPWSTR,
+                                                 ctypes.POINTER(wintypes.DWORD)]
+    userenv.GetUserProfileDirectoryW.restype = wintypes.BOOL
+    token = wintypes.HANDLE()
+    TOKEN_QUERY = 0x0008
+    if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), TOKEN_QUERY,
+                                     ctypes.byref(token)):
+        return None
+    try:
+        size = wintypes.DWORD(0)
+        userenv.GetUserProfileDirectoryW(token, None, ctypes.byref(size))
+        if not size.value:
+            return None
+        buf = ctypes.create_unicode_buffer(size.value)
+        if not userenv.GetUserProfileDirectoryW(token, buf, ctypes.byref(size)):
+            return None
+        return Path(buf.value) if buf.value else None
+    finally:
+        kernel32.CloseHandle(token)
+
+
+def _same_dir(a, b):
+    try:
+        return (os.path.normcase(os.path.realpath(a))
+                == os.path.normcase(os.path.realpath(b)))
+    except Exception:
+        return False
+
+
+def own_home(platform, env, account):
+    """True only when the home this process was handed is the account's own.
+
+    The collector's schedule is one per account (launchd's
+    gui/<uid>/org.nsls.collector, the "NSLS Collector" task). An install from
+    a scratch home -- a test, or any tool that fakes HOME to sandbox session
+    start -- re-registers that one schedule against the scratch folder, and
+    the builder's real collector stops when the folder is deleted ("run.sh: No
+    such file or directory" on every run). Can't tell -> no."""
+    if account is None:
+        return False
+    if platform == "win32":
+        given, local = env.get("USERPROFILE"), env.get("LOCALAPPDATA")
+        return (bool(given) and bool(local) and _same_dir(given, account)
+                and _same_dir(local, Path(account) / "AppData" / "Local"))
+    home = env.get("HOME")
+    return bool(home) and _same_dir(home, account)
 
 
 def base_url(env):
@@ -257,12 +339,17 @@ def _append_log(path, line):
         pass
 
 
-def maybe_bootstrap(config_dir, platform, env, now, popen):
-    """One bootstrap decision. Returns a status word; raises only on bugs."""
+def maybe_bootstrap(config_dir, platform, env, now, popen, account=None):
+    """One bootstrap decision. Returns a status word; raises only on bugs.
+
+    `account` is the account's real home, looked up from the OS when None;
+    only tests pass it, to stand a scratch folder in for the account."""
     if opted_out(env):
         return "optout"
     if collector_home(platform, env) is None:
         return "unsupported"
+    if not own_home(platform, env, account_home(platform) if account is None else account):
+        return "sandboxed"  # silent: no install, no schedule, no marker, no log
     if installed(platform, env, config_dir):
         return "installed"
     base = base_url(env)
@@ -321,7 +408,7 @@ def maybe_bootstrap(config_dir, platform, env, now, popen):
     return "launched"
 
 
-def run(config_dir=None, platform=None, env=None, now=None, popen=None):
+def run(config_dir=None, platform=None, env=None, now=None, popen=None, account=None):
     """Session-start entry point: never raises, never prints."""
     try:
         env = os.environ if env is None else env
@@ -333,6 +420,7 @@ def run(config_dir=None, platform=None, env=None, now=None, popen=None):
             env=env,
             now=now or datetime.now(timezone.utc),
             popen=popen or subprocess.Popen,
+            account=account,
         )
     except Exception:
         return "error"

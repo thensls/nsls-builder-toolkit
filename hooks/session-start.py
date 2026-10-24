@@ -1636,6 +1636,14 @@ FRESH_STAMP = CONFIG_DIR / ".nsls-plugin-fresh-check"
 # has gone blind reads it: touching it keeps that rescue from running a second
 # update the same day.
 LEGACY_DAILY_MARKER = CONFIG_DIR / ".nsls-plugin-update-check"
+# The cheap check needs the published commit. A machine whose 3-second
+# `ls-remote` keeps failing (a proxy, a slow link, a clone with a broken remote)
+# never gets one, and before this it never updated again and never said so.
+# After BLIND_FALLBACK_S with no successful read, it runs the pre-3.29 daily
+# update once, unconditionally, then waits another BLIND_FALLBACK_S. The stamp
+# holds the last read (or fallback); the clock starts at the first failed read.
+PUBLISHED_SEEN_STAMP = CONFIG_DIR / ".nsls-plugin-published-seen"
+BLIND_FALLBACK_S = 86400
 FRESH_CHECK_INTERVAL_S = 600         # at most one network check per 10 minutes
 FRESH_RETRY_AFTER_TROUBLE_S = 7200   # an update that timed out or failed: 2 hours
 UPDATE_TIMEOUT_S = 20                # measured 7-11s for a real update (2026-10-17)
@@ -1688,6 +1696,29 @@ def _claim_fresh_check(now):
         pass
     _set_fresh_stamp(now + FRESH_CHECK_INTERVAL_S)
     return True
+
+
+def _note_published_seen(now):
+    try:
+        PUBLISHED_SEEN_STAMP.write_text(f"{int(now)}\n", encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _blind_too_long(now):
+    """True when no published commit has been read for over BLIND_FALLBACK_S.
+
+    No stamp yet (the first failed read on this machine) starts the clock rather
+    than counting as a day of blindness, and a stamp in the future means the
+    clock moved backwards: restart it, never act on it."""
+    try:
+        last = float(PUBLISHED_SEEN_STAMP.read_text(encoding="utf-8").strip())
+    except Exception:
+        last = None
+    if last is None or last > now:
+        _note_published_seen(now)
+        return False
+    return now - last > BLIND_FALLBACK_S
 
 
 def _published_head():
@@ -1810,6 +1841,10 @@ def ensure_plugin_fresh(reserve=MAIN_RESERVE_S):
     together never update or reinstall at once. An update that times out or
     fails is retried after FRESH_RETRY_AFTER_TROUBLE_S, not the next day.
 
+    A machine that cannot read the published commit for over a day gets the
+    pre-3.29 unconditional update once a day instead (_blind_update), so a
+    failing check can no longer stop updates without a word.
+
     Everything printed here lands in the model's context. Only our own
     literals, validated versions, validated skill names and validated 40-hex
     shas are echoed — never CLI or git output, which a hostile marketplace
@@ -1824,7 +1859,12 @@ def ensure_plugin_fresh(reserve=MAIN_RESERVE_S):
         record = _installed_plugin_record()
         published = _published_head() if record else None
         if not published:
-            return  # not a plugin machine, or offline: the stamp retries later
+            # Not a plugin machine, or offline: the stamp retries later. A plugin
+            # machine that has stayed blind for a day gets the old daily update.
+            if record and _blind_too_long(now):
+                _blind_update(reserve)
+            return
+        _note_published_seen(now)
         if _is_current(record, published):
             return  # level: no CLI call at all
         claude = _find_claude()
@@ -1844,6 +1884,57 @@ def ensure_plugin_fresh(reserve=MAIN_RESERVE_S):
         pass
 
 
+def _run_plugin_update(claude):
+    """`claude plugin update`, bounded by UPDATE_TIMEOUT_S. True on success."""
+    try:
+        LEGACY_DAILY_MARKER.touch()
+    except Exception:
+        pass
+    try:
+        return subprocess.run(
+            [*claude, "plugin", "update", ORG_PLUGIN_KEY],
+            capture_output=True, timeout=UPDATE_TIMEOUT_S, stdin=subprocess.DEVNULL,
+        ).returncode == 0
+    except Exception:  # TimeoutExpired included: too slow here, try again later
+        return False
+
+
+def _blind_update(reserve):
+    """The pre-3.29 daily update, for a machine that cannot read the published commit.
+
+    Unconditional, because without the published commit there is no telling
+    whether main moved, and `plugin update` is a no-op when it has not. Never a
+    heal: a reinstall starts by uninstalling, and there is no evidence of drift
+    to justify one. Counted as done before it runs, so a slow or failing update
+    is tried again tomorrow, not every ten minutes."""
+    claude = _find_claude()
+    if not claude:
+        return
+    if HOOK_BUDGET_S - _hook_elapsed() < UPDATE_TIMEOUT_S + reserve:
+        return  # short of time: the clock is left as it is, so the next session tries
+    lock = _acquire_heal_lock()
+    if lock is None:
+        return  # another session is updating right now
+    try:
+        # Re-check under the lock, as _update_and_heal does: a session that
+        # started alongside this one may have just run the update and restarted
+        # the clock while this one waited.
+        if not _blind_too_long(time.time()):
+            return
+        before = _installed_plugin_record()
+        if not before:
+            return
+        _note_published_seen(time.time())
+        old_skills = _skill_names(before["installPath"])
+        if not _run_plugin_update(claude):
+            return
+        after = _installed_plugin_record()
+        if after and before["installPath"] != after["installPath"]:
+            _announce_new_skills(old_skills, after)
+    finally:
+        _release_heal_lock(lock)
+
+
 def _update_and_heal(claude, published, reserve):
     """Under the lock: update, announce any new skills, then heal drift."""
     # Re-read under the lock: another session may have just done all of this.
@@ -1851,17 +1942,7 @@ def _update_and_heal(claude, published, reserve):
     if not before or _is_current(before, published):
         return
     old_skills = _skill_names(before["installPath"])
-    try:
-        LEGACY_DAILY_MARKER.touch()
-    except Exception:
-        pass
-    try:
-        updated = subprocess.run(
-            [*claude, "plugin", "update", ORG_PLUGIN_KEY],
-            capture_output=True, timeout=UPDATE_TIMEOUT_S, stdin=subprocess.DEVNULL,
-        ).returncode == 0
-    except Exception:  # TimeoutExpired included: too slow here, try again later
-        updated = False
+    updated = _run_plugin_update(claude)
     if not updated:
         # Offline, CLI lock, marketplace unreachable, too slow: whatever stopped
         # the update would stop the reinstall too, and the reinstall starts by
@@ -1910,13 +1991,25 @@ def _heal_and_announce(claude, record, head, deadline):
         )
         return True
 
-    # The heal failed. The plugin may now be uninstalled: say so, hand over
-    # the manual steps, and clear the stamp so the very next session retries
-    # instead of waiting with no toolkit.
+    # The heal failed. The plugin may now be uninstalled: say so and hand over
+    # the manual steps. Still installed, the stamp is cleared so the very next
+    # session retries. Uninstalled, nothing retries: this hook ships inside the
+    # plugin, so it stops running with it. The builder then needs one sentence
+    # they can give Claude in any later session.
     _set_fresh_stamp(time.time())
     after = _installed_plugin_record()
     state = ("is currently NOT installed on this machine"
              if after is None else f"is still on commit {after['sha'][:7] if after['sha'] else '?'}")
+    if after is None:
+        retry = (
+            "Nothing will retry this automatically: the toolkit's session hook "
+            "is part of the plugin, so it no longer runs. If the repair does not "
+            "finish now, give the builder this sentence to paste into Claude in "
+            f"any session: \"Reinstall the {ORG_PLUGIN_KEY} plugin for Claude "
+            f"Code.\""
+        )
+    else:
+        retry = "The hook will retry on the next session."
     print(
         f"WARNING - nsls-builder-toolkit was stale (version {version}, commit "
         f"{old7}; published main is {new7}) and the automatic refresh failed, so "
@@ -1924,7 +2017,7 @@ def _heal_and_announce(claude, record, head, deadline):
         f"`claude plugin install {ORG_PLUGIN_KEY}` (if it reports already "
         f"installed, run `claude plugin uninstall {ORG_PLUGIN_KEY}` first and "
         f"delete the cache directory under ~/.claude/plugins/cache/{ORG_MARKETPLACE}/), "
-        f"then start a new session. The hook will retry on the next session."
+        f"then start a new session. {retry}"
     )
     return False
 

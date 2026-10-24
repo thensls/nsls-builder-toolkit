@@ -25,6 +25,7 @@ asked and edits the registry the way the real one does. No network, no real
 install touched.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import io
 import json
@@ -283,6 +284,38 @@ with tempfile.TemporaryDirectory() as tmp:
     check("failed: stamp cleared so the next session retries", stamp_left(m) <= 0)
     check("failed: gave up after a bounded number of attempts",
           sum(c == f"plugin install {PLUGIN_KEY}" for c in m.calls()) <= 3)
+    # The session hook ships inside the plugin, so with the plugin gone nothing
+    # runs it again: promising a retry left builders with no toolkit, waiting.
+    check("failed: never promises a retry that cannot happen",
+          "will retry on the next session" not in out)
+    check("failed: gives the one sentence that repairs it later",
+          f'"Reinstall the {PLUGIN_KEY} plugin for Claude Code."' in out)
+
+# --- heal failed but the plugin is still installed: the retry is real ----------
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    saved = {k: os.environ.get(k) for k in m.env}
+    os.environ.update(m.env)
+    try:
+        spec = importlib.util.spec_from_file_location("session_start_hook_drift3", HOOK)
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+        hook._heal_plugin_drift = lambda *a, **k: False  # failed before uninstalling
+        record = {"version": "3.6.0", "installPath": str(m.install_path), "sha": OLD}
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            hook._heal_and_announce([str(m.root / "bin" / "claude")], record, m.head,
+                                    time.monotonic() + 30)
+        out = buf.getvalue()
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    check("still installed: is a WARNING", "WARNING" in out)
+    check("still installed: says the next session retries", "will retry on the next session" in out)
+    check("still installed: no repair sentence needed", "paste" not in out)
 
 # --- update itself failed (offline, CLI lock): never trade stale for gone ----
 with tempfile.TemporaryDirectory() as tmp:

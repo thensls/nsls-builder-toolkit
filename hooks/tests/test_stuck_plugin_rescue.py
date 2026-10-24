@@ -15,6 +15,7 @@ update itself when the copy's finder comes back empty.
 A fake claude.exe (a script that logs its arguments) stands in for the CLI, in
 the Store layout, found through the APPDATA/LOCALAPPDATA variables on any OS.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import json
 import os
 import stat

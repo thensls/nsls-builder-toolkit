@@ -22,6 +22,7 @@ Three failures this exists to prevent:
    key is inert and misleading, but only where no `local` marketplace exists.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import json
 import os

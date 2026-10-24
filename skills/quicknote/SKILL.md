@@ -74,8 +74,10 @@ connected, so I skipped it (say /connect to add it)" — and carry on. At the en
 which sources actually ran.
 
 - **Claude Code sessions** — the richest source for most builders. Run
-  `python3 scripts/sweep_sessions.py --start YYYY-MM-DD --end YYYY-MM-DD` from this
-  skill's folder (use `python` if `python3` isn't found). It reads the transcripts on
+  `~/.local/bin/nsls-python scripts/sweep_sessions.py --start YYYY-MM-DD --end YYYY-MM-DD`
+  from this skill's folder. On Windows, use plain `nsls-python`: `python3` and `python`
+  there are Store stubs that run nothing. On a Mac without the launcher, `python3`
+  works too. It reads the transcripts on
   this computer and returns each session's title, active days, a few of the person's
   asks and Claude's last reply. Each real session is a candidate work item. The script
   already removes runs a scheduled task started where the person never typed anything.
