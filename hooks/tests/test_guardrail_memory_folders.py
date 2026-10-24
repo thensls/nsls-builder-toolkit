@@ -55,6 +55,36 @@ with tempfile.TemporaryDirectory() as tmp:
     other.mkdir()
     check("another folder is not affected", memory("list", cwd=other).stdout.strip() == "")
 
+    print("\na decline saved after Claude moved into a subfolder still shows from the top")
+    # Session start lists from the folder the session started in, but Claude
+    # records a decline from wherever it has `cd`'d to. Keyed by that subfolder,
+    # the decline used to vanish from the next session's list.
+    proj = tmp / "proj"
+    deep = proj / "drafts" / "q4 plan"
+    deep.mkdir(parents=True)
+    memory("record", "mentor-check", "--note", "the Q4 deck is a solo draft", cwd=deep)
+    memory("record", "registration", "--note", "proj-wide: just my notes", cwd=proj)
+    sibling = tmp / "proj-old"
+    sibling.mkdir()
+    memory("record", "design-doc", "--note", "the archived one", cwd=sibling)
+    out = memory("list", cwd=proj).stdout
+    check("the subfolder's decline is listed from the session folder",
+          "mentor-check" in out and "Q4 deck" in out, repr(out))
+    check("it says which subfolder it came from", "in drafts/q4 plan/" in out, repr(out))
+    check("the folder's own decline is still listed", "proj-wide" in out, repr(out))
+    check("a sibling folder sharing the name's start is not included",
+          "archived" not in out, repr(out))
+    check("a subfolder does not list its parent's declines",
+          "proj-wide" not in memory("list", cwd=deep).stdout)
+
+    lots = tmp / "lots"
+    for i in range(12):
+        (lots / f"d{i:02d}").mkdir(parents=True)
+        memory("record", "design-doc", "--note", f"n{i:02d}", cwd=lots / f"d{i:02d}")
+    out = memory("list", cwd=lots).stdout
+    check("subfolder declines are capped so session context can't flood",
+          out.count("- design-doc") == 8 and "and 4 older ones in subfolders" in out, repr(out))
+
     print("\ninside a repo, nothing changes")
     repo = tmp / "repo"
     repo.mkdir()

@@ -209,22 +209,62 @@ def _record_locked(topic, note, cwd, key):
     report_decline(topic, note, cwd)
 
 
+# Subfolder declines listed at session start, newest first. Each line can carry
+# a 200-character note, and the list shares the policy hook's 10,000-character
+# output cap, so a session started in a busy folder such as ~ must not flood it.
+MAX_SUBFOLDER_LINES = 8
+
+
+def _decline_line(topic, v, where=""):
+    note = f" — {v['note']}" if v.get("note") else ""
+    place = f", in {where}/" if where else ""
+    return f"- {topic} (declined {v.get('at', 'previously')}{place}){note}"
+
+
+def _subfolder_lines(key, data):
+    """Declines saved under subfolders of the folder `key` names.
+
+    Outside git a decline is keyed by the folder Claude was in when it was
+    recorded, and after a `cd` that is often a subfolder of the one the session
+    started in. Session start lists from the starting folder, so those declines
+    were never shown and the builder was asked again."""
+    here = key[len(FOLDER_PREFIX):].rstrip("/")
+    fold = str.casefold if os.name == "nt" else (lambda p: p)
+    prefix = fold(here + "/")
+    found = []
+    for other, entry in data.items():
+        if (other == key or not other.startswith(FOLDER_PREFIX)
+                or not isinstance(entry, dict)):
+            continue
+        path = other[len(FOLDER_PREFIX):]
+        if not fold(path).startswith(prefix):
+            continue
+        for topic, v in entry.items():
+            if isinstance(v, dict):
+                found.append((v.get("at", ""), topic, v, path[len(prefix):]))
+    found.sort(key=lambda f: f[0], reverse=True)
+    lines = [_decline_line(topic, v, where) for _, topic, v, where in found[:MAX_SUBFOLDER_LINES]]
+    if len(found) > MAX_SUBFOLDER_LINES:
+        lines.append(f"- and {len(found) - MAX_SUBFOLDER_LINES} older ones in subfolders")
+    return lines
+
+
 def describe(cwd):
     """One-line-per-decline summary for session context, or '' if none."""
     key = build_key(cwd)
     if not key:
         return ""
-    entry = load().get(key)
-    if not entry:
+    data = load()
+    entry = data.get(key) or {}
+    lines = [_decline_line(topic, v) for topic, v in sorted(entry.items())]
+    if key.startswith(FOLDER_PREFIX):
+        lines += _subfolder_lines(key, data)
+    if not lines:
         return ""
-    lines = []
-    for topic, v in sorted(entry.items()):
-        note = f" — {v['note']}" if v.get("note") else ""
-        lines.append(f"- {topic} (declined {v.get('at', 'previously')}){note}")
     if key.startswith(FOLDER_PREFIX):
         return (
-            "In this folder (not a git repo, so it may hold several builds) these were "
-            "declined. Each is closed for the build its note describes; do NOT raise it "
+            "In this folder and the ones under it (not a git repo, so they may hold "
+            "several builds) these were declined. Each is closed for the build its note describes; do NOT raise it "
             "again for that build unless the scope genuinely escalated since:\n"
             + "\n".join(lines)
         )
