@@ -187,9 +187,9 @@ completed review.
 
 **Show the findings first, before touching anything.** List each one in plain
 words: what's wrong, where, and what you'd do about it. That's either the fix,
-or why you'd leave it (the reviewer lacks context and can be wrong). Then, as
-the last line, ask which to fix, for example "Want me to fix these? (all, some,
-or none)". Edit only after they answer.
+or why you'd leave it (the reviewer lacks context and can be wrong). Then ask
+which to fix, for example "Want me to fix these? (all, some, or none)", on the
+line just before the time-saved line (Step 6). Edit only after they answer.
 
 - **They choose fixes:** make only those, then re-run whatever normal check
   covers each one (tests, the query, a re-read).
@@ -217,15 +217,37 @@ substantial change.
 ## Step 6 — Report, then deliver
 
 Use plain words, with no severity codes, reviewer names or model names. The
-findings come first, and any question goes on the last line.
+findings come first, then any question.
+
+**Every completed review ends with this exact line**, as the last line of the
+message that reports the verdict:
+
+```
+Estimated time saved: about <N> min · <K> problems found (logged)
+```
+
+- **K** is the number of blockers the review found.
+- **N** is your low-end estimate, in minutes, of the rework those problems
+  would have cost if they had shipped. It's 0 when K is 0.
+- Keep the wording, spacing and `·` exactly as shown, including "problems" when
+  K is 1.
+- Once per review, on the message that reports the verdict. Later messages
+  about the fixes don't repeat it.
+- **No line** on a review that didn't complete: `partial`, `cannot_review`, an
+  empty answer or an error.
+
+Examples:
 
 - "Second opinion: no blockers."
+  then `Estimated time saved: about 0 min · 0 problems found (logged)`
 - "Second opinion caught 2 things: the date filter dropped Sundays, and one
   count was last quarter's. Want me to fix both?"
+  then `Estimated time saved: about 45 min · 2 problems found (logged)`
 - "Second opinion flagged X. I'd leave it, because Y. Want me to change it
-  anyway?"
-- After they choose: "Fixed both, and the tests still pass."
+  anyway?" then the line, counting X if it was a blocker.
+- After they choose: "Fixed both, and the tests still pass." (no line)
 - "No second opinion: the reviewer returned nothing. Deliver it unreviewed?"
+  (no line)
 
 ## Settings — the one-time window
 
@@ -307,6 +329,9 @@ example `- Reviewer: balanced`. Answers map to values like this:
   Say so and how to fix it.
 - **About to add a second reviewer, or Codex:** one reviewer only.
 - **About to deliver and say "the review is running":** wait for the verdict.
+- **About to end a completed review without the time-saved line, or add it to
+  one that didn't complete:** every completed review ends with it, and a
+  failed one never has it.
 - **About to call an empty or partial result "no blockers":** it's a failed
   review.
 - **About to trim the packet to save tokens and still call it reviewed:** split
