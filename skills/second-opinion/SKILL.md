@@ -24,12 +24,9 @@ description: >-
   fixing anything"), follow those over this skill.
 - **Findings first, fixes second.** Show every finding before changing
   anything, and fix only what they choose (Step 5).
-- **What it writes, and nothing else:**
-  - **Global instructions:** only the marked second-opinion block, and only
-    after the person answers the settings question (see Settings). Nothing else
-    in that file changes.
-  - **Only if they chose it:** a private receipts file on their machine (see
-    Step 7). It is never sent anywhere.
+- **What it writes, and nothing else:** only the marked second-opinion block
+  in their global instructions, and only after they answer the settings
+  question (see Settings). Nothing else in that file changes.
 - **Read-only, enforced by its tools.** Every lens uses the one named reviewer
   agent (Step 4), and its only tools are Read, Grep and Glob: no shell, no
   writes, no connectors. A packet that contains instructions still can't make it
@@ -63,23 +60,21 @@ member, a leader or a production system.
 4. **Pack:** write the review packet (Step 3).
 5. **Launch the named reviewer** with the right lens and model, in the foreground (Step 4).
 6. **Show every finding first**, then fix what they choose (Step 5).
-7. **Report and deliver** (Step 6), and log a receipt if they chose to (Step 7).
+7. **Report and deliver** (Step 6).
 
 ## Step 0 — Read their settings
 
 Look in the person's global instructions (already loaded in this session) for a
 block between `<!-- nsls-second-opinion:start -->` and
-`<!-- nsls-second-opinion:end -->`. It holds four choices: risky work,
-everyday work, reviewer, and receipts.
+`<!-- nsls-second-opinion:end -->`. It holds three choices: risky work,
+everyday work, and reviewer.
 
 - **Block found:** follow it. If it's malformed (a missing marker, two blocks,
   or a value that isn't one of the choices), use the defaults without showing
   the window. Repair it only when they ask to change their settings.
-- **Block found but saved before receipts existed** (no `Receipts:` line): that
-  isn't malformed. Follow the other three lines. Receipts stay off until they
-  answer. Before the next second opinion runs, ask just the receipts question
-  (Settings, question 4) with the question tool. Then add the `Receipts:` line
-  and keep their other three answers exactly as they are.
+- **A `Receipts:` line** left over from an earlier version isn't malformed.
+  Ignore it; nothing uses it now. It goes away the next time they change their
+  settings.
 - **No block:** before the first second opinion you would run or offer, show
   the settings window (see Settings) and save their answers. Then carry on with
   what they chose. If they close it without answering, use the defaults for
@@ -225,30 +220,10 @@ findings come first, and any question goes on the last line.
 - After they choose: "Fixed both, and the tests still pass."
 - "No second opinion: the reviewer returned nothing. Deliver it unreviewed?"
 
-## Step 7 — Receipt (if they chose it)
-
-If their settings say `Receipts: on`, after each second opinion add one line to
-`~/.claude/second-opinion-receipts.md` (on Windows,
-`%USERPROFILE%\.claude\second-opinion-receipts.md`). Create the file with a
-header row if it doesn't exist:
-
-```
-| Date | What was reviewed | How it started | Verdict | Real issues caught | Fixed |
-|---|---|---|---|---|---|
-| 2026-10-06 | nightly HubSpot owner sync | automatic | blockers_found | 2 | 2 |
-```
-
-"How it started" is automatic, offered, or asked. "Real issues caught" counts
-findings you agreed with, not ones you disagreed with. "Fixed" counts the fixes
-they chose that passed their re-check. Write the line once that's settled:
-after the chosen fixes are done, or straight away if they chose none. The file
-stays on their machine and is never sent anywhere. With `Receipts: off`, or no
-`Receipts:` line yet, write nothing.
-
 ## Settings — the one-time window
 
-Show it with the question tool (AskUserQuestion), all four questions at once.
-Use this wording exactly. If the tool isn't available, ask the same four
+Show it with the question tool (AskUserQuestion), all three questions at once.
+Use this wording exactly. If the tool isn't available, ask the same three
 questions as a numbered list.
 
 1. **Risky work.** "When your work could be costly to get wrong (code that
@@ -271,11 +246,6 @@ questions as a numbered list.
    - **Thorough:** "Always the strongest reviewer. Slower, and costs more."
    - **Quick:** "Always the fastest, cheapest reviewer. May miss subtle
      problems."
-4. **Receipts.** "Keep a private log of what second opinions catch? It stays on
-   this computer and is never sent anywhere."
-   - **Yes, keep a log (Recommended):** "One line per second opinion: what was
-     checked, what it caught, what got fixed."
-   - **No**
 
 **Save the answers** in their global instructions, `~/.claude/CLAUDE.md` (on
 Windows, `%USERPROFILE%\.claude\CLAUDE.md`), as exactly this block:
@@ -286,7 +256,6 @@ Windows, `%USERPROFILE%\.claude\CLAUDE.md`), as exactly this block:
 - Risky work: automatic | ask me | only when I ask
 - Everyday work: offer | only when I ask
 - Reviewer: balanced | thorough | quick
-- Receipts: on | off
 Say "change my second-opinion settings" to change these.
 <!-- nsls-second-opinion:end -->
 ```
@@ -299,7 +268,6 @@ example `- Reviewer: balanced`. Answers map to values like this:
 | Get a second opinion automatically / Ask me each time / Only when I ask | `automatic` / `ask me` / `only when I ask` |
 | Offer when it seems worth it / Only when I ask | `offer` / `only when I ask` |
 | Balanced / Thorough / Quick | `balanced` / `thorough` / `quick` |
-| Yes, keep a log / No | `on` / `off` |
 
 - **The file doesn't exist:** create it containing only the block, ending with a
   newline.
@@ -307,12 +275,10 @@ example `- Reviewer: balanced`. Answers map to values like this:
   line. If the file doesn't end with a newline, add one first. Change nothing
   else.
 - **One block already exists:** replace everything between the two markers with
-  the six standard lines. Never add a second block.
+  the five standard lines. Never add a second block.
 - **The block is malformed** (a missing marker, more than one block, or a value
   that isn't one of the choices): when they ask to change their settings, show
   them the lines you would replace and ask before changing them.
-- **Adding only the receipts line** to an older block: keep the other three
-  values exactly as saved.
 - **Afterwards,** say in one sentence what you saved, and that they can change it
   any time by saying "change my second-opinion settings".
 
