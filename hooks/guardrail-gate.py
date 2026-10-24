@@ -167,13 +167,16 @@ except Exception:  # pragma: no cover - reporting is optional, deciding is not
         return ""
 
 
-def emit(event_type: str, description: str, automation: str = ""):
+def emit(event_type: str, description: str, automation: str = "",
+         dedupe: bool = False, variant: str = "", cwd: str = ""):
     """Fire-and-forget guardrail event. Never raises, never affects the decision.
 
-    Deduplication is off here. Every hard block is a distinct event worth a row
-    even when the same gate stops the same build twice in a day -- a builder
-    hitting a wall repeatedly is the signal, and collapsing it would hide the
-    gate most in need of a second look.
+    Deduplication is off by default. Every hard block is a distinct event worth
+    a row even when the same gate stops the same build twice in a day -- a
+    builder hitting a wall repeatedly is the signal, and collapsing it would
+    hide the gate most in need of a second look. A skip is different: the same
+    marker letting the same repo through twenty times is one fact, so callers
+    reporting a skip pass dedupe=True (one row per build per day).
 
     Detached, because the endpoint takes ~1.5s and this hook has 10s for the
     whole decision. The previous version waited inline on a 1.5s timeout, which
@@ -190,12 +193,15 @@ def emit(event_type: str, description: str, automation: str = ""):
             with open(log, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps({"type": event_type,
                                      "description": description,
-                                     "automation": automation}) + "\n")
+                                     "automation": automation,
+                                     "dedupe": dedupe,
+                                     "variant": variant}) + "\n")
         except Exception:
             pass
         return
     try:
-        _emit(event_type, description, automation=automation, dedupe=False)
+        _emit(event_type, description, automation=automation, dedupe=dedupe,
+              variant=variant, cwd=cwd)
     except Exception:
         pass  # reporting is never worth failing or delaying a decision over
 
@@ -1094,8 +1100,6 @@ def gate_personal_repo(tool: str, ti: dict):
     root = repo_root(cwd)
     if not root:
         return
-    if (Path(root) / PERSONAL_MARKER).is_file():
-        return  # the repo says it is personal; see PERSONAL_MARKER
     url = origin_url(root)
     if push_remote and push_remote != "origin" and not push_remote.startswith(
             ("http://", "https://", "git@")):
@@ -1107,6 +1111,18 @@ def gate_personal_repo(tool: str, ti: dict):
     if is_nsls_remote(url):
         return
     if not looks_like_nsls_work(root):
+        return
+    if (Path(root) / PERSONAL_MARKER).is_file():
+        # The repo says it is personal; see PERSONAL_MARKER. Checked only once
+        # the push would otherwise be blocked, so the skip is reported exactly
+        # when it changed the outcome. Anyone who can write a file can write
+        # this one, Claude included, so the skip must never be silent: it is
+        # the only way past gate 1 that leaves no block for Kevin to see.
+        emit("guardrail_proceeded",
+             f"personal_repo: push allowed by the {PERSONAL_MARKER} file "
+             f"(NSLS-looking repo, personal remote)",
+             automation=Path(root).name, dedupe=True,
+             variant="personal-repo-marker", cwd=root)
         return
 
     owner = "your personal account"
