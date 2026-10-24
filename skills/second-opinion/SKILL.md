@@ -122,7 +122,7 @@ WHAT THIS IS: <one line>
 WHO IT'S FOR / WHAT HAPPENS NEXT: <"goes to SLT Monday", "runs nightly against HubSpot prod">
 WHAT IT CLAIMS: <2–5 lines: what it does or asserts>
 DONE MEANS: <the bar it has to clear>
-READ: <exact file paths, or the full text. For code, the diff itself: run `git diff origin/main...HEAD` yourself and paste the output or save it to a file. The reviewer has no shell.>
+READ: <exact file paths, or the full text. For code, two things: the diff (run `git diff origin/main...HEAD` yourself and save it to a file; the reviewer has no shell) and the repository's root folder, so it can open whole files and the code the change calls.>
 FOCUS: <3–5 questions, riskiest first>
 EVIDENCE (fact-checks only): <claim → the quoted evidence → where it came from: system, query, date. Run any live query yourself first; the reviewer can't.>
 ```
@@ -132,6 +132,13 @@ EVIDENCE (fact-checks only): <claim → the quoted evidence → where it came fr
   big, split it at a natural boundary (one module, one section), review the
   riskiest part, and **say what was not reviewed.** Never trim the packet and
   still call the whole thing reviewed.
+- **For code, give it the repo, not just the diff.** A diff hides the line that
+  settles most questions: where a variable is set, what a called function
+  already does, whether an encoding is already handled. Name the repository's
+  root folder under READ, next to the diff. The reviewer opens only code,
+  configs, tests and docs in it, never `.env`, credential or data files. If
+  the repo holds raw member data (exports, spreadsheets, logs), name its
+  source folders instead of the root.
 - **Strip secrets.** Name the file that uses a key rather than pasting the key.
 
 ## Step 4 — The right lens, one reviewer
@@ -304,6 +311,8 @@ example `- Reviewer: balanced`. Answers map to values like this:
   review.
 - **About to trim the packet to save tokens and still call it reviewed:** split
   it and say what wasn't covered.
+- **About to send a code review with only the diff under READ:** add the
+  repository's root folder.
 - **About to re-review after fixing findings:** don't. One targeted recheck at
   most, and only for a substantial blocker fix.
 - **About to ask "want a second opinion?" again after a no:** don't. The answer
@@ -362,6 +371,11 @@ Every rule here comes from a real failure:
 - **The reviewer can be wrong.** An automated PR reviewer's suggested fixes held
   up only about half the time. Its findings were often real, but its fixes were
   not. Verify, then decide.
+- **Give it the repo, not just the diff.** Run on 25 past toolkit PRs with only
+  each diff to read, the reviewer raised 13 findings that were plainly wrong.
+  In 8 of them the answer sat just outside the diff: an encoding already set, a
+  variable always assigned, a function that already handled the case. It had
+  used 1 of its 20 lookups, because there was nothing else to read.
 - **Confirm the field exists.** A count against a field that didn't exist came
   back as "two affected". The real answer was sixty. Hence "schema before
   results" in the reviewer's brief.
