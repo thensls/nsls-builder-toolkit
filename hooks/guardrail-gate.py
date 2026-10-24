@@ -77,7 +77,18 @@ PERSONAL_MARKER = ".personal-repo"
 # lookups, then a tracker lookup. (The event POST on the way out is detached
 # and costs nothing.) Blowing the budget means the harness kills the hook
 # mid-decision and the block is lost — the gate silently fails to fire.
+#
+# git gets a shared budget, not just a per-call cap. A timed-out git call reads
+# as "no repo", and the gate allows, so a slow FIRST call is a missed block. On
+# a Mac without Homebrew, `git` is Apple's /usr/bin/git shim, which has to find
+# the developer tools first: 0.93s on a macOS CI runner (2026-10-18) against
+# 0.01s for Homebrew git, and past 2s often enough that a launcher test flaked
+# ten times in a week. So the first call may take GIT_FIRST_TIMEOUT, later ones
+# GIT_TIMEOUT, and all of them together GIT_BUDGET. That keeps git from ever
+# eating the tracker lookup's window: it still has LOOKUP_DEADLINE - GIT_BUDGET.
 GIT_TIMEOUT = 2
+GIT_FIRST_TIMEOUT = 3.5
+GIT_BUDGET = 4
 
 # The tracker lookup must be over LOOKUP_DEADLINE seconds after this module
 # loads, and gets whatever is left of that: slow git lookups shorten its
@@ -220,6 +231,17 @@ def block(reason: str, gate: str = "", automation: str = ""):
 
 
 _GIT_CACHE = {}
+_GIT_DEADLINE = None  # set by the first git call: GIT_BUDGET from then
+
+
+def _git_timeout():
+    """Seconds this git call may take, or 0 when the shared budget is spent."""
+    global _GIT_DEADLINE
+    now = time.monotonic()
+    if _GIT_DEADLINE is None:
+        _GIT_DEADLINE = now + GIT_BUDGET
+        return min(GIT_FIRST_TIMEOUT, GIT_BUDGET)
+    return max(0.0, min(GIT_TIMEOUT, _GIT_DEADLINE - now))
 
 
 def git(*args, cwd=None):
@@ -228,12 +250,15 @@ def git(*args, cwd=None):
     key = (args, cwd)
     if key in _GIT_CACHE:
         return _GIT_CACHE[key]
+    timeout = _git_timeout()
+    if timeout <= 0:
+        return ""  # budget spent: as a timeout always was, and not cached
     try:
         out = subprocess.run(
             ["git", *args],
             capture_output=True,
             text=True, encoding="utf-8", errors="replace",
-            timeout=GIT_TIMEOUT,
+            timeout=timeout,
             cwd=cwd,
         )
         val = out.stdout.strip() if out.returncode == 0 else ""
