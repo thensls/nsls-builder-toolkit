@@ -1217,10 +1217,10 @@ def estimate(block):
     if not isinstance(block, dict):
         return None
     pct, hours = number(block.get("productivity_pct"), 0, MAX_GAIN_PCT), number(block.get("hours_with_claude"), 0, 80)
-    if pct is None or hours is None:
+    if pct is None or hours is None or not pct.is_integer():
         return None
-    pct = int(pct)
-    return pct, int(hours * pct / 10.0) / 10.0
+    saved = hours * pct / 100.0                      # e.g. 12.5 h at 3% = 0.375 h
+    return int(pct), int(saved * 10 + 1e-9) / 10.0  # rounded down to a tenth: 0.3
 
 
 def hours_text(h):
@@ -1243,6 +1243,12 @@ def report_problems(r):
     if followed:
         block = r.get("practice")
         tried = block.get("tried") if isinstance(block, dict) else None
+        key = lambda t: re.sub(r"[\s.…]+", " ", str(t or "")).strip().lower()
+        covered = {key(t.get("title")) for t in tried if isinstance(t, dict)} if isinstance(tried, list) else set()
+        missing = [x["title"] for x in followed[:3] if key(x["title"]) not in covered]
+        if isinstance(tried, list) and tried and missing:
+            probs.append('practice: add a "tried" item for each of last time\'s suggestions, using its exact title. '
+                         'Missing: %s' % "; ".join('"%s"' % safe(m, 100) for m in missing))
         if not isinstance(tried, list) or not tried:
             probs.append('add "practice": for each of last time\'s suggestions, what was put into practice ("tried"), '
                          'then the estimate (see Step 2)')

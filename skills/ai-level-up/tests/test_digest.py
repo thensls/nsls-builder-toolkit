@@ -532,6 +532,15 @@ class Render(Home):
             self.report(previous=last, practice={"tried": [{"title": "x", "status": "adopted"}],
                                                  "productivity_pct": 40, "hours_with_claude": 10})
         self.assertIn("0 to 25", str(stop.exception))                          # past the cap is refused
+        two = {"experiments": [{"title": "Paste one you liked", "direction": "habit"}, {"title": "Owner list", "direction": "up"}]}
+        with self.assertRaises(SystemExit) as stop:
+            self.report(previous=two, practice={"tried": [{"title": "Paste one you liked.", "status": "adopted"}],
+                                                "productivity_pct": 3, "hours_with_claude": 10})
+        self.assertIn('Missing: "Owner list"', str(stop.exception))            # every suggestion gets followed up
+        with self.assertRaises(SystemExit):
+            self.report(previous=last, practice={"tried": [{"title": "Paste one you liked", "status": "adopted"}],
+                                                 "productivity_pct": 2.5, "hours_with_claude": 10})  # whole percent only
+        self.assertEqual(digest.estimate({"productivity_pct": 7, "hours_with_claude": 10}), (7, 0.7))
 
     def test_first_check_in_shows_the_upside_and_logs_nothing(self):
         main = self.report(potential={"productivity_pct": 5, "hours_with_claude": 20}).split("<main", 1)[1]
