@@ -1991,13 +1991,25 @@ def _heal_and_announce(claude, record, head, deadline):
         )
         return True
 
-    # The heal failed. The plugin may now be uninstalled: say so, hand over
-    # the manual steps, and clear the stamp so the very next session retries
-    # instead of waiting with no toolkit.
+    # The heal failed. The plugin may now be uninstalled: say so and hand over
+    # the manual steps. Still installed, the stamp is cleared so the very next
+    # session retries. Uninstalled, nothing retries: this hook ships inside the
+    # plugin, so it stops running with it. The builder then needs one sentence
+    # they can give Claude in any later session.
     _set_fresh_stamp(time.time())
     after = _installed_plugin_record()
     state = ("is currently NOT installed on this machine"
              if after is None else f"is still on commit {after['sha'][:7] if after['sha'] else '?'}")
+    if after is None:
+        retry = (
+            "Nothing will retry this automatically: the toolkit's session hook "
+            "is part of the plugin, so it no longer runs. If the repair does not "
+            "finish now, give the builder this sentence to paste into Claude in "
+            f"any session: \"Reinstall the {ORG_PLUGIN_KEY} plugin for Claude "
+            f"Code.\""
+        )
+    else:
+        retry = "The hook will retry on the next session."
     print(
         f"WARNING - nsls-builder-toolkit was stale (version {version}, commit "
         f"{old7}; published main is {new7}) and the automatic refresh failed, so "
@@ -2005,7 +2017,7 @@ def _heal_and_announce(claude, record, head, deadline):
         f"`claude plugin install {ORG_PLUGIN_KEY}` (if it reports already "
         f"installed, run `claude plugin uninstall {ORG_PLUGIN_KEY}` first and "
         f"delete the cache directory under ~/.claude/plugins/cache/{ORG_MARKETPLACE}/), "
-        f"then start a new session. The hook will retry on the next session."
+        f"then start a new session. {retry}"
     )
     return False
 
