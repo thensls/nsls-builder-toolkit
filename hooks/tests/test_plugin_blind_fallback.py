@@ -138,9 +138,10 @@ class Machine:
         except Exception:
             return None
 
-    def run(self, **kwargs):
+    def run(self, patch=None, **kwargs):
         """A fresh copy of the hook, ensure_plugin_fresh, and what it printed.
-        The 10-minute throttle is cleared first: each call is a new session."""
+        The 10-minute throttle is cleared first: each call is a new session.
+        `patch(hook)` may adjust the loaded module before the call."""
         self.fresh.unlink(missing_ok=True)
         saved = {k: os.environ.get(k) for k in self.env}
         os.environ.update(self.env)
@@ -148,6 +149,8 @@ class Machine:
             spec = importlib.util.spec_from_file_location("session_start_blind", HOOK)
             hook = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(hook)
+            if patch:
+                patch(hook)
             buf = io.StringIO()
             with redirect_stdout(buf):
                 hook.ensure_plugin_fresh(**kwargs)
@@ -187,6 +190,24 @@ with tempfile.TemporaryDirectory() as tmp:
     check("the legacy daily marker is touched (the migration rescue stays quiet)", m.marker.exists())
     m.run()
     check("the next session that day runs nothing", m.calls() == [UPDATE], m.calls())
+
+print("\ntwo sessions start together: only one runs the update")
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp, seen_ago=DAY + 3600)
+
+    def other_session_finished_first(hook):
+        # Both sessions passed the daily check; the other one took the lock,
+        # updated and restarted the clock before this one got the lock.
+        real = hook._acquire_heal_lock
+
+        def acquire():
+            m.seen.write_text(f"{int(time.time())}\n")
+            return real()
+        hook._acquire_heal_lock = acquire
+
+    m.run(patch=other_session_finished_first)
+    check("the second session re-checks under the lock and runs nothing",
+          m.calls() == [], m.calls())
 
 print("\nthe fallback update fails: tried again tomorrow, not every session")
 with tempfile.TemporaryDirectory() as tmp:

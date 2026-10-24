@@ -1916,6 +1916,11 @@ def _blind_update(reserve):
     if lock is None:
         return  # another session is updating right now
     try:
+        # Re-check under the lock, as _update_and_heal does: a session that
+        # started alongside this one may have just run the update and restarted
+        # the clock while this one waited.
+        if not _blind_too_long(time.time()):
+            return
         before = _installed_plugin_record()
         if not before:
             return
