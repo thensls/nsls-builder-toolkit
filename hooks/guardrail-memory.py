@@ -214,6 +214,12 @@ def _record_locked(topic, note, cwd, key):
 # output cap, so a session started in a busy folder such as ~ must not flood it.
 MAX_SUBFOLDER_LINES = 8
 
+# Windows paths ignore case. Compared one folder name at a time, never by
+# character offsets: lowering a name can change its length ("İ" becomes two
+# characters), so slicing an original path by a lowered prefix's length cut
+# into the next folder's name.
+_FOLD = str.lower if os.name == "nt" else (lambda p: p)
+
 
 def _decline_line(topic, v, where=""):
     note = f" — {v['note']}" if v.get("note") else ""
@@ -228,20 +234,20 @@ def _subfolder_lines(key, data):
     recorded, and after a `cd` that is often a subfolder of the one the session
     started in. Session start lists from the starting folder, so those declines
     were never shown and the builder was asked again."""
-    here = key[len(FOLDER_PREFIX):].rstrip("/")
-    fold = str.casefold if os.name == "nt" else (lambda p: p)
-    prefix = fold(here + "/")
+    here = [_FOLD(part) for part in key[len(FOLDER_PREFIX):].rstrip("/").split("/")]
     found = []
     for other, entry in data.items():
         if (other == key or not other.startswith(FOLDER_PREFIX)
                 or not isinstance(entry, dict)):
             continue
-        path = other[len(FOLDER_PREFIX):]
-        if not fold(path).startswith(prefix):
+        parts = other[len(FOLDER_PREFIX):].rstrip("/").split("/")
+        if (len(parts) <= len(here)
+                or [_FOLD(part) for part in parts[:len(here)]] != here):
             continue
+        where = "/".join(parts[len(here):])
         for topic, v in entry.items():
             if isinstance(v, dict):
-                found.append((v.get("at", ""), topic, v, path[len(prefix):]))
+                found.append((v.get("at", ""), topic, v, where))
     found.sort(key=lambda f: f[0], reverse=True)
     lines = [_decline_line(topic, v, where) for _, topic, v, where in found[:MAX_SUBFOLDER_LINES]]
     if len(found) > MAX_SUBFOLDER_LINES:

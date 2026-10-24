@@ -85,6 +85,22 @@ with tempfile.TemporaryDirectory() as tmp:
     check("subfolder declines are capped so session context can't flood",
           out.count("- design-doc") == 8 and "and 4 older ones in subfolders" in out, repr(out))
 
+    print("\nWindows: case is ignored, one folder name at a time")
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("guardrail_memory", HOOKS / "guardrail-memory.py")
+    gm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gm)
+    gm._FOLD = str.lower  # what Windows uses, whatever this runner is
+    decl = {"t": {"at": "2026-10-24", "note": ""}}
+    data = {"dir:C:/Users/Ana/İstanbul": {}, "dir:c:/users/ana/İSTANBUL/drafts": decl,
+            "dir:C:/Users/Ana/İstanbul-old/x": decl}
+    lines = gm._subfolder_lines("dir:C:/Users/Ana/İstanbul", data)
+    check("a subfolder spelled in another case is found, and named whole",
+          lines == ["- t (declined 2026-10-24, in drafts/)"], lines)
+    lines = gm._subfolder_lines("dir:C:", {"dir:C:/proj/sub": decl})
+    check("from a drive root, the whole path below it is the subfolder",
+          lines == ["- t (declined 2026-10-24, in proj/sub/)"], lines)
+
     print("\ninside a repo, nothing changes")
     repo = tmp / "repo"
     repo.mkdir()
