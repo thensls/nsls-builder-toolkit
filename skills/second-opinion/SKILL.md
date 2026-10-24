@@ -120,7 +120,7 @@ The reviewer has not seen the conversation, so the packet is everything it knows
 ```
 WHAT THIS IS: <one line>
 WHO IT'S FOR / WHAT HAPPENS NEXT: <"goes to SLT Monday", "runs nightly against HubSpot prod">
-WHAT IT CLAIMS: <2–5 lines: what it does or asserts>
+WHAT IT CLAIMS: <2–5 lines: what it does or asserts, what it changes on purpose, and any trade-off it accepts. For a PR, take these from its description. If the intent isn't written down, say so rather than guess.>
 DONE MEANS: <the bar it has to clear>
 READ: <exact file paths, or the full text. For code, the diff itself: run `git diff origin/main...HEAD` yourself and paste the output or save it to a file. The reviewer has no shell.>
 FOCUS: <3–5 questions, riskiest first>
@@ -365,6 +365,12 @@ Every rule here comes from a real failure:
 - **Confirm the field exists.** A count against a field that didn't exist came
   back as "two affected". The real answer was sixty. Hence "schema before
   results" in the reviewer's brief.
+- **Deliberate isn't a defect, and every finding needs a trigger.** In a test on
+  25 past toolkit PRs, 7 of the reviewer's findings argued with choices the PR
+  description or the code's own comments already explained. 5 more needed a
+  scenario nobody would hit, such as a byte-order mark in a file Claude writes
+  itself. Hence the PR's intent goes in WHAT IT CLAIMS, and the reviewer names
+  who hits each finding.
 
 ## Related
 
