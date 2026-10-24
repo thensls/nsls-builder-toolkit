@@ -108,7 +108,7 @@ for c in nsls-python python3 python py; do p=$(command -v "$c" 2>/dev/null) || c
   - A turn with empty text and `pasted_chars` was pasted material only.
   - Each turn keeps about 250 characters, so treat what you can't see as unknown, never as missing.
   - Date a session by its `start`.
-- **Several Claude accounts:** if a note says Cowork was skipped for this reason, ask once for their work email, save it with `config email=…`, and scan again.
+- **Cowork skipped:** if a note says Cowork was skipped, ask once for their work email, save it with `config email=…`, and scan again.
 - **Machine-made sessions:** drop any sampled session that is plainly machine-made (health checks, canned repeated prompts, test canaries).
 
 ### Chat mode
