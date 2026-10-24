@@ -297,7 +297,13 @@ example `- Reviewer: balanced`. Answers map to values like this:
 | Get a second opinion automatically / Ask me each time / Only when I ask | `automatic` / `ask me` / `only when I ask` |
 | Offer when it seems worth it / Only when I ask | `offer` / `only when I ask` |
 | Balanced / Thorough / Quick | `balanced` / `thorough` / `quick` |
+| Anything they typed themselves (the question tool's "Other" box) | the closest choice above, once they confirm it |
 
+- **A typed answer:** never save it as typed, and never fall back to the
+  defaults without saying so. Map it to the closest choice and confirm it in
+  one line before saving, for example: "I've read 'only for the big stuff' as
+  *Ask me each time*. Is that right?" If nothing is close, ask that one
+  question again with its choices.
 - **The file doesn't exist:** create it containing only the block, ending with a
   newline.
 - **The file exists with no block:** add the block at the end, after one blank
