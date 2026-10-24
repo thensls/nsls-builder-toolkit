@@ -172,6 +172,10 @@ phrase advice as "policy blocks" or "isn't allowed".
 **Every hard block has two ways out, and both must appear:** the compliance route
 (register it, assign a reviewer, move the repo) and Kevin's authorization. If
 Kevin isn't named, the message isn't finished. Offer to draft the note.
+The personal-repo block has a third: an empty `.personal-repo` file at the top
+of the repo skips it for good. Only for a really personal project or one Kevin
+OK'd staying put, and only on the builder's say-so; never add it yourself to
+get past a block. Each skip is reported.
 
 **When a builder says no, record it so you never ask again:**
 
