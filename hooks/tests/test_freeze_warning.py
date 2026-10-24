@@ -17,6 +17,7 @@ and then asserted "local commits or edits" without ever checking, discarding
 git's text on the way — so the real reason was unrecoverable too.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import io
 import os

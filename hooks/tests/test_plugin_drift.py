@@ -25,6 +25,7 @@ asked and edits the registry the way the real one does. No network, no real
 install touched.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import io
 import json
