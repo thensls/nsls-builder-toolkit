@@ -254,7 +254,7 @@ missing. That's the same installer as the self-serve link, at most once a
 day and five times in all. It prints nothing. The builder hears about it
 through Signal's enrollment DM. If a builder asks what it is: it sends a
 summary of each session (for example the app, models, timing, token counts,
-skill and tool names, and branch name), never prompts, responses or files.
+and skill and tool names), never your prompts or files.
 The full list is at signal.nsls.org/me/machines. Questions go to Davo Wood.
 Details are in the README under "Claude Usage Reporter".
 
