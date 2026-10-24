@@ -187,6 +187,40 @@ def count_suggestions(docjson):
     return ins, dele
 
 
+def pending_warning(docjson, editing=False):
+    """The one-line PENDING SUGGESTIONS warning, or None when nothing is pending.
+
+    `read` and the editing actions share the count; only the advice differs.
+    An edit is worse than a misread: the API only makes direct edits, so a
+    replace, remove or anchor edit on a line holding a colleague's suggestion
+    replaces their suggestion instead of leaving it for them to accept.
+    """
+    ins, dele = count_suggestions(docjson)
+    if not (ins or dele):
+        return None
+    if editing:
+        return (f"\u26a0\ufe0f  PENDING SUGGESTIONS: this document has {ins} inserted and "
+                f"{dele} deleted text run(s) nobody has accepted yet. This is a direct edit, "
+                f"not a suggestion: where it touches a line holding one, it replaces that "
+                f"suggestion. Run read to check what changed.")
+    return (f"\u26a0\ufe0f  PENDING SUGGESTIONS: {ins} inserted and {dele} deleted "
+            f"text run(s) below are UNACCEPTED edits, shown inline. What follows "
+            f"is a redline, not the live document. Re-run with "
+            f"--suggestions accepted (or rejected) to see one resolved version.")
+
+
+def warn_before_edit(doc):
+    """Fetch the live doc, print the warning first if anything is pending, return it.
+
+    Printed before the edit runs, so a gws failure mid-edit can't swallow it.
+    """
+    d = get_doc(doc)
+    w = pending_warning(d, editing=True)
+    if w:
+        print(w)
+    return d
+
+
 def _para_text(paragraph):
     return "".join(e.get("textRun", {}).get("content", "")
                    for e in paragraph.get("elements", []))
@@ -242,10 +276,11 @@ def do_replace_literal(doc, find, replace):
     }])
 
 
-def do_replace_regex(doc, pattern, replace):
+def do_replace_regex(doc, pattern, replace, d=None):
     """Client-side regex replace: the Docs API has no regex, so we resolve ranges
-    from the live text and delete+insert from end->start so indices stay valid."""
-    d = get_doc(doc)
+    from the live text and delete+insert from end->start so indices stay valid.
+    `d` is the doc as just fetched; leave it out once an earlier edit has moved it."""
+    d = d or get_doc(doc)
     # Build an absolute-index map of the concatenated top-level paragraph text.
     segs, text = [], []
     pos = 0
@@ -322,8 +357,8 @@ def do_insert_top(doc, title, text, level=2):
     return batch_update(doc, _insert_block(1, title, text, "HEADING_%d" % level))
 
 
-def do_insert_after(doc, anchor, title, text, level=3):
-    d = get_doc(doc)
+def do_insert_after(doc, anchor, title, text, level=3, d=None):
+    d = d or get_doc(doc)
     hit = [p for p in paragraphs(d) if anchor in p["text"]]
     if not hit:
         return {"ok": False, "error": "anchor not found: " + anchor}
@@ -338,8 +373,8 @@ def do_append(doc, text):
     return batch_update(doc, [{"insertText": {"location": {"index": idx}, "text": "\n" + text}}])
 
 
-def do_remove(doc, anchors):
-    d = get_doc(doc)
+def do_remove(doc, anchors, d=None):
+    d = d or get_doc(doc)
     hits = [p for p in paragraphs(d)
             if any(a and a in p["text"] for a in anchors) and p["start"] is not None]
     # delete high -> low so earlier deletions don't shift later indices
@@ -612,17 +647,15 @@ def main():
     if a.action == "read":
         d = get_doc(a.doc, a.suggestions)
         if a.suggestions == "inline":
-            ins, dele = count_suggestions(d)
-            if ins or dele:
+            w = pending_warning(d)
+            if w:
                 # First line of stdout, deliberately -- not stderr. The failure
                 # this prevents is a reader (human or agent) treating a redline
                 # as settled text, and a warning that a pipe or a log can drop
                 # does not prevent it. A doc with no suggestions prints exactly
-                # what it printed before, byte for byte.
-                print(f"\u26a0\ufe0f  PENDING SUGGESTIONS: {ins} inserted and {dele} deleted "
-                      f"text run(s) below are UNACCEPTED edits, shown inline. What follows "
-                      f"is a redline, not the live document. Re-run with "
-                      f"--suggestions accepted (or rejected) to see one resolved version.")
+                # what it printed before, byte for byte. The editing actions
+                # print their own version first for the same reason.
+                print(w)
         else:
             print(f"\u2139\ufe0f  Showing this document with suggestions {a.suggestions.upper()} "
                   f"-- a preview, not what the document says right now.")
@@ -640,8 +673,9 @@ def main():
     elif a.action == "replace":
         if a.find is None or a.replace is None:
             sys.exit("replace needs --find and --replace")
+        d = warn_before_edit(a.doc)
         if a.regex:
-            n = do_replace_regex(a.doc, a.find, a.replace)
+            n = do_replace_regex(a.doc, a.find, a.replace, d=d)
             print("ok, matches=%d" % n)
         else:
             r = do_replace_literal(a.doc, a.find, a.replace)
@@ -656,8 +690,9 @@ def main():
     elif a.action == "insert-after":
         if not a.anchor:
             sys.exit("insert-after needs --anchor")
-        r = do_insert_after(a.doc, a.anchor[0], a.title or "", read_text(a),
-                            level=a.level or 3)
+        text = read_text(a)
+        r = do_insert_after(a.doc, a.anchor[0], a.title or "", text,
+                            level=a.level or 3, d=warn_before_edit(a.doc))
         print("ok" if r.get("ok") else "FAILED: " + str(r.get("error", r)))
 
     elif a.action == "append":
@@ -677,14 +712,14 @@ def main():
     elif a.action == "remove":
         if not a.anchor:
             sys.exit("remove needs at least one --anchor")
-        print("ok, removed=%d" % do_remove(a.doc, a.anchor))
+        print("ok, removed=%d" % do_remove(a.doc, a.anchor, d=warn_before_edit(a.doc)))
 
     elif a.action == "batch":
         if not a.file:
             sys.exit("batch needs --file")
         cfg = json.load(open(a.file, encoding="utf-8-sig"))  # -sig: tolerate a PS 5.1 BOM
         use_regex = cfg.get("regex", False)
-        lines = full_text(get_doc(a.doc)).split("\n")
+        lines = full_text(warn_before_edit(a.doc)).split("\n")
         results = []
         for e in cfg.get("edits", []):
             if "anchor" in e:
