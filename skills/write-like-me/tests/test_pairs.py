@@ -1,5 +1,6 @@
 """Tests for write-like-me's pairs.py. Run: python3 skills/write-like-me/tests/test_pairs.py"""
 import json
+import re
 import os
 import subprocess
 import sys
@@ -314,6 +315,23 @@ class Attribution(Base):
         by_id, _ = self.run_all([{"id": "sam", "source": "slack",
                                   "time": "2026-10-10T11:00:00-04:00", "text": SENT}])
         self.assertEqual(len(by_id["sam"]["corrections"]), 1)
+
+
+class ReceiptLine(unittest.TestCase):
+    """The usage collector logs time saved from one exact line (thensls/employee-profiles
+    collector/lib/parse.js RECEIPT_RE). Keep SKILL.md's lines readable by it."""
+    COLLECTOR = re.compile(r"Estimated time saved:\s*about\s+(\d{1,4}(?:\.\d{1,2})?)\s*"
+                           r"(min(?:ute)?s?|h(?:ours?|rs?)?)\b(.{0,160}?)\(logged\)", re.I)
+
+    def test_every_documented_line_logs_its_minutes(self):
+        skill = (HERE.parent / "SKILL.md").read_text(encoding="utf-8")
+        lines = re.findall(r"`(Estimated time saved:[^`]*)`", skill)
+        self.assertEqual(len(lines), 2, "one line for a new guide, one for an update")
+        for line in lines:
+            m = self.COLLECTOR.search(line.replace("<N>", "30"))
+            self.assertIsNotNone(m, line)
+            self.assertEqual(m.group(1), "30")
+            self.assertTrue(m.group(2).lower().startswith("min"), line)
 
 
 class Measures(unittest.TestCase):
