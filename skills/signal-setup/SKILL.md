@@ -94,7 +94,8 @@ If a token exists, ask whether to rotate or just verify the existing one.
 
 Tell the user to:
 
-1. Open `https://employee-profiles-production.up.railway.app/me/mcp-token` in a browser (works for everyone; managers/execs can also use the button on `/team`). Sign in with their NSLS Google account.
+1. Open `https://signal.nsls.org/me/mcp-token` in a browser (works for everyone; managers/execs can also use the button on `https://signal.nsls.org/team`). Sign in with their NSLS Google account.
+   Always give the `signal.nsls.org` address, never the `employee-profiles-production.up.railway.app` one: sign-in only sticks on `signal.nsls.org`, so the Railway address sends people round the sign-in again and drops them on "You don't have a quarterly yet" instead of the token page.
 2. Click **"Generate MCP token"**.
 3. Copy the token (starts with `signal_` followed by 64 hex chars). It's shown once; if they dismiss the popup they need to regenerate.
 
@@ -182,7 +183,7 @@ Claude Code only registers MCP servers at session start. Tell the user:
 
 If a token is compromised or the user just wants a fresh one:
 
-1. Click "Generate MCP token" again on `/me/mcp-token` (or `/team` for managers/execs). The old token stops working the instant the new one is minted (the `app_api_token` column is unique).
+1. Click "Generate MCP token" again on `https://signal.nsls.org/me/mcp-token` (or `https://signal.nsls.org/team` for managers/execs). The old token stops working the instant the new one is minted (the `app_api_token` column is unique).
 2. Re-run /signal-setup.
 
 ## Common failures
