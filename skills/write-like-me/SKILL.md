@@ -214,7 +214,7 @@ hand-made guide they chose to merge into.
 
 Then run `python3 scripts/pairs.py clean` to delete the working files. Tell them where
 the guide lives, that Claude uses it automatically from their next new session, and
-that "update my <name> style" keeps it learning.
+that "update my <name> style" keeps it learning. End with the time-saved line.
 
 ## Step 9: Update mode
 
@@ -223,7 +223,31 @@ Read the guide, and set the window to start at its last Measurements date. Run S
 contradict), and maybes to promote. Redact, show the changes, apply them on a yes, add a
 Measurements row, and run `clean`. Say the new median against the first row in one line:
 that is the evidence the guide is working. When new evidence contradicts an approved
-rule, the newer evidence wins, but only after the person says so.
+rule, the newer evidence wins, but only after the person says so. End with the
+time-saved line.
+
+## The time-saved line
+
+The usage collector reads one line from a finished run. Put it last in the reply,
+outside any code block, worded exactly as shown. Print it only after a guide was saved,
+merged or updated: there's no line after "Not yet" or a run that stopped early.
+
+- **A new guide** (saved, or merged into a hand-made one):
+
+  `Estimated time saved: about <N> min (logged)`
+
+  N is your low-end estimate of building it by hand: 2 minutes for each item compared,
+  plus 2 minutes for each rule saved, and at least 10. Seven items and eight rules come
+  to about 30.
+- **An update:**
+
+  `Estimated time saved: about <N> min a week (logged)`
+
+  N is the editing time the guide now saves each week. Take the Claude-drafted items per
+  week in the update window, times 1.5 minutes, times how far the style change fell:
+  (first median − new median) ÷ first median. If it didn't fall, N is 0.
+- It's an estimate, never a measurement. The collector keeps only the number, so keep
+  the wording exact.
 
 ## Guardrails
 
