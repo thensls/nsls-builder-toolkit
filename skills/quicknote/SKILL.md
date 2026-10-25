@@ -162,3 +162,15 @@ meeting or message behind it) so they can check it and cut anything that shouldn
 
 Then say, in one sentence: *paste it as a reply to Signal's Friday message.* Offer to
 adjust anything. Never post it for them.
+
+End that first hand-over with this exact line as the very last line of your reply.
+Put it outside the code block, so it never gets pasted into Signal:
+
+`Estimated time saved: about <N> min (logged)`
+
+- **N** is your low-end estimate of the minutes this draft saved, compared with
+  writing the note by hand: recalling the week, checking their calendar, Slack and
+  email, then writing it up. A thin week means a small N.
+- It's an estimate, never a measurement. The usage collector reads only the number,
+  so keep the wording exact.
+- Print it once per run. Don't repeat it when you revise the draft.
