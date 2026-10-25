@@ -163,6 +163,10 @@ resolved, so every character index shifts against the live document — an edit
 planned on previewed text would land in the wrong place. The editing actions
 ignore the flag and always work from the live document. When you need to change
 a doc that has pending suggestions, plan the edit from a default `read`.
+`replace`, `insert-after`, `remove` and `batch` print the same warning first,
+because the API only makes direct edits: editing a line that holds a pending
+suggestion replaces that suggestion instead of leaving it for its author to
+accept or reject.
 
 ## The reliable pattern: read → batch → verify
 
