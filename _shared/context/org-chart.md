@@ -1,5 +1,5 @@
 # NSLS Org Chart
-_Last synced: 2026-10-19_
+_Last synced: 2026-10-26_
 
 ## Business Intelligence
 
@@ -175,6 +175,7 @@ _Last synced: 2026-10-19_
 | Angelyn Kempe | Contractor | Kevin Prentiss | akempe@nsls.org | U0B6JBUSKF0 |
 | Bogdan Tarbujaru | Contractor | Juan Maggi | tbogdan@nsls.org | U08DNV4U0CE |
 | Boris Doyer | Contractor | Michael O'Brien | bdoyer@nsls.org | U096X7F82MP |
+| Brandee Busch | Contractor | Dylan Blaty | bbusch@nsls.org |  |
 | Bruno Drouin | Contractor | Michael O'Brien | bdrouin@nsls.org | U097SSUQB6J |
 | Christophre Munns | Contractor | Kevin Prentiss | mmunns@nsls.org | U0BPDNT2Q8K |
 | Collin Wood | Contractor | Adam Stone | cwood@nsls.org | U08RLLMFJTU |

@@ -275,7 +275,9 @@
     "email": "dblaty@nsls.org",
     "slack": "U0ANJR7P66S",
     "department": "Marketing",
-    "manages": []
+    "manages": [
+      "Brandee Busch"
+    ]
   },
   {
     "name": "Olivia Rigor",
@@ -463,6 +465,15 @@
     "manager": "Jordan Perry",
     "email": "jwalsh@nsls.org",
     "slack": "U0ADTNZUB8D",
+    "department": "Unknown",
+    "manages": []
+  },
+  {
+    "name": "Brandee Busch",
+    "title": "Contractor",
+    "manager": "Dylan Blaty",
+    "email": "bbusch@nsls.org",
+    "slack": "",
     "department": "Unknown",
     "manages": []
   },
