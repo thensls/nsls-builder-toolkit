@@ -1,14 +1,14 @@
 # Lines of Priority (LOPs)
-_Last synced: 2026-10-12_
+_Last synced: 2026-10-26_
 
 ## L1: Simplification/Efficiency
 **Owner**: Anish Patel | **Health**: On Track
 **Goal**: Complete 4 major simplicity initiatives by Q4
 > We're making solid progress across simplification initiatives, with Drupal transition, marketing automation migration, and advisor tracking all advancing. The SLT dashboards goal lacks substantive progress—we need the DRI to provide concrete updates and commit to Q2 delivery. We should clarify priorities if resource constraints are impacting dashboard development, as this directly supports SLT decision-making.
 
-### L2: Transition off of Drupal by end of Q3 of 2026
-**Owner**: Kevin Prentiss | **Health**: At Risk | **Deadline**: 2026-09-30
-> Technical work is progressing on track, but DRI is concerned about the timeline for full deprecation. The new invite/list creation system must be fully migrated before Drupal can be safely removed. A hard cutoff at end of Q3 while invites are flowing is deemed risky; DRI anticipates leaving Drupal in place longer to ensure responsible shutdown.
+### L2: Transition off of Drupal by end of Q4 of 2026
+**Owner**: Kevin Prentiss | **Health**: On Track | **Deadline**: 2026-12-31
+> DRI reported at the 10/15 SLT that the Drupal shutdown was moved from Q3 to end of Q4 for risk mitigation; the team is planning it for end of Q4 and DRI feels it is on track. Goal re-dated to 12/31. (Logged 10/20 from SLT 10/15 reconciliation, Chelsea-approved: https://fathom.video/calls/861155721?timestamp=2057)
 
 ### L2: Move all Society and FOL lifecycle marketing emails to Customer.io by end of 2026
 **Owner**: Adam Stone | **Health**: On Track | **Deadline**: 2026-12-31
@@ -16,14 +16,18 @@ _Last synced: 2026-10-12_
 
 ### L2: Dashboards for SLT and Core Revenue: 2026 data by the end of Q2 and 2025 data by Q4
 **Owner**: Anish Patel | **Health**: On Track | **Deadline**: 2026-06-30
-> 2026 dashboards built and in use; finishing two fixes (adding churn to chapter revenue dashboard, correcting fall response rates). 2025 data load planned after 2026 fixes complete for year-over-year comparison. Both deliverables due Q4. Delayed by fall forecast and 2027 budget work in September.
+> DRI reports goal is on track. Continuing work on the model and view components for the dashboards.
+
+### L2: Other key L3 projects
+**Owner**: Chelsea Byers | **Health**: No update | **Deadline**: 2026-12-31
+> No update yet.
 
 ### L2: Build a repeatable system to track and engage 100% of advisors and E-board members each season.
 **Owner**: Adam Stone | **Health**: Complete | **Deadline**: 2026-06-30
 > DRI indicates the goal is likely complete but is waiting to confirm acceptance of the deliverable or system before finalizing.
 
 ### L2: 90% of schools on evergreen partnership agreements by 12/31/2026
-**Owner**: Ashleigh Smith | **Health**: On Track | **Deadline**: 2026-09-30
+**Owner**: Ashleigh Smith | **Health**: On Track | **Deadline**: 2026-12-31
 > No update yet.
 
 ### L2: New automated invitation workflow tested and production ready for all chapters by June 30
@@ -39,13 +43,13 @@ _Last synced: 2026-10-12_
 **Owner**: Adam Stone | **Health**: On Track | **Deadline**: 2026-12-31
 > No new updates reported. DRI suggests reassigning the goal to Adam, Joe's new manager, who has better visibility into events.
 
-### L2: Complete job framework and compensation leveling project by the end of Q3
-**Owner**: Heather Darnell | **Health**: At Risk | **Deadline**: 2026-09-30
-> Job framework and compensation leveling project is fragmented and blocking progress. DRI identified that the framework (KPI base, LOP work, Knowledge Base) needs unification; a follow-up is scheduled for July 27. A dependent compensation decision remains open and is being handled outside this goal. Quarterly reviews are scheduled for next week, but core framework alignment is pending.
+### L2: Complete job framework and compensation leveling project by the end of Q4
+**Owner**: Heather Darnell | **Health**: On Track | **Deadline**: 2026-12-31
+> No update yet.
 
 ### L2: Host Meaningful 25th Anniversary Event
 **Owner**: Chelsea Byers | **Health**: On Track | **Deadline**: 2026-10-27
-> Team is in final sprint with some stress, but confidence remains high in the plan and ability to deliver a meaningful event. Danielle is leading effectively.
+> No update yet.
 
 ## L1: Core Revenue
 **Owner**: Ashleigh Smith | **Health**: At Risk
@@ -53,14 +57,14 @@ _Last synced: 2026-10-12_
 > Core Revenue momentum is mixed—while brand initiatives and engagement programs advance on track, we're at risk on enrollment growth and LTV improvement, both critical to hitting our 10.6M market target and revenue expansion. Enrollment remains flat despite being needed for the L1 goal, and the $3 LTV uplift continues to slip. We need to assess whether current enrollment tactics require pivoting or if resource reallocation from on-track initiatives could accelerate these two at-risk areas.
 
 ### L2: Protect, retain, and grow our serviceable addressable market from 9.9M to 10.6M.
-**Owner**: Ashleigh Smith | **Health**: At Risk | **Deadline**: 2026-09-30
+**Owner**: Ashleigh Smith | **Health**: At Risk | **Deadline**: 2026-12-31
 > No update yet.
 
 ### L2: Develop brand tracking score & launch 10 B2B/B2C brand improvement initiatives
 **Owner**: Michael O'Brien | **Health**: On Track | **Deadline**: 2026-12-31
 > DRI confirms the goal is top priority this week, indicating active engagement and forward momentum.
 
-### L2: Increase ARPM1 to $140
+### L2: Increase LTV to $140
 **Owner**: Michael O'Brien | **Health**: At Risk | **Deadline**: 2026-12-31
 > No update yet.
 
@@ -87,15 +91,15 @@ _Last synced: 2026-10-12_
 
 ### L2: Create unified, cross-org customer touchpoints NPS metric
 **Owner**: Chelsea Byers | **Health**: On Track | **Deadline**: 2026-12-31
-> DRI confirms the goal is achievable and will require active collaboration with product and education teams before the Dec 31st deadline.
+> No update yet.
 
 ### L2: Get 30k 2026 vintage NSLS members to complete Welcome and Personal Insights on Society
 **Owner**: Kevin Prentiss | **Health**: No update
 > No update yet.
 
 ### L2: Resolve 90%+ of member support tickets within SLA every quarter
-**Owner**: Kimberly Campbell | **Health**: No update | **Deadline**: 2026-12-31
-> No update yet.
+**Owner**: Kimberly Campbell | **Health**: On Track | **Deadline**: 2026-12-31
+> DRI reports goal is on track. No additional details provided on current resolution rate, SLA performance, or specific metrics.
 
 ### L2: Define product requirements for 2027 product lead growth in to market footprint expansion and/or a new market
 **Owner**: Kevin Prentiss | **Health**: No update
