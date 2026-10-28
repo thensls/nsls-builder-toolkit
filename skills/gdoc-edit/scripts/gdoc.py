@@ -478,6 +478,9 @@ def do_comment(doc, anchor, body, occurrence=None, recommend=None, why=None, pre
     One comment per call on purpose: on a colleague's document every comment
     needs its own yes, and a batch would make one approval cover several.
     """
+    if not anchor.strip():
+        print("ANCHOR_EMPTY: an empty phrase matches everywhere. Give the exact words to attach the comment to.")
+        sys.exit(EXIT_ANCHOR)
     if "\n" in anchor:
         print("ANCHOR_MULTILINE: the anchor spans a paragraph break. Pick a phrase inside one paragraph.")
         sys.exit(EXIT_ANCHOR)
@@ -529,7 +532,8 @@ def do_comment(doc, anchor, body, occurrence=None, recommend=None, why=None, pre
             sys.exit(0 if preview else EXIT_ANCHOR)
         sys.exit(EXIT_ANCHOR)
 
-    occurrence = occurrence or 1
+    if occurrence is None:
+        occurrence = 1
     if not 1 <= occurrence <= n:
         sys.exit(f"--occurrence {occurrence} is out of range: {n} match(es)")
     p, k, start, end = hits[occurrence - 1]
@@ -813,6 +817,8 @@ def main():
                     help="comment: show where it would anchor, with surrounding text; post nothing")
     a = ap.parse_args()
 
+    if a.anchor and any(not x.strip() for x in a.anchor):
+        sys.exit("--anchor can't be empty or blank: it would match every line of the document")
     if a.action != "create" and not a.doc:
         sys.exit(a.action + " needs --doc")
 
