@@ -404,6 +404,7 @@ def do_comments(doc):
 # against its words like any comment a person made.
 
 EXIT_ANCHOR = 3
+OBJECT_MARK = "\ufffc"  # stands in for a non-text element in the character map
 COMMENT_MAX = 2048  # insertComment's limit, in UTF-8 BYTES: an em dash costs three
 
 
@@ -419,7 +420,18 @@ def _paragraph_map(docjson):
                     pos = e.get("startIndex")
                     if pos is None:
                         continue
-                    for ch in e.get("textRun", {}).get("content", ""):
+                    if "textRun" not in e:
+                        # A footnote marker, inline image, smart chip or similar: it
+                        # occupies document positions but carries no text. Leaving it
+                        # out let "about rubrics" match across a footnote between the
+                        # words, with a range that silently took the footnote along.
+                        # A visible placeholder per position keeps the map honest: the
+                        # preview shows the object, and a plain phrase can't jump it.
+                        for q in range(pos, e.get("endIndex", pos + 1)):
+                            txt.append(OBJECT_MARK)
+                            idx.append(q)
+                        continue
+                    for ch in e["textRun"].get("content", ""):
                         txt.append(ch)
                         idx.append(pos)
                         pos += _u16len(ch)
@@ -446,7 +458,10 @@ def find_anchor(paras, anchor):
         k = txt.find(anchor)
         while k >= 0:
             last = k + len(anchor) - 1
-            hits.append((p, k, idx[k], idx[last] + _u16len(txt[last])))
+            # Backstop: a match is only real if its characters are adjacent in the
+            # document. Any gap means something the map didn't see sits inside it.
+            if all(idx[j + 1] == idx[j] + _u16len(txt[j]) for j in range(k, last)):
+                hits.append((p, k, idx[k], idx[last] + _u16len(txt[last])))
             k = txt.find(anchor, k + 1)
     return hits
 
@@ -500,7 +515,9 @@ def do_comment(doc, anchor, body, occurrence=None, recommend=None, why=None, pre
         print("Re-read it -- the text may have changed since the comment was drafted.")
         sys.exit(EXIT_ANCHOR)
 
-    if n > 1 and occurrence is None:
+    # --recommend only ever displays. Without this, a unique phrase skipped the
+    # branch and `--recommend 1` posted straight away.
+    if occurrence is None and (n > 1 or recommend is not None):
         # Ambiguous. Without --recommend: list every candidate and refuse, so nothing
         # ever lands on a coin-flip. With --recommend: the model has judged, so show
         # its pick first with its reason and keep the rest on screen as alternatives
@@ -512,7 +529,7 @@ def do_comment(doc, anchor, body, occurrence=None, recommend=None, why=None, pre
         if recommend:
             order.remove(recommend)
             order.insert(0, recommend)
-            print(f"{anchor!r} appears {n} times -- recommended one first.\n")
+            print(f"{anchor!r} appears {n} time{'s' if n != 1 else ''} -- recommended one first.\n")
         else:
             print(f"AMBIGUOUS: {anchor!r} appears {n} times. Nothing was posted.")
             print("Decide which one the comment belongs on, then re-run with --recommend N --why \"...\".\n")
