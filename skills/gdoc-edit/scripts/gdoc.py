@@ -44,7 +44,7 @@ Anchor/insert/remove target TOP-LEVEL paragraphs (not text inside tables).
 append-rich can ADD a new section with tables, hyperlinks, real bullets and shaded
 callouts at the end of a doc; editing an EXISTING table still needs /gdoc-build.
 """
-import argparse, json, os, re, subprocess, sys
+import argparse, html, json, os, re, subprocess, sys, unicodedata
 
 # The gdoc family ALWAYS runs gws from the toolkit's own profile — forced per
 # spawned process, so neither the default config dir nor an ambient
@@ -393,6 +393,170 @@ def do_comments(doc):
     return r.get("comments", r)
 
 
+# ---------- anchored comments (Docs API insertComment) ----------
+#
+# Until 2026-09-30 an anchored comment could only be made by driving the Docs
+# editor: Drive's comments.create accepts an `anchor` but the editors ignore it,
+# and a Drive comment sent with one renders as an orphan reading "Original
+# content deleted". Never use that route. The Docs API's insertComment request
+# (generally available 2026-09-30) takes a text range and has Google's own
+# server mint the kix anchor the editor uses, so the comment sits in the margin
+# against its words like any comment a person made.
+
+EXIT_ANCHOR = 3
+COMMENT_MAX = 2048  # insertComment's limit, in UTF-8 BYTES: an em dash costs three
+
+
+def _paragraph_map(docjson):
+    """Every paragraph, table cells included, as (text, [document index of each char])."""
+    out = []
+
+    def walk(content):
+        for el in content:
+            if "paragraph" in el:
+                txt, idx = [], []
+                for e in el["paragraph"].get("elements", []):
+                    pos = e.get("startIndex")
+                    if pos is None:
+                        continue
+                    for ch in e.get("textRun", {}).get("content", ""):
+                        txt.append(ch)
+                        idx.append(pos)
+                        pos += _u16len(ch)
+                out.append(("".join(txt), idx))
+            elif "table" in el:
+                for row in el["table"].get("tableRows", []):
+                    for cell in row.get("tableCells", []):
+                        walk(cell.get("content", []))
+
+    walk(docjson.get("body", {}).get("content", []))
+    return out
+
+
+def find_anchor(paras, anchor):
+    """Every occurrence of `anchor` as (paragraph, char offset, start index, end index).
+
+    Searches whole paragraphs rather than single text runs: a phrase with a bold
+    word or a link inside it is split across runs and a run-by-run search misses
+    it. Indices come from the per-character map, so an emoji earlier in the
+    paragraph (two UTF-16 units, one Python char) does not shift the range.
+    """
+    hits = []
+    for p, (txt, idx) in enumerate(paras):
+        k = txt.find(anchor)
+        while k >= 0:
+            last = k + len(anchor) - 1
+            hits.append((p, k, idx[k], idx[last] + _u16len(txt[last])))
+            k = txt.find(anchor, k + 1)
+    return hits
+
+
+def _anchor_context(paras, p, k, anchor):
+    """The anchor's paragraph with the phrase underlined, between its nearest non-blank neighbours."""
+    def neighbour(step):
+        q = p + step
+        while 0 <= q < len(paras) and not paras[q][0].strip():
+            q += step
+        return paras[q][0].rstrip("\n") if 0 <= q < len(paras) else None
+
+    lines = []
+    before, after = neighbour(-1), neighbour(1)
+    if before is not None:
+        lines.append("     " + before)
+    lines.append("  >  " + paras[p][0].rstrip("\n"))
+    def cols(t):  # terminal width: wide glyphs such as ✅ take two columns
+        return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in t)
+    lines.append("     " + " " * cols(paras[p][0][:k]) + "^" * cols(anchor))
+    if after is not None:
+        lines.append("     " + after)
+    return "\n".join(lines)
+
+
+def do_comment(doc, anchor, body, occurrence=None, recommend=None, why=None, preview=False):
+    """Preview, or post, one comment anchored to `anchor`. Exits EXIT_ANCHOR rather than guess.
+
+    One comment per call on purpose: on a colleague's document every comment
+    needs its own yes, and a batch would make one approval cover several.
+    """
+    if "\n" in anchor:
+        print("ANCHOR_MULTILINE: the anchor spans a paragraph break. Pick a phrase inside one paragraph.")
+        sys.exit(EXIT_ANCHOR)
+    if not preview and not body.strip():
+        sys.exit("comment needs --text or --text-file")
+    size = len(body.encode("utf-8"))
+    if size > COMMENT_MAX:
+        sys.exit(f"comment text is {size} bytes; Google's limit is {COMMENT_MAX} UTF-8 bytes")
+
+    d = warn_before_edit(doc)
+    paras = _paragraph_map(d)
+    hits = find_anchor(paras, anchor)
+    n = len(hits)
+
+    if n == 0:
+        print(f"TEXT_NOT_FOUND: {anchor!r} is not in the document. Nothing was posted.")
+        print("Re-read it -- the text may have changed since the comment was drafted.")
+        sys.exit(EXIT_ANCHOR)
+
+    if n > 1 and occurrence is None:
+        # Ambiguous. Without --recommend: list every candidate and refuse, so nothing
+        # ever lands on a coin-flip. With --recommend: the model has judged, so show
+        # its pick first with its reason and keep the rest on screen as alternatives
+        # -- a recommendation nobody can check is a guess. Either way nothing posts:
+        # posting needs --occurrence, after the person has seen the choice.
+        if recommend is not None and not 1 <= recommend <= n:
+            sys.exit(f"--recommend {recommend} is out of range: {n} matches")
+        order = list(range(1, n + 1))
+        if recommend:
+            order.remove(recommend)
+            order.insert(0, recommend)
+            print(f"{anchor!r} appears {n} times -- recommended one first.\n")
+        else:
+            print(f"AMBIGUOUS: {anchor!r} appears {n} times. Nothing was posted.")
+            print("Decide which one the comment belongs on, then re-run with --recommend N --why \"...\".\n")
+        for i in order:
+            p, k, _, _ = hits[i - 1]
+            if i == recommend:
+                print(f"★ RECOMMENDED -- occurrence {i} of {n}")
+                if why:
+                    print(f"  why: {why}")
+            else:
+                print(f"--- {'alternative' if recommend else 'occurrence'} {i} of {n} ---")
+            print(_anchor_context(paras, p, k, anchor) + "\n")
+        if recommend and preview and body.strip():
+            print("Comment:\n" + "\n".join("    " + ln for ln in body.splitlines()))
+        if recommend:
+            print(f"\n[to post, confirm the choice: --occurrence {recommend}]")
+            sys.exit(0 if preview else EXIT_ANCHOR)
+        sys.exit(EXIT_ANCHOR)
+
+    occurrence = occurrence or 1
+    if not 1 <= occurrence <= n:
+        sys.exit(f"--occurrence {occurrence} is out of range: {n} match(es)")
+    p, k, start, end = hits[occurrence - 1]
+
+    if preview:
+        print(_anchor_context(paras, p, k, anchor))
+        print(f"\n[anchor: occurrence {occurrence} of {n}]")
+        if body.strip():
+            print("\nComment:\n" + "\n".join("    " + ln for ln in body.splitlines()))
+        return
+
+    r = batch_update(doc, [{"insertComment": {
+        "range": {"startIndex": start, "endIndex": end}, "content": body}}])
+    thread = (r.get("replies") or [{}])[0].get("insertComment", {}).get("commentThread", {})
+    state = r.get("commentUpdateState")
+    # plainTextQuote comes back HTML-escaped ("Builder &#183; heavy builder"), so
+    # compare after unescaping or a correct anchor reads as a mismatch.
+    quote = html.unescape(thread.get("plainTextQuote") or "")
+    if state != "ALL_SAVED" or quote != anchor or not thread.get("anchorId"):
+        print(f"NOT CONFIRMED: save state {state!r}, anchored on {quote!r}, "
+              f"anchor id {thread.get('anchorId')!r}. Check the document before trying again "
+              f"-- a retry can post the same comment twice.")
+        sys.exit(1)
+    print(f"posted ✓  anchored on {quote!r}  (anchor {thread['anchorId']}, "
+          f"comment {thread.get('commentId')})")
+
+
 def do_create(title, text):
     r = gws(["docs", "documents", "create"], body={"title": title})
     doc = r.get("documentId")
@@ -617,8 +781,9 @@ def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="Read, edit, and create Google Docs via gws.")
-    ap.add_argument("action", choices=["read", "comments", "create", "replace", "insert-top",
-                                       "insert-after", "append", "append-rich", "remove", "batch"])
+    ap.add_argument("action", choices=["read", "comments", "comment", "create", "replace",
+                                       "insert-top", "insert-after", "append", "append-rich",
+                                       "remove", "batch"])
     ap.add_argument("--doc", help="Google Doc ID (required for all actions except create)")
     ap.add_argument("--find")
     ap.add_argument("--replace")
@@ -639,6 +804,13 @@ def main():
     ap.add_argument("--level", type=int, choices=[1, 2, 3, 4],
                     help="heading level for the inserted --title "
                          "(default: 2 for insert-top, 3 for insert-after)")
+    ap.add_argument("--occurrence", type=int,
+                    help="comment: which match of --anchor to attach to (1-based), when it repeats")
+    ap.add_argument("--recommend", type=int,
+                    help="comment: the match the model judges right; shown first and flagged, never posted")
+    ap.add_argument("--why", help="comment: one line explaining --recommend")
+    ap.add_argument("--preview", action="store_true",
+                    help="comment: show where it would anchor, with surrounding text; post nothing")
     a = ap.parse_args()
 
     if a.action != "create" and not a.doc:
@@ -663,6 +835,12 @@ def main():
 
     elif a.action == "comments":
         print(json.dumps(do_comments(a.doc), indent=2, ensure_ascii=False))
+
+    elif a.action == "comment":
+        if not a.anchor or len(a.anchor) != 1:
+            sys.exit("comment needs exactly one --anchor: the exact text to attach it to")
+        do_comment(a.doc, a.anchor[0], read_text(a), occurrence=a.occurrence,
+                   recommend=a.recommend, why=a.why, preview=a.preview)
 
     elif a.action == "create":
         if not a.title:
