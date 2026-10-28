@@ -270,7 +270,7 @@ When building a new skill, use three tools in sequence. Each tests a different q
 
 **Optional Phase 4**: For broadly-released skills that need reliable auto-triggering across many sessions, run `skill-creator`'s eval/benchmark mode for quantitative trigger accuracy. Skip for personal / time-boxed / Kevin-only skills.
 
-See `/skill-creation` for the full cascade including a worked example (gary-meeting-prep build, 2026-04-18).
+See `/skill-creation` for the full cascade including a worked example (a personal meeting-prep skill, 2026-04-18).
 
 ## Presentations
 - Always ask "NSLS branded or Society branded?" before creating slides
