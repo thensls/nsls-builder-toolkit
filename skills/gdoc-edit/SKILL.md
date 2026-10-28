@@ -4,7 +4,8 @@ description: >-
   Use when the user wants to change an EXISTING Google Doc in place rather than
   create a new one: "update the doc", "edit my Google Doc", "add a changelog to
   the top", "change X to Y in the doc", "insert a section after …", "remove the
-  stale section", "append this to the doc", "what are the comments on this doc",
+  stale section", "append this to the doc", "what are the comments on this doc", "comment on this doc", "add a comment
+  on X", "leave this feedback as comments",
   "don't make a new version — edit this one". The complement to gdoc-build (which
   creates new branded docs). NSLS or Society.
 ---
@@ -12,7 +13,7 @@ description: >-
 # gdoc-edit
 
 Edit an existing Google Doc in place — replace text, insert a section, drop a changelog
-at the top, delete a stale section, read reviewer comments — as **you**, with **your** doc
+at the top, delete a stale section, read reviewer comments or leave anchored ones — as **you**, with **your** doc
 permissions, and Google Docs **Version history** as the audit trail. Also creates simple
 net-new docs; for polished tables/branding use `/gdoc-build`.
 
@@ -106,6 +107,8 @@ DOC=<google-doc-id>                       # the part of the URL after /document/
 python3 $S read   --doc $DOC              # full text (use to plan exact edits)
 python3 $S read   --doc $DOC --suggestions accepted   # preview with suggestions applied
 python3 $S comments --doc $DOC            # reviewer comments (address them; don't orphan)
+python3 $S comment  --doc $DOC --anchor "exact phrase" --preview --text "draft"  # where it would land
+python3 $S comment  --doc $DOC --anchor "exact phrase" --text-file /tmp/c1.txt   # post it, anchored
 python3 $S replace --doc $DOC --find "old text" --replace "new text"   # literal by default
 python3 $S insert-top --doc $DOC --title "Changelog — v2.3" --text-file /tmp/changelog.txt
 python3 $S insert-after --doc $DOC --anchor "Top questions for Kevin" --text "• New bullet"
@@ -167,6 +170,55 @@ a doc that has pending suggestions, plan the edit from a default `read`.
 because the API only makes direct edits: editing a line that holds a pending
 suggestion replaces that suggestion instead of leaving it for its author to
 accept or reject.
+
+## Commenting — anchored, in the margin
+
+`comment` puts a comment against exact text, in the margin, the same as selecting the
+words and pressing Comment. It uses the Docs API's `insertComment` request (generally
+available since 30 September 2026), so no browser is involved.
+
+**Never use Drive's `comments.create` with an `anchor` on a Google Doc.** Docs ignores
+the anchor and shows the comment as an orphan reading "Original content deleted".
+Without an anchor it lands only in the All Comments panel, which nobody opens. `comment`
+is the route that reaches the margin.
+
+### The flow — one comment, one yes
+
+1. **Draft** the comments.
+2. **Preview each** with `--preview`: the paragraph before, the anchor paragraph with
+   the phrase underlined, the paragraph after, then the comment text. Show that block.
+3. **Ask: approve · edit · skip.** On someone else's document each comment is its own
+   yes — posting puts words in front of a colleague under the person's name. Never
+   take one yes for several, and show the text again if it changes after a yes. On the
+   person's own document (a private working copy, say) post without asking.
+4. **Post** the approved one. It prints `posted ✓` only when Google confirms the save
+   and quotes back exactly the anchor text.
+5. Next comment.
+
+To let someone read comments in place before a colleague sees any: copy the doc to a
+private working copy, post everything there, then repeat on the original with their
+approvals.
+
+### When the phrase isn't unique
+
+`comment` refuses to guess: exit 3, `AMBIGUOUS`, every match listed in context. Decide
+which one the comment belongs on and re-run with `--recommend N --why "..."` — your
+pick shows first and flagged, the alternatives stay on screen so the person can
+overrule you. `--recommend` only displays; post with `--occurrence N` once they agree.
+
+It also refuses on `TEXT_NOT_FOUND` (the doc changed since drafting — re-read and
+re-draft) and `ANCHOR_MULTILINE` (pick a phrase inside one paragraph).
+
+| Symptom | Cause | Do this |
+|---|---|---|
+| `NOT CONFIRMED` after a post | Google didn't report the save, or quoted different text back | Look at the doc before retrying: a retry can post the comment twice |
+| A correct anchor reads as a mismatch in a hand-rolled check | `plainTextQuote` comes back HTML-escaped (`&#183;` for `·`) | Unescape first; `comment` does |
+| Range lands a character or two off | Docs counts in UTF-16 units, and an emoji is two | `comment` maps every character to its real index; never compute ranges by hand |
+| A phrase with bold or a link inside it isn't found | Formatting splits text into separate runs | `comment` searches whole paragraphs, table cells included |
+| Reading anchors back from the document returns 400 | `documents.get` returns comment anchors only with all three set explicitly: `commentsViewMode: COMMENTS_VIEW_MODE_INCLUDED`, `includeTabsContent: true`, `suggestionsViewMode: SUGGESTIONS_INLINE` — any one missing is a 400 naming the next | Set all three. The anchors then sit under each tab's `documentTab.commentAnchors`, with the exact range each comment is attached to |
+
+Comments don't change the document's text, so posting several in a row never shifts the
+next one's position.
 
 ## The reliable pattern: read → batch → verify
 
@@ -274,6 +326,6 @@ There is always a path: read the doc, anchor on real text, verify by marker.
 ## References
 
 - [`references/setup.md`](references/setup.md) — `gws auth` setup (builder + one-time admin).
-- [`scripts/gdoc.py`](scripts/gdoc.py) — the helper CLI (read/comments/create/replace/insert-top/insert-after/append/remove/batch).
+- [`scripts/gdoc.py`](scripts/gdoc.py) — the helper CLI (read/comments/comment/create/replace/insert-top/insert-after/append/remove/batch).
 - [`references/works-for-everyone-spec.md`](references/works-for-everyone-spec.md) — superseded design history (why gws, not a service).
 - [`references/legacy/gas-doc-webhook.gs`](references/legacy/gas-doc-webhook.gs) — retired Apps Script webhook.
