@@ -234,12 +234,12 @@ Run this by saying: "evaluate my skill" or "run evals on this skill."
 
 Skipping Phase 1 produces a skill that works but lacks depth. Skipping Phase 2 produces a skill that works in the happy path but breaks under pressure. Skipping Phase 3 produces a skill that violates the spec and may not load correctly. Skipping Phase 4 (when needed) produces a skill that's well-built but doesn't trigger reliably.
 
-### Example: the `gary-meeting-prep` build
+### Example: a personal meeting-prep skill
 
-Run on 2026-04-18. Kevin's cascade: Phase 1 → 2 → 3 (no Phase 4 — personal skill, narrow trigger set Kevin controls).
+Run on 2026-04-18 for a skill that preps one person for meetings with a colleague: Phase 1 → 2 → 3 (no Phase 4, because it's a personal skill with a narrow trigger set its owner controls).
 
-- **Phase 1** surfaced: safety tiers, domain-specific wound patterns with dates, Gary's 8 mental models as a table, two-output discipline (brief vs. share-ready), composition over three existing skills.
-- **Phase 2** caught: description was summarizing workflow (the CSO trap — Claude would have shortcut the skill). Added 9-row rationalization table, Red Flags — STOP list with 8 specific violations.
-- **Phase 3** polished: pure-trigger description, Quick Start section, second-person drift fixed, confirmed <500 lines, honored NSLS memory rule against `disable-model-invocation`.
+- **Phase 1** surfaced: safety tiers for what the brief may say, the colleague's working style captured as a reference table, two outputs kept apart (a private brief vs. a share-ready version), and composition over three existing skills.
+- **Phase 2** caught: the description was summarizing the workflow (the CSO trap: Claude would have shortcut the skill). Added a 9-row rationalization table and a Red Flags — STOP list with 8 specific violations.
+- **Phase 3** polished: pure-trigger description, Quick Start section, second-person drift fixed, confirmed <500 lines, honored the NSLS memory rule against `disable-model-invocation`.
 
 The build took ~30 minutes. A one-phase build would have shipped a skill with a fragile description and no rationalization defenses.
