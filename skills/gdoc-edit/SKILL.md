@@ -215,6 +215,7 @@ re-draft) and `ANCHOR_MULTILINE` (pick a phrase inside one paragraph).
 | A correct anchor reads as a mismatch in a hand-rolled check | `plainTextQuote` comes back HTML-escaped (`&#183;` for `·`) | Unescape first; `comment` does |
 | Range lands a character or two off | Docs counts in UTF-16 units, and an emoji is two | `comment` maps every character to its real index; never compute ranges by hand |
 | A phrase with bold or a link inside it isn't found | Formatting splits text into separate runs | `comment` searches whole paragraphs, table cells included |
+| Reading anchors back from the document returns 400 | `documents.get` returns comment anchors only with all three set explicitly: `commentsViewMode: COMMENTS_VIEW_MODE_INCLUDED`, `includeTabsContent: true`, `suggestionsViewMode: SUGGESTIONS_INLINE` — any one missing is a 400 naming the next | Set all three. The anchors then sit under each tab's `documentTab.commentAnchors`, with the exact range each comment is attached to |
 
 Comments don't change the document's text, so posting several in a row never shifts the
 next one's position.
