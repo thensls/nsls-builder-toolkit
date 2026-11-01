@@ -104,9 +104,16 @@ local = make_skill(CFG / "local-plugins" / "nsls-builder-toolkit" / "skills" / "
 code, out = helper("backup", str(local))
 check("local plugin clone refused", out.startswith("Not backed up") and "plugin" in out, out)
 pointer = make_skill(CFG / "skills" / "plan",
-                     "---\nname: plan\ndescription: x\n---\nRead and follow the full skill at `~/.claude/x/SKILL.md`.\n")
+                     "---\nname: plan\ndescription: >-\n  Plan things.\n---\n\nRead and follow the full skill at "
+                     "`~/.claude/local-plugins/nsls-builder-toolkit/skills/plan/SKILL.md`.\n")
 code, out = helper("backup", str(pointer))
 check("toolkit pointer stub refused", out.startswith("Not backed up") and "pointer" in out, out)
+mentions = make_skill(CFG / "skills" / "my-notes",
+                      "---\nname: my-notes\ndescription: mine\n---\nFor planning, read and follow the full skill at "
+                      "`~/.claude/local-plugins/nsls-builder-toolkit/skills/plan/SKILL.md`, then add my notes.\n")
+code, out = helper("backup", str(mentions))
+check("the builder's own skill that only mentions a toolkit skill is theirs to back up",
+      out.startswith("Backed up."), out)
 synced = make_skill(CFG / "skills" / "synced" / "org_123" / "board")
 code, out = helper("backup", str(synced))
 check("claude.ai-synced skill refused", out.startswith("Not backed up") and "claude.ai" in out, out)

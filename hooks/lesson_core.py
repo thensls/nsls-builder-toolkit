@@ -119,6 +119,33 @@ def read_log():
 # ── whose skill is it ───────────────────────────────────────────────────────
 
 _POINTER = re.compile(r"read and follow the full skill at", re.I)
+_pointer_check = []
+
+
+def is_toolkit_pointer(text, skill):
+    """True only for a pointer exactly as the toolkit writes it, by the one
+    shared definition (is_own_pointer in session-start.py, also used by
+    install.sh and sync-pointers.sh). A builder's own skill that merely
+    mentions a toolkit skill, or a pointer they have added notes to, is theirs.
+    If that definition cannot be loaded, treat a pointer-looking file as a
+    pointer: refusing a backup is safe, overwriting a pointer is not."""
+    if not _pointer_check:
+        try:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "nsls_session_start_for_lesson", str(Path(__file__).resolve().with_name("session-start.py")))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            _pointer_check.append(mod.is_own_pointer)
+        except Exception:
+            _pointer_check.append(None)
+    check = _pointer_check[0]
+    if check is None:
+        return bool(_POINTER.search(text[:2000]))
+    try:
+        return bool(check(text, skill))
+    except Exception:
+        return bool(_POINTER.search(text[:2000]))
 
 
 def skill_owner(path):
@@ -156,7 +183,7 @@ def skill_owner(path):
     if len(rel.parts) != 1:  # Claude Code loads skills/<name>/SKILL.md, nothing deeper
         return "elsewhere", None
     text = (real / "SKILL.md").read_text(encoding="utf-8", errors="replace")
-    if _POINTER.search(text[:2000]):
+    if is_toolkit_pointer(text, real.name):
         return "pointer", None
     if _holds_links(real):
         return "linked", None
