@@ -151,6 +151,8 @@ def skill_owner(path):
         return "elsewhere", None
     if rel.parts and rel.parts[0] == "synced":
         return "synced", None
+    if len(rel.parts) != 1:  # Claude Code loads skills/<name>/SKILL.md, nothing deeper
+        return "elsewhere", None
     text = (real / "SKILL.md").read_text(encoding="utf-8", errors="replace")
     if _POINTER.search(text[:2000]):
         return "pointer", None
@@ -165,8 +167,8 @@ REFUSALS = {
                "Don't change it; offer to raise the change with the toolkit instead.",
     "synced": "Not backed up: this skill is synced from claude.ai, so a local edit may be overwritten. "
               "Suggest the builder change it in claude.ai instead.",
-    "elsewhere": "Not backed up: this skill lives outside the builder's skills folder (often a link into a "
-                 "repo). Don't change it here; offer to make the change where it lives instead.",
+    "elsewhere": "Not backed up: this skill isn't directly in the builder's skills folder (often a link "
+                 "into a repo). Don't change it here; offer to make the change where it lives instead.",
 }
 
 
@@ -189,8 +191,23 @@ def backup(path):
     return dest.name, None
 
 
+def _own_skill_slot(target):
+    """True when target is, or would be, a direct child of the builder's skills
+    folder (outside synced/). Checked before undo touches anything, whether or
+    not the folder exists yet: the path comes from a file on disk, and a file
+    can be edited."""
+    try:
+        rel = Path(target).resolve().relative_to((config_dir() / "skills").resolve())
+    except (ValueError, OSError):
+        return False
+    return len(rel.parts) == 1 and rel.parts[0] != "synced"
+
+
 def undo(backup_id):
-    """Put a backed-up skill back. Returns a one-line result."""
+    """Put a backed-up skill back. Returns a one-line result.
+
+    The backup is copied next to the skill first; only a complete copy is
+    swapped in, and if the swap fails the skill is put back as it was."""
     bid = re.sub(r"[^A-Za-z0-9_-]", "", str(backup_id or ""))
     src = backups_dir() / bid
     try:
@@ -198,14 +215,35 @@ def undo(backup_id):
         target = Path(meta["path"])
     except Exception:
         return f"Not undone: no backup called {bid or '(blank)'}."
-    owner, _ = skill_owner(target) if (target / "SKILL.md").exists() else ("own", None)
-    if owner not in ("own", "missing"):
+    if not (src / "skill" / "SKILL.md").is_file():
+        return "Not undone: that backup is incomplete, so the skill was left as it is."
+    if not _own_skill_slot(target):
+        return "Not undone: that backup points outside the builder's own skills folder."
+    if (target / "SKILL.md").exists() and skill_owner(target)[0] != "own":
         return "Not undone: that folder is no longer one of the builder's own skills."
-    aside = target.with_name(target.name + ".undo-" + time.strftime("%Y%m%d-%H%M%S"))
-    if target.exists():
-        os.replace(target, aside)
-    shutil.copytree(src / "skill", target, symlinks=True)
-    if aside.exists():
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    staged = target.with_name(f".{target.name}.restore-{stamp}")
+    aside = target.with_name(f".{target.name}.undo-{stamp}")
+    try:
+        shutil.copytree(src / "skill", staged, symlinks=True)
+    except Exception:
+        shutil.rmtree(staged, ignore_errors=True)
+        return "Not undone: the backup could not be copied, so the skill was left as it is."
+    moved = False
+    try:
+        if target.exists() or target.is_symlink():
+            os.replace(target, aside)
+            moved = True
+        os.replace(staged, target)
+    except Exception:
+        if moved and not target.exists():
+            try:
+                os.replace(aside, target)
+            except Exception:
+                return f"Not undone, and the skill is now at {aside.name} beside where it was. Move it back."
+        shutil.rmtree(staged, ignore_errors=True)
+        return "Not undone: the swap failed, so the skill was left as it was."
+    if moved:
         shutil.rmtree(aside, ignore_errors=True)
     append_log({"event": "undo", "id": bid, "skill": target.name})
     return f"Undone: {target.name} is back to how it was at {meta.get('at', 'the backup')}."

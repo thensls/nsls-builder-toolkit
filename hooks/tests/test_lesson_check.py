@@ -112,7 +112,10 @@ code, out = helper("backup", str(synced))
 check("claude.ai-synced skill refused", out.startswith("Not backed up") and "claude.ai" in out, out)
 outside = make_skill(TMP / "repo" / "skills" / "thing")
 code, out = helper("backup", str(outside))
-check("skill outside the skills folder refused", out.startswith("Not backed up") and "outside" in out, out)
+check("skill outside the skills folder refused", out.startswith("Not backed up") and "directly" in out, out)
+nested = make_skill(CFG / "skills" / "group" / "deep")
+code, out = helper("backup", str(nested))
+check("a folder nested deeper than skills/<name> refused", out.startswith("Not backed up") and "directly" in out, out)
 code, out = helper("backup", str(CFG / "skills" / "nope"))
 check("missing skill refused", out.startswith("Not backed up") and "no SKILL.md" in out, out)
 if not WINDOWS:  # symlinks need extra rights on Windows
@@ -120,6 +123,36 @@ if not WINDOWS:  # symlinks need extra rights on Windows
     os.symlink(local.parent, link)
     code, out = helper("backup", str(link))
     check("a link from skills/ into a plugin is still a plugin skill", "plugin" in out, out)
+
+print("undo never writes outside the skills folder, and never strands a skill")
+evil = CFG / ".nsls-lesson-check" / "backups" / "evil"
+make_skill(evil / "skill")
+(evil / "meta.json").write_text(json.dumps({"path": str(TMP / "outside" / "planted"), "at": "x"}), encoding="utf-8")
+code, out = helper("undo", "evil")
+check("an edited backup record pointing outside is refused", out.startswith("Not undone") and "outside" in out, out)
+check("and nothing was written there", not (TMP / "outside").exists())
+(evil / "meta.json").write_text(json.dumps({"path": str(CFG / "skills" / "synced" / "x"), "at": "x"}), encoding="utf-8")
+code, out = helper("undo", "evil")
+check("a backup record pointing into synced/ is refused", out.startswith("Not undone"), out)
+broken = CFG / ".nsls-lesson-check" / "backups" / "broken"
+broken.mkdir(parents=True)
+(broken / "meta.json").write_text(json.dumps({"path": str(own.parent), "at": "x"}), encoding="utf-8")
+before = own.read_text(encoding="utf-8")
+code, out = helper("undo", "broken")
+check("an incomplete backup is refused and the skill left alone",
+      out.startswith("Not undone") and own.read_text(encoding="utf-8") == before, out)
+if not WINDOWS and hasattr(os, "geteuid") and os.geteuid() != 0:
+    code, out = helper("backup", str(own))
+    bid2 = out.rsplit(" ", 1)[-1]
+    locked = CFG / ".nsls-lesson-check" / "backups" / bid2 / "skill" / "secret.txt"
+    locked.write_text("x", encoding="utf-8")
+    locked.chmod(0)
+    code, out = helper("undo", bid2)
+    locked.chmod(0o600)
+    check("a copy that fails midway leaves the skill exactly as it was",
+          out.startswith("Not undone") and own.read_text(encoding="utf-8") == before, out)
+    stray = [p.name for p in (CFG / "skills").iterdir() if p.name.startswith(".")]
+    check("and leaves no half-restored folder behind", not stray, str(stray))
 
 print("never a non-zero exit, never a traceback")
 code, out = helper()
