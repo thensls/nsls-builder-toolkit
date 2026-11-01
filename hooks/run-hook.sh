@@ -21,7 +21,7 @@
 # run is silence, never a notice — fail open is the gate's first design rule.
 #
 # The same launcher runs the helpers Claude itself calls from the guardrail
-# policy (memory, event, similar, logit), with their arguments passed through. Those
+# policy (memory, event, similar, logit) and the lesson check (lesson), with their arguments passed through. Those
 # used to be written as `python3 ...`, which does not exist on stock Windows, so
 # on a PC a builder's "no thanks" was never recorded and the event never sent.
 set -u
@@ -42,6 +42,7 @@ case "$sub" in
   similar)       script="$root/hooks/similar-skills.py" ;;
   checkpoint)    script="$root/hooks/logit-checkpoint.py" ;;
   logit)         script="$root/hooks/log-it.py" ;;
+  lesson)        script="$root/hooks/lesson-check.py" ;;
   # "Update my NSLS toolkit" (skills/update-toolkit): session-start.py's own
   # update code, run on request with time to finish.
   update)        script="$root/hooks/session-start.py"; set -- --update-now ;;
@@ -195,7 +196,7 @@ fi
 # it was not.
 if [ -z "$py" ]; then
   case "$sub" in
-    memory|event|similar|logit) echo "Not run: no Python 3 found on this machine, so nothing was recorded or checked." ;;
+    memory|event|similar|logit|lesson) echo "Not run: no Python 3 found on this machine, so nothing was recorded or checked." ;;
     update) echo "Not run: no Python 3 found on this machine, so the toolkit was not updated. Suggest the builder tell the NSLS AI team." ;;
   esac
   exit 0

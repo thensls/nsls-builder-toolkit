@@ -1,0 +1,222 @@
+"""The lesson check's shared state: on/off, the check log, and skill backups.
+
+Used by lesson-check.py (the helper Claude runs) and by the end-of-turn hook
+that offers the check. Plain stdlib, fails open everywhere.
+
+WHY A LESSON CHECK. The compound skill saves a lesson so the builder never has
+to repeat a correction to Claude. Nothing ever triggered it: on the machine it
+was tested on, it ran 0 times in 30 days while the builder corrected Claude
+about twice per long session. The hook offers the check after a stretch of
+corrections; compound turns it into at most two proposed lessons, and nothing
+is saved until the builder says yes.
+
+ON BY DEFAULT, ONE SWITCH. "Turn off lesson checks" writes enabled=false here;
+NSLS_LESSON_CHECK=off does the same for one shell. Both are read on every check.
+
+BACKUPS BEFORE PATCHES. A lesson can change one of the builder's own skills.
+The backup is taken by this helper, not by Claude copying a file, and it
+refuses skills the builder does not own: toolkit and plugin skills (an edit is
+overwritten at the next update), pointer skills the toolkit writes, and skills
+synced from claude.ai.
+"""
+import json
+import os
+import re
+import shutil
+import time
+from pathlib import Path
+
+LOG_KEEP = 500  # newest log lines kept; the log is for status, not history
+
+
+def config_dir():
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
+
+
+def home():
+    return config_dir() / ".nsls-lesson-check"
+
+
+def _config_path():
+    return home() / "config.json"
+
+
+def log_path():
+    return home() / "log.jsonl"
+
+
+def backups_dir():
+    return home() / "backups"
+
+
+def now_iso():
+    return time.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+# ── on / off ────────────────────────────────────────────────────────────────
+
+def enabled():
+    if os.environ.get("NSLS_LESSON_CHECK", "").strip().lower() in ("off", "0", "false", "no"):
+        return False
+    try:
+        return json.loads(_config_path().read_text(encoding="utf-8")).get("enabled", True) is not False
+    except Exception:
+        return True
+
+
+def set_enabled(value):
+    try:
+        data = json.loads(_config_path().read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            data = {}
+    except Exception:
+        data = {}
+    data["enabled"] = bool(value)
+    home().mkdir(parents=True, exist_ok=True)
+    tmp = _config_path().with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, _config_path())
+
+
+# ── log ─────────────────────────────────────────────────────────────────────
+
+def append_log(entry):
+    try:
+        home().mkdir(parents=True, exist_ok=True)
+        with open(log_path(), "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"ts": now_iso(), **entry}) + "\n")
+        _trim_log()
+    except Exception:
+        pass
+
+
+def _trim_log():
+    p = log_path()
+    if p.stat().st_size < 256 * 1024:
+        return
+    lines = p.read_text(encoding="utf-8", errors="replace").splitlines()[-LOG_KEEP:]
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.replace(tmp, p)
+
+
+def read_log():
+    out = []
+    try:
+        for line in log_path().read_text(encoding="utf-8", errors="replace").splitlines():
+            try:
+                row = json.loads(line)
+                if isinstance(row, dict):
+                    out.append(row)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return out
+
+
+# ── whose skill is it ───────────────────────────────────────────────────────
+
+_POINTER = re.compile(r"read and follow the full skill at", re.I)
+
+
+def skill_owner(path):
+    """("own", skill_dir) when the builder may edit it, else (reason, None).
+
+    Reasons: missing · plugin (toolkit or another plugin: an update overwrites
+    the edit) · pointer (a stub the toolkit writes and refreshes) · synced (a
+    skill synced from claude.ai: change it there) · elsewhere (not in the
+    builder's skills folder).
+    """
+    p = Path(str(path)).expanduser()
+    if p.name == "SKILL.md":
+        p = p.parent
+    if not (p / "SKILL.md").is_file():
+        return "missing", None
+    skills = config_dir() / "skills"
+    try:
+        real = p.resolve()
+        skills_real = skills.resolve()
+    except Exception:
+        return "missing", None
+    for root in (config_dir() / "plugins", config_dir() / "local-plugins"):
+        try:
+            real.relative_to(root.resolve())
+            return "plugin", None
+        except (ValueError, OSError):
+            pass
+    try:
+        rel = real.relative_to(skills_real)
+    except ValueError:
+        return "elsewhere", None
+    if rel.parts and rel.parts[0] == "synced":
+        return "synced", None
+    text = (real / "SKILL.md").read_text(encoding="utf-8", errors="replace")
+    if _POINTER.search(text[:2000]):
+        return "pointer", None
+    return "own", real
+
+
+REFUSALS = {
+    "missing": "Not backed up: there is no SKILL.md at that path.",
+    "plugin": "Not backed up: this skill comes from the toolkit or another plugin, and its next update "
+              "would overwrite the edit. Don't change it; offer to raise the change with its owner instead.",
+    "pointer": "Not backed up: this is a pointer the toolkit keeps up to date, not the skill itself. "
+               "Don't change it; offer to raise the change with the toolkit instead.",
+    "synced": "Not backed up: this skill is synced from claude.ai, so a local edit may be overwritten. "
+              "Suggest the builder change it in claude.ai instead.",
+    "elsewhere": "Not backed up: this skill lives outside the builder's skills folder (often a link into a "
+                 "repo). Don't change it here; offer to make the change where it lives instead.",
+}
+
+
+# ── backup / undo ───────────────────────────────────────────────────────────
+
+def backup(path):
+    """Copy the skill's folder aside. Returns (backup_id, None) or (None, refusal)."""
+    owner, skill_dir = skill_owner(path)
+    if owner != "own":
+        return None, REFUSALS[owner]
+    bid = time.strftime("%Y%m%d-%H%M%S") + "-" + re.sub(r"[^A-Za-z0-9_-]", "-", skill_dir.name)[:40]
+    dest = backups_dir() / bid
+    n = 1
+    while dest.exists():
+        n += 1
+        dest = backups_dir() / f"{bid}-{n}"
+    shutil.copytree(skill_dir, dest / "skill", symlinks=True)
+    (dest / "meta.json").write_text(json.dumps({"path": str(skill_dir), "at": now_iso()}), encoding="utf-8")
+    append_log({"event": "backup", "id": dest.name, "skill": skill_dir.name})
+    return dest.name, None
+
+
+def undo(backup_id):
+    """Put a backed-up skill back. Returns a one-line result."""
+    bid = re.sub(r"[^A-Za-z0-9_-]", "", str(backup_id or ""))
+    src = backups_dir() / bid
+    try:
+        meta = json.loads((src / "meta.json").read_text(encoding="utf-8"))
+        target = Path(meta["path"])
+    except Exception:
+        return f"Not undone: no backup called {bid or '(blank)'}."
+    owner, _ = skill_owner(target) if (target / "SKILL.md").exists() else ("own", None)
+    if owner not in ("own", "missing"):
+        return "Not undone: that folder is no longer one of the builder's own skills."
+    aside = target.with_name(target.name + ".undo-" + time.strftime("%Y%m%d-%H%M%S"))
+    if target.exists():
+        os.replace(target, aside)
+    shutil.copytree(src / "skill", target, symlinks=True)
+    if aside.exists():
+        shutil.rmtree(aside, ignore_errors=True)
+    append_log({"event": "undo", "id": bid, "skill": target.name})
+    return f"Undone: {target.name} is back to how it was at {meta.get('at', 'the backup')}."
+
+
+def backups():
+    out = []
+    for meta in sorted(backups_dir().glob("*/meta.json")) if backups_dir().exists() else []:
+        try:
+            m = json.loads(meta.read_text(encoding="utf-8"))
+            out.append({"id": meta.parent.name, "skill": Path(m["path"]).name, "at": m.get("at", "")})
+        except Exception:
+            continue
+    return out
