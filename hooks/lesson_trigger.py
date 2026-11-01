@@ -210,9 +210,15 @@ def score(st):
     return sum(w * st.get(k, 0) for k, w in WEIGHTS.items())
 
 
+# A question mark, then only formatting: Markdown emphasis, closing quotes,
+# and at most one parenthetical such as "(yes / no)". "**Which folder?**" and
+# "Go ahead? (y/n)" are both Claude waiting on the builder.
+_TRAILING_QUESTION = re.compile(r"\?[\s*_`~\"'\u201d\u2019]*(\([^()]*\))?[\s*_`~\"'\u201d\u2019]*$")
+
+
 def ends_on_question(message):
     lines = [ln.strip() for ln in str(message or "").strip().splitlines() if ln.strip()]
-    return bool(lines) and lines[-1].endswith("?")
+    return bool(lines) and _TRAILING_QUESTION.search(lines[-1]) is not None
 
 
 def due(st, payload, now):

@@ -125,6 +125,12 @@ check("a system reminder is not the builder speaking", lt.human_text(say("<syste
 check("an interrupt is not the builder speaking", lt.human_text(interrupt()) is None)
 check("a tool result is not the builder speaking", lt.human_text(tools(1)[1]) is None)
 
+for msg in ("Which folder?", "**Which folder should I use?**", "Go ahead? (yes / no)", "_Shall I?_",
+            'You said "ship it?"', "Line one.\nWhich one?"):
+    check(f"Claude waiting on an answer: {msg!r}", lt.ends_on_question(msg))
+for msg in ("Done.", "Shipped (PR #12).", "Is it ready? Yes, it is.", "**Done.**", ""):
+    check(f"not waiting on an answer: {msg!r}", not lt.ends_on_question(msg))
+
 print("when it is offered (in process)")
 
 
