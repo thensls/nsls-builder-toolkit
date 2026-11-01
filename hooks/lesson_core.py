@@ -24,6 +24,7 @@ import os
 import re
 import shutil
 import time
+import uuid
 from pathlib import Path
 
 LOG_KEEP = 500  # newest log lines kept; the log is for status, not history
@@ -125,8 +126,9 @@ def skill_owner(path):
 
     Reasons: missing · plugin (toolkit or another plugin: an update overwrites
     the edit) · pointer (a stub the toolkit writes and refreshes) · synced (a
-    skill synced from claude.ai: change it there) · elsewhere (not in the
-    builder's skills folder).
+    skill synced from claude.ai: change it there) · elsewhere (not directly in
+    the builder's skills folder) · linked (holds a link to a file elsewhere: a
+    backup would save the link, not the text, so undo could not restore it).
     """
     p = Path(str(path)).expanduser()
     if p.name == "SKILL.md":
@@ -156,7 +158,26 @@ def skill_owner(path):
     text = (real / "SKILL.md").read_text(encoding="utf-8", errors="replace")
     if _POINTER.search(text[:2000]):
         return "pointer", None
+    if _holds_links(real):
+        return "linked", None
     return "own", real
+
+
+def _holds_links(folder):
+    try:
+        for dirpath, dirnames, filenames in os.walk(folder):
+            for name in dirnames + filenames:
+                if os.path.islink(os.path.join(dirpath, name)):
+                    return True
+    except OSError:
+        return True
+    return False
+
+
+def _unique(name):
+    """A sibling name no other run can pick: a second undo or backup started in
+    the same second must never share (and then delete) this one's folder."""
+    return f"{name}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
 
 
 REFUSALS = {
@@ -167,6 +188,8 @@ REFUSALS = {
                "Don't change it; offer to raise the change with the toolkit instead.",
     "synced": "Not backed up: this skill is synced from claude.ai, so a local edit may be overwritten. "
               "Suggest the builder change it in claude.ai instead.",
+    "linked": "Not backed up: this skill links to files kept somewhere else, and a backup would save "
+              "only the links. Don't change it here; offer to make the change where those files live.",
     "elsewhere": "Not backed up: this skill isn't directly in the builder's skills folder (often a link "
                  "into a repo). Don't change it here; offer to make the change where it lives instead.",
 }
@@ -179,12 +202,8 @@ def backup(path):
     owner, skill_dir = skill_owner(path)
     if owner != "own":
         return None, REFUSALS[owner]
-    bid = time.strftime("%Y%m%d-%H%M%S") + "-" + re.sub(r"[^A-Za-z0-9_-]", "-", skill_dir.name)[:40]
+    bid = _unique(time.strftime("%Y%m%d-%H%M%S") + "-" + re.sub(r"[^A-Za-z0-9_-]", "-", skill_dir.name)[:40])
     dest = backups_dir() / bid
-    n = 1
-    while dest.exists():
-        n += 1
-        dest = backups_dir() / f"{bid}-{n}"
     shutil.copytree(skill_dir, dest / "skill", symlinks=True)
     (dest / "meta.json").write_text(json.dumps({"path": str(skill_dir), "at": now_iso()}), encoding="utf-8")
     append_log({"event": "backup", "id": dest.name, "skill": skill_dir.name})
@@ -221,7 +240,7 @@ def undo(backup_id):
         return "Not undone: that backup points outside the builder's own skills folder."
     if (target / "SKILL.md").exists() and skill_owner(target)[0] != "own":
         return "Not undone: that folder is no longer one of the builder's own skills."
-    stamp = time.strftime("%Y%m%d-%H%M%S")
+    stamp = _unique(time.strftime("%Y%m%d-%H%M%S"))
     staged = target.with_name(f".{target.name}.restore-{stamp}")
     aside = target.with_name(f".{target.name}.undo-{stamp}")
     try:

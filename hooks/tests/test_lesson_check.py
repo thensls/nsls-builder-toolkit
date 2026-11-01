@@ -123,6 +123,14 @@ if not WINDOWS:  # symlinks need extra rights on Windows
     os.symlink(local.parent, link)
     code, out = helper("backup", str(link))
     check("a link from skills/ into a plugin is still a plugin skill", "plugin" in out, out)
+    real = TMP / "repo" / "real-SKILL.md"
+    real.write_text("---\nname: y\ndescription: t\n---\nOriginal.\n", encoding="utf-8")
+    holder = CFG / "skills" / "holds-link"
+    holder.mkdir()
+    os.symlink(real, holder / "SKILL.md")
+    code, out = helper("backup", str(holder))
+    check("a skill whose SKILL.md is a link is refused (a backup would keep only the link)",
+          out.startswith("Not backed up") and "links" in out, out)
 
 print("undo never writes outside the skills folder, and never strands a skill")
 evil = CFG / ".nsls-lesson-check" / "backups" / "evil"
