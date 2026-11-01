@@ -105,6 +105,10 @@ def on_stop(payload):
     tx = core.locked()
     with tx as data:
         known = sid in data["sessions"]
+        # Log it only ever creates its record at a prompt. Make one here only
+        # when the lesson check has something to keep in it.
+        if not known and not lesson_trigger.can_run(payload):
+            return
         sess = core.session(data, sid)
         if known:
             out = logit_stop(data, sess, sid, payload)

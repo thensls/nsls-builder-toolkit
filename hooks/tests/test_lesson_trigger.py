@@ -216,6 +216,12 @@ STATE.write_text(json.dumps(state), encoding="utf-8")
 code, out = run_stop(payload(write(TMP / "c.jsonl", work + [say("no"), say("wrong again")]), sid="hook-c"))
 check("next turn, log it quiet: the lesson check goes out", code == 0 and is_lesson(out), str(out))
 
+off_env = dict(ENV, NSLS_LESSON_CHECK="off")
+code, out = run_stop(payload(write(TMP / "e.jsonl", work), sid="hook-e"), env=off_env)
+known = json.loads(STATE.read_text(encoding="utf-8"))["sessions"]
+check("lesson checks off: Stop creates no record for a session log it never saw",
+      code == 0 and out is None and "hook-e" not in known, str(out))
+
 r = subprocess.run([sys.executable, str(HOOKS / "lesson-check.py"), "status"], env=ENV, capture_output=True,
                    text=True, encoding="utf-8", timeout=30)
 check("lesson status lists the checks the hook offered", "lesson check(s) offered" in r.stdout, r.stdout)

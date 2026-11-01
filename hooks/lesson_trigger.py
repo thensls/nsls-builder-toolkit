@@ -260,19 +260,22 @@ def nudge(stretch, skills):
 SYSTEM_MESSAGE = "🧠 Lesson check: Claude will offer to save what you corrected, so you don't have to repeat it."
 
 
-def on_stop(sess, payload, now=None):
-    """The Stop hook's output dict for a lesson check, or None. Mutates sess."""
-    now = now or time.time()
+def can_run(payload):
+    """Lesson checks are on and this Stop names a transcript to read."""
     try:
         import lesson_core
         on = lesson_core.enabled()
     except Exception:
         on = True
-    if not on:
+    return on and bool(payload.get("transcript_path"))
+
+
+def on_stop(sess, payload, now=None):
+    """The Stop hook's output dict for a lesson check, or None. Mutates sess."""
+    now = now or time.time()
+    if not can_run(payload):
         return None
-    path = payload.get("transcript_path") or ""
-    if not path:
-        return None
+    path = payload["transcript_path"]
     st = state(sess)
     if payload.get("stop_hook_active"):
         # Continuing after a Stop hook (this check's own answer, or log it's
