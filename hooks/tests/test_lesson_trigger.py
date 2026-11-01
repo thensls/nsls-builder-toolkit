@@ -146,6 +146,10 @@ _, out = sess_after([say("build it"), *tools(15), say("no, wrong folder")])
 check("one correction alone: not offered", out is None)
 _, out = sess_after([say("build it"), *tools(60)])
 check("volume alone: never offered", out is None)
+_, out = sess_after([say("build it"), *tools(15), interrupt(), interrupt(), interrupt()])
+check("interrupts with no correction: never offered", out is None)
+_, out = sess_after([say("build it"), *tools(12), *denial(), *denial(), *denial()])
+check("declined calls with no correction: never offered", out is None)
 _, out = sess_after([say("build it"), *tools(5), say("no"), say("wrong again")])
 check("too little work (under 12 tool calls): not offered", out is None)
 _, out = sess_after([say("build it"), *tools(15), say("no, wrong folder"), say("you forgot the tests")],
@@ -201,7 +205,7 @@ check("the same stretch is not offered twice", code == 0 and out is None, str(ou
 state = json.loads(STATE.read_text(encoding="utf-8"))
 state["sessions"]["hook-b"] = {"offset": 0, "changes": 9, "prompts": 4, "asked_at": "2026-11-01T10:00:05Z",
                                "answer": "", "reminded": False, "counted": False, "changes_at_answer": 0,
-                               "prompt_at": "2026-11-01T10:00:00Z", "key": "folder:x", "updated": "2026-11-01T10:00:05Z"}
+                               "turn": 4, "asked_turn": 4, "key": "folder:x", "updated": "2026-11-01T10:00:05Z"}
 state["sessions"]["hook-c"] = dict(state["sessions"]["hook-b"], answer="not-yet")
 STATE.write_text(json.dumps(state), encoding="utf-8")
 code, out = run_stop(payload(write(TMP / "b.jsonl", work), sid="hook-b"))
@@ -211,7 +215,7 @@ check("log it's unanswered question wins: its reminder, not a lesson check",
 code, out = run_stop(payload(write(TMP / "c.jsonl", work), sid="hook-c"))
 check("log it asked (and was answered) this turn: the lesson check waits", code == 0 and out is None, str(out))
 state = json.loads(STATE.read_text(encoding="utf-8"))
-state["sessions"]["hook-c"]["prompt_at"] = "2026-11-01T10:05:00Z"
+state["sessions"]["hook-c"]["turn"] = 5  # the next prompt, even within the same second
 STATE.write_text(json.dumps(state), encoding="utf-8")
 code, out = run_stop(payload(write(TMP / "c.jsonl", work + [say("no"), say("wrong again")]), sid="hook-c"))
 check("next turn, log it quiet: the lesson check goes out", code == 0 and is_lesson(out), str(out))

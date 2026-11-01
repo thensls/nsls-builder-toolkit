@@ -56,7 +56,9 @@ def on_prompt(payload):
     with tx as data:
         sess = core.session(data, sid)
         sess["key"] = key
-        sess["prompt_at"] = core.now_iso()  # lets Stop tell whether log it asked this turn
+        # Numbered turns let Stop tell whether log it asked THIS turn; timestamps
+        # are whole seconds and cannot.
+        sess["turn"] = int(sess.get("turn") or 0) + 1
         core.scan(sess, payload.get("transcript_path") or "")
         b = core.build(data, key)
         core.note_work(sess, b)
@@ -65,6 +67,7 @@ def on_prompt(payload):
             "<scheduled-task")
         if not automated and core.due(sess, b, key):
             sess["asked_at"] = core.now_iso()
+            sess["asked_turn"] = sess["turn"]
             sess["answer"] = ""
             sess["reminded"] = False
             out = core.checkpoint_text(sess, b, key, sid)
@@ -92,8 +95,8 @@ def logit_stop(data, sess, sid, payload):
 
 
 def asked_this_turn(sess):
-    asked, prompt = sess.get("asked_at") or "", sess.get("prompt_at") or ""
-    return bool(asked) and asked >= prompt
+    turn = sess.get("turn")
+    return turn is not None and sess.get("asked_turn") == turn
 
 
 def on_stop(payload):

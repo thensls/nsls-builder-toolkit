@@ -12,8 +12,9 @@ a lesson, from the conversation, and the builder decides whether it is saved.
 
 THE SIGNAL. Since the last check: the builder's messages that read as a
 correction (3 points each), interrupts (2) and declined tool calls (2), with at
-least 12 tool calls of real work. A score of 5 asks: two corrections, or one
-plus an interrupt or a declined call. Volume alone never asks. Tuned on 30 days
+least 12 tool calls of real work. A score of 5 with at least one correction
+asks: two corrections, or one plus an interrupt or a declined call. Volume,
+interrupts or declined calls alone never ask. Tuned on 30 days
 of real sessions (2026-10-11): about 0.8 checks per long session, and in a
 18-day trial 5 of 11 checks found a lesson worth keeping.
 
@@ -223,7 +224,9 @@ def due(st, payload, now):
         return False
     if ends_on_question(payload.get("last_assistant_message")):
         return False
-    return st["tool_calls"] >= MIN_TOOL_CALLS and score(st) >= THRESHOLD
+    # A correction is required: interrupts and declined calls only add weight
+    # to one. Three interrupts with no correction are not a lesson to offer.
+    return st["tool_calls"] >= MIN_TOOL_CALLS and st["corrections"] > 0 and score(st) >= THRESHOLD
 
 
 def summary(st):
