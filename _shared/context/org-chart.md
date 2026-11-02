@@ -1,5 +1,5 @@
 # NSLS Org Chart
-_Last synced: 2026-10-26_
+_Last synced: 2026-11-02_
 
 ## Business Intelligence
 
@@ -117,7 +117,6 @@ _Last synced: 2026-10-26_
 | Naomi Ariza | Membership Experience Specialist | Alejandro Gabriel | nariza@nsls.org | U0B24LCLQMP |
 | Rauly Villar | Membership Experience Specialist | Alejandro Gabriel | rvillar@nsls.org | U0B24L8CQD7 |
 | Samantha Montas | Membership Experience Specialist | Alejandro Gabriel | smontas@nsls.org | U0B7FB0EM5L |
-| Saray Rosado | Membership Experience Specialist | Alejandro Gabriel | srosado@nsls.org | U0B1NBK7C21 |
 | Sofia Fader | Membership Experience Specialist | Alejandro Gabriel | skurtenbach@nsls.org | U0B1NBN7UN9 |
 
 ## Operations
@@ -175,7 +174,7 @@ _Last synced: 2026-10-26_
 | Angelyn Kempe | Contractor | Kevin Prentiss | akempe@nsls.org | U0B6JBUSKF0 |
 | Bogdan Tarbujaru | Contractor | Juan Maggi | tbogdan@nsls.org | U08DNV4U0CE |
 | Boris Doyer | Contractor | Michael O'Brien | bdoyer@nsls.org | U096X7F82MP |
-| Brandee Busch | Contractor | Dylan Blaty | bbusch@nsls.org |  |
+| Brandee Busch | Contractor | Dylan Blaty | bbusch@nsls.org | U0CDHUXBFE3 |
 | Bruno Drouin | Contractor | Michael O'Brien | bdrouin@nsls.org | U097SSUQB6J |
 | Christophre Munns | Contractor | Kevin Prentiss | mmunns@nsls.org | U0BPDNT2Q8K |
 | Collin Wood | Contractor | Adam Stone | cwood@nsls.org | U08RLLMFJTU |
