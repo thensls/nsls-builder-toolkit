@@ -473,7 +473,7 @@
     "title": "Contractor",
     "manager": "Dylan Blaty",
     "email": "bbusch@nsls.org",
-    "slack": "",
+    "slack": "U0CDHUXBFE3",
     "department": "Unknown",
     "manages": []
   },
@@ -726,7 +726,6 @@
       "Patricia Pi\u00f1a",
       "Rauly Villar",
       "Samantha Montas",
-      "Saray Rosado",
       "Sofia Fader",
       "Steffanie Punde"
     ]
@@ -822,15 +821,6 @@
     "manager": "Alejandro Gabriel",
     "email": "rvillar@nsls.org",
     "slack": "U0B24L8CQD7",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
-    "name": "Saray Rosado",
-    "title": "Membership Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "srosado@nsls.org",
-    "slack": "U0B1NBK7C21",
     "department": "Member Experience",
     "manages": []
   },
