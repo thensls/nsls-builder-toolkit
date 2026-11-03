@@ -43,6 +43,7 @@ case "$sub" in
   checkpoint)    script="$root/hooks/logit-checkpoint.py" ;;
   logit)         script="$root/hooks/log-it.py" ;;
   lesson)        script="$root/hooks/lesson-check.py" ;;
+  harvest-nudge) script="$root/hooks/harvest-nudge.py" ;;
   # "Update my NSLS toolkit" (skills/update-toolkit): session-start.py's own
   # update code, run on request with time to finish.
   update)        script="$root/hooks/session-start.py"; set -- --update-now ;;

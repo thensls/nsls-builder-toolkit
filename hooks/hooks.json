@@ -24,6 +24,17 @@
             "shell": "bash"
           }
         ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh\" harvest-nudge",
+            "timeout": 5,
+            "shell": "bash"
+          }
+        ]
       }
     ],
     "PreToolUse": [
