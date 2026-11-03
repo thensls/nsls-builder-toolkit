@@ -81,6 +81,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 
 from .base import Receipt, SourceUnavailable, normalize_merchant
 
@@ -134,15 +135,27 @@ BILLING_RELAY_DOMAINS: frozenset[str] = frozenset({
 UNRESOLVED_RELAY_MERCHANT = "xunresolvedbillingrelaysender"
 
 
+QUOTA_RETRIES = 6
+QUOTA_BACKOFF_SECONDS = 20
+
+
 def _gws(args: list[str], params: dict) -> dict:
     if not os.path.exists(GWS):
         raise SourceUnavailable(
             "`gws` CLI not found — see the gws skill (run `gws auth login`)"
         )
-    proc = subprocess.run(
-        [GWS, *args, "--params", json.dumps(params), "--format", "json"],
-        capture_output=True, text=True, timeout=120,
-    )
+    # Gmail's per-user quota is per MINUTE. A long window means thousands of
+    # `messages get` calls, so a quota error is routine mid-run, not fatal:
+    # pause and retry rather than aborting the whole source.
+    for attempt in range(QUOTA_RETRIES + 1):
+        proc = subprocess.run(
+            [GWS, *args, "--params", json.dumps(params), "--format", "json"],
+            capture_output=True, text=True, timeout=120,
+        )
+        if "quota exceeded" in (proc.stdout + proc.stderr).lower() and attempt < QUOTA_RETRIES:
+            time.sleep(QUOTA_BACKOFF_SECONDS)
+            continue
+        break
     # gws prints a keyring banner before JSON and reports auth failure as a
     # JSON error object with exit code 0. Both must be handled: a non-zero
     # exit check alone would silently pass an auth failure through as
