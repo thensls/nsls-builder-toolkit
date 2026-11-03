@@ -100,6 +100,17 @@ tmp, cfg = sandbox()
 _, out = run(tmp, cfg, CLAUDE_CODE_ENTRYPOINT="sdk-cli")
 check("silent in a headless SDK session", out == "", out)
 
+tmp, cfg = sandbox()
+(cfg / ".nsls-harvest-nudge-2000-01-01").write_text("", encoding="utf-8")
+env = dict(os.environ, HOME=str(tmp), USERPROFILE=str(tmp), CLAUDE_CONFIG_DIR=str(cfg),
+           PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+env.pop("CLAUDE_CODE_ENTRYPOINT", None)
+procs = [subprocess.Popen([sys.executable, str(HOOK)], env=env, stdout=subprocess.PIPE, text=True,
+                          encoding="utf-8") for _ in range(6)]
+spoke = sum(1 for p in procs if p.communicate(timeout=20)[0].strip())
+check("six sessions opened at once: exactly one speaks", spoke == 1, f"spoke={spoke}")
+check("yesterday's claim file is cleaned up", not (cfg / ".nsls-harvest-nudge-2000-01-01").exists())
+
 for ep in ("sdk-py", "local-agent", "remote", "mcp"):
     tmp, cfg = sandbox()
     _, out = run(tmp, cfg, CLAUDE_CODE_ENTRYPOINT=ep)

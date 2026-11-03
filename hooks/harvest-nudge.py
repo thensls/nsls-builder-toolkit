@@ -27,7 +27,9 @@ HOME = Path.home()
 CONFIG_DIR = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (HOME / ".claude"))
 PERSONAL_DIR = CONFIG_DIR / "local-plugins" / "nsls-personal-toolkit"
 ENV_FILE = PERSONAL_DIR / ".env"
-STAMP = CONFIG_DIR / ".nsls-harvest-nudge"
+# One claim file per day, created with O_EXCL: two sessions opened at the same moment
+# can't both pass a read-then-write check, so exactly one of them speaks.
+CLAIM_PREFIX = ".nsls-harvest-nudge-"
 LOOKBACK_DAYS = 7  # first run, or no harvest log yet
 # Sessions a person is sitting at. Everything else (print mode `-p` and the SDKs are
 # sdk-*, Cowork's local agent, remote and Slack runs, MCP) stays silent: a nudge there
@@ -88,19 +90,21 @@ def main():
     if harvest_switch(vault) == "off":
         return
     today = datetime.date.today()
-    try:
-        if STAMP.read_text(encoding="utf-8").strip() == today.isoformat():
-            return
-    except Exception:
-        pass
     last = last_harvest_date(vault)
     if last is not None and last >= today:
         return
     since = last or (today - datetime.timedelta(days=LOOKBACK_DAYS))
     try:
-        STAMP.write_text(today.isoformat(), encoding="utf-8")
+        fd = os.open(CONFIG_DIR / f"{CLAIM_PREFIX}{today.isoformat()}", os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(fd)
     except Exception:
-        return  # can't record the once-a-day stamp: stay quiet rather than repeat
+        return  # already claimed today, or can't record the claim: stay quiet rather than repeat
+    for old in CONFIG_DIR.glob(f"{CLAIM_PREFIX}*"):
+        if old.name != f"{CLAIM_PREFIX}{today.isoformat()}":
+            try:
+                old.unlink()
+            except Exception:
+                pass
     print(
         "[Knowledge base harvest check — do this quietly, once]\n"
         f"Using the Fathom connector, list meetings this user recorded since {since.isoformat()}. "
