@@ -10,7 +10,7 @@ connector, so the hook decides *whether to look* and Claude does the looking:
   - silent unless the personal toolkit's harvest skill is installed and the
     builder hasn't set `kb_harvest: off` in builder-profile.md;
   - at most once a day (stamp file), and never if a harvest already ran today;
-  - never in a headless or SDK session.
+  - only in a session a person is sitting at (CLI, desktop app, IDE).
 When it does speak, Claude checks Fathom for meetings the builder recorded since
 their last harvest and says nothing at all if there are none. Only the person who
 recorded a meeting is asked, so attendees aren't all asked about the same call.
@@ -29,6 +29,10 @@ PERSONAL_DIR = CONFIG_DIR / "local-plugins" / "nsls-personal-toolkit"
 ENV_FILE = PERSONAL_DIR / ".env"
 STAMP = CONFIG_DIR / ".nsls-harvest-nudge"
 LOOKBACK_DAYS = 7  # first run, or no harvest log yet
+# Sessions a person is sitting at. Everything else (print mode `-p` and the SDKs are
+# sdk-*, Cowork's local agent, remote and Slack runs, MCP) stays silent: a nudge there
+# is chatter nobody reads. Unset means an older CLI, which is interactive.
+INTERACTIVE = {"", "cli", "claude-desktop", "claude-vscode", "claude-jetbrains"}
 
 
 def read_env(key):
@@ -73,7 +77,7 @@ def last_harvest_date(vault):
 
 
 def main():
-    if os.environ.get("CLAUDE_CODE_ENTRYPOINT", "").startswith("sdk"):
+    if os.environ.get("CLAUDE_CODE_ENTRYPOINT", "") not in INTERACTIVE:
         return
     if not (PERSONAL_DIR / "skills" / "harvest-meeting" / "SKILL.md").exists():
         return

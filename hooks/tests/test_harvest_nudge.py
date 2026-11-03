@@ -100,6 +100,15 @@ tmp, cfg = sandbox()
 _, out = run(tmp, cfg, CLAUDE_CODE_ENTRYPOINT="sdk-cli")
 check("silent in a headless SDK session", out == "", out)
 
+for ep in ("sdk-py", "local-agent", "remote", "mcp"):
+    tmp, cfg = sandbox()
+    _, out = run(tmp, cfg, CLAUDE_CODE_ENTRYPOINT=ep)
+    check(f"silent when the session is not interactive ({ep})", out == "", out)
+
+tmp, cfg = sandbox()
+_, out = run(tmp, cfg, CLAUDE_CODE_ENTRYPOINT="claude-desktop")
+check("speaks in the desktop app", out != "", out)
+
 if failures:
     print(f"\n{len(failures)} failure(s)")
     sys.exit(1)
