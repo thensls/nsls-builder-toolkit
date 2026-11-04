@@ -89,7 +89,7 @@ AMOUNT = re.compile(r"\$\s?([0-9][0-9,]*\.[0-9]{2})")
 # e.g. "Total $99.91", "Amount paid: $99.91". \b before the label prevents
 # matching "Subtotal" (no word boundary exists between "Sub" and "Total").
 LABELED_AMOUNT = re.compile(
-    r"\b(?:Total(?:\s+(?:amount|due))?|Amount\s+(?:charged|paid)|Grand\s+Total)\b"
+    r"(?<!sub )(?<!sub-)\b(?:Total(?:\s+(?:amount|due))?|Amount\s+(?:charged|paid)|Grand\s+Total)\b"
     r"\s*:?\s*\$\s?([0-9][0-9,]*\.[0-9]{2})",
     re.IGNORECASE,
 )
@@ -99,7 +99,7 @@ LABELED_AMOUNT = re.compile(
 # an explicit USD/$ marker, so a EUR/GBP invoice can never be read as dollars
 # (amounts are compared as bare cents downstream — see sources/neon.py).
 PDF_LABELED_AMOUNT = re.compile(
-    r"\b(?:Invoice\s+Total|Grand\s+Total|Total(?:\s+(?:amount|due))?"
+    r"(?<!sub )(?<!sub-)\b(?:Invoice\s+Total|Grand\s+Total|Total(?:\s+(?:amount|due))?"
     r"|Amount\s+(?:charged|paid)(?:\s+via\s+[A-Za-z ]{1,30}?)?)\b"
     r"\s*:?\s*(?:USD|US\$|\$)\s?([0-9][0-9,]*\.[0-9]{2})",
     re.IGNORECASE,
@@ -129,13 +129,21 @@ def _trusted_forwarders() -> set[str]:
     return {_canonical_address(a) for a in raw.split(",") if a.strip()}
 
 
+class AmbiguousForward(Exception):
+    """A trusted forward carrying more than one forwarded message: the vendor,
+    date, amount and PDF could each come from a different one."""
+
+
 def _forwarded_origin(from_header: str, body_text: str) -> tuple[str, dt.date] | None:
     """(original From header, original sent date) of a forward from a trusted
     forwarder, else None. Both halves are required: a forward dated by when it
     was forwarded would bind to the wrong charge window."""
     if _canonical_address(from_header) not in _trusted_forwarders():
         return None
-    m = FORWARD_FROM.search(body_text)
+    blocks = list(FORWARD_FROM.finditer(body_text))
+    if len(blocks) > 1:
+        raise AmbiguousForward
+    m = blocks[0] if blocks else None
     if not m:
         return None
     d = FORWARD_DATE.search(body_text, m.end())
@@ -395,6 +403,7 @@ class GmailSource:
         unresolved_relay = 0
         pdf_unreadable = 0
         pdf_no_total = 0
+        forward_ambiguous = 0
         stubs: list[dict] = []
         page_token = None
         for _ in range(PAGE_GUARD):
@@ -462,7 +471,11 @@ class GmailSource:
                     continue
 
             from_hdr = hdrs.get("From", "")
-            fwd = _forwarded_origin(from_hdr, " ".join(self._plain_text(msg["payload"])))
+            try:
+                fwd = _forwarded_origin(from_hdr, " ".join(self._plain_text(msg["payload"])))
+            except AmbiguousForward:
+                forward_ambiguous += 1
+                continue
             if fwd:
                 from_hdr, date = fwd[0], fwd[1].isoformat()
             else:
@@ -499,14 +512,21 @@ class GmailSource:
         if pdf_unreadable:
             self.notes.append(
                 f"{pdf_unreadable} receipt PDF(s) had no amount in the email body and "
-                f"could not be read because `pdftotext` is not installed "
-                f"(macOS: `brew install poppler`) — they were skipped and cannot bind."
+                f"their text could not be extracted — `pdftotext` is missing "
+                f"(macOS: `brew install poppler`) or it failed/timed out on that file. "
+                f"They were skipped and cannot bind; attach them by hand."
             )
         if pdf_no_total:
             self.notes.append(
                 f"{pdf_no_total} receipt PDF(s) had no amount in the email body and no "
                 f"USD total could be read from the PDF (non-USD, scanned image, or an "
                 f"unusual layout) — they were skipped. Attach them by hand."
+            )
+        if forward_ambiguous:
+            self.notes.append(
+                f"{forward_ambiguous} forwarded message(s) from a trusted forwarder contained "
+                f"more than one forwarded email, so which vendor, date, amount and PDF belong "
+                f"together is ambiguous — they were skipped. Forward each receipt on its own."
             )
         return out
 

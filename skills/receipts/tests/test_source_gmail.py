@@ -662,6 +662,12 @@ def test_parse_pdf_amount_reads_the_charged_total_not_list_price_or_credits():
     assert SOURCE.parse_pdf_amount(ATLASSIAN_PDF_TEXT) == 11167
 
 
+def test_sub_total_is_never_read_as_the_total_even_when_it_comes_last():
+    assert SOURCE.parse_pdf_amount("Invoice Total: USD 111.67\nSub Total: USD 106.20") == 11167
+    assert SOURCE.parse_pdf_amount("Invoice Total: USD 111.67\nSub-Total: USD 106.20") == 11167
+    assert SOURCE.parse_amount("Total $111.67\nSub Total $106.20") == 11167
+
+
 def test_parse_pdf_amount_refuses_non_usd_and_unlabelled_figures():
     assert SOURCE.parse_pdf_amount("Invoice Total: EUR 111.67") is None
     assert SOURCE.parse_pdf_amount("Total: 111.67") is None
@@ -702,7 +708,7 @@ def test_fetch_announces_when_pdftotext_is_missing_instead_of_silently_skipping(
          patch("sources.gmail.subprocess.run", side_effect=_dispatch(responses)):
         receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
     assert receipts == []
-    assert any("pdftotext" in n and "poppler" in n for n in SOURCE.notes)
+    assert any("pdftotext" in n and "poppler" in n and "failed" in n for n in SOURCE.notes)
 
 
 def _forward_message(outer_from: str) -> dict:
@@ -764,3 +770,18 @@ def test_forward_is_not_trusted_when_no_forwarders_are_configured(monkeypatch):
          patch("sources.gmail.subprocess.run", side_effect=_dispatch(responses)):
         receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
     assert all(r.merchant != "supabase" for r in receipts)
+
+
+def test_forward_with_several_forwarded_messages_is_skipped_and_announced(monkeypatch):
+    monkeypatch.setenv("RECEIPTS_TRUSTED_FORWARDERS", "kevin.prentiss@gmail.com")
+    msg = _forward_message("Kevin Prentiss <kevinprentiss@gmail.com>")
+    first = base64.urlsafe_b64decode(msg["payload"]["parts"][0]["body"]["data"] + "==")
+    second = first.replace(b"Supabase Pte. Ltd. <invoice+statements@supabase.com>",
+                           b"Other Vendor <billing@other.example>").replace(b"$53.82", b"$99.00")
+    msg["payload"]["parts"][0]["body"]["data"] = _b64url_nopad(first + b"\n\n" + second)
+    responses = {"list": LIST_PAYLOAD, "get": msg, "attachments": _attachment_payload(PDF_BYTES)}
+    with patch("sources.gmail.os.path.exists", return_value=True), \
+         patch("sources.gmail.subprocess.run", side_effect=_dispatch(responses)):
+        receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
+    assert receipts == []
+    assert any("more than one forwarded email" in n for n in SOURCE.notes)
