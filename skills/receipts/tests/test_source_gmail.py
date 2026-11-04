@@ -826,3 +826,11 @@ def test_a_zero_balance_never_beats_the_amount_actually_paid():
     # only a balance is labelled -> still usable when non-zero
     assert SOURCE.parse_pdf_amount("Total due: USD 53.82") == 5382
     assert SOURCE.parse_pdf_amount("Total due: USD 0.00") is None
+
+
+def test_pdf_amount_survives_pdftotext_layout_padding():
+    # `pdftotext -layout` pads columns with runs of spaces, including between the
+    # currency marker and the figure.
+    assert SOURCE.parse_pdf_amount("Invoice Total:      USD       111.67") == 11167
+    assert SOURCE.parse_pdf_amount("Amount paid:    $      50.00\nGrand Total:   USD   90.00") == 5000
+    assert SOURCE.parse_pdf_amount("Invoice Total:\tUSD\t111.67") == 11167

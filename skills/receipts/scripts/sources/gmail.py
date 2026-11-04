@@ -101,7 +101,7 @@ LABELED_AMOUNT = re.compile(
 PDF_LABELED_AMOUNT = re.compile(
     r"(?<!sub )(?<!sub-)\b(?P<label>Invoice\s+Total|Grand\s+Total|Total(?:\s+(?:amount|due))?"
     r"|Amount\s+(?:charged|paid)(?:\s+via\s+[A-Za-z ]{1,30}?)?)\b"
-    r"\s*:?\s*(?:USD|US\$|(?<![A-Za-z])\$)\s?(?P<amt>[0-9][0-9,]*\.[0-9]{2})"
+    r"\s*:?\s*(?:USD|US\$|(?<![A-Za-z])\$)\s*(?P<amt>[0-9][0-9,]*\.[0-9]{2})"
     # ...and not followed by another currency code ("$111.67 CAD"). The scoped
     # (?-i:) keeps this case-sensitive so ordinary words ("Due") don't trip it.
     r"(?!\s*(?-i:(?!USD\b)[A-Z]{3}\b))",
