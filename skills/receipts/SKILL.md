@@ -136,6 +136,23 @@ domain. See [Coverage](#stripe-relayed-vendors--a-ceiling-that-turned-out-to-be-
 If `gws` isn't authenticated, the Gmail source is skipped and announced in
 the report; every other source still runs.
 
+**Receipts with no amount in the email, and forwarded receipts.** Two cases
+the Gmail source handles beyond a plain vendor email:
+
+- *Amount only in the PDF* (Atlassian: the email says "payment processed" and the
+  total, `Invoice Total: USD 111.67`, is only inside the attachment). The source
+  reads the PDF with `pdftotext` (`brew install poppler`). It accepts only a
+  labelled total with an explicit `USD`/`$` marker — a EUR or GBP invoice is
+  never read as dollars. If `pdftotext` is missing, or no USD total can be read,
+  the receipt is skipped **and** reported as a `SOURCE GMAIL: NOTE` line.
+- *Receipts you forward to yourself* (for example from a personal Gmail). The
+  forward's own `From` is you, so the vendor and the date are read from the
+  "Forwarded message" block. This is believed **only** for senders listed in
+  `RECEIPTS_TRUSTED_FORWARDERS` (comma-separated, your own addresses):
+  `export RECEIPTS_TRUSTED_FORWARDERS=you@gmail.com`. Anyone else can type a
+  fake "Forwarded message / From: Supabase" into an email, so unlisted
+  forwarders are never attributed to the named vendor.
+
 ### 3. Anthropic source (optional)
 
 **No browser, and nothing to install.** This source is plain HTTP against
