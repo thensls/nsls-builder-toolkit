@@ -785,3 +785,33 @@ def test_forward_with_several_forwarded_messages_is_skipped_and_announced(monkey
         receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
     assert receipts == []
     assert any("more than one forwarded email" in n for n in SOURCE.notes)
+
+
+def test_pdf_amount_refuses_other_currencies_however_they_are_written():
+    assert SOURCE.parse_pdf_amount("Invoice Total: $111.67 CAD") is None
+    assert SOURCE.parse_pdf_amount("Invoice Total: CA$111.67") is None
+    assert SOURCE.parse_pdf_amount("Currency: CAD\nInvoice Total: $111.67") is None
+    # ...but plain USD, and ordinary words after the figure, are still fine
+    assert SOURCE.parse_pdf_amount("Invoice Total: $111.67 Due on receipt") == 11167
+    assert SOURCE.parse_pdf_amount("Invoice Total: USD 111.67") == 11167
+    assert SOURCE.parse_pdf_amount("Currency: USD\nInvoice Total: $111.67") == 11167
+
+
+def test_forward_with_unparseable_header_date_fails_closed_not_to_a_due_date(monkeypatch):
+    monkeypatch.setenv("RECEIPTS_TRUSTED_FORWARDERS", "kevin.prentiss@gmail.com")
+    msg = _forward_message("Kevin Prentiss <kevinprentiss@gmail.com>")
+    body = (
+        b"---------- Forwarded message ---------\n"
+        b"From: Supabase Pte. Ltd. <invoice+statements@supabase.com>\n"
+        b"Date: yesterday-ish\n"
+        b"Subject: Payment received\n\n"
+        b"Your invoice has been paid. $53.82 charged.\nDue Date: Oct 19, 2026\n"
+    )
+    msg["payload"]["parts"][0]["body"]["data"] = _b64url_nopad(body)
+    responses = {"list": LIST_PAYLOAD, "get": msg, "attachments": _attachment_payload(PDF_BYTES)}
+    with patch("sources.gmail.os.path.exists", return_value=True), \
+         patch("sources.gmail.subprocess.run", side_effect=_dispatch(responses)):
+        receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
+    assert all(r.merchant != "supabase" or r.date != "2026-10-19" for r in receipts), (
+        "a Due Date in the invoice body must never be taken as the forward's sent date"
+    )

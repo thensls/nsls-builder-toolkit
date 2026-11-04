@@ -101,9 +101,14 @@ LABELED_AMOUNT = re.compile(
 PDF_LABELED_AMOUNT = re.compile(
     r"(?<!sub )(?<!sub-)\b(?:Invoice\s+Total|Grand\s+Total|Total(?:\s+(?:amount|due))?"
     r"|Amount\s+(?:charged|paid)(?:\s+via\s+[A-Za-z ]{1,30}?)?)\b"
-    r"\s*:?\s*(?:USD|US\$|\$)\s?([0-9][0-9,]*\.[0-9]{2})",
+    r"\s*:?\s*(?:USD|US\$|(?<![A-Za-z])\$)\s?([0-9][0-9,]*\.[0-9]{2})"
+    # ...and not followed by another currency code ("$111.67 CAD"). The scoped
+    # (?-i:) keeps this case-sensitive so ordinary words ("Due") don't trip it.
+    r"(?!\s*(?-i:(?!USD\b)[A-Z]{3}\b))",
     re.IGNORECASE,
 )
+# A PDF that declares a currency other than USD anywhere is never read as dollars.
+PDF_NON_USD_DECLARED = re.compile(r"\bCurrency\s*:?\s*(?-i:(?!USD\b)[A-Z]{3}\b)", re.IGNORECASE)
 PDFTOTEXT = shutil.which("pdftotext")
 # Comma-separated addresses of YOUR OWN accounts whose forwarded receipts may be
 # attributed to the original vendor (e.g. a personal Gmail you forward from).
@@ -111,7 +116,7 @@ PDFTOTEXT = shutil.which("pdftotext")
 # never trusted: it could otherwise attach a fake invoice to a Ramp charge.
 TRUSTED_FORWARDERS_ENV = "RECEIPTS_TRUSTED_FORWARDERS"
 FORWARD_FROM = re.compile(r"-{5,}\s*Forwarded message\s*-{5,}\s*From:\s*([^\n]+)", re.IGNORECASE)
-FORWARD_DATE = re.compile(r"Date:\s*(?:[A-Za-z]{3},\s*)?([A-Za-z]{3,9})\s+(\d{1,2}),\s*(\d{4})")
+FORWARD_DATE = re.compile(r"(?m)^[ \t]*Date:\s*(?:[A-Za-z]{3},\s*)?([A-Za-z]{3,9})\s+(\d{1,2}),\s*(\d{4})")
 
 
 def _canonical_address(addr: str) -> str:
@@ -146,7 +151,11 @@ def _forwarded_origin(from_header: str, body_text: str) -> tuple[str, dt.date] |
     m = blocks[0] if blocks else None
     if not m:
         return None
-    d = FORWARD_DATE.search(body_text, m.end())
+    # Only the header block (up to the first blank line) may supply the date: a
+    # missing/unparseable header date must fail closed, not fall through to a
+    # later "Due Date:" in the invoice body.
+    header_block = re.split(r"\r?\n[ \t]*\r?\n", body_text[m.end():], maxsplit=1)[0]
+    d = FORWARD_DATE.search("\n" + header_block)
     if not d:
         return None
     try:
@@ -350,6 +359,8 @@ class GmailSource:
         return round(float(m.group(1).replace(",", "")) * 100) if m else None
 
     def parse_pdf_amount(self, text: str) -> int | None:
+        if PDF_NON_USD_DECLARED.search(text or ""):
+            return None
         labeled = list(PDF_LABELED_AMOUNT.finditer(text or ""))
         return round(float(labeled[-1].group(1).replace(",", "")) * 100) if labeled else None
 
