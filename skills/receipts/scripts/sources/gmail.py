@@ -99,9 +99,9 @@ LABELED_AMOUNT = re.compile(
 # an explicit USD/$ marker, so a EUR/GBP invoice can never be read as dollars
 # (amounts are compared as bare cents downstream — see sources/neon.py).
 PDF_LABELED_AMOUNT = re.compile(
-    r"(?<!sub )(?<!sub-)\b(?:Invoice\s+Total|Grand\s+Total|Total(?:\s+(?:amount|due))?"
+    r"(?<!sub )(?<!sub-)\b(?P<label>Invoice\s+Total|Grand\s+Total|Total(?:\s+(?:amount|due))?"
     r"|Amount\s+(?:charged|paid)(?:\s+via\s+[A-Za-z ]{1,30}?)?)\b"
-    r"\s*:?\s*(?:USD|US\$|(?<![A-Za-z])\$)\s?([0-9][0-9,]*\.[0-9]{2})"
+    r"\s*:?\s*(?:USD|US\$|(?<![A-Za-z])\$)\s?(?P<amt>[0-9][0-9,]*\.[0-9]{2})"
     # ...and not followed by another currency code ("$111.67 CAD"). The scoped
     # (?-i:) keeps this case-sensitive so ordinary words ("Due") don't trip it.
     r"(?!\s*(?-i:(?!USD\b)[A-Z]{3}\b))",
@@ -361,8 +361,23 @@ class GmailSource:
     def parse_pdf_amount(self, text: str) -> int | None:
         if PDF_NON_USD_DECLARED.search(text or ""):
             return None
-        labeled = list(PDF_LABELED_AMOUNT.finditer(text or ""))
-        return round(float(labeled[-1].group(1).replace(",", "")) * 100) if labeled else None
+        # Rank by what the label means, then take the LAST figure in the best tier:
+        #   1 paid/charged  — what actually left the card
+        #   2 invoice/grand/plain total
+        #   3 total due     — a remaining balance; 0.00 on a paid invoice
+        # Zero is never a charge, so it can never be the answer.
+        def tier(label: str) -> int:
+            l = label.lower()
+            if l.startswith("amount"):
+                return 1
+            return 3 if l.endswith("due") else 2
+
+        best: dict[int, int] = {}
+        for m in PDF_LABELED_AMOUNT.finditer(text or ""):
+            cents = round(float(m.group("amt").replace(",", "")) * 100)
+            if cents > 0:
+                best[tier(m.group("label"))] = cents
+        return best[min(best)] if best else None
 
     def build_query(self, since: str, until: str) -> str:
         # Gmail's `before:` is EXCLUSIVE while `after:` is inclusive. Passing

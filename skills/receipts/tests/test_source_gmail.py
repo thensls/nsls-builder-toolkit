@@ -815,3 +815,14 @@ def test_forward_with_unparseable_header_date_fails_closed_not_to_a_due_date(mon
     assert all(r.merchant != "supabase" or r.date != "2026-10-19" for r in receipts), (
         "a Due Date in the invoice body must never be taken as the forward's sent date"
     )
+
+
+def test_a_zero_balance_never_beats_the_amount_actually_paid():
+    paid = "Invoice Total: USD 111.67\nAmount paid: USD 111.67\nTotal due: USD 0.00"
+    assert SOURCE.parse_pdf_amount(paid) == 11167
+    assert SOURCE.parse_pdf_amount("Invoice Total: USD 111.67\nTotal due: USD 0.00") == 11167
+    # amount paid outranks a later, different total line
+    assert SOURCE.parse_pdf_amount("Amount paid: USD 50.00\nGrand Total: USD 90.00") == 5000
+    # only a balance is labelled -> still usable when non-zero
+    assert SOURCE.parse_pdf_amount("Total due: USD 53.82") == 5382
+    assert SOURCE.parse_pdf_amount("Total due: USD 0.00") is None
