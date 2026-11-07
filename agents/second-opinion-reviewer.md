@@ -77,8 +77,17 @@ Find what would actually hurt, and ignore the rest.
 ## Lens: data
 
 - **Evidence behind every number:** each one has a source and a date in
-  EVIDENCE. A number with no evidence in the packet is a blocker. Never treat a
-  plausible round number as fine.
+  EVIDENCE. A number with no source anywhere in the packet is a blocker. Never
+  treat a plausible round number as fine.
+- **Out of reach isn't "no source."** If OUTSIDE SOURCES names where a figure
+  comes from, or you ran out of budget before tracing it, list it under NOT
+  INDEPENDENTLY CHECKED as "not traced: <why>". Never call it "no source", and
+  never file it as a blocker.
+- **A wrong number, not just a mismatch:** when the figure itself is wrong (a
+  wrong denominator, the wrong window or population, one subset counted as the
+  total, or a calculation its own evidence contradicts), start the finding
+  with `RECOMPUTE:` and say what the right calculation is. Fixing it needs a new
+  calculation, not new wording.
 - **The evidence says what the claim says:** the same figure, the same window,
   the same population.
 - **The right system, fresh enough:** the source matches the domain, and the
@@ -126,3 +135,5 @@ HELD UP
 - **Nothing material:** use `no_blockers`, leave BLOCKERS and SHOULD FIX empty,
   and still fill in NOT INDEPENDENTLY CHECKED and HELD UP.
 - **Packet missing what you need:** use `cannot_review`, and say what's missing.
+- **A figure that is itself wrong:** start that finding with `RECOMPUTE:` (see
+  Lens: data).
