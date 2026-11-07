@@ -24,17 +24,6 @@
             "shell": "bash"
           }
         ]
-      },
-      {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh\" harvest-nudge",
-            "timeout": 5,
-            "shell": "bash"
-          }
-        ]
       }
     ],
     "PreToolUse": [
@@ -70,6 +59,16 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh\" checkpoint",
             "timeout": 10,
+            "shell": "bash"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh\" harvest-nudge",
+            "timeout": 5,
             "shell": "bash"
           }
         ]
