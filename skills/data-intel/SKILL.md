@@ -24,6 +24,29 @@ description: >-
 
 If any system's tools aren't available, run `/connect` to set them up.
 
+## Where record lookups run
+
+Record lookups in HubSpot, PostHog, Customer.io and Hex are moving to Claude Code, where every lookup is logged. What this skill queries stays the same; only the route changes.
+
+| Platform | Record work | The logged route: tools whose names start |
+|---|---|---|
+| HubSpot | Every tool except the marketing, content and schema tools listed below | `mcp__hubspot-records__` |
+| PostHog | Everything | `mcp__posthog-records__` |
+| Customer.io | Everything | `mcp__customerio-records__` |
+| Hex | Everything | `mcp__hex-records__` |
+
+HubSpot's reviewed marketing, content and schema tools keep working on the shared connector everywhere, Cowork and claude.ai included: `manage_campaign_objects`, `manage_blog_post`, `manage_landing_page`, `render_asset`, `get_organization_details`, `get_user_details`, `search_owners`, `get_properties`, `search_properties`, `discover_hubspot_schema`, `tool_guidance`, `show_feedback_form`. Every other HubSpot tool is record work, new ones included. Only those four prefixes count; any other tools for these platforms, the shared connector included, are not the logged route.
+
+**Where you are.** Settle it once per conversation, before the first record lookup:
+1. The logged route's tools are present: you're in Claude Code. Cowork and claude.ai can't reach them.
+2. Otherwise go by what your own instructions say you are running in, as `/ai-level-up` does: Claude Code (a terminal, or the Code tab in the Claude app), or Cowork or claude.ai.
+3. Still unsure? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell: `$env:CLAUDE_CODE_ENTRYPOINT`), the marker the toolkit's hooks read. `local-agent` is Cowork; any other answer, blank included, is Claude Code. No way to run a command means claude.ai.
+
+**Then, platform by platform:**
+- **Claude Code with that platform's logged route:** use it for that platform's record work. Call the same-named tool under its prefix; if there isn't one, use that server's closest equivalent.
+- **Claude Code without it:** carry on exactly as this skill describes, through the connection you have today. Say nothing about setting up the logged route yet.
+- **Cowork or claude.ai:** a question that needs records from any of the four platforms isn't answered here, and a half answer without them would mislead. Don't run it and don't offer a workaround. Say only this, with nothing about tools, servers or settings: "This kind of lookup happens in Claude Code (the Code tab in the Claude app), where every lookup is logged. Open it and type: /data-intel <their question, in one line>". Questions that need only Airtable, Slack, n8n or HubSpot's marketing, content and schema tools carry on as usual.
+
 ## What This Skill Does
 
 You are a data intelligence agent with access to every system the user has connected via `/connect`. Your job: answer the user's question by querying the right systems, cross-referencing data across platforms, and synthesizing insights through whatever lens they need. Users speak plain English — you figure out which systems to query and how to combine the results.
