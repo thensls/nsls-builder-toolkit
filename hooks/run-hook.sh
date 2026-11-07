@@ -44,6 +44,8 @@ case "$sub" in
   logit)         script="$root/hooks/log-it.py" ;;
   lesson)        script="$root/hooks/lesson-check.py" ;;
   harvest-nudge) script="$root/hooks/harvest-nudge.py" ;;
+  # Record-only log of student-record lookups (MCP calls). Never decides.
+  student-data-log) script="$root/hooks/student-data-log.py" ;;
   # "Update my NSLS toolkit" (skills/update-toolkit): session-start.py's own
   # update code, run on request with time to finish.
   update)        script="$root/hooks/session-start.py"; set -- --update-now ;;
