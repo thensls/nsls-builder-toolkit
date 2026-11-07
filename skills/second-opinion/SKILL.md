@@ -1,7 +1,9 @@
 ---
 name: second-opinion
 description: >-
-  Use right before handing over finished work that would be costly to get
+  Use right before finished work goes out (before Claude posts, sends,
+  publishes, comments on a shared doc or opens a pull request for it, or
+  hands it over to be sent) when it would be costly to get
   wrong: code that changes production data or other hard-to-undo data beyond
   the builder's own machine, touches logins or security, money or member data,
   or runs unattended; and facts or numbers presented to leadership for a
@@ -75,6 +77,9 @@ everyday work, and reviewer.
 - **A `Receipts:` line** left over from an earlier version isn't malformed.
   Ignore it; nothing uses it now. It goes away the next time they change their
   settings.
+- **No "Claude checks these settings…" line:** the block is from an earlier
+  version. It isn't malformed. The line arrives the next time they change
+  their settings.
 - **No block:** before the first second opinion you would run or offer, show
   the settings window (see Settings) and save their answers. Then carry on with
   what they chose. If they close it without answering, use the defaults for
@@ -97,6 +102,12 @@ setting decides what happens next.**
 | **Everyday team work:** other team- or company-facing internal work (an all-staff note, a tool announcement), tricky code with none of the risks above, internal fact-checks | offer (the default) → **Offer** · only when I ask → **Skip** |
 | **Neither:** small, routine or easily undone · Tier 1 throwaways · already reviewed this session · commits along the way (review the finished work once instead) | **Skip**, and say nothing |
 
+**The moment is before it leaves.** Run or offer it before Claude posts,
+sends, publishes, comments on someone else's doc, opens a pull request or
+merges, or hands the work over for the person to send. That includes steps
+Claude takes on its own along the way. A review after the work has gone out can
+only correct it, not prevent the mistake.
+
 An offer is one line, on the last line of the message, with nothing after it:
 
 > Risky work: "This could be costly to get wrong. Want a quick second opinion
@@ -113,6 +124,14 @@ Review once the work is complete and its normal checks have passed (tests run,
 the doc is whole, the query returned), just before it's first shared or acted
 on. Never mid-build, and never per commit.
 
+**Check whether it has already gone out.** Before reviewing, check whether the
+work has already been posted, sent, published or merged: a comment on a shared
+doc, an email, a Slack post, a merged pull request. Don't assume it's a draft.
+If it has gone out, say so in the report's first line ("This has already gone
+out, so these are corrections, not catches"). Fixing it then means changing
+something people may already have read, so ask before editing anything they can
+see.
+
 ## Step 3 — Build the packet
 
 The reviewer has not seen the conversation, so the packet is everything it knows.
@@ -125,8 +144,20 @@ DONE MEANS: <the bar it has to clear>
 READ: <exact file paths, or the full text. For code, two things: the diff (run `git diff origin/main...HEAD` yourself and save it to a file; the reviewer has no shell) and the repository's root folder, so it can open whole files and the code the change calls.>
 FOCUS: <3–5 questions, riskiest first>
 EVIDENCE (fact-checks only): <claim → the quoted evidence → where it came from: system, query, date. Run any live query yourself first; the reviewer can't.>
+OUTSIDE SOURCES: <figures that come from somewhere the reviewer can't open (another project folder, a system, a colleague) → where each one comes from. Write "none" if there are none.>
 ```
 
+- **A whole folder or project** ("check what's been done"): the reviewer is
+  built for work about to go out, not a whole project. Name the deliverables
+  that go out (published, sent, presented) and review those, riskiest first.
+  Put any record of past errors (a corrections log, earlier review findings)
+  in FOCUS as a list of what to hunt for. Name under READ any big source the
+  reviewer can only partly read (long journals, a folder of queries), and say
+  so in the report.
+- **Numbers that matter:** before packing, re-run the queries behind the
+  figures the conclusion rests on (read-only) and put the results under
+  EVIDENCE. If you can't, list which figures weren't re-measured, and offer to
+  re-measure them in the report.
 - **Complete or nothing.** Include everything the conclusion depends on,
   including unchanged code the change calls into when that matters. If it's too
   big, split it at a natural boundary (one module, one section), review the
@@ -156,7 +187,10 @@ EVIDENCE (fact-checks only): <claim → the quoted evidence → where it came fr
   files, so "read-only" would only be a request, not a fact. If that agent isn't
   in your list, there is no second opinion this time. Say so plainly: the
   toolkit may be out of date, or Claude Code needs a restart after an update.
-  Suggest they say "update my NSLS toolkit" and then restart.
+  Suggest they say "update my NSLS toolkit" and then restart. If it's still
+  missing after that, the toolkit isn't fully installed on this computer, so
+  its other checks aren't running either. Say that too, and suggest
+  reinstalling it with the one-line install in the toolkit's README.
 
 - **Mixed work** (a slide, memo or email with figures): head the packet
   `LENS: data + writing`, with the text under READ and your query results under
@@ -196,10 +230,17 @@ line just before the time-saved line (Step 6). Edit only after they answer.
 - **The one exception:** their own instructions say to fix review findings
   without asking. Then fix, re-run the checks, and report what changed. When
   those instructions are silent, show first.
+- **A wrong figure isn't a wording fix.** A finding marked `RECOMPUTE` means
+  the number itself is wrong: a wrong denominator, the wrong window, one subset
+  counted as the total. Say so plainly: "the figure itself is wrong; it has to
+  be recomputed." Recompute it from the source (re-run the query; never nudge
+  the old number), and mark every recomputed figure in your report as not
+  independently checked.
 
 **One round.** Fixes don't trigger another review. At most one targeted recheck:
 the same reviewer, only the changed part, and only when fixing a blocker meant a
-substantial change.
+substantial change or a recomputed figure. For recomputed figures, offer it
+before the work goes out; don't run it unasked.
 
 **If the review failed:**
 
@@ -218,6 +259,18 @@ substantial change.
 
 Use plain words, with no severity codes, reviewer names or model names. The
 findings come first, then any question.
+
+**Shape:** lead with what has to change before it goes out. Then:
+
+- **Must fix** (the blockers), one plain line each: what's wrong, where, and
+  your proposed fix or why you'd leave it.
+- **Should fix**, one line each. List every finding, touch-ups included.
+  Never drop one to keep the report short.
+- **Held up** and **not checked**, a line or two each. If figures weren't
+  re-measured, offer to re-measure them here.
+
+With more than about five findings, keep each to one line and offer detail on
+any of them. A short review can be a sentence or two.
 
 **Every completed review ends with this exact line**, as the last line of the
 message that reports the verdict:
@@ -285,12 +338,15 @@ Windows, `%USERPROFILE%\.claude\CLAUDE.md`), as exactly this block:
 - Risky work: automatic | ask me | only when I ask
 - Everyday work: offer | only when I ask
 - Reviewer: balanced | thorough | quick
+Claude checks these settings before posting, sending, publishing or opening a pull request for my work, and uses /second-opinion when they call for it.
 Say "change my second-opinion settings" to change these.
 <!-- nsls-second-opinion:end -->
 ```
 
 Keep only the chosen value on each line, without the `|` alternatives, for
-example `- Reviewer: balanced`. Answers map to values like this:
+example `- Reviewer: balanced`. The "Claude checks these settings…" line is what
+makes *automatic* and *ask me* happen at the right moment, because these
+instructions are read in every session. Answers map to values like this:
 
 | Answer | Saved as |
 |---|---|
@@ -310,7 +366,7 @@ example `- Reviewer: balanced`. Answers map to values like this:
   line. If the file doesn't end with a newline, add one first. Change nothing
   else.
 - **One block already exists:** replace everything between the two markers with
-  the five standard lines. Never add a second block.
+  the six standard lines. Never add a second block.
 - **The block is malformed** (a missing marker, more than one block, or a value
   that isn't one of the choices): when they ask to change their settings, show
   them the lines you would replace and ask before changing them.
@@ -345,7 +401,14 @@ example `- Reviewer: balanced`. Answers map to values like this:
 - **About to send a code review with only the diff under READ:** add the
   repository's root folder.
 - **About to re-review after fixing findings:** don't. One targeted recheck at
-  most, and only for a substantial blocker fix.
+  most, only for a substantial blocker fix or a recomputed figure, and offered
+  first for a recomputed figure.
+- **About to review work that has already been posted or sent without saying
+  so:** say it in the first line, and ask before editing what people can see.
+- **About to fix a wrong figure by editing the number:** recompute it from the
+  source, and mark it as not independently checked.
+- **About to leave a finding out of the report to keep it short:** list it in
+  one line instead.
 - **About to ask "want a second opinion?" again after a no:** don't. The answer
   stands.
 - **About to paste an API key, a `.env` or a full member export into the
@@ -375,7 +438,10 @@ example `- Reviewer: balanced`. Answers map to values like this:
   and ask.
 - **The reviewer agent isn't in the list.** No second opinion this time, and
   no stand-in. Tell them the toolkit may be out of date or Claude Code needs a
-  restart, and suggest "update my NSLS toolkit".
+  restart, and suggest "update my NSLS toolkit". Still missing after a restart
+  means the toolkit isn't fully installed, so suggest reinstalling it (Step 4).
+  A stand-in would hide that, and the toolkit's other checks would stay off
+  without anyone noticing.
 - **The reviewer can't check a live number.** It has no connectors, so it marks
   the claim "not independently checked". Pass that on, and don't count the claim
   as passed. If the claim is load-bearing, run the query yourself and say so in
@@ -416,6 +482,17 @@ Every rule here comes from a real failure:
   scenario nobody would hit, such as a byte-order mark in a file Claude writes
   itself. Hence the PR's intent goes in WHAT IT CLAIMS, and the reviewer names
   who hits each finding.
+- **Before it leaves, and say if it already has.** In a nine-run field test,
+  two reviews ran after the comments under review had been posted. The session
+  took them for drafts and found out only when it went to fix them.
+- **Out of reach isn't wrong.** In the same test, about thirteen correct
+  figures came back as "no source" because they came from another project
+  folder, or sat past the reviewer's lookup budget. Hence OUTSIDE SOURCES in
+  the packet, and "not traced" in the reviewer's brief.
+- **A wrong figure needs a new calculation.** A count of one subset (about 880
+  where the real total was about 3,700) and a wrong denominator (41% instead of
+  29%) were reported like wording problems. Nothing said the fix needed a new
+  calculation, or that the new figure was unchecked. Hence `RECOMPUTE`.
 
 ## Related
 
