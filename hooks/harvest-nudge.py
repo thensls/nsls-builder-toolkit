@@ -43,9 +43,12 @@ ENV_FILE = PERSONAL_DIR / ".env"
 # because a session left open keeps running the copy it started with: on 8 Nov such
 # sessions took the "asked" claim within a minute of it being cleared, every time.
 # The cleanup removes other days' claims of every name and leaves today's alone, so an
-# older copy that has already spoken today stays quiet.
+# older copy that has already spoken today stays quiet. Once this copy speaks it also
+# writes today's claim under the older names: an older copy then sees the day as taken,
+# instead of speaking again and deleting this claim in its own cleanup.
 CLAIM_GLOB = ".nsls-harvest-nudge-*"
 CLAIM_PREFIX = ".nsls-harvest-nudge-typed-"
+OLDER_CLAIM_PREFIXES = (".nsls-harvest-nudge-", ".nsls-harvest-nudge-asked-")
 LOOKBACK_DAYS = 7  # first run, or no harvest log yet
 # Sessions a person is sitting at. Everything else (print mode `-p` and the SDKs are
 # sdk-*, Cowork's local agent, remote and Slack runs, MCP) stays silent: a nudge there
@@ -165,6 +168,11 @@ def main():
         os.close(fd)
     except Exception:
         return  # already claimed today, or can't record the claim: stay quiet rather than repeat
+    for prefix in OLDER_CLAIM_PREFIXES:
+        try:
+            os.close(os.open(CONFIG_DIR / f"{prefix}{today.isoformat()}", os.O_CREAT | os.O_WRONLY, 0o600))
+        except Exception:
+            pass
     for old in CONFIG_DIR.glob(CLAIM_GLOB):
         if today.isoformat() not in old.name:
             try:

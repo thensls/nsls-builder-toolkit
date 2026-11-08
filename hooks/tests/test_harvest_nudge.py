@@ -202,6 +202,12 @@ for label, old_name in (("session-start", ".nsls-harvest-nudge-"), ("first typed
     _, out = run(tmp, cfg)
     check(f"and the nudge still speaks only once ({label})", out == "", out)
 
+tmp, cfg = sandbox()
+_, out = run(tmp, cfg)
+older = [cfg / f"{p}{TODAY.isoformat()}" for p in (".nsls-harvest-nudge-", ".nsls-harvest-nudge-asked-")]
+check("after speaking, today is marked taken under the older names too, so older copies stay quiet",
+      out != "" and all(p.exists() for p in older), [p.name for p in older if not p.exists()])
+
 if failures:
     print(f"\n{len(failures)} failure(s)")
     sys.exit(1)
