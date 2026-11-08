@@ -1,0 +1,7 @@
+{
+  "_what_this_is": "The NSLS HubSpot app that /connect uses to add hubspot-records, the HubSpot student-record connection. An NSLS admin fills in client_id once HubSpot issues it. While client_id is empty, /connect tells people the HubSpot connection isn't ready yet and stops there.",
+  "_never_the_secret": "Never put the HubSpot client secret in this file or anywhere in this repo. Each person types it at Claude Code's own hidden prompt, and Claude Code keeps it in the computer's secure store.",
+  "client_id": "",
+  "where_staff_get_the_secret": "Ask Davo Wood for the HubSpot secret.",
+  "_where_staff_get_the_secret_note": "Placeholder: where staff get the secret isn't decided yet. Replace that one sentence when it is. /connect shows it to the person word for word."
+}

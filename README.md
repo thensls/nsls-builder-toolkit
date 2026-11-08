@@ -327,6 +327,18 @@ the session ping sends `collector_backed: true`. If the collector stops
 reporting for 7 days, the hooks take over again on their own
 (`hooks/collector_evidence.py`).
 
+## Student-data activity log
+
+In Claude Code, the toolkit keeps a local note each time a session looks up
+student records: a call to a vendor's own server (HubSpot, PostHog,
+Customer.io, Hex), a record tool on the shared claude.ai connector, or a
+Drive or Gmail request that mentions a roster, GPA, a `.edu` address or a
+spreadsheet. It never blocks or asks anything. Each line holds the time, the
+tool and server names, the platform, how the call was recognised, the session
+id and the toolkit version, and never what was searched for or returned. The
+file is `~/.claude/.nsls-student-data-log.jsonl`, capped at 5 MB. The format
+is documented at the top of `hooks/student-data-log.py`.
+
 ## Request a Skill
 
 Open a [GitHub issue](https://github.com/thensls/nsls-builder-toolkit/issues) or message Kevin in Slack.
