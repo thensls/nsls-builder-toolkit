@@ -7,8 +7,10 @@ Plain stdlib: `python3 hooks/tests/test_harvest_nudge.py`.
 Pins: silent without the personal toolkit's harvest skill, with `kb_harvest: off`
 (CRLF too), in an SDK session, after a harvest already ran today, and on the second
 message of the day; otherwise one instruction naming the last harvest date, or a
-seven-day lookback when there is no harvest log. A scheduled task's message, or one
-that harvests anyway, stays silent AND leaves the day's nudge for the person.
+seven-day lookback when there is no harvest log. A scheduled task's message, a
+background job reporting back, any later message in a session that began as a
+scheduled task, or a message that harvests anyway, stays silent AND leaves the
+day's nudge for the person.
 
 Every subprocess runs sandboxed in its own config dir.
 """
@@ -52,16 +54,33 @@ def sandbox(profile="---\nname: x\n---\n", log_dates=None, skill=True):
     return tmp, cfg
 
 
-def payload(prompt):
-    return json.dumps({"hook_event_name": "UserPromptSubmit", "session_id": "s", "prompt": prompt})
+def payload(prompt, transcript=None):
+    body = {"hook_event_name": "UserPromptSubmit", "session_id": "s", "prompt": prompt}
+    if transcript:
+        body["transcript_path"] = str(transcript)
+    return json.dumps(body)
 
 
-def run(tmp, cfg, prompt="what's on my plate today?", **extra):
+def transcript_of(tmp, *first_rows):
+    path = tmp / f"session-{len(list(tmp.glob('session-*')))}.jsonl"
+    path.write_text("".join(json.dumps(r) + "\n" for r in first_rows), encoding="utf-8")
+    return path
+
+
+def user_row(text, as_blocks=False, meta=False):
+    content = [{"type": "text", "text": text}] if as_blocks else text
+    row = {"type": "user", "message": {"role": "user", "content": content}}
+    if meta:
+        row["isMeta"] = True
+    return row
+
+
+def run(tmp, cfg, prompt="what's on my plate today?", transcript=None, **extra):
     env = dict(os.environ, HOME=str(tmp), USERPROFILE=str(tmp), CLAUDE_CONFIG_DIR=str(cfg),
                PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
     env.pop("CLAUDE_CODE_ENTRYPOINT", None)
     env.update(extra)
-    r = subprocess.run([sys.executable, str(HOOK)], env=env, input=payload(prompt), capture_output=True,
+    r = subprocess.run([sys.executable, str(HOOK)], env=env, input=payload(prompt, transcript), capture_output=True,
                        text=True, encoding="utf-8", timeout=20)
     return r.returncode, r.stdout
 
@@ -142,6 +161,33 @@ for prompt in ("/close-day", "close day", "let's close-week", "harvest my meetin
 tmp, cfg = sandbox()
 _, out = run(tmp, cfg, prompt="")
 check("silent on an empty message", out == "", out)
+
+TASK = '<scheduled-task name="git-health-check" file="x">\nThis is an automated run'
+NOTE = "<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>"
+tmp, cfg = sandbox()
+_, out = run(tmp, cfg, prompt=NOTE)
+check("silent on a background job reporting back", out == "", out)
+_, out = run(tmp, cfg)
+check("and the person's next message still gets the nudge", out != "", out)
+
+for label, rows in (("plain text", [user_row(TASK)]),
+                    ("text blocks", [user_row(TASK, as_blocks=True)]),
+                    ("after a meta row", [{"type": "summary"}, user_row("Caveat: local commands", meta=True),
+                                          user_row(TASK)])):
+    tmp, cfg = sandbox()
+    _, out = run(tmp, cfg, prompt="Thanks, carry on", transcript=transcript_of(tmp, *rows))
+    check(f"silent on a later message in a scheduled task's session ({label})", out == "", out)
+    _, out = run(tmp, cfg, transcript=transcript_of(tmp, user_row("morning! what's on today?")))
+    check(f"and a person's own session still gets the nudge ({label})", out != "", out)
+
+tmp, cfg = sandbox()
+_, out = run(tmp, cfg, transcript=tmp / "not-written-yet.jsonl")
+check("a new session's first message speaks before its transcript exists", out != "", out)
+
+tmp, cfg = sandbox()
+_, out = run(tmp, cfg, transcript=transcript_of(tmp, {"type": "summary"}, "not json at all", [1, 2],
+                                                    user_row("hi there")))
+check("a transcript with junk rows before the first message still speaks", out != "", out)
 
 tmp, cfg = sandbox()
 stale = cfg / f".nsls-harvest-nudge-{TODAY.isoformat()}"
