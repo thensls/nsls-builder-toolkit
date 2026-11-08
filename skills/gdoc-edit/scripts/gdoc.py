@@ -578,6 +578,164 @@ def do_comment(doc, anchor, body, occurrence=None, recommend=None, why=None, pre
           f"comment {thread.get('commentId')})")
 
 
+# ---------- the approval card (draft comments shown for a person's go) ----------
+#
+# `comment` posts one comment. `comment-card` is what a person approves before any
+# are posted: every draft shown as the passage reads in the document, the anchored
+# words in brackets with a highlighter behind them, the comment underneath, a
+# one-click Skip and an Edit per comment, and one button that sends the go. The
+# output is an HTML fragment for the chat's visual widget, printed verbatim.
+#
+# Built after Davo tried the multiple-choice question box on 2026-11-08: it shows
+# plain text only, so nothing could be highlighted, and skipping took two clicks.
+
+CARD_CONTEXT = 230  # characters of the document shown either side of the anchor
+
+
+def _card_window(paras, p, k, anchor):
+    """The text around an anchor as it reads in the document: about CARD_CONTEXT
+    characters each side, cut at a word, runs of blank lines collapsed to one."""
+    stream, starts = "", []
+    for txt, _ in paras:
+        starts.append(len(stream))
+        stream += txt
+    pos = starts[p] + k
+    lo = max(0, pos - CARD_CONTEXT)
+    hi = min(len(stream), pos + len(anchor) + CARD_CONTEXT)
+    before, after = stream[lo:pos], stream[pos + len(anchor):hi]
+    if lo > 0:
+        cut = before.find(" ")
+        before = "…" + (before[cut + 1:] if cut >= 0 else before)
+    if hi < len(stream):
+        cut = after.rfind(" ")
+        after = (after[:cut] if cut > 0 else after) + "…"
+    tidy = lambda t: re.sub(r"\n{2,}", "\n", t)
+    return tidy(before).lstrip("\n"), tidy(after).rstrip("\n")
+
+
+_CARD_STYLE = """<style>
+.gc{background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:1rem 1.25rem;margin:0 0 12px}
+.gc [hidden]{display:none}
+.gc-ctx{font-size:15px;line-height:1.7;color:var(--text-secondary);white-space:pre-wrap;margin:0}
+.gc-ctx mark{background:var(--bg-highlight,var(--bg-warning));color:var(--text-primary);font-weight:500;padding:1px 3px;border-radius:3px}
+.gc-cm{display:flex;gap:10px;margin:12px 0 0;padding:10px 12px;background:var(--surface-1);border-radius:var(--radius);font-size:15px;line-height:1.6;color:var(--text-primary)}
+.gc-cm i{font-size:18px;color:var(--text-secondary);margin-top:2px}
+.gc-txt{white-space:pre-wrap}
+.gc-ta{flex:1;min-height:6em;font:inherit;line-height:1.6;resize:vertical}
+.gc-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px}
+.gc-n{font-size:13px;color:var(--text-muted)}
+.gc-tag{display:none;margin-left:8px;font-size:12px;padding:2px 8px;border-radius:var(--radius);background:var(--bg-accent);color:var(--text-accent)}
+.edited .gc-tag{display:inline}
+.gc-err{font-size:13px;color:var(--text-danger);margin:6px 0 0}
+.gc-err:empty{display:none}
+.off{background:var(--surface-1)}
+.off .gc-ctx,.off .gc-cm{color:var(--text-muted)}
+.off .gc-ctx mark{background:transparent;color:var(--text-muted)}
+.off .gc-txt{text-decoration:line-through}
+</style>"""
+
+_CARD_JS = r"""const skip=new Set(),edits={},all=Object.keys(D.items).map(Number),go=document.getElementById('gc-go'),goErr=document.getElementById('gc-goerr');
+const card=n=>document.getElementById('gc'+n);
+function count(){const k=all.filter(n=>!skip.has(n));go.textContent=k.length?'Post '+k.length+' comment'+(k.length>1?'s':'')+' ↗':'Post nothing ↗'}
+document.querySelectorAll('[data-skip]').forEach(b=>b.addEventListener('click',()=>{const n=+b.dataset.skip,c=card(n);if(skip.has(n)){skip.delete(n);c.classList.remove('off');b.textContent='Skip'}else{skip.add(n);c.classList.add('off');b.textContent='Undo skip'}count()}));
+document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>{const n=+b.dataset.edit,c=card(n),sp=c.querySelector('.gc-txt'),ta=c.querySelector('.gc-ta'),er=c.querySelector('.gc-err');
+if(ta.hidden){ta.value=edits[n]??D.items[n];sp.hidden=true;ta.hidden=false;ta.style.height=Math.max(ta.scrollHeight,96)+'px';ta.focus();b.textContent='Done';return}
+const v=ta.value.trim();
+if(!v){er.textContent='A comment can’t be empty.';return}
+if(new TextEncoder().encode(v).length>2048){er.textContent='Too long for Google Docs: keep it under 2,048 bytes.';return}
+er.textContent='';if(v!==D.items[n].trim()){edits[n]=v;c.classList.add('edited')}else{delete edits[n];c.classList.remove('edited')}
+sp.textContent=v;ta.hidden=true;sp.hidden=false;b.textContent='Edit'}));
+document.querySelectorAll('.gc-ta').forEach(t=>t.addEventListener('input',()=>{t.closest('.gc').querySelector('.gc-err').textContent=''}));
+go.addEventListener('click',()=>{if([...document.querySelectorAll('.gc-ta')].some(t=>!t.hidden)){goErr.textContent='Finish editing first: press Done on the open comment.';return}
+goErr.textContent='';const k=all.filter(n=>!skip.has(n));
+if(!k.length){sendPrompt('Post none of the comments on “'+D.title+'”.');return}
+let m='Go: post comments '+k.join(', ')+' on “'+D.title+'”.';
+k.forEach(n=>{if(edits[n])m+='\n\nComment '+n+', edited:\n'+edits[n]});
+sendPrompt(m)});"""
+
+
+def _card_html(doc, title, cards, total):
+    e = html.escape
+    out = ['<h2 class="sr-only">Draft comments for ' + e(title) + ', each shown in its surrounding '
+           'text with the anchored words highlighted, with skip and edit for each and one button to '
+           'post the rest.</h2>', _CARD_STYLE, '<div style="padding:0.5rem 0 0">']
+    for c in cards:
+        where = f"{c['n']} of {total}"
+        if c["total"] > 1:
+            where += f" · match {c['occurrence']} of {c['total']} for this phrase"
+        out.append(
+            f'<div class="gc" id="gc{c["n"]}">'
+            f'<p class="gc-ctx">{e(c["before"])}<mark>[{e(c["anchor"])}]</mark>{e(c["after"])}</p>'
+            f'<div class="gc-cm"><i class="ti ti-message" aria-hidden="true"></i>'
+            f'<span class="gc-txt">{e(c["text"])}</span>'
+            f'<textarea class="gc-ta" hidden aria-label="Edit comment {c["n"]}"></textarea></div>'
+            f'<p class="gc-err" role="alert"></p>'
+            f'<div class="gc-row"><span class="gc-n">{e(where)}<span class="gc-tag">Edited</span></span>'
+            f'<span><button data-edit="{c["n"]}">Edit</button> '
+            f'<button data-skip="{c["n"]}">Skip</button></span></div></div>')
+    n = len(cards)
+    out.append(f'<p class="gc-err" id="gc-goerr" role="alert"></p>'
+               f'<div class="gc-row" style="margin:16px 0 0.5rem">'
+               f'<a href="https://docs.google.com/document/d/{e(doc)}/edit" style="font-size:14px">'
+               f'Open the document <i class="ti ti-external-link" aria-hidden="true"></i></a>'
+               f'<button id="gc-go" style="font-weight:500">Post {n} comment{"s" if n != 1 else ""} ↗</button>'
+               f'</div></div>')
+    # json.dumps leaves "</script>" intact inside a string, which would end the
+    # script block early; escaping the slash keeps any comment text inert.
+    data = json.dumps({"title": title, "items": {c["n"]: c["text"] for c in cards}},
+                      ensure_ascii=False).replace("</", "<\\/")
+    out.append("<script>(()=>{const D=" + data + ";" + _CARD_JS + "})();</script>")
+    return "\n".join(out)
+
+
+def do_comment_card(doc, items):
+    """Print the approval card for a batch of draft comments.
+
+    Every anchor is resolved before anything is drawn. One that is empty,
+    multi-line, missing, or ambiguous without an "occurrence" stops the whole
+    card (exit 3): a card must never ask a person to approve a guess. The Go
+    button sends a message listing the comments to post, plus the new wording of
+    any that were edited. That message is the approval; post each listed comment
+    with `comment`, one call each.
+    """
+    if not isinstance(items, list) or not items:
+        sys.exit('comment-card needs --file: a JSON list of {"anchor": ..., "text": ...}')
+    d = get_doc(doc)
+    paras = _paragraph_map(d)
+    cards, problems = [], []
+    for n, it in enumerate(items, 1):
+        anchor, text, occ = it.get("anchor") or "", it.get("text") or "", it.get("occurrence")
+        if not anchor.strip():
+            problems.append(f"{n}: ANCHOR_EMPTY")
+        elif "\n" in anchor:
+            problems.append(f"{n}: ANCHOR_MULTILINE {anchor!r}")
+        elif not text.strip():
+            problems.append(f"{n}: no comment text")
+        elif len(text.encode("utf-8")) > COMMENT_MAX:
+            problems.append(f"{n}: comment is over Google's {COMMENT_MAX}-byte limit")
+        else:
+            hits = find_anchor(paras, anchor)
+            if not hits:
+                problems.append(f"{n}: TEXT_NOT_FOUND {anchor!r}")
+            elif len(hits) > 1 and occ is None:
+                problems.append(f"{n}: AMBIGUOUS {anchor!r} appears {len(hits)} times -- settle it "
+                                f"with `comment --recommend`, then give the item an \"occurrence\"")
+            elif occ is not None and (not isinstance(occ, int) or not 1 <= occ <= len(hits)):
+                problems.append(f"{n}: occurrence {occ!r} is out of range ({len(hits)} matches)")
+            else:
+                occ = 1 if occ is None else occ
+                p, k, _, _ = hits[occ - 1]
+                before, after = _card_window(paras, p, k, anchor)
+                cards.append({"n": n, "before": before, "anchor": anchor, "after": after,
+                              "text": text, "occurrence": occ, "total": len(hits)})
+    if problems:
+        print("Card not built. Fix these first:")
+        for pr in problems:
+            print("  " + pr)
+        sys.exit(EXIT_ANCHOR)
+    print(_card_html(doc, d.get("title", "this document"), cards, len(items)))
+
+
 def do_create(title, text):
     r = gws(["docs", "documents", "create"], body={"title": title})
     doc = r.get("documentId")
@@ -802,7 +960,7 @@ def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="Read, edit, and create Google Docs via gws.")
-    ap.add_argument("action", choices=["read", "comments", "comment", "create", "replace",
+    ap.add_argument("action", choices=["read", "comments", "comment", "comment-card", "create", "replace",
                                        "insert-top", "insert-after", "append", "append-rich",
                                        "remove", "batch"])
     ap.add_argument("--doc", help="Google Doc ID (required for all actions except create)")
@@ -818,7 +976,7 @@ def main():
     ap.add_argument("--anchor", action="append", help="repeatable; line/section anchor substring")
     ap.add_argument("--text")
     ap.add_argument("--text-file", dest="text_file")
-    ap.add_argument("--file", help="batch edits JSON")
+    ap.add_argument("--file", help="batch edits JSON, or comment-card draft comments JSON")
     ap.add_argument("--md", help="append-rich: markdown-subset file to append at the end")
     ap.add_argument("--verify", action="append", default=[],
                     help="append-rich: phrase that must be present after the append (repeatable)")
@@ -858,6 +1016,11 @@ def main():
 
     elif a.action == "comments":
         print(json.dumps(do_comments(a.doc), indent=2, ensure_ascii=False))
+
+    elif a.action == "comment-card":
+        if not a.file:
+            sys.exit('comment-card needs --file: a JSON list of {"anchor": ..., "text": ...}')
+        do_comment_card(a.doc, json.load(open(a.file, encoding="utf-8-sig")))  # -sig: tolerate a PS 5.1 BOM
 
     elif a.action == "comment":
         if not a.anchor or len(a.anchor) != 1:
