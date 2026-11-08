@@ -5,7 +5,8 @@ description: >-
   Use when a skill says its tools aren't available, when MCP tools aren't
   loading, or when you want to add a new system. Detects what's already
   connected, walks through setup for what's missing, and handles the
-  failures that will happen along the way.
+  failures that will happen along the way. Also adds the student-record
+  connections for HubSpot, PostHog, Customer.io and Hex.
 ---
 
 # /connect — Connect Your Systems
@@ -61,6 +62,8 @@ Report status for each system:
 
 For each system the user wants to connect, follow the service-specific instructions below. Each system may have multiple viable connection methods (seeds). The skill recommends one, explains the tradeoffs, and helps discover what works for the user's specific setup.
 
+**Student-record lookups in HubSpot, PostHog, Customer.io or Hex** use § Student-record servers below, not the per-service entries in the Service Registry.
+
 **At every step: expect failure.** Silent failures, environment incompatibilities, expired tokens, wrong package names, missing env vars. When something doesn't work:
 1. Diagnose what happened (don't guess — check the error)
 2. Try the next approach
@@ -75,6 +78,95 @@ For each system the user wants to connect, follow the service-specific instructi
 
 ---
 
+## Student-record servers (HubSpot, PostHog, Customer.io, Hex)
+
+Student-record lookups go through each vendor's own server, added for this one person in Claude Code only. Cowork never reads that list, so it never sees them. The shared `claude.ai` connectors for these four are being retired for record lookups.
+
+> **Never add these to the plugin's `.mcp.json` or any server list the plugin ships.** A plugin installed in Cowork would carry them there, and keeping record lookups out of Cowork is the whole point. They are added per person, at user scope, with `claude mcp add`, and nowhere else.
+
+Use these names exactly. The toolkit's activity log and platform skills rely on them.
+
+| Name | Address | Sign-in |
+|---|---|---|
+| `hubspot-records` | `https://mcp.hubspot.com` | NSLS's HubSpot app: client ID from `hubspot-app.json`, secret typed by the person, callback port 8765 |
+| `posthog-records` | `https://mcp.posthog.com/mcp` | Browser sign-in; region picked automatically |
+| `customerio-records` | `https://mcp.customer.io/mcp` (EU account that won't connect: `https://mcp-eu.customer.io/mcp`) | Browser sign-in; an admin must first switch on Account settings → AI → Customer.io MCP |
+| `hex-records` | `https://app.hex.tech/mcp` | Browser sign-in; Hex role Explorer or higher |
+
+Set up only the ones the person uses. Everything below was checked against Claude Code 2.1.319.
+
+### R1. Check what's already there
+
+Run `claude mcp list` and match each line's address by host, ignoring lines that start with `claude.ai ` (those are the shared connectors being retired). Both Customer.io hosts count as Customer.io. `claude mcp add` won't catch a duplicate for you: it refuses a repeated name but happily adds a second server on the same address.
+
+Every person must end up on the four standard names. The platform skills recognise this route by its tool names (`mcp__hubspot-records__…` and so on) and can't see addresses, so a connection under any other name is invisible to them.
+
+- **The standard name on its standard address:** nothing to do. Skip to R4 (or R5 if it's signed in).
+- **Anything else on a record address:** replace it, never reuse it. That covers another name (e.g. `hubspot-pilot`), an older `posthog` or `customerio` entry from this skill's earlier setup steps, or the standard name on some other address.
+  1. Find where it lives with `claude mcp get <old>`, reading only its `Scope:` line. The rest of that output prints stored tokens in full, such as an older PostHog key, so never show it. `User config` means `-s user`, `Local config` means `-s local`, and `Project config` means `-s project`. Anything else, such as a server another plugin supplies, can't be removed here: say so and leave that vendor.
+  2. Say it in one sentence, e.g. "You already have an older PostHog connection, so I'll swap it for the standard one, and you'll sign in once more." For `Project config`, add that this also changes a settings file shared in this project folder. Wait for a yes.
+  3. Run `claude mcp remove <old> -s <scope>`, then add the standard name (R2, or R3 for HubSpot).
+- **HubSpot while `client_id` in `hubspot-app.json` is empty:** leave any existing HubSpot server alone. Say HubSpot isn't ready yet, using the sentence in R3.
+
+### R2. Add PostHog, Customer.io and Hex (Claude runs these)
+
+Ask first, as for any change to their setup: "I'll add the PostHog, Customer.io and Hex connections to Claude Code on this computer. They stay in Claude Code only. OK?" Then run only the lines they need. Each line is the same in Bash and PowerShell, and works from inside a Claude Code session:
+
+```
+claude mcp add --scope user --transport http posthog-records https://mcp.posthog.com/mcp
+claude mcp add --scope user --transport http customerio-records https://mcp.customer.io/mcp
+claude mcp add --scope user --transport http hex-records https://app.hex.tech/mcp
+```
+
+Expect `Added HTTP MCP server … to user config`. `already exists in user config` means it was already there, which is fine. Adding doesn't sign in.
+
+### R3. Add HubSpot (the person runs this one line)
+
+Read `client_id` from `${CLAUDE_PLUGIN_ROOT}/skills/connect/hubspot-app.json`, the one place it lives.
+
+- **Empty:** say "HubSpot isn't ready to connect yet. NSLS is still setting it up on HubSpot's side, so there's nothing for you to do for now." Stop HubSpot there. The other three don't depend on it.
+- **Filled in:** the secret never passes through this conversation. Never ask for it in chat, never put it in a command Claude runs, never write it to a file. That's why Claude can't run this line: Claude Code asks for the secret at its own hidden prompt, which needs a real terminal window. From Claude's shell it stops with `No TTY available to prompt for client secret`, and the variable it offers instead would put the secret in the chat.
+
+Give the person this one line, with the client ID filled in:
+
+```
+claude mcp add --scope user --transport http --client-id <client_id> --client-secret --callback-port 8765 hubspot-records https://mcp.hubspot.com
+```
+
+Say, on a Mac: "Open Terminal (press Command-Space, type Terminal, press Return). Paste this line and press Return. When it asks for the HubSpot secret, type it, or paste just the secret itself, then press Return once. Nothing shows on screen while you type. That's normal." On Windows, say "Open PowerShell (Start menu, type PowerShell)" instead; the line is the same. Then add the sentence from `where_staff_get_the_secret` in `hubspot-app.json`, word for word.
+
+"Just the secret itself" matters. A copied line break goes in as part of the secret, and HubSpot sign-in then fails. If the person pastes the secret into this chat anyway, don't repeat it or use it. Tell them it's now in this conversation's history, and that they should let whoever gave it to them know so it can be replaced.
+
+Afterwards, check the setup landed with `claude mcp get hubspot-records`. Expect `Scope: User config` and `OAuth: client_id configured, callback_port 8765`. The secret isn't in any config file. Claude Code keeps it in the computer's secure store (the keychain on a Mac).
+
+### R4. Sign in once
+
+Say: "Restart Claude Code, or open a new session, so it picks up the new connections. Then type /mcp, choose the one called hubspot-records (or posthog-records, and so on), and sign in with your own login in the browser window that opens. Come back here when you're done." Name only the ones you added.
+
+### R5. Confirm with a call that returns no records
+
+Call the server's who-am-I tool: for HubSpot, `get_user_details`. For the others, pick the tool from the server's list that reports the signed-in user, organization, workspace or project. **Never use a record lookup as the test.** That means nothing that searches or fetches contacts, people, customers or events, and nothing that runs a query. Report one line per server: "HubSpot: connected as <their name>."
+
+### R6. Allow the read tools only
+
+This follows the same pattern as the other services, with one tightening. Once the tools load, list them, show the person which you'd allow, ask, and add the exact names to `permissions.allow` in `~/.claude/settings.json`.
+
+- **Allow** only tools that just read: names starting `get_`, `search_`, `list_`, `query_`, `read_`, and for PostHog the same patterns as its entry in the Service Registry.
+- **Never allow** a write tool: HubSpot's `manage_*`, or anything that creates, updates, deletes, sends, imports, switches or runs a project.
+- **Never** a wildcard (`mcp__hubspot-records__*`) or the bare server name, because either one lets the write tools through. Unsure about a tool? Leave it out. The person is asked each time it's used, and nothing breaks.
+
+### Troubleshooting the record servers
+
+- **Customer.io sign-in fails, or connects with no access.** A Customer.io account admin must first switch on Account settings → AI → Customer.io MCP. Nothing on this computer fixes it. If an EU-region account still won't connect, run `claude mcp remove customerio-records --scope user` and add it again with `https://mcp-eu.customer.io/mcp`, keeping the same name.
+- **Hex signs in but refuses access.** Hex needs the role Explorer or higher. A Hex admin can change it.
+- **"OAuth callback port 8765 is already in use".** Another program on this computer is holding the port HubSpot signs in through. Find it: on a Mac, run `lsof -ti:8765 -sTCP:LISTEN`, then `ps -p <pid> -o comm=`. On Windows, run `Get-NetTCPConnection -LocalPort 8765 -State Listen`, then `Get-Process -Id <OwningProcess>`. Tell the person which program it is, and ask them to quit or pause it just for the sign-in, then start it again. The port can't be changed, because HubSpot's app only accepts `http://localhost:8765/callback`.
+- **HubSpot sign-in says the client or secret is invalid.** Most often the secret went in with a copied line break. Run `claude mcp remove hubspot-records --scope user`. The person then runs the R3 line again and types the secret, or copies only the secret itself.
+- **The person's Terminal says `claude: command not found` (Windows: "not recognized").** Find the full path from your own shell, with `command -v claude` on a Mac or `(Get-Command claude).Source` in PowerShell. Give the line again starting with that path in quotes. In PowerShell, put `& ` in front of the quoted path.
+- **A vendor shows up twice in /mcp, or the platform skills don't use the connection.** It's under an old name, or on an old address. Run R1, which swaps it for the standard name after a yes.
+- **The tools disappear later.** The sign-in expired. The person types /mcp, picks the server, and signs in again.
+
+---
+
 ## Service Registry
 
 Each entry below is a seed — one path that worked. Your setup may need a different approach.
@@ -85,6 +177,8 @@ Each entry below is a seed — one path that worked. Your setup may need a diffe
 
 **What:** Product analytics across Society, FOL, and Shop.
 **Skills that use it:** `/posthog`, `/data-intel`
+
+> **Don't add this entry any more.** In Claude Code, PostHog is `posthog-records` (§ Student-record servers). An entry added the way below gets swapped for it in R1.
 
 #### Connection: HTTP with bearer token
 **MCP type:** HTTP
@@ -198,6 +292,8 @@ All tools matching `mcp__posthog__*-get*`, `mcp__posthog__*-list*`, `mcp__postho
 
 **What:** Email marketing and customer messaging.
 **Skills that use it:** `/customerio`
+
+> **Don't add this entry any more.** In Claude Code, Customer.io is `customerio-records` (§ Student-record servers). An entry added the way below gets swapped for it in R1.
 
 #### Connection: HTTP with OAuth
 **MCP type:** HTTP (remote server)
