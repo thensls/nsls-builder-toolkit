@@ -40,6 +40,10 @@ $bash = Find-Bash
 Check 'bash is available (install.ps1 requires Git for Windows)' ($null -ne $bash)
 if (-not $bash) { exit 1 }
 $launcher = (Join-Path $repo 'hooks/run-hook.sh') -replace '\\', '/'
+# What this shell puts on a pipe, so a lane that differs shows why (5.1 can add
+# a byte-order mark; the hook tolerates one).
+$probe = 'A' | & $bash -c 'od -An -tx1' | Out-String
+Write-Host "info bytes this shell pipes for 'A':$($probe.TrimEnd())"
 
 $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ('nsls-sdlog-' + [guid]::NewGuid().ToString('N'))
 $home2 = Join-Path $scratch 'home'

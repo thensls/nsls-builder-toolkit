@@ -57,8 +57,14 @@ from urllib.parse import urlsplit
 
 LOG_NAME = ".nsls-student-data-log.jsonl"
 LEARNED_NAME = ".nsls-student-data-connectors.json"
+LOCK_NAME = ".nsls-student-data-log.lock"
 MAX_BYTES = 5_000_000
 MAX_LEARNED = 50
+# Parallel tool calls run their hooks at the same moment, so the size check,
+# the move to .1 and the append happen under one lock, as does the learned-id
+# file's read-modify-write. Held for well under a millisecond; if it can't be
+# had in this long the record is still appended, just without rotating.
+LOCK_WAIT = 1.0
 
 # The vendors' own MCP servers. Fixed by the plan; /connect registers them.
 RECORD_HOSTS = {
@@ -134,6 +140,68 @@ def _read_bytes(path) -> bytes:
             return fh.read()
     except Exception:
         return b""
+
+
+def _lock_fd(fd) -> None:
+    """Non-blocking exclusive lock: flock where it exists, the C runtime's
+    byte-range lock on Windows. Raises OSError while another process holds it."""
+    try:
+        import fcntl
+    except ImportError:
+        import msvcrt
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+    else:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def _unlock_fd(fd) -> None:
+    try:
+        import fcntl
+    except ImportError:
+        import msvcrt
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+
+
+class _locked:
+    """Cross-process lock on the config dir's shared files. An OS lock, so a
+    hook that dies holding it leaves nothing stale. `held` is False when it
+    couldn't be had within LOCK_WAIT; the caller decides what that skips."""
+
+    def __enter__(self):
+        self.fd, self.held = None, False
+        try:
+            path = _config_dir() / LOCK_NAME
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self.fd = os.open(str(path), os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0), 0o600)
+            deadline = time.monotonic() + LOCK_WAIT
+            while not self.held:
+                try:
+                    _lock_fd(self.fd)
+                    self.held = True
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        break
+                    time.sleep(0.01)
+        except Exception:
+            pass
+        return self
+
+    def __exit__(self, *exc):
+        if self.fd is not None:
+            if self.held:
+                try:
+                    _unlock_fd(self.fd)
+                except Exception:
+                    pass
+            try:
+                os.close(self.fd)
+            except Exception:
+                pass
+        return False
 
 
 def _global_config() -> bytes:
@@ -236,17 +304,23 @@ def _learned() -> dict:
 
 
 def _learn(server: str, platform: str) -> None:
-    """Remember which vendor a connector id belongs to. Never overwrites."""
+    """Remember which vendor a connector id belongs to. Never overwrites.
+
+    Under the lock, so two hooks learning different ids at once both land.
+    Without it, skip: a later call of the same shape teaches it again."""
     try:
-        known = _learned()
-        if known.get(server) or len(known) >= MAX_LEARNED:
-            return
-        known[server] = platform
-        path = _learned_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_name(f"{LEARNED_NAME}.{os.getpid()}.tmp")
-        tmp.write_text(json.dumps(known, sort_keys=True), encoding="utf-8")
-        os.replace(tmp, path)
+        with _locked() as lock:
+            if not lock.held:
+                return
+            known = _learned()
+            if known.get(server) or len(known) >= MAX_LEARNED:
+                return
+            known[server] = platform
+            path = _learned_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(f"{LEARNED_NAME}.{os.getpid()}.tmp")
+            tmp.write_text(json.dumps(known, sort_keys=True), encoding="utf-8")
+            os.replace(tmp, path)
     except Exception:
         pass
 
@@ -316,24 +390,36 @@ def write(tool_name, server, platform, route, detector, session_id) -> None:
     }
     line = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
     path = _config_dir() / LOG_NAME
-    try:
-        if path.stat().st_size >= MAX_BYTES:
-            os.replace(path, path.with_name(LOG_NAME + ".1"))
-    except OSError:
-        pass
     path.parent.mkdir(parents=True, exist_ok=True)
-    flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_BINARY", 0)
-    fd = os.open(str(path), flags, 0o600)
-    try:
-        os.write(fd, line)
-    finally:
-        os.close(fd)
+    with _locked() as lock:
+        # Rotate only while holding the lock: a second hook acting on a size it
+        # read before the first one rotated would move the fresh log over .1.
+        if lock.held:
+            try:
+                if path.stat().st_size >= MAX_BYTES:
+                    os.replace(path, path.with_name(LOG_NAME + ".1"))
+            except OSError:
+                pass
+        flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_BINARY", 0)
+        fd = os.open(str(path), flags, 0o600)
+        try:
+            os.write(fd, line)
+        finally:
+            os.close(fd)
+
+
+def _decode(raw: bytes) -> str:
+    """The payload as text. Claude Code sends UTF-8; a byte-order mark, which
+    a PowerShell pipe can add, or UTF-16 must not make a record vanish."""
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16", "replace")
+    return raw.decode("utf-8-sig", "replace")
 
 
 def main() -> None:
     raw = getattr(sys.stdin, "buffer", None)
     raw = raw.read() if raw is not None else sys.stdin.read().encode("utf-8")
-    payload = json.loads(raw.decode("utf-8", "replace"))
+    payload = json.loads(_decode(raw))
     if not isinstance(payload, dict):
         return
     tool_name = payload.get("tool_name")

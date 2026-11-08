@@ -272,6 +272,45 @@ check("a full log moves to .1 and a fresh one starts with the new record",
       code == 0 and rotated.exists() and rotated.stat().st_size >= 5_000_000
       and [r["platform"] for r in fresh] == ["hex"], f"({rotated.exists()}, {fresh})")
 
+print("\na byte-order mark or UTF-16 does not make a record vanish")
+plain = json.dumps({"session_id": "sess-bom", "tool_name": "mcp__claude_ai_Hex__run_project", "tool_input": {}})
+new, code, _ = call(None, raw=b"\xef\xbb\xbf" + plain.encode("utf-8"))
+check("a UTF-8 BOM (a PowerShell pipe adds one) is still logged", code == 0 and len(new) == 1, f"(exit {code}, {new})")
+new, code, _ = call(None, raw=plain.encode("utf-16"))
+check("a UTF-16 payload is still logged", code == 0 and len(new) == 1, f"(exit {code}, {new})")
+
+
+def parallel(payloads):
+    """Run one hook per payload, all at once, as parallel tool calls do."""
+    procs = [subprocess.Popen([sys.executable, str(HOOK)], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL, env=ENV, cwd=str(PROJECT)) for _ in payloads]
+    for p, raw in zip(procs, payloads):
+        p.stdin.write(raw.encode("utf-8"))
+    for p in procs:
+        p.stdin.close()
+    return [p.wait(timeout=60) for p in procs]
+
+
+print("\nparallel hooks share the files safely")
+RACERS = 12
+LOG.write_bytes(filler * (5_000_000 // len(filler) + 1))
+codes = parallel([json.dumps({"session_id": f"sess-race-{i}", "tool_name": "mcp__claude_ai_Hex__run_project",
+                              "tool_input": {}}) for i in range(RACERS)])
+old = rotated.read_bytes()
+racers = [r["session_id"] for r in lines()] + [json.loads(x).get("session_id") for x in old.splitlines()
+                                                 if b"sess-race-" in x]
+check("at the size cap, .1 keeps the whole old log (no second rotation moves the fresh one over it)",
+      all(c == 0 for c in codes) and len(old) >= 5_000_000, f"({codes}, .1 is {len(old)} bytes)")
+check("and every parallel record is kept", sorted(racers) == sorted(f"sess-race-{i}" for i in range(RACERS)),
+      f"({len(racers)} of {RACERS})")
+ids = [f"0f0f0f0f-1111-2222-3333-{i:012d}" for i in range(RACERS)]
+codes = parallel([json.dumps({"session_id": "sess-learn", "tool_name": f"mcp__{u}__search_crm_objects",
+                              "tool_input": {}}) for u in ids])
+known = json.loads(LEARNED.read_text(encoding="utf-8"))
+check("connector ids learned at the same moment are all remembered",
+      all(c == 0 for c in codes) and all(known.get(u) == "hubspot" for u in ids),
+      f"({sum(u in known for u in ids)} of {RACERS})")
+
 print("\nthrough the real launcher, as hooks.json runs it")
 bash = git_bash()
 if not bash:
