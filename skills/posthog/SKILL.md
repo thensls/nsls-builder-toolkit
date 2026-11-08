@@ -21,6 +21,24 @@ description: >-
 2. **Configuration** (creating dashboards, insights, feature flags) — ask permission, explain what will be created and where it will be visible.
 3. **Destructive** (deleting insights, dashboards, experiments, feature flags) — never proactively offered. If explicitly requested: explain that deletion is permanent (no recycle bin for insights), confirm which specific item, confirm they understand it cannot be undone, then proceed.
 
+## Where record lookups run
+
+PostHog record lookups are moving to Claude Code, where every lookup is logged. What this skill queries stays the same; only the route changes.
+
+**Record work:** everything in PostHog: queries, person lookups, recordings, errors, flags, experiments, dashboards and insights.
+
+**The logged route:** tools whose names start `mcp__posthog-records__`. Only that prefix counts; any other PostHog tools, the shared connector included, are not the logged route.
+
+**Where you are.** Settle it once per conversation, before the first record lookup:
+1. The logged route's tools are present: you're in Claude Code. Cowork and claude.ai can't reach them.
+2. Otherwise go by what your own instructions say you are running in, as `/ai-level-up` does: Claude Code (a terminal, or the Code tab in the Claude app), or Cowork or claude.ai.
+3. Still unsure? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell: `$env:CLAUDE_CODE_ENTRYPOINT`), the marker the toolkit's hooks read. `local-agent` is Cowork; any other answer, blank included, is Claude Code. No way to run a command means claude.ai.
+
+**Then:**
+- **Claude Code with the logged route:** use it for all of this skill's PostHog work. Call the same-named tool under that prefix (`query-run` becomes `mcp__posthog-records__query-run`); if there isn't one, use that server's closest equivalent.
+- **Claude Code without it:** carry on exactly as this skill describes, through the connection you have today. Say nothing about setting up the logged route yet.
+- **Cowork or claude.ai, record work:** don't run it, and don't offer a workaround. Say only this, with nothing about tools, servers or settings: "This kind of PostHog lookup happens in Claude Code (the Code tab in the Claude app), where every lookup is logged. Open it and type: /posthog <their request, in one line>".
+
 ## Purpose
 
 This skill makes PostHog's full analytical power accessible through conversation — not just running queries, but knowing which queries to run, what the results mean in the NSLS context, and what to try next when the data doesn't look right. If PostHog tools aren't available, run `/connect` first. For cross-system intelligence that combines PostHog with Airtable, Slack, Customer.io, and more, use `/data-intel`.
