@@ -37,11 +37,15 @@ CONFIG_DIR = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (HOME / ".claude"))
 PERSONAL_DIR = CONFIG_DIR / "local-plugins" / "nsls-personal-toolkit"
 ENV_FILE = PERSONAL_DIR / ".env"
 # One claim file per day, created with O_EXCL: two messages sent at the same moment
-# can't both pass a read-then-write check, so exactly one of them speaks. Named
-# "asked" so a claim left by the session-start version (which a scheduled task
-# usually took) doesn't silence today's nudge; the cleanup below removes both kinds.
+# can't both pass a read-then-write check, so exactly one of them speaks.
+# Each version that changed who may take the nudge gets its own name ("asked" when it
+# moved to the typed message, "typed" when background-job reports stopped counting),
+# because a session left open keeps running the copy it started with: on 8 Nov such
+# sessions took the "asked" claim within a minute of it being cleared, every time.
+# The cleanup removes other days' claims of every name and leaves today's alone, so an
+# older copy that has already spoken today stays quiet.
 CLAIM_GLOB = ".nsls-harvest-nudge-*"
-CLAIM_PREFIX = ".nsls-harvest-nudge-asked-"
+CLAIM_PREFIX = ".nsls-harvest-nudge-typed-"
 LOOKBACK_DAYS = 7  # first run, or no harvest log yet
 # Sessions a person is sitting at. Everything else (print mode `-p` and the SDKs are
 # sdk-*, Cowork's local agent, remote and Slack runs, MCP) stays silent: a nudge there
@@ -162,7 +166,7 @@ def main():
     except Exception:
         return  # already claimed today, or can't record the claim: stay quiet rather than repeat
     for old in CONFIG_DIR.glob(CLAIM_GLOB):
-        if old.name != claim.name:
+        if today.isoformat() not in old.name:
             try:
                 old.unlink()
             except Exception:

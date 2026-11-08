@@ -126,7 +126,8 @@ _, out = run(tmp, cfg, CLAUDE_CODE_ENTRYPOINT="sdk-cli")
 check("silent in a headless SDK session", out == "", out)
 
 tmp, cfg = sandbox()
-(cfg / ".nsls-harvest-nudge-asked-2000-01-01").write_text("", encoding="utf-8")
+for old_name in (".nsls-harvest-nudge-asked-2000-01-01", ".nsls-harvest-nudge-2000-01-01"):
+    (cfg / old_name).write_text("", encoding="utf-8")
 env = dict(os.environ, HOME=str(tmp), USERPROFILE=str(tmp), CLAUDE_CONFIG_DIR=str(cfg),
            PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
 env.pop("CLAUDE_CODE_ENTRYPOINT", None)
@@ -134,7 +135,8 @@ procs = [subprocess.Popen([sys.executable, str(HOOK)], env=env, stdin=subprocess
                           text=True, encoding="utf-8") for _ in range(6)]
 spoke = sum(1 for p in procs if p.communicate(payload("hi"), timeout=20)[0].strip())
 check("six messages sent at once: exactly one speaks", spoke == 1, f"spoke={spoke}")
-check("yesterday's claim file is cleaned up", not (cfg / ".nsls-harvest-nudge-asked-2000-01-01").exists())
+check("yesterday's claim files of every name are cleaned up",
+      not list(cfg.glob(".nsls-harvest-nudge-*2000-01-01")))
 
 for ep in ("sdk-py", "local-agent", "remote", "mcp"):
     tmp, cfg = sandbox()
@@ -189,12 +191,16 @@ _, out = run(tmp, cfg, transcript=transcript_of(tmp, {"type": "summary"}, "not j
                                                     user_row("hi there")))
 check("a transcript with junk rows before the first message still speaks", out != "", out)
 
-tmp, cfg = sandbox()
-stale = cfg / f".nsls-harvest-nudge-{TODAY.isoformat()}"
-stale.write_text("", encoding="utf-8")
-_, out = run(tmp, cfg)
-check("a claim left today by the session-start version doesn't silence the nudge", out != "", out)
-check("and that old claim is cleaned up", not stale.exists())
+for label, old_name in (("session-start", ".nsls-harvest-nudge-"), ("first typed-message", ".nsls-harvest-nudge-asked-")):
+    tmp, cfg = sandbox()
+    stale = cfg / f"{old_name}{TODAY.isoformat()}"
+    stale.write_text("", encoding="utf-8")
+    _, out = run(tmp, cfg)
+    check(f"a claim taken today by the {label} version, still running in an open session, "
+          "doesn't silence the nudge", out != "", out)
+    check(f"and it is left in place, so that older copy stays quiet today ({label})", stale.exists())
+    _, out = run(tmp, cfg)
+    check(f"and the nudge still speaks only once ({label})", out == "", out)
 
 if failures:
     print(f"\n{len(failures)} failure(s)")
