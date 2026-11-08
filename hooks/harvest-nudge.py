@@ -13,8 +13,10 @@ connector, so the hook decides *whether to look* and Claude does the looking:
   - only on a message a person typed, in a session they are sitting at (CLI,
     desktop app, IDE). It runs on the message, not at session start, because the
     desktop app's scheduled tasks open as ordinary desktop sessions: at session
-    start they were taking the day's only nudge, and nobody reads them. Only
-    the message shows it's a scheduled task (it starts "<scheduled-task");
+    start they were taking the day's only nudge, and nobody reads them. A
+    scheduled task's first message starts "<scheduled-task", but its later ones
+    (a background job reporting back) don't, so the hook also reads the
+    session's first message from its transcript;
   - not when the message already asks for a harvest or a close-day/close-week,
     which harvest anyway.
 When it does speak, Claude checks Fathom for meetings the builder recorded since
@@ -45,6 +47,10 @@ LOOKBACK_DAYS = 7  # first run, or no harvest log yet
 # sdk-*, Cowork's local agent, remote and Slack runs, MCP) stays silent: a nudge there
 # is chatter nobody reads. Unset means an older CLI, which is interactive.
 INTERACTIVE = {"", "cli", "claude-desktop", "claude-vscode", "claude-jetbrains"}
+# Messages the app sends by itself: a scheduled task's opening prompt, and a
+# background job reporting back, which also arrives as a message.
+NOT_TYPED = ("<scheduled-task", "<task-notification")
+TRANSCRIPT_SCAN_LINES = 200  # the first message is near the top; don't read a long session
 # A message that will harvest anyway: no point offering it alongside.
 HARVESTING = re.compile(r"harvest|close[ -]?day|close[ -]?week", re.I)
 
@@ -90,12 +96,39 @@ def last_harvest_date(vault):
     return None
 
 
-def read_prompt():
+def read_payload():
     try:
         payload = json.loads(sys.stdin.read() or "{}")
-        return str(payload.get("prompt") or payload.get("user_prompt") or "")
+        return payload if isinstance(payload, dict) else {}
     except Exception:
-        return ""
+        return {}
+
+
+def began_as_scheduled_task(transcript):
+    """True when the session's first message was a scheduled task's prompt.
+
+    Its later messages don't say so: on 8 Nov 2026 a background job reporting back
+    inside the git health check took the day's nudge. No transcript yet (a new
+    session's first message) means no: that message speaks for itself.
+    """
+    try:
+        with open(transcript, encoding="utf-8") as f:
+            for n, line in enumerate(f):
+                if n >= TRANSCRIPT_SCAN_LINES:
+                    break
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                if not isinstance(row, dict) or row.get("type") != "user" or row.get("isMeta"):
+                    continue
+                content = (row.get("message") or {}).get("content")
+                if isinstance(content, list):
+                    content = "".join(b.get("text", "") for b in content if isinstance(b, dict))
+                return str(content or "").lstrip().startswith(NOT_TYPED[0])
+    except Exception:
+        pass
+    return False
 
 
 def main():
@@ -105,9 +138,12 @@ def main():
     claim = CONFIG_DIR / f"{CLAIM_PREFIX}{today.isoformat()}"
     if claim.exists():
         return  # this runs on every message; the usual answer is the cheapest one
-    prompt = read_prompt().lstrip()
-    if not prompt or prompt.startswith("<scheduled-task") or HARVESTING.search(prompt):
+    payload = read_payload()
+    prompt = str(payload.get("prompt") or payload.get("user_prompt") or "").lstrip()
+    if not prompt or prompt.startswith(NOT_TYPED) or HARVESTING.search(prompt):
         return  # nobody at the keyboard, or it harvests anyway: leave the day's nudge unclaimed
+    if payload.get("transcript_path") and began_as_scheduled_task(payload["transcript_path"]):
+        return
     if not (PERSONAL_DIR / "skills" / "harvest-meeting" / "SKILL.md").exists():
         return
     vault_raw = read_env("OBSIDIAN_VAULT_PATH")
