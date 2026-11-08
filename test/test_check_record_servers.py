@@ -78,6 +78,28 @@ with tempfile.TemporaryDirectory() as tmp:
     code, _ = run(plugin(tmp, SIGNAL, extra={"nested/plugin/.mcp.json": {"mcpServers": {"h": {"type": "http", "url": "https://eu.mcp.posthog.com/mcp"}}}}))
     check("a .mcp.json further down the tree, on a subdomain, fails", code == 1)
 
+print("\nno shape of server list hides a server")
+HS = {"type": "http", "url": "https://mcp.hubspot.com"}
+with tempfile.TemporaryDirectory() as tmp:
+    code, out = run(plugin(tmp, SIGNAL, market={"name": "m", "plugins": [{"name": "q", "source": "./plugins/q"}]},
+                           extra={"plugins/q/.claude-plugin/plugin.json": {"name": "q", "mcpServers": {"hs": HS}}}))
+    check("a marketplace plugin in a subfolder whose own manifest has servers fails", code == 1 and "plugins/q" in out)
+with tempfile.TemporaryDirectory() as tmp:
+    code, out = run(plugin(tmp, SIGNAL, manifest={"name": "p", "mcpServers": [{"hs": HS}]}))
+    check("an inline server inside a list fails", code == 1 and "'hs'" in out)
+with tempfile.TemporaryDirectory() as tmp:
+    code, out = run(plugin(tmp, SIGNAL, manifest={"name": "p", "mcpServers": [SIGNAL]}))
+    check("and an unrelated inline server inside a list passes, not 'unreadable'", code == 0)
+with tempfile.TemporaryDirectory() as tmp:
+    code, out = run(plugin(tmp, SIGNAL, manifest={"name": "p", "mcpServers": {"mcpServers": SIGNAL["signal"], "hs": HS}}))
+    check("an inline server named mcpServers doesn't hide its neighbour", code == 1 and "'hs'" in out)
+with tempfile.TemporaryDirectory() as tmp:
+    code, out = run(plugin(tmp, json.dumps({"mcpServers": SIGNAL["signal"], "hs": HS})))
+    check("nor does one in a bare .mcp.json", code == 1 and "'hs'" in out)
+with tempfile.TemporaryDirectory() as tmp:
+    code, out = run(plugin(tmp, json.dumps([{"hs": HS}])))
+    check("a .mcp.json that isn't a map is searched whole", code == 1)
+
 print("\na file that can't be read fails rather than passing unread")
 with tempfile.TemporaryDirectory() as tmp:
     code, out = run(plugin(tmp, '{"mcpServers": {"x": '))

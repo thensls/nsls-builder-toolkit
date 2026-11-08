@@ -12,9 +12,9 @@ which would put record lookups in the one place they must not reach.
 
 What counts as a plugin server list, and is checked here:
   - every `.mcp.json` in the repo (the plugin's own is the one at the root)
-  - `mcpServers` in .claude-plugin/plugin.json and in each plugin entry of
-    .claude-plugin/marketplace.json: inline servers, or a path (or list of
-    paths) to a file of them, which is then read too
+  - `mcpServers` in every .claude-plugin/plugin.json in the repo and in each
+    plugin entry of .claude-plugin/marketplace.json: inline servers, a path to
+    a file of them (then read too), or a list of either
 
 Every string inside a server's config is searched, not only `url`, so a
 stdio wrapper such as `npx mcp-remote https://mcp.hubspot.com` is caught as
@@ -57,11 +57,17 @@ def load_json(path):
 
 
 def servers_in(data):
-    """The name -> config map in a server-list document. `.mcp.json` wraps it in
-    `mcpServers`; a file named from plugin.json may hold the map bare."""
-    if isinstance(data, dict) and isinstance(data.get("mcpServers"), dict):
-        return data["mcpServers"]
-    return data if isinstance(data, dict) else {}
+    """(name, config) pairs in a server-list file. `.mcp.json` wraps them in
+    `mcpServers`; a file named from plugin.json may hold them bare. The shape is
+    only a guess, so nothing is dropped on it: the other top-level keys are kept
+    too (a server named `mcpServers` can't hide its neighbours), and a file
+    that isn't a map at all is searched whole."""
+    if not isinstance(data, dict):
+        return [("(whole file)", data)]
+    inner = data.get("mcpServers")
+    if not isinstance(inner, dict):
+        return list(data.items())
+    return [(k, v) for k, v in data.items() if k != "mcpServers"] + list(inner.items())
 
 
 def strings(value):
@@ -77,16 +83,19 @@ def strings(value):
 
 
 def declared_lists(field, base, label):
-    """(label, servers map) for a manifest's `mcpServers` field: inline, a path, or a list of paths."""
+    """(label, server pairs) for a manifest's `mcpServers` field: inline servers,
+    a path, or a list whose items are paths or inline servers. An inline map is
+    the servers themselves, never unwrapped."""
     if field is None:
         return []
-    if isinstance(field, dict):
-        return [(label, servers_in(field))]
-    paths = [field] if isinstance(field, str) else field
-    if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
-        raise Unreadable(f"{label}: mcpServers is neither servers, a path, nor a list of paths")
+    items = field if isinstance(field, list) else [field]
+    if not all(isinstance(p, (str, dict)) for p in items):
+        raise Unreadable(f"{label}: mcpServers is neither servers, a path, nor a list of them")
     out = []
-    for p in paths:
+    for p in items:
+        if isinstance(p, dict):
+            out.append((label, list(p.items())))
+            continue
         target = (base / p).resolve()
         if not target.is_file():
             raise Unreadable(f"{label}: mcpServers names {p!r}, which isn't a file")
@@ -94,15 +103,22 @@ def declared_lists(field, base, label):
     return out
 
 
+def in_repo(root, path):
+    return not SKIP_DIRS.intersection(path.relative_to(root).parts)
+
+
 def server_lists(root):
     root = Path(root).resolve()
     found = []
     for path in sorted(root.rglob(".mcp.json")):
-        if not SKIP_DIRS.intersection(path.relative_to(root).parts):
+        if in_repo(root, path):
             found.append((str(path.relative_to(root)), servers_in(load_json(path))))
-    plugin = root / ".claude-plugin" / "plugin.json"
-    if plugin.is_file():
-        found += declared_lists(load_json(plugin).get("mcpServers"), root, ".claude-plugin/plugin.json")
+    # Every plugin manifest in the repo, not only the root one: a marketplace
+    # entry can point at a plugin in a subfolder, and its manifest ships too.
+    for manifest in sorted(root.rglob("plugin.json")):
+        if manifest.parent.name == ".claude-plugin" and in_repo(root, manifest):
+            label = str(manifest.relative_to(root))
+            found += declared_lists(load_json(manifest).get("mcpServers"), manifest.parent.parent, label)
     market = root / ".claude-plugin" / "marketplace.json"
     if market.is_file():
         for i, entry in enumerate(load_json(market).get("plugins") or []):
@@ -118,7 +134,7 @@ def server_lists(root):
 def findings(root):
     out = []
     for where, servers in server_lists(root):
-        for name, config in servers.items():
+        for name, config in servers:
             hosts = sorted({m.group(1).lower() for s in strings({name: config}) for m in HOST_RE.finditer(s)})
             if hosts:
                 out.append((where, name, hosts))
