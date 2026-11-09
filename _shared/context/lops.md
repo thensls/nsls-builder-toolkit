@@ -1,5 +1,5 @@
 # Lines of Priority (LOPs)
-_Last synced: 2026-10-26_
+_Last synced: 2026-11-09_
 
 ## L1: Simplification/Efficiency
 **Owner**: Anish Patel | **Health**: On Track
@@ -14,12 +14,8 @@ _Last synced: 2026-10-26_
 **Owner**: Adam Stone | **Health**: On Track | **Deadline**: 2026-12-31
 > DRI reports the migration of Society and FOL lifecycle marketing emails to Customer.io is on track for completion by end of 2026.
 
-### L2: Dashboards for SLT and Core Revenue: 2026 data by the end of Q2 and 2025 data by Q4
-**Owner**: Anish Patel | **Health**: On Track | **Deadline**: 2026-06-30
-> DRI reports goal is on track. Continuing work on the model and view components for the dashboards.
-
 ### L2: Other key L3 projects
-**Owner**: Chelsea Byers | **Health**: No update | **Deadline**: 2026-12-31
+**Owner**: Chelsea Byers | **Health**: On Track | **Deadline**: 2026-12-31
 > No update yet.
 
 ### L2: Build a repeatable system to track and engage 100% of advisors and E-board members each season.
@@ -45,10 +41,6 @@ _Last synced: 2026-10-26_
 
 ### L2: Complete job framework and compensation leveling project by the end of Q4
 **Owner**: Heather Darnell | **Health**: On Track | **Deadline**: 2026-12-31
-> No update yet.
-
-### L2: Host Meaningful 25th Anniversary Event
-**Owner**: Chelsea Byers | **Health**: On Track | **Deadline**: 2026-10-27
 > No update yet.
 
 ## L1: Core Revenue
