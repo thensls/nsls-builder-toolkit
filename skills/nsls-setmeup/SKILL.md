@@ -29,6 +29,7 @@ Show the roadmap upfront so the builder knows the shape:
 Welcome to the NSLS Builder Toolkit! Let's get you set up.
 
 This takes about 5 minutes, and I'll do it with you one step at a time:
+  0. Check this computer has the tools the skills use (automatic, about a minute)
   1. Confirm your builder email + GitHub username (so the tracker credits your work and your merged PRs)
   2. Connect your tools — Slack, Google Drive, Calendar, Gmail, Asana, Fathom
   3. Check your plugins are working
@@ -47,6 +48,52 @@ if it doesn't match, re-ask, and never "clean it up" by guessing.
 - **Email:** `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$`
 - **GitHub username:** `^[A-Za-z0-9-]{1,39}$`
 - **Full name:** no backtick, `$`, `\`, `"`, `;`, `|`, `&`, `<`, `>` or line breaks
+
+## Step 0: Set up this computer (automatic, ~1 min)
+
+The toolkit's skills call a few tools that live on the computer, not in the
+toolkit: the Google Workspace tool (`gws`), Python with the document libraries
+(through the `nsls-python` launcher), and Node.js. The toolkit carries its own
+setup for these. It downloads nothing from the toolkit's repository, so it
+works on a machine with no GitHub sign-in.
+
+**Detect first.** If all three answer, say "This computer already has what the
+toolkit needs" and go to Step 1:
+
+```bash
+~/.local/bin/nsls-python -c 'import docx, pptx' && gws --version && node --version
+```
+
+(On Windows use plain `nsls-python`.)
+
+**Otherwise run the setup for them**, with a generous timeout (it downloads
+tools, which can take a few minutes on a slow connection):
+
+- *Mac/Linux:*
+  ```bash
+  bash "${CLAUDE_PLUGIN_ROOT}/install.sh" --machine-only
+  ```
+- *Windows:*
+  ```powershell
+  powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/install.ps1" -MachineOnly
+  ```
+  Never run `install.sh` on Windows.
+
+`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the folder two levels above this SKILL.md.
+
+Tell the builder one plain sentence about what you are doing ("I'm checking
+this computer has the tools the skills use") and do not show them the output.
+Then:
+
+- **It ends with "This computer is set up for the NSLS toolkit" and nothing is
+  flagged:** say so in one sentence and go on.
+- **A line starts with `Note`, `[warn]` or `[ACTION NEEDED]`:** pass on only
+  that item, in plain words, with the one thing they need to do (for example
+  "Node.js is missing, so the Signal connection won't work until it's
+  installed; here is the page"). Everything else in the toolkit works
+  meanwhile, so carry on with Step 1.
+- **Windows says Git was installed and asks for a re-run:** ask the builder to
+  quit Claude fully, reopen it, and say `/nsls-setmeup` again.
 
 ## Step 1: Confirm Your Builder Email (~15 sec)
 
@@ -383,7 +430,13 @@ esac
 
 **If macOS or Linux**: skip silently — the bash hooks work natively.
 
-**If Windows**: run the installer for them:
+**If Windows, and the toolkit reached this PC as a Claude plugin** (the file
+`$HOME\.claude\local-plugins\nsls-builder-toolkit\install.ps1` does not
+exist): skip silently too. The plugin brings its own hooks, and Step 0 already
+set up the PC.
+
+**If Windows, and that file exists** (a PC set up by the installer): run the
+installer for them:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\.claude\local-plugins\nsls-builder-toolkit\install.ps1"
