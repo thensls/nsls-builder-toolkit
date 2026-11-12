@@ -2152,6 +2152,13 @@ HANDOVER_DECLINED = CONFIG_DIR / ".nsls-org-copy-handover-declined"
 # between the switch-off and its check would leave the switch-off unchecked.
 HANDOVER_CALL_S = 8
 HANDOVER_CALLS = 4
+# Every CLI call that changes the install names the scope. The install this
+# hook reads (_installed_plugin_record) and the switch it reads
+# (marketplace_plugin_active) are the USER-scope ones, and `plugin disable`
+# picks a scope by itself when none is given: in a project that also enables
+# the toolkit it could switch that project's entry off and leave the user one
+# on, which is not the install being handed over.
+_USER_SCOPE = ("--scope", "user")
 # Sessions that sign in some other way than a claude.ai account neither
 # download nor load synced plugins (Claude Code's plugin-loading reference).
 # On such a session the marketplace install is the only toolkit there is.
@@ -2257,7 +2264,7 @@ def _undo_handover(claude):
     first, then the settings file directly, and if neither worked, say so now,
     while this session can still pass it on.
     """
-    _cli_ok(claude, "plugin", "enable", ORG_PLUGIN_KEY)
+    _cli_ok(claude, "plugin", "enable", ORG_PLUGIN_KEY, *_USER_SCOPE)
     if marketplace_plugin_active():
         return True
     if _force_marketplace_on() and marketplace_plugin_active():
@@ -2390,12 +2397,18 @@ def _start_handover(reserve):
         before = _listed_org_copy(claude)
         if not before or not before["enabled"]:
             return False  # Claude Code does not offer it to this account
-        if not _cli_ok(claude, "plugin", "disable", ORG_PLUGIN_KEY):
+        if not _cli_ok(claude, "plugin", "disable", ORG_PLUGIN_KEY, *_USER_SCOPE):
             # "Failed" includes "timed out after doing it": the setting can be
             # written before the CLI is cut off. Left like that, the install
             # is off with nothing checked and no marker. Put it back.
             if not marketplace_plugin_active():
                 _undo_handover(claude)
+            return False
+        if marketplace_plugin_active():
+            # The CLI said yes, and the switch this hook reads is still on:
+            # whatever it switched off was not this install. No marker, or the
+            # next session would read "on again" as a builder's choice and
+            # give up on this machine for good.
             return False
         after = _listed_org_copy(claude)
         if not (after and after["enabled"] and after["path"]):
@@ -2438,7 +2451,7 @@ def _finish_handover(reserve):
     if lock is None:
         return False
     try:
-        if not _cli_ok(claude, "plugin", "uninstall", ORG_PLUGIN_KEY):
+        if not _cli_ok(claude, "plugin", "uninstall", ORG_PLUGIN_KEY, *_USER_SCOPE):
             return False
         # Best-effort: with no plugin installed from it, the marketplace is
         # only a pointer at a repository this machine may not be able to read.

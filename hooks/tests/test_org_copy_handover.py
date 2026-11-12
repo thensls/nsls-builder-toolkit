@@ -82,6 +82,11 @@ FAKE_CLAUDE = textwrap.dedent('''\
     registry = load(registry_path, {"plugins": {}})
     enabled = settings.setdefault("enabledPlugins", {})
     key, synced = "nsls-builder-toolkit@nsls-toolkit", "nsls-builder-toolkit@synced"
+    # The real CLI picks a scope by itself when none is named. Only a call that
+    # names the user scope is sure to act on the user-scope install.
+    scoped = args[-2:] == ["--scope", "user"]
+    if scoped:
+        args = args[:-2]
     if args[:3] == ["plugin", "list", "--json"]:
         out = []
         market_on = key in registry["plugins"] and enabled.get(key) is not False
@@ -99,16 +104,18 @@ FAKE_CLAUDE = textwrap.dedent('''\
     if args[:2] == ["plugin", "disable"] and args[2:] == [key]:
         if behave == "disable-fails":
             sys.exit(1)
+        if behave == "wrong-scope" or not scoped:
+            sys.exit(0)        # "disabled", but some other scope's entry
         enabled[key] = False
         if behave == "disable-writes-then-fails":
             settings_path.write_text(json.dumps(settings))
             sys.exit(1)
     elif args[:2] == ["plugin", "enable"] and args[2:] == [key]:
-        if "enable-fails" in behave:
+        if "enable-fails" in behave or not scoped:
             sys.exit(1)
         enabled[key] = True
     elif args[:2] == ["plugin", "uninstall"] and args[2:] == [key]:
-        if behave == "uninstall-fails":
+        if behave == "uninstall-fails" or not scoped:
             sys.exit(1)
         registry["plugins"].pop(key, None)
         enabled.pop(key, None)
@@ -210,7 +217,7 @@ with tempfile.TemporaryDirectory() as tmp:
     seen = calls(log)
     check("it reports having handed over", did is True, str(seen))
     check("it asked Claude Code first, switched the install off, then asked again",
-          seen == ["plugin list --json", f"plugin disable {KEY}", "plugin list --json"], str(seen))
+          seen == ["plugin list --json", f"plugin disable {KEY} --scope user", "plugin list --json"], str(seen))
     check("the marketplace install is switched off", enabled(cfg).get(KEY) is False)
     check("and NOT uninstalled: its record and files are still there", registered(cfg))
     check("nothing was uninstalled or removed", not [c for c in seen if "uninstall" in c or "remove" in c])
@@ -229,7 +236,7 @@ with tempfile.TemporaryDirectory() as tmp:
     seen = calls(log)
     check("it does not claim a hand-over", did is False)
     check("the marketplace install was switched straight back on",
-          seen[-1] == f"plugin enable {KEY}" and enabled(cfg).get(KEY) is True, str(seen))
+          seen[-1] == f"plugin enable {KEY} --scope user" and enabled(cfg).get(KEY) is True, str(seen))
     check("no marker is left", not (cfg / ".nsls-org-copy-handover").exists())
     check("and the machine still has its toolkit", registered(cfg) and ss.marketplace_plugin_active())
     log.write_text("", encoding="utf-8")
@@ -243,7 +250,7 @@ with tempfile.TemporaryDirectory() as tmp:
     did = ss.hand_over_to_org_copy()
     seen = calls(log)
     check("the CLI refused to switch the install back on",
-          seen[-1] == f"plugin enable {KEY}" and did is False, str(seen))
+          seen[-1] == f"plugin enable {KEY} --scope user" and did is False, str(seen))
     check("so the hook set the switch back itself: the machine still has its toolkit",
           enabled(cfg).get(KEY) is True and ss.marketplace_plugin_active())
     check("and no marker is left", not (cfg / ".nsls-org-copy-handover").exists())
@@ -269,7 +276,7 @@ with tempfile.TemporaryDirectory() as tmp:
     did = ss.hand_over_to_org_copy()
     seen = calls(log)
     check("a switch-off that failed after taking effect is put back",
-          did is False and seen[-1] == f"plugin enable {KEY}" and enabled(cfg).get(KEY) is True, str(seen))
+          did is False and seen[-1] == f"plugin enable {KEY} --scope user" and enabled(cfg).get(KEY) is True, str(seen))
     check("with no marker, and the toolkit still on this machine",
           not (cfg / ".nsls-org-copy-handover").exists() and ss.marketplace_plugin_active())
 
@@ -314,7 +321,9 @@ CASES = [
     ("Claude Code does not list the organization's copy", dict(behave="not-listed"), {}, ["plugin list --json"]),
     ("Claude Code lists it as disabled", dict(behave="listed-disabled"), {}, ["plugin list --json"]),
     ("the switch-off itself fails", dict(behave="disable-fails"), {},
-     ["plugin list --json", f"plugin disable {KEY}"]),
+     ["plugin list --json", f"plugin disable {KEY} --scope user"]),
+    ("the CLI says it switched something off, but not this install", dict(behave="wrong-scope"), {},
+     ["plugin list --json", f"plugin disable {KEY} --scope user"]),
 ]
 for label, kwargs, env, expected in CASES:
     with tempfile.TemporaryDirectory() as tmp:
@@ -366,7 +375,7 @@ with tempfile.TemporaryDirectory() as tmp:
     seen = calls(log)
     check("the hook knows it runs from the organization's copy", got.get("root") == str(root.resolve()), raw)
     check("it uninstalls the install it switched off, then drops the marketplace",
-          got.get("did") is True and seen == [f"plugin uninstall {KEY}", "plugin marketplace remove nsls-toolkit"], str(seen))
+          got.get("did") is True and seen == [f"plugin uninstall {KEY} --scope user", "plugin marketplace remove nsls-toolkit"], str(seen))
     check("the marketplace install is gone", not registered(cfg))
     check("and so is the marker", not (cfg / ".nsls-org-copy-handover").exists())
     log.write_text("", encoding="utf-8")
