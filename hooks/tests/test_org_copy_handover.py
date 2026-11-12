@@ -100,6 +100,9 @@ FAKE_CLAUDE = textwrap.dedent('''\
         if behave == "disable-fails":
             sys.exit(1)
         enabled[key] = False
+        if behave == "disable-writes-then-fails":
+            settings_path.write_text(json.dumps(settings))
+            sys.exit(1)
     elif args[:2] == ["plugin", "enable"] and args[2:] == [key]:
         if "enable-fails" in behave:
             sys.exit(1)
@@ -257,6 +260,18 @@ with tempfile.TemporaryDirectory() as tmp:
     check("if even that fails, Claude is told now, while a session can still pass it on",
           did is False and out.startswith("WARNING") and f"claude plugin enable {KEY}" in out, out[:200])
     check("in toolkit-authored words only (no CLI output)", "Traceback" not in out and "\n" == out[-1])
+
+with tempfile.TemporaryDirectory() as tmp:
+    # The switch-off is cut off AFTER it wrote the setting (a timeout looks
+    # exactly like this): the CLI reports failure, the install is off.
+    cfg, root, log = machine(tmp, behave="disable-writes-then-fails")
+    ss = load(HOOKS / "session-start.py")
+    did = ss.hand_over_to_org_copy()
+    seen = calls(log)
+    check("a switch-off that failed after taking effect is put back",
+          did is False and seen[-1] == f"plugin enable {KEY}" and enabled(cfg).get(KEY) is True, str(seen))
+    check("with no marker, and the toolkit still on this machine",
+          not (cfg / ".nsls-org-copy-handover").exists() and ss.marketplace_plugin_active())
 
 print("\na builder who switches the marketplace install back on has chosen it")
 with tempfile.TemporaryDirectory() as tmp:

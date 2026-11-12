@@ -2391,6 +2391,11 @@ def _start_handover(reserve):
         if not before or not before["enabled"]:
             return False  # Claude Code does not offer it to this account
         if not _cli_ok(claude, "plugin", "disable", ORG_PLUGIN_KEY):
+            # "Failed" includes "timed out after doing it": the setting can be
+            # written before the CLI is cut off. Left like that, the install
+            # is off with nothing checked and no marker. Put it back.
+            if not marketplace_plugin_active():
+                _undo_handover(claude)
             return False
         after = _listed_org_copy(claude)
         if not (after and after["enabled"] and after["path"]):
