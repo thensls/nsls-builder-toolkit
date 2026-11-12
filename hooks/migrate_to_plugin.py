@@ -11,6 +11,9 @@ Stage A — plugin not installed yet:
     Nothing else changes: the running session keeps using the shims, and the
     plugin loads at the NEXT session start. Anyone with git access to the repo
     can install; the marketplace is not public.
+    Never runs where NSLS's Claude organization already delivers the toolkit
+    (hooks/synced_copy.py): that copy IS the plugin, and a marketplace install
+    beside it would outrank it and cut the machine off from its updates.
 
 Stage B — plugin installed, shims still present (mac/linux only):
     Remove exactly the shims the installer created, now that the plugin
@@ -416,7 +419,42 @@ def _claude(args, timeout):
         return False, str(e)
 
 
-def _plugin_installed():
+def _synced_copy():
+    """hooks/synced_copy.py from beside this file, or None.
+
+    It recognises the copy NSLS's Claude organization delivers, which has no
+    record in installed_plugins.json. None on a checkout older than that file:
+    then only the registry counts, as it always did.
+    """
+    try:
+        here = str(Path(globals()["__file__"]).resolve().parent)
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import synced_copy
+
+        return synced_copy
+    except Exception:
+        return None
+
+
+def _synced_present():
+    sc = _synced_copy()
+    try:
+        return bool(sc and sc.present(_CONFIG_DIR, globals().get("__file__")))
+    except Exception:
+        return False
+
+
+def _synced_active():
+    sc = _synced_copy()
+    try:
+        return bool(sc and sc.active(_CONFIG_DIR, globals().get("__file__")))
+    except Exception:
+        return False
+
+
+def _marketplace_installed():
+    """True when the CLI's registry holds a marketplace install of the toolkit."""
     try:
         registry = _read_json(_CONFIG_DIR / "plugins" / "installed_plugins.json")
         return any(
@@ -427,12 +465,48 @@ def _plugin_installed():
         return False
 
 
+def _plugin_installed():
+    """True when the toolkit is here as a plugin: a marketplace install, or the
+    copy NSLS's Claude organization delivers.
+
+    Reading only the registry called an organization-delivered machine "not
+    installed", so stage A registered the marketplace and installed a second
+    copy beside it. A marketplace install outranks a synced one, so that second
+    copy then took over and the organization's updates stopped arriving.
+
+    This decides stage A only. "On disk" is not "delivering": whether stage B
+    may retire anything is _plugin_disabled_by_user()'s question.
+    """
+    return _synced_present() or _marketplace_installed()
+
+
 def _plugin_disabled_by_user():
-    """True if the user explicitly disabled the plugin — respect that."""
+    """True when no plugin is delivering the toolkit here, because whatever is
+    installed has been switched off. Respect that: stage B retires the shims
+    and the user-scope signal server on the strength of a plugin doing their
+    job, and a switched-off plugin does no job.
+
+    The organization's copy has two switches (its own, and
+    `syncClaudeAiPlugins: false` for every synced plugin), and neither is an
+    `enabledPlugins` key a marketplace install would carry. Reading only those
+    keys called a machine with syncing switched off and nothing else installed
+    "not disabled", and stage B then removed the only signal server and any
+    shim an old beacon still vouched for.
+    """
+    if _synced_active():
+        # The organization's copy is delivering the toolkit, whatever else on
+        # this machine is switched off.
+        return False
+    if not _marketplace_installed():
+        # Only the organization's copy is here, and it is not active.
+        return True
     try:
         settings = _read_json(_SETTINGS)
         for key, enabled in settings.get("enabledPlugins", {}).items():
-            if key.startswith("nsls-builder-toolkit@") and enabled is False:
+            # The synced copy's own switch says nothing about a marketplace
+            # install beside it.
+            if (key.startswith("nsls-builder-toolkit@")
+                    and key != "nsls-builder-toolkit@synced" and enabled is False):
                 return True
     except Exception:
         pass
@@ -900,8 +974,12 @@ def _stage_b():
             + ". Org skills now load as nsls-builder-toolkit:<name> — if a "
             "bare skill name fails this session, use the prefixed form. "
             "Rollback, if ever needed: restore "
-            "~/.claude/settings.json.pre-plugin-migration and run "
-            "`claude plugin uninstall nsls-builder-toolkit@nsls-toolkit`."
+            "~/.claude/settings.json.pre-plugin-migration"
+            # A copy NSLS's Claude organization delivers has no marketplace
+            # install to uninstall; naming one would send a builder to a
+            # command that fails.
+            + ("." if _synced_active() else
+               " and run `claude plugin uninstall nsls-builder-toolkit@nsls-toolkit`.")
         )
 
 

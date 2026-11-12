@@ -867,10 +867,93 @@ function Test-OwnPointer {
     return [regex]::IsMatch($t, $pattern)
 }
 
+# --- the copy NSLS's Claude organization delivers ---
+# Organization sync puts the toolkit on a machine with NO record in
+# installed_plugins.json, at
+#   .claude\plugins\synced\<organizationUuid>_<accountUuid>\nsls-builder-toolkit
+# and Claude Code keeps it current by itself. A hook that only reads the
+# registry calls that machine "no plugin" and keeps writing a pointer file for
+# every toolkit skill beside the real ones. Same rules as hooks/synced_copy.py.
+
+# The folder Claude Code keeps the signed-in account's synced plugins under, or
+# $null when the account cannot be read. Read as text, not ConvertFrom-Json:
+# .claude.json also holds a map keyed by project path, and Windows PowerShell
+# 5.1 refuses a JSON object whose keys differ only by case, which two spellings
+# of one drive letter are.
+function Get-SyncedAccountFolder {
+    foreach ($p in @((Join-Path $env:USERPROFILE '.claude.json'), (Join-Path $ClaudeDir '.claude.json'))) {
+        try {
+            $text = [System.IO.File]::ReadAllText($p)
+            $at = $text.IndexOf('"oauthAccount"')
+            if ($at -lt 0) { continue }
+            $part = $text.Substring($at, [Math]::Min(6000, $text.Length - $at))
+            $org  = [regex]::Match($part, '"organizationUuid"\s*:\s*"([0-9A-Fa-f][0-9A-Fa-f-]{7,63})"')
+            $acct = [regex]::Match($part, '"accountUuid"\s*:\s*"([0-9A-Fa-f][0-9A-Fa-f-]{7,63})"')
+            if ($org.Success -and $acct.Success) { return ($org.Groups[1].Value + '_' + $acct.Groups[1].Value) }
+        } catch { }
+    }
+    return $null
+}
+
+# A folder that holds this plugin, whole enough to run its hooks.
+function Test-SyncedToolkitCopy {
+    param([string]$Root)
+    try {
+        $manifest = Get-Content (Join-Path $Root '.claude-plugin\plugin.json') -Raw -ErrorAction Stop | ConvertFrom-Json
+        return (($manifest.name -eq 'nsls-builder-toolkit') -and (Test-Path (Join-Path $Root 'hooks\hooks.json') -PathType Leaf))
+    } catch { return $false }
+}
+
+# The synced copy for the signed-in account, or $null. A copy another account
+# left behind is on disk but never loaded, so with the account readable only
+# its own folder counts; unreadable, a copy counts only when it is the only one.
+function Get-SyncedToolkitRoot {
+    $base = Join-Path $ClaudeDir 'plugins\synced'
+    if (-not (Test-Path $base -PathType Container)) { return $null }
+    $names = @(); $roots = @()
+    foreach ($folder in @(Get-ChildItem $base -Directory -ErrorAction SilentlyContinue)) {
+        if ($folder.Name.StartsWith('.')) { continue }
+        $root = Join-Path $folder.FullName 'nsls-builder-toolkit'
+        if (Test-SyncedToolkitCopy -Root $root) { $names += $folder.Name; $roots += $root }
+    }
+    if ($roots.Count -eq 0) { return $null }
+    $account = Get-SyncedAccountFolder
+    if ($account) {
+        for ($i = 0; $i -lt $names.Count; $i++) { if ($names[$i] -ieq $account) { return $roots[$i] } }
+        return $null
+    }
+    if ($roots.Count -eq 1) { return $roots[0] }
+    return $null
+}
+
+# On disk for this account AND not switched off in this machine's settings.
+# `syncClaudeAiPlugins: false` stops every synced plugin; the plugin's own
+# switch stops this one unless NSLS made it required.
+function Test-SyncedToolkitActive {
+    $root = Get-SyncedToolkitRoot
+    if (-not $root) { return $false }
+    try {
+        $cfg = Get-Content (Join-Path $ClaudeDir 'settings.json') -Raw -ErrorAction Stop | ConvertFrom-Json
+    } catch { return $true }
+    if (($cfg.syncClaudeAiPlugins -is [bool]) -and (-not $cfg.syncClaudeAiPlugins)) { return $false }
+    $off = $false
+    foreach ($prop in $cfg.enabledPlugins.PSObject.Properties) {
+        if ($prop.Name -eq 'nsls-builder-toolkit@synced' -and ($prop.Value -is [bool]) -and (-not $prop.Value)) { $off = $true }
+    }
+    if (-not $off) { return $true }
+    try {
+        $meta = Get-Content (Join-Path (Split-Path $root -Parent) 'nsls-builder-toolkit.meta.json') -Raw -ErrorAction Stop | ConvertFrom-Json
+        return ([string]$meta.installation_preference -match 'required')
+    } catch { return $false }
+}
+# --- end the copy NSLS's Claude organization delivers ---
+
 # Installed AND not switched off by the builder: same rule as org_plugin_active()
 # in session-start.py. A disabled plugin can't deliver skills, so that builder
-# keeps the pointer files.
+# keeps the pointer files. The organization's copy counts as installed; its own
+# switch is judged above and is not a marketplace install's.
 function Test-OrgPluginActive {
+    if (Test-SyncedToolkitActive) { return $true }
     try {
         $reg = Get-Content (Join-Path $ClaudeDir 'plugins\installed_plugins.json') -Raw -ErrorAction Stop | ConvertFrom-Json
         $installed = @($reg.plugins.PSObject.Properties.Name | Where-Object { $_ -like 'nsls-builder-toolkit@*' }).Count -gt 0
@@ -879,7 +962,7 @@ function Test-OrgPluginActive {
     try {
         $cfg = Get-Content (Join-Path $ClaudeDir 'settings.json') -Raw -ErrorAction Stop | ConvertFrom-Json
         foreach ($prop in $cfg.enabledPlugins.PSObject.Properties) {
-            if ($prop.Name -like 'nsls-builder-toolkit@*' -and $prop.Value -eq $false) { return $false }
+            if ($prop.Name -like 'nsls-builder-toolkit@*' -and $prop.Name -ne 'nsls-builder-toolkit@synced' -and $prop.Value -eq $false) { return $false }
         }
     } catch { }
     return $true
