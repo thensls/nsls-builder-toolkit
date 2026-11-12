@@ -12,8 +12,12 @@ the toolkit that asked "is the plugin installed?" by reading that registry got
 1. hooks/synced_copy.py recognises a synced copy: only a whole one, only the
    signed-in account's, and not one the builder switched off.
 2. With one present, session start does not install the marketplace plugin
-   beside it (stage A), does not ask GitHub about updates, does not pull the
-   old checkout, and stops writing a pointer file per toolkit skill.
+   beside it (stage A), does not ask GitHub about plugin updates, and stops
+   writing a pointer file per toolkit skill. The old checkout keeps updating:
+   things on a machine may still read files from it.
+3a. "On disk" is not "delivering". A synced copy that is switched off (its
+   own switch, or all syncing) never lets stage B retire a shim or the signal
+   server: nothing would be left doing their job.
 3. "Update my NSLS toolkit" says the truth instead of "not installed".
 4. With NO synced copy, every answer is what it was before: nothing here may
    change today's install and update path.
@@ -292,7 +296,59 @@ with tempfile.TemporaryDirectory() as tmp:
           not mig._plugin_disabled_by_user())
     settings(cfg, enabledPlugins={f"{PLUGIN}@synced": False})
     check("switched off by the builder: respected", mig._plugin_disabled_by_user())
+    settings(cfg, syncClaudeAiPlugins=False)
+    check("all syncing switched off: on disk, so no stage A",
+          mig._plugin_installed())
+    check("but nothing is delivering the toolkit, so stage B must not run",
+          mig._plugin_disabled_by_user())
+    registry(cfg)
+    check("a marketplace install beside it is judged by its own switch", not mig._plugin_disabled_by_user())
+    settings(cfg, syncClaudeAiPlugins=False, enabledPlugins={f"{PLUGIN}@synced": False})
+    check("which the synced copy's switch is not", not mig._plugin_disabled_by_user())
+    settings(cfg, enabledPlugins={f"{PLUGIN}@nsls-toolkit": False})
+    check("a marketplace install switched off, with the organization's copy active: delivering",
+          not mig._plugin_disabled_by_user())
+    settings(cfg, syncClaudeAiPlugins=False, enabledPlugins={f"{PLUGIN}@nsls-toolkit": False})
+    check("both switched off: respected", mig._plugin_disabled_by_user())
 reset_env()
+
+if not WINDOWS:
+    # The whole migration, on the machine that review caught: the organization's
+    # copy is on disk with all syncing switched off, no marketplace install, the
+    # installer's shims still in settings.json, and beacons left behind by a
+    # marketplace copy whose cache folder was never cleaned up. Stage B used to
+    # run there: it removed the only signal server and every shim the stale
+    # beacons vouched for, leaving neither a plugin nor a shim.
+    SHIM = "/Users/someone/.claude/local-plugins/nsls-builder-toolkit/hooks/"
+    for label, off in (("syncing switched off: stage B touches nothing", True),
+                       ("the same machine with the copy active: stage B does its job", False)):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = new_cfg(tmp)
+            log = fake_cli(tmp)
+            add_copy(cfg)
+            body = {"hooks": {"PreToolUse": [{"matcher": "Bash|Write|Edit", "hooks": [
+                {"type": "command", "command": f'python3 "{SHIM}guardrail-gate.py"'}]}]}}
+            if off:
+                body["syncClaudeAiPlugins"] = False
+            settings(cfg, **body)
+            stale = cfg / "plugins" / "cache" / "nsls-toolkit" / PLUGIN / "3.6.0" / "hooks"
+            stale.mkdir(parents=True)
+            (cfg / ".nsls-plugin-beacons").mkdir()
+            (cfg / ".nsls-plugin-beacons" / "guardrail-gate.json").write_text(json.dumps(
+                {"hook": "guardrail-gate", "root": str(stale.parent.resolve()), "version": "3.6.0"}), encoding="utf-8")
+            clone = cfg / "local-plugins" / PLUGIN
+            shutil.copytree(HOOKS, clone / "hooks", ignore=shutil.ignore_patterns("tests", "__pycache__"))
+            ss = load(HOOKS / "session-start.py", cfg)
+            ss.PLUGIN_DIR = clone
+            ss.run_plugin_migration()
+            seen = calls(log)
+            left = json.loads((cfg / "settings.json").read_text(encoding="utf-8")).get("hooks", {})
+            if off:
+                check(label, seen == [] and "PreToolUse" in left, f"calls={seen} hooks={left}")
+                check("and writes no done marker", not (cfg / ".nsls-plugin-migration-done").exists())
+            else:
+                check(label, any(c.startswith("mcp get signal") for c in seen), f"calls={seen}")
+        reset_env()
 
 if not WINDOWS:
     for label, synced in (("no synced copy: stage A installs the plugin (as before)", False),
@@ -354,8 +410,8 @@ if not WINDOWS:
         check("the hook knows it runs from the organization's copy",
               got.get("root") == str(root.resolve()), res.stdout + res.stderr)
         check("and reports the toolkit installed", got.get("installed") is True)
-        check("the old builder checkout is left alone (no GitHub call for it)",
-              git(cfg / "local-plugins" / PLUGIN, "rev-parse", "HEAD") != org_head)
+        check("the old builder checkout still updates: something may yet read files from it",
+              git(cfg / "local-plugins" / PLUGIN, "rev-parse", "HEAD") == org_head)
         check("the personal toolkit is still pulled",
               git(cfg / "local-plugins" / "nsls-personal-toolkit", "rev-parse", "HEAD") == personal_head)
         check("no update check is claimed or stamped", not (cfg / ".nsls-plugin-fresh-check").exists())

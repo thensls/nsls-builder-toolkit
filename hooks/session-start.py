@@ -1204,15 +1204,7 @@ def git_pull(deadline=None):
     """
     if deadline is None:
         deadline = time.monotonic() + 15
-    # Running from the copy NSLS's Claude organization delivers, the builder
-    # toolkit's old checkout feeds nothing: skills, hooks and agents all come
-    # from the synced copy. Fetching it would be a GitHub call per session that
-    # changes nothing a builder uses, and once the repository is private it is a
-    # call that needs a sign-in most machines do not have.
-    skip_org_checkout = bool(org_copy_root())
     for plugin in SYNC_PLUGINS:
-        if skip_org_checkout and plugin == "nsls-builder-toolkit":
-            continue
         plugin_dir = CONFIG_DIR / "local-plugins" / plugin
         if not (plugin_dir / ".git").exists():
             continue

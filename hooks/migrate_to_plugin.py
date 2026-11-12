@@ -453,17 +453,8 @@ def _synced_active():
         return False
 
 
-def _plugin_installed():
-    """True when the toolkit is here as a plugin: a marketplace install, or the
-    copy NSLS's Claude organization delivers.
-
-    Reading only the registry called an organization-delivered machine "not
-    installed", so stage A registered the marketplace and installed a second
-    copy beside it. A marketplace install outranks a synced one, so that second
-    copy then took over and the organization's updates stopped arriving.
-    """
-    if _synced_present():
-        return True
+def _marketplace_installed():
+    """True when the CLI's registry holds a marketplace install of the toolkit."""
     try:
         registry = _read_json(_CONFIG_DIR / "plugins" / "installed_plugins.json")
         return any(
@@ -474,16 +465,48 @@ def _plugin_installed():
         return False
 
 
+def _plugin_installed():
+    """True when the toolkit is here as a plugin: a marketplace install, or the
+    copy NSLS's Claude organization delivers.
+
+    Reading only the registry called an organization-delivered machine "not
+    installed", so stage A registered the marketplace and installed a second
+    copy beside it. A marketplace install outranks a synced one, so that second
+    copy then took over and the organization's updates stopped arriving.
+
+    This decides stage A only. "On disk" is not "delivering": whether stage B
+    may retire anything is _plugin_disabled_by_user()'s question.
+    """
+    return _synced_present() or _marketplace_installed()
+
+
 def _plugin_disabled_by_user():
-    """True if the user explicitly disabled the plugin — respect that."""
+    """True when no plugin is delivering the toolkit here, because whatever is
+    installed has been switched off. Respect that: stage B retires the shims
+    and the user-scope signal server on the strength of a plugin doing their
+    job, and a switched-off plugin does no job.
+
+    The organization's copy has two switches (its own, and
+    `syncClaudeAiPlugins: false` for every synced plugin), and neither is an
+    `enabledPlugins` key a marketplace install would carry. Reading only those
+    keys called a machine with syncing switched off and nothing else installed
+    "not disabled", and stage B then removed the only signal server and any
+    shim an old beacon still vouched for.
+    """
     if _synced_active():
         # The organization's copy is delivering the toolkit, whatever else on
         # this machine is switched off.
         return False
+    if not _marketplace_installed():
+        # Only the organization's copy is here, and it is not active.
+        return True
     try:
         settings = _read_json(_SETTINGS)
         for key, enabled in settings.get("enabledPlugins", {}).items():
-            if key.startswith("nsls-builder-toolkit@") and enabled is False:
+            # The synced copy's own switch says nothing about a marketplace
+            # install beside it.
+            if (key.startswith("nsls-builder-toolkit@")
+                    and key != "nsls-builder-toolkit@synced" and enabled is False):
                 return True
     except Exception:
         pass

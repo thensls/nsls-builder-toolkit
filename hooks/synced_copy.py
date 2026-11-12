@@ -183,6 +183,12 @@ def switched_off(cfg=None, root=None) -> bool:
     Two switches exist: `syncClaudeAiPlugins: false` stops every synced plugin,
     and `"nsls-builder-toolkit@synced": false` stops this one, unless NSLS made
     it required. Settings that cannot be read are not a switch.
+
+    The machine's own settings file, on purpose, and not a project's. What
+    this answer gates is machine-wide: pointer files in ~/.claude/skills, the
+    shims in ~/.claude/settings.json, whether to install a plugin. A project
+    that turns the toolkit off for itself must not make the hook write a
+    pointer file per skill for every other project, or reinstall anything.
     """
     cfg = config_dir() if cfg is None else Path(cfg)
     try:
