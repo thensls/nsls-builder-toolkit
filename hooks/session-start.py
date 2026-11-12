@@ -1030,7 +1030,7 @@ def report_personal_fork_drift(deadline=None):
     onto it (see _fast_forward_clean_fork); any other fork gets the offer.
     """
     plugin_dir = CONFIG_DIR / "local-plugins" / PERSONAL_PLUGIN
-    if not (plugin_dir / ".git").exists():
+    if not (plugin_dir / ".git").exists() or _follows_delivered_copy(plugin_dir):
         return
 
     def remaining():
@@ -1222,6 +1222,8 @@ def git_pull(deadline=None):
         plugin_dir = CONFIG_DIR / "local-plugins" / plugin
         if not (plugin_dir / ".git").exists():
             continue
+        if _follows_delivered_copy(plugin_dir):
+            continue   # kept current from the copy Claude delivers; its .git is a placeholder
         if deadline - time.monotonic() <= 0:
             break
         try:
@@ -1244,6 +1246,162 @@ def git_pull(deadline=None):
         report_personal_fork_drift(deadline=deadline)
     except Exception:
         pass
+
+
+# --- the Personal Toolkit folder follows the copy NSLS delivers through Claude ---
+# Once NSLS's repository is private, a computer with no GitHub sign-in can no
+# longer pull the Personal Toolkit. NSLS's Claude organization can deliver it
+# instead (see hooks/personal_delivery.py). Everything here does nothing at all
+# until such a copy exists for the signed-in account, so a computer without one
+# updates from GitHub exactly as before.
+PERSONAL_DELIVERY_NOTICE_STAMP = CONFIG_DIR / ".nsls-personal-delivery-notice"
+PERSONAL_DELIVERY_NOTICE_EVERY_H = 24
+# A session start spends at most this long copying. A first copy that needs
+# longer carries on at the next start; an update is a handful of small files.
+PERSONAL_DELIVERY_BUDGET_S = 4
+
+
+def _personal_delivery():
+    """The personal_delivery module beside this file, or None. None when this
+    file runs without one beside it: then nothing here acts, as before."""
+    try:
+        here = str(_own_hooks_dir())
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import personal_delivery
+
+        return personal_delivery
+    except Exception:
+        return None
+
+
+def _follows_delivered_copy(plugin_dir):
+    """True when this folder is kept current from the copy Claude delivers.
+    It is then not a checkout: no git command belongs in it."""
+    pd = _personal_delivery()
+    try:
+        return bool(pd and pd.is_delivered(plugin_dir))
+    except Exception:
+        return False
+
+
+def _personal_delivery_command(request):
+    return f'bash "{_own_hooks_dir() / "run-hook.sh"}" personal-delivery {request}'
+
+
+def _personal_delivery_notice_due():
+    """At most one "your changes are holding updates back" notice a day."""
+    try:
+        if PERSONAL_DELIVERY_NOTICE_STAMP.exists():
+            age_h = (time.time() - PERSONAL_DELIVERY_NOTICE_STAMP.stat().st_mtime) / 3600
+            if 0 <= age_h < PERSONAL_DELIVERY_NOTICE_EVERY_H:
+                return False
+        PERSONAL_DELIVERY_NOTICE_STAMP.parent.mkdir(parents=True, exist_ok=True)
+        PERSONAL_DELIVERY_NOTICE_STAMP.touch()
+    except OSError:
+        pass
+    return True
+
+
+def _named(paths, limit=5):
+    shown = ", ".join(_safe_text(p, 80) for p in list(paths)[:limit])
+    more = len(paths) - limit
+    return shown + (f" and {more} more" if more > 0 else "")
+
+
+def _say_personal_delivery(pd, res, found, plugin_dir):
+    """What a session start says about the pass it just made. Almost always
+    nothing: a folder that was made, updated or already current is not news.
+    One thing is: updates held back by the owner's own changes. Our own words
+    and verified values only."""
+    outcome = res.get("outcome")
+    where = _safe_text(plugin_dir)
+    if outcome == "paused":
+        changed = res.get("changed") or []
+        if not changed or not _personal_delivery_notice_due():
+            return
+        print(
+            f"[NSLS Personal Toolkit] Updates to this person's Personal Toolkit are paused: "
+            f"they changed or removed {len(changed)} file(s) in its folder ({_named(changed)}), "
+            f"so NSLS's newer version ({found.version}; the folder is on "
+            f"{_safe_text(res.get('have') or 'an earlier one', 20)}) was not applied. Nothing of "
+            f"theirs was touched. Mention it in ONE plain sentence at a natural moment and offer "
+            f"the choice: keep their changes as they are (updates stay paused), or take NSLS's "
+            f"version, which first moves each file they changed into a .set-aside folder inside "
+            f"{where} so nothing is lost. If they choose NSLS's version, run this yourself: "
+            f"{_personal_delivery_command('adopt')} . NEVER hand them a command."
+        )
+        return
+
+
+def deliver_personal_toolkit(deadline=None, request=None):
+    """Keep the Personal Toolkit folder in step with the copy Claude delivers.
+
+    Returns None, having done nothing, when NSLS's Claude organization delivers
+    no Personal Toolkit to the signed-in account: that is every computer until
+    delivery is switched on. Otherwise one pass (see personal_delivery.py): make
+    the folder when there is none, or update a folder made that way. A git
+    checkout, a fork and a copy from anywhere else are never touched.
+    `request` is "adopt" when the owner has said yes to replacing their own
+    changes, "now" when a skill wants the result said out loud.
+    """
+    pd = _personal_delivery()
+    if pd is None:
+        return None
+    found = pd.offer(CONFIG_DIR)
+    if found is None:
+        return None
+    if deadline is None:
+        deadline = time.monotonic() + PERSONAL_DELIVERY_BUDGET_S
+    plugin_dir = pd.folder(CONFIG_DIR)
+    adopt = request == "adopt"
+    kind = pd.state(plugin_dir)
+    if kind in ("none", "delivered"):
+        res = pd.refresh(CONFIG_DIR, found, deadline, take_theirs=adopt)
+    else:
+        res = {"outcome": "kept", "why": kind}   # a checkout or a copy: git's, or its owner's
+    res.setdefault("version", found.version)
+    res["folder"] = str(plugin_dir)
+    if request is None:
+        _say_personal_delivery(pd, res, found, plugin_dir)
+        if res.get("outcome") in ("created", "updated"):
+            print(f"personal toolkit {res['outcome']}: version {found.version}", file=sys.stderr)
+    return res
+
+
+def personal_delivery_request(request):
+    """`run-hook.sh personal-delivery now|adopt`: one pass, with time to finish,
+    and the result in plain words for the skill (or Claude) that asked."""
+    res = deliver_personal_toolkit(deadline=time.monotonic() + 60, request=request)
+    if res is None:
+        print("PERSONAL_TOOLKIT_NOT_DELIVERED: NSLS's Claude organization delivers no Personal "
+              "Toolkit to this account on this computer, so nothing was changed.")
+        return
+    outcome, where = res.get("outcome"), _safe_text(res.get("folder", ""))
+    version = _safe_text(res.get("version") or "", 20)
+    if outcome in ("created", "updated", "current"):
+        print(f"PERSONAL_TOOLKIT_READY: version {version} is in {where}, kept current from the "
+              f"copy NSLS delivers through Claude.")
+        if res.get("set_aside"):
+            print(f"The files it replaced were moved to {_safe_text(res['set_aside'])}; nothing "
+                  f"was deleted. Tell the builder where they are.")
+        try:
+            sync_pointers()   # a new folder's skills show up without a restart
+        except Exception:
+            pass
+    elif outcome == "paused":
+        print(f"PERSONAL_TOOLKIT_PAUSED: the builder changed or removed "
+              f"{len(res.get('changed') or [])} file(s) in {where} ({_named(res.get('changed') or [])}), "
+              f"so nothing was replaced. With their yes, `personal-delivery adopt` moves those "
+              f"files to a .set-aside folder and takes NSLS's version.")
+    elif outcome == "kept":
+        what = "a git checkout" if res.get("why") == "checkout" else "a copy this hook did not make"
+        print(f"PERSONAL_TOOLKIT_KEPT: {where} is {what}, so it was left exactly as it is and "
+              f"still updates the way it did before.")
+    else:
+        print("PERSONAL_TOOLKIT_RETRY: the copy could not be finished just now (the delivered "
+              "copy is still arriving, or a file is in use). Nothing is broken; try again in a "
+              "minute or at the next session start.")
 
 
 SYNCED_PLUGIN_KEY = "nsls-builder-toolkit@synced"
@@ -3740,6 +3898,11 @@ def _policy_hook_owns_policy():
 
 def main():
     _utf8_stdio()
+    # Before the pull: a folder this takes over is no longer git's to update.
+    try:
+        deliver_personal_toolkit()
+    except Exception:
+        pass
     git_pull()
     stage_a = run_plugin_migration()
     if not stage_a:  # stage A spent this session's freshness budget
@@ -3786,7 +3949,7 @@ if __name__ == "__guardrails__":
     try:
         for _plugin in SYNC_PLUGINS:
             _dir = CONFIG_DIR / "local-plugins" / _plugin
-            if (_dir / ".git").exists():
+            if (_dir / ".git").exists() and not _follows_delivered_copy(_dir):
                 _warn_if_stale_by_configuration(
                     _plugin, _dir, deadline=time.monotonic() + 10)
     except Exception:
@@ -3839,5 +4002,10 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["--update-now"]:
         _utf8_stdio()
         update_now()
+    elif sys.argv[1:2] == ["--personal-delivery"]:
+        # `run-hook.sh personal-delivery now|adopt` (skills/personal-setup, and
+        # Claude when a builder says yes to the offer the session start made).
+        _utf8_stdio()
+        personal_delivery_request("adopt" if sys.argv[2:3] == ["adopt"] else "now")
     else:
         main()
