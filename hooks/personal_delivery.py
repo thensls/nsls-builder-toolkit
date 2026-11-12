@@ -825,11 +825,17 @@ def take_over(cfg, found, tracked=(), origin=None, deadline=None, take_theirs=Fa
 
 _GIT_NAMES = r"[A-Z_]+"
 _PULL = r'git -C "(?P<dir>[^"\n]+)" pull --ff-only --quiet'
+# What makes a pull unable to ask anyone to sign in, in each shell an entry is
+# written for (see quieten_update_entries). GIT_TERMINAL_PROMPT=0 stops git's
+# own terminal question; GCM_INTERACTIVE=never stops Git Credential Manager's
+# sign-in window, which ignores the first; an empty GIT_ASKPASS turns off a
+# helper program git would run to ask. Stored credentials still work.
+_BASH_QUIET = "GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= "
+_PS_QUIET = "$env:GIT_TERMINAL_PROMPT='0'; $env:GCM_INTERACTIVE='never'; "
 _PULL_ENTRY = re.compile(
     r"(?:unset(?: " + _GIT_NAMES + r")+; "
     r"|Remove-Item Env:" + _GIT_NAMES + r"(?:,Env:" + _GIT_NAMES + r")* -ErrorAction Ignore; )?"
-    r"(?:GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= "
-    r"|\$env:GIT_TERMINAL_PROMPT='0'; \$env:GCM_INTERACTIVE='never'; )?"
+    r"(?:" + re.escape(_BASH_QUIET) + "|" + re.escape(_PS_QUIET) + r")?"
     + _PULL)
 _SYNC_ENTRY = re.compile(
     r'"[^"\n]+" "(?P<dir>[^"\n]+)[/\\]hooks[/\\]session-start\.py" --no-pull')
@@ -956,6 +962,31 @@ def update_entries(cfg):
     return ours, edited
 
 
+def _save_settings(path, before, settings, backup_name) -> bool:
+    """Write settings.json back in one step. A copy of the file as it was is
+    kept beside it the first time, and whoever wrote the file since it was read
+    wins: ours is dropped and the next session tries again."""
+    backup = path.with_name(backup_name)
+    if not backup.exists():
+        shutil.copy2(str(path), str(backup))
+    fd, tmp = tempfile.mkstemp(prefix=".settings.json.", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(settings, fh, indent=2)
+            fh.write("\n")
+        os.chmod(tmp, stat.S_IMODE(path.stat().st_mode))
+        if path.read_bytes() != before:
+            raise OSError("settings.json changed")
+        os.replace(tmp, str(path))
+        return True
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return False
+
+
 def remove_update_entries(cfg) -> bool:
     """Take the installers' own update entries out of settings.json. True when
     none is left. Nothing else in the file changes meaning; a copy of the file
@@ -982,26 +1013,66 @@ def remove_update_entries(cfg) -> bool:
                     del hooks[event]
         if not removed:
             return True
-        backup = path.with_name("settings.json.pre-personal-delivery")
-        if not backup.exists():
-            shutil.copy2(str(path), str(backup))
-        fd, tmp = tempfile.mkstemp(prefix=".settings.json.", dir=str(path.parent))
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump(settings, fh, indent=2)
-                fh.write("\n")
-            os.chmod(tmp, stat.S_IMODE(path.stat().st_mode))
-            # Whoever wrote settings.json since we read it wins: drop ours and
-            # let the next session try again.
-            if path.read_bytes() != before:
-                raise OSError("settings.json changed")
-            os.replace(tmp, str(path))
-        except Exception:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
+        if not _save_settings(path, before, settings, "settings.json.pre-personal-delivery"):
             return False
         return update_entries(cfg)[0] == 0
     except Exception:
         return False
+
+
+def _quietened(command):
+    """The same pull, unable to ask anyone to sign in. None when it already
+    is, or is the bare form with no shell of its own yet: the installers'
+    upgrades give that one its `unset` or `Remove-Item` prefix first, and only
+    then is it clear which shell the three settings must be written for."""
+    if _BASH_QUIET in command or _PS_QUIET in command:
+        return None
+    at = command.rfind('git -C "')
+    if command.startswith("unset "):
+        return command[:at] + _BASH_QUIET + command[at:]
+    if command.startswith("Remove-Item "):
+        return command[:at] + _PS_QUIET + command[at:]
+    return None
+
+
+def quieten_update_entries(cfg) -> int:
+    """Make this folder's own pull entry unable to ask for a sign-in. Returns
+    how many entries were rewritten (0 when none needed it, or none could be).
+
+    The entry the installers register is a `git pull` with nothing to stop git
+    asking for credentials. Against a public repository it never needs any.
+    Against a private one, on a computer with no GitHub sign-in, Git Credential
+    Manager (the default on Windows) opens a sign-in window: from a hook, at
+    every session start. A folder that follows the delivered copy has no such
+    entry any more, but a fork and a checkout with its owner's own work keep
+    theirs for good, and every checkout keeps it until it is taken over.
+
+    Only an entry exactly as an installer or an upgrade wrote it, for THIS
+    folder, is rewritten, and only by adding the three settings: it pulls the
+    same folder the same way. Anyone's hand-written entry is theirs.
+    """
+    try:
+        path = Path(os.path.realpath(Path(cfg) / "settings.json"))
+        before = path.read_bytes()
+        if b"pull --ff-only --quiet" not in before:
+            return 0
+        settings = json.loads(before.decode("utf-8-sig"))
+        targets = _targets(cfg)
+        changed = 0
+        for _event, _group, entries in _hook_lists(settings):
+            for hook in entries:
+                command = hook.get("command") if isinstance(hook, dict) else None
+                if not isinstance(command, str):
+                    continue
+                match = _PULL_ENTRY.fullmatch(command)
+                if not match or not any(_same_folder(match.group("dir"), t) for t in targets):
+                    continue
+                quiet = _quietened(command)
+                if quiet is not None:
+                    hook["command"] = quiet
+                    changed += 1
+        if not changed:
+            return 0
+        return changed if _save_settings(path, before, settings, "settings.json.pre-personal-quiet-pull") else 0
+    except Exception:
+        return 0

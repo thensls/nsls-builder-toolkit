@@ -1548,6 +1548,20 @@ def deliver_personal_toolkit(deadline=None, request=None):
     return res
 
 
+def quieten_personal_pull():
+    """Make the Personal Toolkit's own update entry unable to ask for a sign-in.
+
+    hooks/personal_delivery.py has the why. This is the one part of that module
+    that acts with nothing delivered: the entry must already be quiet on the
+    day the repository goes private, on every computer that still has it.
+    """
+    pd = _personal_delivery()
+    if pd is None:
+        return
+    if pd.quieten_update_entries(CONFIG_DIR):
+        print("personal-toolkit update hook can no longer ask for a GitHub sign-in", file=sys.stderr)
+
+
 def personal_delivery_request(request):
     """`run-hook.sh personal-delivery now|adopt`: one pass, with time to finish,
     and the result in plain words for the skill (or Claude) that asked."""
@@ -4094,6 +4108,10 @@ def main():
         deliver_personal_toolkit()
     except Exception:
         pass
+    try:
+        quieten_personal_pull()
+    except Exception:
+        pass
     git_pull()
     stage_a = run_plugin_migration()
     if not stage_a:  # stage A spent this session's freshness budget
@@ -4143,6 +4161,14 @@ if __name__ == "__guardrails__":
             if (_dir / ".git").exists() and not _follows_delivered_copy(_dir):
                 _warn_if_stale_by_configuration(
                     _plugin, _dir, deadline=time.monotonic() + 10)
+    except Exception:
+        pass
+    # The Personal Toolkit's own pull entry, made unable to ask for a sign-in.
+    # Git Credential Manager, whose window this is about, is the Windows
+    # default, and on a PC whose plugin hooks do not fire this is the only run
+    # that can do it.
+    try:
+        quieten_personal_pull()
     except Exception:
         pass
     # Stage A on Windows. This run_name is the ONLY path from the PowerShell
