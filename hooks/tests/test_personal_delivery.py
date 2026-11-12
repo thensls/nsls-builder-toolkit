@@ -644,7 +644,7 @@ with tempfile.TemporaryDirectory() as tmp:
             f'Remove-Item {env_paths} -ErrorAction Ignore; git -C "{folder}" pull --ff-only --quiet',
             f'unset {names}; GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= git -C "{folder}" pull --ff-only --quiet',
             f"Remove-Item {env_paths} -ErrorAction Ignore; $env:GIT_TERMINAL_PROMPT='0'; $env:GCM_INTERACTIVE='never'; "
-            f'git -C "{folder}" pull --ff-only --quiet',
+            f'Remove-Item Env:GIT_ASKPASS -ErrorAction Ignore; git -c core.askPass= -C "{folder}" pull --ff-only --quiet',
             f'"/opt/homebrew/bin/python3" "{hook_folder}/hooks/session-start.py" --no-pull',
         ]
 

@@ -42,7 +42,8 @@ WINDOWS = os.name == "nt"
 NAMES = "GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR"
 ENV_PATHS = ",".join("Env:" + n for n in NAMES.split())
 BASH_QUIET = "GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= "
-PS_QUIET = "$env:GIT_TERMINAL_PROMPT='0'; $env:GCM_INTERACTIVE='never'; "
+PS_QUIET = ("$env:GIT_TERMINAL_PROMPT='0'; $env:GCM_INTERACTIVE='never'; "
+            "Remove-Item Env:GIT_ASKPASS -ErrorAction Ignore; ")
 
 failures = []
 
@@ -118,7 +119,8 @@ with tempfile.TemporaryDirectory() as tmp:
     check("the Git Bash / Mac form gains the three settings, written for a POSIX shell",
           after[0] == f"unset {NAMES}; {BASH_QUIET}" + bare(folder), after[0])
     check("the PowerShell form gains them, written for PowerShell",
-          after[1] == f"Remove-Item {ENV_PATHS} -ErrorAction Ignore; {PS_QUIET}" + bare(folder), after[1])
+          after[1] == f"Remove-Item {ENV_PATHS} -ErrorAction Ignore; {PS_QUIET}"
+          + f'git -c core.askPass= -C "{folder}" pull --ff-only --quiet', after[1])
     check("the bare form, which has no shell of its own yet, is left for the installers' own upgrade",
           after[2] == bare(folder))
     check("another checkout's entry is not this folder's to change", after[3] == bash_form(other))
@@ -175,11 +177,13 @@ with tempfile.TemporaryDirectory() as tmp:
             r = subprocess.run([pwsh, "-NoProfile", "-NonInteractive", "-Command", after[1]], env=env,
                                capture_output=True, text=True, timeout=120)
             got = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line]
-            check("under PowerShell: one git call, the same folder and arguments as before",
-                  len(got) == 1 and got[0]["argv"] == ["-C", str(folder), "pull", "--ff-only", "--quiet"],
+            check("under PowerShell: one git call, the same folder and pull, with an empty askpass setting in front",
+                  len(got) == 1 and got[0]["argv"] == ["-c", "core.askPass=", "-C", str(folder), "pull", "--ff-only", "--quiet"],
                   f"{r.stdout} {r.stderr} {got}")
             check("with the terminal question and Git Credential Manager's window switched off",
                   bool(got) and all(got[0]["env"].get(k) == v for k, v in want_env.items()), str(got))
+            check("and the askpass helper this session inherited is gone from git's environment",
+                  bool(got) and got[0]["env"].get("GIT_ASKPASS") is None, str(got))
 
 print("5. nothing to rewrite: nothing is written")
 with tempfile.TemporaryDirectory() as tmp:

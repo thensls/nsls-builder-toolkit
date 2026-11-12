@@ -907,14 +907,20 @@ def take_over(cfg, found, tracked=(), origin=None, deadline=None, take_theirs=Fa
 # changed by hand: it is left alone, and so is its folder.
 
 _GIT_NAMES = r"[A-Z_]+"
-_PULL = r'git -C "(?P<dir>[^"\n]+)" pull --ff-only --quiet'
 # What makes a pull unable to ask anyone to sign in, in each shell an entry is
 # written for (see quieten_update_entries). GIT_TERMINAL_PROMPT=0 stops git's
 # own terminal question; GCM_INTERACTIVE=never stops Git Credential Manager's
-# sign-in window, which ignores the first; an empty GIT_ASKPASS turns off a
-# helper program git would run to ask. Stored credentials still work.
+# sign-in window, which ignores the first. The third asker is an askpass
+# helper, a program git runs to ask (VS Code's terminal sets one for everything
+# started from it). A POSIX shell switches it off with an empty GIT_ASKPASS.
+# PowerShell cannot hold an empty variable, so there the variable is removed
+# and git is given an empty core.askPass on its command line, which also stops
+# it falling back to a configured helper. Stored credentials still work.
 _BASH_QUIET = "GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= "
-_PS_QUIET = "$env:GIT_TERMINAL_PROMPT='0'; $env:GCM_INTERACTIVE='never'; "
+_PS_QUIET = ("$env:GIT_TERMINAL_PROMPT='0'; $env:GCM_INTERACTIVE='never'; "
+             "Remove-Item Env:GIT_ASKPASS -ErrorAction Ignore; ")
+_PS_GIT = "git -c core.askPass= "
+_PULL = r'git (?:-c core\.askPass= )?-C "(?P<dir>[^"\n]+)" pull --ff-only --quiet'
 _PULL_ENTRY = re.compile(
     r"(?:unset(?: " + _GIT_NAMES + r")+; "
     r"|Remove-Item Env:" + _GIT_NAMES + r"(?:,Env:" + _GIT_NAMES + r")* -ErrorAction Ignore; )?"
@@ -1111,10 +1117,12 @@ def _quietened(command):
     if _BASH_QUIET in command or _PS_QUIET in command:
         return None
     at = command.rfind('git -C "')
+    if at < 0:
+        return None
     if command.startswith("unset "):
         return command[:at] + _BASH_QUIET + command[at:]
     if command.startswith("Remove-Item "):
-        return command[:at] + _PS_QUIET + command[at:]
+        return command[:at] + _PS_QUIET + _PS_GIT + command[at + len("git "):]
     return None
 
 

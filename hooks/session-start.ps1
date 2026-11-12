@@ -60,6 +60,12 @@ $env:GIT_TERMINAL_PROMPT = '0'   # credentialed remotes fail fast, never prompt-
 # asked for, at every session start. 'never' makes it fail instead; stored
 # credentials still work.
 $env:GCM_INTERACTIVE = 'never'
+# The third asker is an askpass helper, a program git runs to ask. VS Code's
+# terminal sets one (GIT_ASKPASS) for everything started from it, a session
+# included. The Python hook switches it off with an empty value; PowerShell
+# cannot hold an empty variable, so it is removed for this hook and every git
+# call it makes.
+Remove-Item Env:GIT_ASKPASS, Env:SSH_ASKPASS -ErrorAction SilentlyContinue
 
 # git's markers for an operation in progress. A checkout mid-bisect, mid-rebase,
 # mid-am or mid-revert can look clean and sit on its branch, and moving that branch
