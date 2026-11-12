@@ -41,7 +41,13 @@ def session_line(cookies, external):
             f'\\"cookie_count\\":{cookies}}}"')
 
 
-def fake_repo(tmp, lines_to_log, record_env=False, skip_entry=None):
+# Same shape as expect-cli 0.1.3's cookie import (server-*.js and index.js), made callable:
+# open({cookies: true}, false) reports whether addCookies ran.
+COOKIE_CHUNK = ("export function open(t,s){let imported=false;const u={addCookies(){imported=true}};"
+                "if(t.cookies&&!s){let r=Array.isArray(t.cookies)?t.cookies:[];u.addCookies(r)}return imported}\n")
+
+
+def fake_repo(tmp, lines_to_log, record_env=False, skip_entry=None, cookie_chunk=COOKIE_CHUNK):
     """A git repo to run in, plus a fake pre-installed expect-cli in a temp cache
     (so the wrapper skips npm and patches these files instead)."""
     tmp = pathlib.Path(tmp)
@@ -62,6 +68,8 @@ def fake_repo(tmp, lines_to_log, record_env=False, skip_entry=None):
     for name in ("browser-mcp.js", "browser-daemon.js"):
         if name != skip_entry:
             (dist / name).write_text("export {};\n")
+    if cookie_chunk is not None:
+        (dist / "server-Abc123.js").write_text(cookie_chunk)
     env = dict(os.environ, XDG_CACHE_HOME=str(tmp / "cache"),
                EXPECT_PROFILE="Default", EXPECT_COOKIE_BROWSERS="chrome")
     return repo, env, dist
@@ -111,6 +119,30 @@ with tempfile.TemporaryDirectory() as tmp:
     r = run_wrapper(repo, env)
     check("missing entry point refuses to run (exit 2)", r.returncode == 2, repr(r.stderr[-300:]))
 
+print("\ncookie import is switched off in Expect's own code")
+probe_open = "import(process.argv[1]).then(m=>console.log(m.open({cookies:true},false)))"
+with tempfile.TemporaryDirectory() as tmp:
+    repo, env, dist = fake_repo(tmp, [session_line(0, "false")])
+    chunk = dist / "server-Abc123.js"
+    before = subprocess.run(["node", "-e", probe_open, str(chunk)], capture_output=True, text=True).stdout.strip()
+    check("unpatched chunk imports cookies when asked (the test is live)", before == "true", repr(before))
+    r = run_wrapper(repo, env)
+    check("run succeeds", r.returncode == 0, repr(r.stderr[-300:]))
+    after = subprocess.run(["node", "-e", probe_open, str(chunk)], capture_output=True, text=True,
+                           env=dict(os.environ, NODE_OPTIONS="")).stdout.strip()
+    check("patched chunk imports nothing even with cookies:true", after == "false", repr(after))
+    run_wrapper(repo, env)
+    check("cookie patch applied once, not again on rerun", chunk.read_text().count("&&!1)") == 1)
+with tempfile.TemporaryDirectory() as tmp:
+    repo, env, _ = fake_repo(tmp, [session_line(0, "false")],
+                             cookie_chunk="export const x=(u)=>u.addCookies([]);\n")
+    r = run_wrapper(repo, env)
+    check("addCookies in an unrecognised shape refuses to run (exit 2)", r.returncode == 2, repr(r.stderr[-300:]))
+with tempfile.TemporaryDirectory() as tmp:
+    repo, env, _ = fake_repo(tmp, [session_line(0, "false")], cookie_chunk=None)
+    r = run_wrapper(repo, env)
+    check("no cookie-import code found at all refuses to run (exit 2)", r.returncode == 2, repr(r.stderr[-300:]))
+
 print("\nparallel runs never trip over each other's setup")
 with tempfile.TemporaryDirectory() as tmp:
     repo, env, dist = fake_repo(tmp, [session_line(0, "false")])
@@ -142,10 +174,10 @@ with tempfile.TemporaryDirectory() as tmp:
 print("\nthe after-run cookie check")
 cases = [
     ("clean session passes", [session_line(0, "false")], 0),
-    ("cookies loaded fails (exit 3)", [session_line(12, "false")], 3),
+    ("cookies the site set itself don't fail a headless run", [session_line(3, "false")], 0),
     ("real browser attached fails (exit 3)", [session_line(0, "true")], 3),
     ("one bad session among clean ones fails (exit 3)",
-     [session_line(0, "false"), session_line(0, "false"), session_line(5, "false")], 3),
+     [session_line(0, "false"), session_line(2, "false"), session_line(0, "true")], 3),
 ]
 for label, lines, want in cases:
     with tempfile.TemporaryDirectory() as tmp:
@@ -154,11 +186,11 @@ for label, lines, want in cases:
         check(label, r.returncode == want, f"got exit {r.returncode}: {r.stderr[-300:]!r}")
 
 with tempfile.TemporaryDirectory() as tmp:
-    repo, env, _ = fake_repo(tmp, [session_line(12, "false")])
+    repo, env, _ = fake_repo(tmp, [session_line(0, "true")])
     sub = repo / "web" / "src"
     sub.mkdir(parents=True)
     r = run_wrapper(sub, env)
-    check("cookies loaded fails (exit 3) when started from a subfolder", r.returncode == 3,
+    check("real-browser session fails (exit 3) when started from a subfolder", r.returncode == 3,
           f"got exit {r.returncode}: {r.stderr[-300:]!r}")
     check("Expect's log lands at the repo root, where it is audited",
           (repo / ".expect" / "logs.md").is_file() and not (sub / ".expect").exists())

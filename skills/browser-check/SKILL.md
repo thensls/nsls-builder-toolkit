@@ -57,14 +57,15 @@ and headed options.
 | Protection | How | Verified 2026-11-12 on 0.1.3 |
 |---|---|---|
 | **No vendor telemetry** | `NO_TELEMETRY=1` turns off the PostHog analytics. That flag does **not** cover Expect's Axiom traces or its expect.dev version check, and an environment variable can't reach Expect's browser server (the agent starts it with a fixed env list). So the wrapper keeps a private, pinned install of Expect (`~/.cache/nsls-browser-check/`) and adds `block-telemetry.cjs` to the first line of every Expect entry point, refusing `*.posthog.com`, `*.axiom.co` and `*.expect.dev`. If the patch isn't in place, it refuses to run. | Network capture of a full run. Flag only: ~175 connection samples to `api.axiom.co`. Wrapper: **zero** connections to any telemetry address; 26 Axiom attempts and 1 version check refused, across 13 Expect processes. |
-| **No cookies copied** | `--ci` (in 0.1.3, `--no-cookies` on its own does nothing; only `--ci` actually turns cookies off), Expect's profile/CDP/cookie env vars unset, and the agent told never to ask for cookies. | Headless mode hardcodes an empty cookie list. All test sessions logged `cookie_count: 0`. |
-| **Checked afterwards** | Expect logs every browser session with `cookie_count` and `is_external_browser`. If any new session isn't `0` / `false`, the wrapper exits **3** with the log line. | Checked against real logs and planted bad lines. |
+| **No cookies copied** | Expect imports local browser cookies in one place (`if(opts.cookies && !cdp){ addCookies(...) }`). The wrapper patches that branch dead in every file that has it, and refuses to run if it can't. It also passes `--ci` (in 0.1.3, `--no-cookies` on its own does nothing), unsets Expect's profile/CDP/cookie env vars, and tells the agent never to ask for cookies. | Both copies (index.js, the MCP server chunk) patched; the agent asking for `cookies: true` now imports nothing. |
+| **Checked afterwards** | Expect logs every browser session with `is_external_browser`. If any new session attached to a real browser, or Expect wrote no log, the wrapper exits **3**. `cookie_count` is reported, not failed on: Expect counts after the page loads, so it includes cookies the site under test set itself. | Checked against real logs and planted bad lines. |
 | Pinned version | `expect-cli@0.1.3`, installed privately on first run (~15s). Bump on purpose, after re-running the network capture and `test/test_browser_check_wrapper.py`. | — |
 | Headless, no prompts | `--ci --browser-mode headless`, stdin closed | — |
 
-Why the after-run check exists: Expect's browser tool lets the *agent* pass
-`cookies: true` mid-run, and nothing in Expect stops it, even in `--ci` mode. The run's
-instructions tell it not to, and the log check catches it if it does anyway.
+Why the import is patched out rather than just discouraged: Expect's browser tool lets
+the *agent* pass `cookies: true` mid-run, and nothing in Expect stops it, even in `--ci`
+mode. A count taken afterwards can't tell imported cookies from the site's own, so the
+only reliable fix is to make the import impossible.
 
 ### Writing `--message`
 
@@ -84,8 +85,8 @@ transcript.
   "summary": "8 passed, 0 failed, 1 skipped out of 9 steps" }
 ```
 
-1. **Exit code 3** means the safety check failed: a session loaded cookies or attached to a
-   real browser. Stop. Tell the builder, and don't trust or reuse that run.
+1. **Exit code 3** means the safety check failed: a session attached to a real browser, or
+   Expect wrote no log so nothing could be checked. Stop. Tell the builder, and don't trust or reuse that run.
 2. **`status: "failed"`** — read the failed step titles, fix, run again. Don't open the PR
    on a failed run. (It does fail when it should. A wrong-heading test came back
    `4 passed, 1 failed`.)
@@ -125,10 +126,11 @@ Read-only pages on production are fine.
   member data stays on Claude.
 - **Nothing goes to Million or its vendors.** The wrapper blocks PostHog, Axiom and
   expect.dev. That's why you must never bypass it.
-- **Recordings stay local, but get shared.** Expect saves a `.webm` screen recording and a
-  performance trace of every run in `/tmp/expect-artifacts/`, which other accounts on the
-  machine can read. If a page showed member data, delete them after reviewing:
-  `rm -f /tmp/expect-artifacts/session-*.webm`.
+- **Recordings stay local, but get shared.** Expect saves screen recordings (`.webm`) and
+  performance traces of every run in `/tmp/expect-artifacts/`, which other accounts on the
+  machine can read. Each recording exists twice: the original under `playwright/` and a
+  `session-*.webm` copy. If a page showed member data, delete the whole folder after
+  reviewing: `rm -rf /tmp/expect-artifacts`.
 - **Files it adds to your repo:** `.expect/` (logs, gitignores itself) and
   `.claude/settings.local.json` (allows its own `mcp__browser__*` tools). Neither is
   committed by default. Leave them out of commits.
@@ -145,7 +147,8 @@ years). No account and no API key are needed. Runs use your Claude Code login.
 | Can't reach the page | Dev server not running, or on another port | `curl -s <url>` first |
 | Every step fails "needs login" | No cookies, by design | See *Pages behind a login* |
 | `WARNING - no browser session was logged` | Expect never opened a browser (crashed early, or bad URL) | Read the JSON; treat the run as not done |
-| Exit code 3 | Safety check tripped: a session loaded cookies or attached to a real browser, or Expect wrote no log so nothing could be checked | See *Reading the result*, step 1 |
+| Exit code 3 | Safety check tripped: a session attached to a real browser, or Expect wrote no log so nothing could be checked | See *Reading the result*, step 1 |
+| `refusing to run` while setting up | Expect's files no longer match what the wrapper patches (cookie import or telemetry blocker) | Don't work around it. Delete `~/.cache/nsls-browser-check/` and rerun; if it persists, the pinned version changed — tell Kevin |
 
 ## Not yet standard
 

@@ -2,9 +2,10 @@
 # browser-check.sh — the only way the toolkit runs Expect (expect-cli).
 #
 # Forces, every run, whatever the caller passes or has in its environment:
-#   - telemetry OFF        NO_TELEMETRY=1 (Expect otherwise reports usage + machine ID to Million's PostHog)
-#   - NO cookies copied     --ci --no-cookies, and every Expect env var that could
-#                           point it at a real browser profile / Chrome / cookie store is unset
+#   - telemetry OFF        NO_TELEMETRY=1 plus a blocker imported by every Expect entry
+#                           point (PostHog, Axiom, expect.dev refused)
+#   - NO cookies copied     --ci --no-cookies, Expect's cookie-import branch patched dead,
+#                           and every env var that could point it at a real browser unset
 #   - headless, plan auto-approved, pinned version, JSON result
 #
 # Usage: browser-check.sh --url <http://localhost:3000> --message "<acceptance criteria>" [--target changes|unstaged|branch]
@@ -93,6 +94,27 @@ for entry in index.js browser-mcp.js browser-daemon.js; do
   fi
   grep -qF "$marker" "$f" || die "could not wire the telemetry blocker into ${entry}; refusing to run"
 done
+
+# Switch off Expect's cookie import at the source. Its browser tool imports local
+# browser cookies only inside `if(<opts>.cookies&&!<isCdp>){ ... addCookies(...) }`
+# (one copy in index.js, one in the server chunk the MCP server loads). Appending
+# `&&!1` makes that branch dead, whatever the run flags or the agent ask for.
+# Every file that calls addCookies must carry the patch, or nothing runs.
+cookie_sites=0
+for f in "${dist}"/*.js; do
+  grep -q 'addCookies(' "$f" || continue
+  if grep -qE 'if\([A-Za-z0-9_$]+\.cookies&&![A-Za-z0-9_$]+\)\{' "$f"; then
+    tmp="${f}.tmp.$$"
+    perl -pe 's/if\(([A-Za-z0-9_\$]+)\.cookies&&!([A-Za-z0-9_\$]+)\)\{/if($1.cookies&&!$2&&!1){/g' "$f" > "$tmp"
+    mv -f "$tmp" "$f"
+  fi
+  if grep -qE 'if\([A-Za-z0-9_$]+\.cookies&&![A-Za-z0-9_$]+\)\{' "$f" \
+     || ! grep -qE 'if\([A-Za-z0-9_$]+\.cookies&&![A-Za-z0-9_$]+&&!1\)\{' "$f"; then
+    die "could not switch off cookie import in $(basename "$f"); refusing to run"
+  fi
+  cookie_sites=$((cookie_sites + 1))
+done
+[ "$cookie_sites" -ge 1 ] || die "found no cookie-import code to switch off in ${dist}; Expect changed shape, refusing to run"
 rmdir "$lock" 2>/dev/null || true
 trap - EXIT
 
@@ -115,20 +137,24 @@ node "${dist}/index.js" tui \
 status=$?
 set -e
 
-# Expect logs every browser session it opens, with cookie_count and whether it
-# attached to a real (external) browser. Anything but 0/false fails the run loudly.
+# Expect logs every browser session it opens. is_external_browser:true means it
+# attached to a real browser (and its logged-in sessions): that fails the run.
+# cookie_count is taken AFTER the page loads, so it includes cookies the tested
+# site set itself (CSRF, analytics); import is already switched off above, so it
+# is reported, not failed on.
 if [ -f "$logfile" ]; then
   new_sessions=$(tail -n +"$((before + 1))" "$logfile" | grep 'MCP browser session opened' || true)
   if [ -z "$new_sessions" ]; then
     echo "browser-check: WARNING - no browser session was logged, so the no-cookies check could not run." >&2
   # No `echo | grep -q` here: under pipefail, grep -q exiting early can SIGPIPE the
   # echo and turn a hit into a miss. Here-string, output discarded instead.
-  elif grep -v -E 'cookie_count\\?":0[,}].*is_external_browser\\?":false|is_external_browser\\?":false.*cookie_count\\?":0[,}]' <<< "$new_sessions" > /dev/null; then
-    echo "browser-check: FAILED SAFETY CHECK - a browser session loaded local cookies or attached to a real browser:" >&2
+  elif grep -v -E 'is_external_browser\\?":false' <<< "$new_sessions" > /dev/null; then
+    echo "browser-check: FAILED SAFETY CHECK - a browser session attached to a real browser:" >&2
     echo "$new_sessions" >&2
     exit 3
   else
-    echo "browser-check: safety check passed - $(echo "$new_sessions" | wc -l | tr -d ' ') browser session(s), 0 cookies, no real browser attached." >&2
+    site_cookies=$(grep -oE 'cookie_count\\?":[0-9]+' <<< "$new_sessions" | grep -oE '[0-9]+$' | paste -sd, - || true)
+    echo "browser-check: safety check passed - $(echo "$new_sessions" | wc -l | tr -d ' ') browser session(s), no real browser attached, cookie import switched off (cookies the site itself set: ${site_cookies:-none})." >&2
   fi
 else
   echo "browser-check: FAILED SAFETY CHECK - Expect wrote no log at $logfile, so the no-cookies check could not run. Don't trust this run." >&2
