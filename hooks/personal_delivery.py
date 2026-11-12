@@ -481,7 +481,9 @@ def standing_in_the_way(cfg, found, tracked=()) -> list:
     file goes. Reads only. Asked BEFORE anything is changed, settings included,
     so a folder that will not be taken over is left exactly as it is."""
     try:
-        return owner_changes(folder(cfg), _as_shipped(folder(cfg), tracked), found.hashes)
+        target = folder(cfg)
+        shipped = _respelled(target, _as_shipped(target, tracked), found.hashes)
+        return owner_changes(target, shipped, found.hashes)
     except Exception:
         return ["?"]
 
@@ -842,7 +844,7 @@ def take_over(cfg, found, tracked=(), origin=None, deadline=None, take_theirs=Fa
                 return _result("retry", why="settling")
             baseline = {}
             if not take_theirs:
-                baseline = _as_shipped(target, tracked)
+                baseline = _respelled(target, _as_shipped(target, tracked), found.hashes)
                 changed = owner_changes(target, baseline, found.hashes)
                 if changed:
                     return _result("kept", why="own-changes", changed=changed)

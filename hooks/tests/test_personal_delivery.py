@@ -126,12 +126,12 @@ class Machine:
         lay(copy, files)
         return copy
 
-    def checkout(self, version, url=NSLS_URL):
+    def checkout(self, version, url=NSLS_URL, extra=None):
         """The folder as install.sh leaves it: a clone of NSLS's repository."""
         if not self.upstream.exists():
             self.upstream.mkdir(parents=True)
             git(self.upstream, "init", "-q", "-b", "main")
-        lay(self.upstream, toolkit_files(version))
+        lay(self.upstream, toolkit_files(version, extra))
         git(self.upstream, "add", "-A")
         git(self.upstream, "commit", "-q", "-m", f"release {version}")
         self.folder.parent.mkdir(parents=True, exist_ok=True)
@@ -470,6 +470,18 @@ with tempfile.TemporaryDirectory() as tmp:
     res, _ = m.run()
     check("an interrupted take-over of a folder its owner has since edited is dropped, not finished",
           outcome(res) == "kept" and pd.state(m.folder) == "checkout" and m.text("README.md") == "edited since\n", str(res))
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    probe = Path(tmp) / "Probe.txt"
+    probe.write_text("x", encoding="utf-8")
+    if (Path(tmp) / "PROBE.TXT").exists():                  # a Mac or a PC: letter case is ignored
+        m.checkout("1.9.0", extra={"skills/open-day/ref.md": "reference, first edition\n"})
+        m.deliver("2.0.0", extra={"skills/open-day/REF.md": "reference, second edition\n"})
+        res, _ = m.run()
+        check("a file NSLS renamed only in letter case since the checkout was last pulled does not read as the owner's",
+              outcome(res) == "converted" and m.text("skills/open-day/REF.md") == "reference, second edition\n"
+              and "REF.md" in os.listdir(m.folder / "skills/open-day"), str(res))
 
 print("7. anything of the owner's keeps the checkout on GitHub, untouched")
 
