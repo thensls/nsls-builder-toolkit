@@ -154,7 +154,24 @@ for label, lines, want in cases:
         check(label, r.returncode == want, f"got exit {r.returncode}: {r.stderr[-300:]!r}")
 
 with tempfile.TemporaryDirectory() as tmp:
-    repo, env, _ = fake_repo(tmp, [])
+    repo, env, _ = fake_repo(tmp, [session_line(12, "false")])
+    sub = repo / "web" / "src"
+    sub.mkdir(parents=True)
+    r = run_wrapper(sub, env)
+    check("cookies loaded fails (exit 3) when started from a subfolder", r.returncode == 3,
+          f"got exit {r.returncode}: {r.stderr[-300:]!r}")
+    check("Expect's log lands at the repo root, where it is audited",
+          (repo / ".expect" / "logs.md").is_file() and not (sub / ".expect").exists())
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo, env, dist = fake_repo(tmp, [])
+    (dist / "index.js").write_text("#!/usr/bin/env node\nconsole.log('{}');\n")  # writes no log at all
+    r = run_wrapper(repo, env)
+    check("no log written at all fails (exit 3), never passes unaudited", r.returncode == 3,
+          f"got exit {r.returncode}: {r.stderr[-300:]!r}")
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo, env, _ = fake_repo(tmp, ['timestamp=2026-11-12T21:18:00.447Z level=Info message="plan ready"'])
     r = run_wrapper(repo, env)
     check("no session logged warns, never claims safe", "WARNING" in r.stderr and "passed" not in r.stderr,
           repr(r.stderr))

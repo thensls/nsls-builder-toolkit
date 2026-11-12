@@ -96,7 +96,11 @@ done
 rmdir "$lock" 2>/dev/null || true
 trap - EXIT
 
-logfile="$(git rev-parse --show-toplevel)/.expect/logs.md"
+# Expect writes .expect/logs.md under its working directory. Run it from the repo
+# root so the log it writes is the log audited below, wherever the caller started.
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+logfile="${repo_root}/.expect/logs.md"
 before=0
 [ -f "$logfile" ] && before=$(wc -l < "$logfile")
 
@@ -127,6 +131,7 @@ if [ -f "$logfile" ]; then
     echo "browser-check: safety check passed - $(echo "$new_sessions" | wc -l | tr -d ' ') browser session(s), 0 cookies, no real browser attached." >&2
   fi
 else
-  echo "browser-check: WARNING - Expect wrote no log at $logfile, so the no-cookies check could not run." >&2
+  echo "browser-check: FAILED SAFETY CHECK - Expect wrote no log at $logfile, so the no-cookies check could not run. Don't trust this run." >&2
+  exit 3
 fi
 exit $status

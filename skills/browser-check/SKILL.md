@@ -145,7 +145,7 @@ years). No account and no API key are needed. Runs use your Claude Code login.
 | Can't reach the page | Dev server not running, or on another port | `curl -s <url>` first |
 | Every step fails "needs login" | No cookies, by design | See *Pages behind a login* |
 | `WARNING - no browser session was logged` | Expect never opened a browser (crashed early, or bad URL) | Read the JSON; treat the run as not done |
-| Exit code 3 | Safety check tripped | See *Reading the result*, step 1 |
+| Exit code 3 | Safety check tripped: a session loaded cookies or attached to a real browser, or Expect wrote no log so nothing could be checked | See *Reading the result*, step 1 |
 
 ## Not yet standard
 
