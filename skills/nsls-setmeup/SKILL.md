@@ -431,11 +431,12 @@ never collides with other Google tools' client files (background + manual fallba
 **1. Run the doctor** (use a generous timeout — its login step waits for a human):
 
 ```bash
-python3 ~/.claude/local-plugins/nsls-builder-toolkit/skills/gws/scripts/gws_doctor.py
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/gws/scripts/gws_doctor.py"
 ```
 ```powershell
-& "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe" "$env:USERPROFILE\.claude\local-plugins\nsls-builder-toolkit\skills\gws\scripts\gws_doctor.py"
+& "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe" "${CLAUDE_PLUGIN_ROOT}/skills/gws/scripts/gws_doctor.py"
 ```
+`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the folder two levels above this SKILL.md.
 The doctor's login step **prints a consent URL and starts a local listener** — on
 Windows it does **not** open a browser at all, and on Mac you can't verify from
 your side that one opened. So, always, all three parts: run it in the background,
