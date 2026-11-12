@@ -47,12 +47,41 @@ message="${message}
 
 Rules for this run: never pass cookies:true or a cdp URL to the browser open tool, and never reuse local browser cookies or sessions. If a page needs a login, mark that step failed with the reason 'needs login' instead of working around it."
 
+# Private, pinned install of Expect with the blocker wired into every entry
+# point. NODE_OPTIONS (above) does not reach the browser MCP server: the agent
+# launches it as `node browser-mcp.js` with an explicit env list. So the
+# blocker is imported from the first line of each entry file instead.
+install_dir="${XDG_CACHE_HOME:-$HOME/.cache}/nsls-browser-check/expect-cli-${EXPECT_VERSION}"
+dist="${install_dir}/node_modules/expect-cli/dist"
+if [ ! -f "${dist}/index.js" ]; then
+  echo "browser-check: installing expect-cli@${EXPECT_VERSION} (first run only)..." >&2
+  mkdir -p "$install_dir"
+  npm install --prefix "$install_dir" --no-audit --no-fund --loglevel=error \
+    "expect-cli@${EXPECT_VERSION}" >&2 || die "npm install of expect-cli@${EXPECT_VERSION} failed"
+fi
+cp "${here}/block-telemetry.cjs" "${dist}/nsls-block-telemetry.cjs"   # refreshed every run
+marker='import "./nsls-block-telemetry.cjs"; // nsls-browser-check'
+for entry in index.js browser-mcp.js browser-daemon.js; do
+  f="${dist}/${entry}"
+  [ -f "$f" ] || die "expected Expect entry point ${entry} is missing; refusing to run unpatched"
+  if ! grep -qF "$marker" "$f"; then
+    # Keep a shebang on line 1; the import goes right after it.
+    if head -1 "$f" | grep -q '^#!'; then
+      { head -1 "$f"; echo "$marker"; tail -n +2 "$f"; } > "${f}.tmp"
+    else
+      { echo "$marker"; cat "$f"; } > "${f}.tmp"
+    fi
+    mv "${f}.tmp" "$f"
+  fi
+  grep -qF "$marker" "$f" || die "could not wire the telemetry blocker into ${entry}; refusing to run"
+done
+
 logfile="$(git rev-parse --show-toplevel)/.expect/logs.md"
 before=0
 [ -f "$logfile" ] && before=$(wc -l < "$logfile")
 
 set +e
-npx -y "expect-cli@${EXPECT_VERSION}" tui \
+node "${dist}/index.js" tui \
   --ci --no-cookies --browser-mode headless \
   -a claude \
   -t "$target" \

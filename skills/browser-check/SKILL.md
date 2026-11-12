@@ -46,7 +46,7 @@ Run it with the Bash tool's `run_in_background: true`. It takes 1–5 minutes an
 told when it finishes. It prints a JSON result on stdout and a one-line safety check on
 stderr.
 
-**Never run `npx expect-cli` directly, and never run `expect init` or `expect add skill`.**
+**Never run `npx expect-cli` (or any other copy of Expect) directly, and never run `expect init` or `expect add skill`.**
 Those skip every protection below. `init` also installs Expect's own `/expect` skill and MCP
 server with cookies and telemetry on by default. The wrapper accepts only `--url`,
 `--message` and `--target`, and refuses everything else, including profile, CDP, cookie
@@ -56,10 +56,10 @@ and headed options.
 
 | Protection | How | Verified 2026-11-12 on 0.1.3 |
 |---|---|---|
-| **No vendor telemetry** | `NO_TELEMETRY=1` turns off the PostHog analytics. That flag does **not** cover Expect's Axiom traces or its expect.dev version check, so `block-telemetry.cjs` is preloaded into every Node process Expect starts and refuses `*.posthog.com`, `*.axiom.co` and `*.expect.dev`. | Network capture during a full run: without the blocker, ~175 connection samples to `api.axiom.co` even with `NO_TELEMETRY=1`. With it: see PR. |
+| **No vendor telemetry** | `NO_TELEMETRY=1` turns off the PostHog analytics. That flag does **not** cover Expect's Axiom traces or its expect.dev version check, and an environment variable can't reach Expect's browser server (the agent starts it with a fixed env list). So the wrapper keeps a private, pinned install of Expect (`~/.cache/nsls-browser-check/`) and adds `block-telemetry.cjs` to the first line of every Expect entry point, refusing `*.posthog.com`, `*.axiom.co` and `*.expect.dev`. If the patch isn't in place, it refuses to run. | Network capture of a full run. Flag only: ~175 connection samples to `api.axiom.co`. Wrapper: **zero** connections to any telemetry address; 26 Axiom attempts and 1 version check refused, across 13 Expect processes. |
 | **No cookies copied** | `--ci` (in 0.1.3, `--no-cookies` on its own does nothing; only `--ci` actually turns cookies off), Expect's profile/CDP/cookie env vars unset, and the agent told never to ask for cookies. | Headless mode hardcodes an empty cookie list. All test sessions logged `cookie_count: 0`. |
 | **Checked afterwards** | Expect logs every browser session with `cookie_count` and `is_external_browser`. If any new session isn't `0` / `false`, the wrapper exits **3** with the log line. | Checked against real logs and planted bad lines. |
-| Pinned version | `expect-cli@0.1.3`. Bump on purpose, after re-running the checks above. | — |
+| Pinned version | `expect-cli@0.1.3`, installed privately on first run (~15s). Bump on purpose, after re-running the network capture and `test/test_browser_check_wrapper.py`. | — |
 | Headless, no prompts | `--ci --browser-mode headless`, stdin closed | — |
 
 Why the after-run check exists: Expect's browser tool lets the *agent* pass

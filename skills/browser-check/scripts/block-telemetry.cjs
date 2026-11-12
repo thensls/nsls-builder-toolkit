@@ -1,9 +1,13 @@
-// block-telemetry.cjs — preloaded into every Node process Expect starts
-// (NODE_OPTIONS=--require), so its vendor telemetry can't leave the machine.
+// block-telemetry.cjs — loaded first by every Expect entry point (the wrapper
+// copies it into Expect's dist/ and imports it at the top of index.js,
+// browser-mcp.js and browser-daemon.js), and also preloaded via NODE_OPTIONS
+// for any other Node process in the run, so vendor telemetry can't leave.
 //
 // Why: expect-cli 0.1.3 honours NO_TELEMETRY=1 for its PostHog analytics, but
 // its OpenTelemetry traces go to Axiom unconditionally (measured 2026-11-12:
 // ~175 connection samples to api.axiom.co in one run with NO_TELEMETRY=1 set).
+// NODE_OPTIONS alone is not enough: the browser MCP server is launched by the
+// agent with an explicit env list, and it was the process still reaching Axiom.
 // It also phones expect.dev for a version check. This refuses all three at
 // DNS and socket level. Nothing else is touched: Claude, npm and the page
 // under test connect normally.
@@ -56,3 +60,7 @@ function guard(orig) {
 tls.connect = guard(tls.connect);
 net.connect = guard(net.connect);
 net.createConnection = guard(net.createConnection);
+
+// Expect is ES modules: `import * as tls from "node:tls"` sees the patches only
+// after this sync.
+require("node:module").syncBuiltinESMExports();

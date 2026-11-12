@@ -3,7 +3,7 @@
 run that loaded browser cookies fails loudly.
 
 Plain stdlib, no network: run with `python3 test/test_browser_check_wrapper.py`.
-Needs bash, git and node on PATH. A fake `npx` stands in for expect-cli and writes
+Needs bash, git and node on PATH. A fake pre-installed expect-cli (in a temp cache) writes
 the same session log line the real 0.1.3 writes, so the after-run cookie check
 is exercised end to end.
 
@@ -41,24 +41,30 @@ def session_line(cookies, external):
             f'\\"cookie_count\\":{cookies}}}"')
 
 
-def fake_repo(tmp, lines_to_log, record_env=False):
-    repo = pathlib.Path(tmp) / "repo"
+def fake_repo(tmp, lines_to_log, record_env=False, skip_entry=None):
+    """A git repo to run in, plus a fake pre-installed expect-cli in a temp cache
+    (so the wrapper skips npm and patches these files instead)."""
+    tmp = pathlib.Path(tmp)
+    repo = tmp / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
-    bindir = pathlib.Path(tmp) / "bin"
-    bindir.mkdir()
-    log_body = "\n".join(f"echo '{l}' >> .expect/logs.md" for l in lines_to_log)
-    env_dump = f'env > "{tmp}/env.txt"; printf "%s\\n" "$@" > "{tmp}/args.txt"' if record_env else ""
-    (bindir / "npx").write_text(
-        "#!/usr/bin/env bash\n"
-        "mkdir -p .expect\n"
-        f"{log_body}\n{env_dump}\n"
-        "echo '{\"status\": \"passed\"}'\n"
-    )
-    (bindir / "npx").chmod(0o755)
-    env = dict(os.environ, PATH=f"{bindir}{os.pathsep}{os.environ['PATH']}",
+    pkg = tmp / "cache" / "nsls-browser-check" / "expect-cli-0.1.3" / "node_modules" / "expect-cli"
+    dist = pkg / "dist"
+    dist.mkdir(parents=True)
+    (pkg / "package.json").write_text('{"type": "module"}')
+    logs = "".join(f"fs.appendFileSync('.expect/logs.md', {l!r} + '\\n');\n" for l in lines_to_log)
+    dump = (f"fs.writeFileSync({str(tmp / 'env.txt')!r}, Object.entries(process.env).map(([k,v])=>k+'='+v).join('\\n'));\n"
+            f"fs.writeFileSync({str(tmp / 'args.txt')!r}, process.argv.slice(2).join('\\n'));\n") if record_env else ""
+    (dist / "index.js").write_text(
+        "#!/usr/bin/env node\nimport fs from 'node:fs';\n"
+        "fs.mkdirSync('.expect', {recursive: true});\n" + logs + dump +
+        "console.log(JSON.stringify({status: 'passed'}));\n")
+    for name in ("browser-mcp.js", "browser-daemon.js"):
+        if name != skip_entry:
+            (dist / name).write_text("export {};\n")
+    env = dict(os.environ, XDG_CACHE_HOME=str(tmp / "cache"),
                EXPECT_PROFILE="Default", EXPECT_COOKIE_BROWSERS="chrome")
-    return repo, env
+    return repo, env, dist
 
 
 def run_wrapper(repo, env, *extra):
@@ -82,23 +88,41 @@ check("localhost still resolves", out.get("localhost") == "ok", repr(r.stdout + 
 
 print("\nthe wrapper refuses anything that could reach a real browser session")
 with tempfile.TemporaryDirectory() as tmp:
-    repo, env = fake_repo(tmp, [])
+    repo, env, _ = fake_repo(tmp, [])
     for flag in (["--profile", "Default"], ["--cdp", "ws://x"], ["--cookies"], ["--browser-mode", "headed"]):
         r = run_wrapper(repo, env, *flag)
         check(f"{flag[0]} refused (exit 2)", r.returncode == 2, repr(r.stderr))
 
+print("\nthe blocker is wired into every Expect entry point, or nothing runs")
+MARKER = 'import "./nsls-block-telemetry.cjs"; // nsls-browser-check'
+with tempfile.TemporaryDirectory() as tmp:
+    repo, env, dist = fake_repo(tmp, [session_line(0, "false")])
+    r = run_wrapper(repo, env)
+    check("run succeeds after patching", r.returncode == 0, repr(r.stderr[-300:]))
+    for name in ("index.js", "browser-mcp.js", "browser-daemon.js"):
+        check(f"{name} imports the blocker", MARKER in (dist / name).read_text())
+    check("index.js keeps its shebang on line 1", (dist / "index.js").read_text().startswith("#!"))
+    check("blocker copied beside them", (dist / "nsls-block-telemetry.cjs").is_file())
+    r2 = run_wrapper(repo, env)
+    check("patch applied once, not again on rerun",
+          (dist / "browser-mcp.js").read_text().count(MARKER) == 1, repr(r2.stderr[-200:]))
+with tempfile.TemporaryDirectory() as tmp:
+    repo, env, _ = fake_repo(tmp, [session_line(0, "false")], skip_entry="browser-mcp.js")
+    r = run_wrapper(repo, env)
+    check("missing entry point refuses to run (exit 2)", r.returncode == 2, repr(r.stderr[-300:]))
+
 print("\nwhat the wrapper hands expect-cli")
 with tempfile.TemporaryDirectory() as tmp:
-    repo, env = fake_repo(tmp, [session_line(0, "false")], record_env=True)
+    repo, env, _ = fake_repo(tmp, [session_line(0, "false")], record_env=True)
     r = run_wrapper(repo, env)
     envtxt = (pathlib.Path(tmp) / "env.txt").read_text()
     args = (pathlib.Path(tmp) / "args.txt").read_text().split("\n")
     check("NO_TELEMETRY=1", "NO_TELEMETRY=1" in envtxt.split("\n"))
-    check("blocker preloaded via NODE_OPTIONS", "block-telemetry.cjs" in envtxt)
+    check("blocker also preloaded via NODE_OPTIONS", "block-telemetry.cjs" in envtxt)
     check("caller's EXPECT_PROFILE removed", "EXPECT_PROFILE=" not in envtxt)
     check("caller's EXPECT_COOKIE_BROWSERS removed", "EXPECT_COOKIE_BROWSERS=" not in envtxt)
-    check("--ci passed (the flag that actually drops cookies)", "--ci" in args)
-    check("version pinned", any(a.startswith("expect-cli@0.") for a in args), repr(args))
+    check("--ci passed (the flag that actually drops cookies)", "--ci" in args, repr(args))
+    check("headless", "headless" in args, repr(args))
 
 print("\nthe after-run cookie check")
 cases = [
@@ -110,12 +134,12 @@ cases = [
 ]
 for label, lines, want in cases:
     with tempfile.TemporaryDirectory() as tmp:
-        repo, env = fake_repo(tmp, lines)
+        repo, env, _ = fake_repo(tmp, lines)
         r = run_wrapper(repo, env)
         check(label, r.returncode == want, f"got exit {r.returncode}: {r.stderr[-300:]!r}")
 
 with tempfile.TemporaryDirectory() as tmp:
-    repo, env = fake_repo(tmp, [])
+    repo, env, _ = fake_repo(tmp, [])
     r = run_wrapper(repo, env)
     check("no session logged warns, never claims safe", "WARNING" in r.stderr and "passed" not in r.stderr,
           repr(r.stderr))
