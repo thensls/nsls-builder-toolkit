@@ -1626,6 +1626,9 @@ def _find_claude():
     shell may not have on PATH yet. Without this the daily update silently did
     nothing on most Windows machines — the exact silent failure this file exists
     to prevent.
+
+    On a Mac, last of all, the desktop app's own bundled CLI (see _mac_app_cli):
+    a builder who only ever uses the app has no other `claude` anywhere.
     """
     found = shutil.which("claude")
     if found:
@@ -1692,6 +1695,18 @@ def _find_claude():
                 continue
         if best:
             return _claude_argv(best[1])
+    # The Mac desktop app's bundled CLI. Nothing here looked for it, so on a Mac
+    # with the app and no separate CLI every caller came back empty-handed: the
+    # self-install could never install the plugin (it said "the claude command
+    # could not be found" once a day, for good), and the machine stayed on its
+    # folder copy with no agents and none of the plugin's own hooks.
+    if _IS_MAC:
+        try:
+            found = _mac_app_cli(home / "Library" / "Application Support" / "Claude" / "claude-code")
+        except Exception:
+            found = None
+        if found:
+            return _claude_argv(found)
     return None
 
 
@@ -1720,6 +1735,50 @@ def _bundled_clis(folder):
             except OSError:
                 continue
     return found
+
+
+_IS_MAC = sys.platform == "darwin"
+# Where the Mac app has kept its CLI under claude-code/<version>/. The newest
+# shape is <version>/<hash>/claude.app/Contents/MacOS/claude (seen 2026-11-12).
+_MAC_APP_CLI_PATTERNS = (
+    "*/*/claude.app/Contents/MacOS/claude",
+    "*/claude.app/Contents/MacOS/claude",
+    "*/claude",
+)
+
+
+def _mac_app_cli(folder):
+    """The newest CLI the Mac desktop app keeps under `folder`, or None.
+
+    The version is the folder directly under claude-code, compared numerically
+    (2.1.321 is newer than 2.1.99); the newest file breaks a tie. A Linux build
+    is skipped: the app keeps one for its VM, and it cannot run from a hook
+    (`exec format error` on every call, which would read as "installed nothing"
+    forever). Reading four bytes is cheaper than running it to find out.
+    """
+    best = None
+    for pattern in _MAC_APP_CLI_PATTERNS:
+        try:
+            hits = list(folder.glob(pattern))
+        except OSError:
+            continue
+        for exe in hits:
+            try:
+                if not (exe.is_file() and os.access(exe, os.X_OK)):
+                    continue
+                with open(exe, "rb") as f:
+                    if f.read(4) == b"\x7fELF":
+                        continue
+                try:
+                    ver = tuple(int(x) for x in exe.relative_to(folder).parts[0].split("."))
+                except ValueError:
+                    ver = (0,)
+                key = (ver, exe.stat().st_mtime)
+            except (OSError, ValueError):
+                continue
+            if best is None or key > best[0]:
+                best = (key, exe)
+    return best[1] if best else None
 
 
 def _claude_argv(path):
