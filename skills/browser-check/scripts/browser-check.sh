@@ -53,28 +53,48 @@ Rules for this run: never pass cookies:true or a cdp URL to the browser open too
 # blocker is imported from the first line of each entry file instead.
 install_dir="${XDG_CACHE_HOME:-$HOME/.cache}/nsls-browser-check/expect-cli-${EXPECT_VERSION}"
 dist="${install_dir}/node_modules/expect-cli/dist"
+mkdir -p "$(dirname "$install_dir")"
+
+# Two checks can start at once (parallel agents). Setup below is serialized with a
+# mkdir lock (no flock on macOS), and every file is published with an atomic mv from
+# a per-process temp file, so a run never sees, or removes, another run's half-write.
+lock="${install_dir}.lock"
+waited=0
+until mkdir "$lock" 2>/dev/null; do
+  # A lock older than 10 minutes is from a run that died mid-setup.
+  if [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then rmdir "$lock" 2>/dev/null || true; continue; fi
+  [ "$waited" -ge 600 ] && die "timed out waiting for another browser check to finish setting up (${lock})"
+  sleep 1; waited=$((waited + 1))
+done
+trap 'rmdir "$lock" 2>/dev/null || true' EXIT
+
 if [ ! -f "${dist}/index.js" ]; then
   echo "browser-check: installing expect-cli@${EXPECT_VERSION} (first run only)..." >&2
   mkdir -p "$install_dir"
   npm install --prefix "$install_dir" --no-audit --no-fund --loglevel=error \
     "expect-cli@${EXPECT_VERSION}" >&2 || die "npm install of expect-cli@${EXPECT_VERSION} failed"
 fi
-cp "${here}/block-telemetry.cjs" "${dist}/nsls-block-telemetry.cjs"   # refreshed every run
+# Refreshed every run; staged then moved so a running check never imports a partial copy.
+cp "${here}/block-telemetry.cjs" "${dist}/nsls-block-telemetry.cjs.tmp.$$"
+mv -f "${dist}/nsls-block-telemetry.cjs.tmp.$$" "${dist}/nsls-block-telemetry.cjs"
 marker='import "./nsls-block-telemetry.cjs"; // nsls-browser-check'
 for entry in index.js browser-mcp.js browser-daemon.js; do
   f="${dist}/${entry}"
   [ -f "$f" ] || die "expected Expect entry point ${entry} is missing; refusing to run unpatched"
   if ! grep -qF "$marker" "$f"; then
     # Keep a shebang on line 1; the import goes right after it.
+    tmp="${f}.tmp.$$"
     if head -1 "$f" | grep -q '^#!'; then
-      { head -1 "$f"; echo "$marker"; tail -n +2 "$f"; } > "${f}.tmp"
+      { head -1 "$f"; echo "$marker"; tail -n +2 "$f"; } > "$tmp"
     else
-      { echo "$marker"; cat "$f"; } > "${f}.tmp"
+      { echo "$marker"; cat "$f"; } > "$tmp"
     fi
-    mv "${f}.tmp" "$f"
+    mv -f "$tmp" "$f"
   fi
   grep -qF "$marker" "$f" || die "could not wire the telemetry blocker into ${entry}; refusing to run"
 done
+rmdir "$lock" 2>/dev/null || true
+trap - EXIT
 
 logfile="$(git rev-parse --show-toplevel)/.expect/logs.md"
 before=0

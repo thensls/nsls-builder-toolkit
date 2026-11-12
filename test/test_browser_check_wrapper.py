@@ -111,6 +111,21 @@ with tempfile.TemporaryDirectory() as tmp:
     r = run_wrapper(repo, env)
     check("missing entry point refuses to run (exit 2)", r.returncode == 2, repr(r.stderr[-300:]))
 
+print("\nparallel runs never trip over each other's setup")
+with tempfile.TemporaryDirectory() as tmp:
+    repo, env, dist = fake_repo(tmp, [session_line(0, "false")])
+    procs = [subprocess.Popen(["bash", str(WRAPPER), "--url", "http://localhost:1", "--message", "m"],
+                              cwd=repo, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+             for _ in range(6)]
+    results = [(p.wait(), p.stderr.read()) for p in procs]
+    check("6 simultaneous runs all succeed", all(rc == 0 for rc, _ in results),
+          repr([(rc, e[-200:]) for rc, e in results if rc != 0]))
+    for name in ("index.js", "browser-mcp.js", "browser-daemon.js"):
+        check(f"{name} patched exactly once", (dist / name).read_text().count(MARKER) == 1)
+    check("no staged temp files left behind", not any(".tmp" in p.name for p in dist.iterdir()),
+          repr([p.name for p in dist.iterdir()]))
+    check("setup lock released", not (dist.parent.parent.parent.with_name("expect-cli-0.1.3.lock")).exists())
+
 print("\nwhat the wrapper hands expect-cli")
 with tempfile.TemporaryDirectory() as tmp:
     repo, env, _ = fake_repo(tmp, [session_line(0, "false")], record_env=True)
