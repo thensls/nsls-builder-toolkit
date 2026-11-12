@@ -222,11 +222,12 @@ def git(cwd, *args, env=None):
                           text=True, env=env).stdout.strip()
 
 
-def folder_copy(tmp, cfg, env, behind=False, hook=None):
+def folder_copy(tmp, cfg, env, behind=False, hook=None, branch=None):
     """NSLS's repo (a local bare repo) and this machine's clone of it, tracking
-    main, as install.sh leaves it. `behind`: NSLS has released 3.7.0 since.
-    `hook`: the SessionStart command in settings.json, if any. git runs with an
-    isolated config so a builder's own settings cannot change the fixture."""
+    main, as install.sh leaves it. `behind`: NSLS has released 3.7.0 on main
+    since. `hook`: the SessionStart command in settings.json, if any. `branch`:
+    the copy follows that branch of NSLS's repo instead of main. git runs with
+    an isolated config so a builder's own settings cannot change the fixture."""
     root = Path(tmp)
     (root / "gitconfig").write_text(
         "[user]\n\tname = T\n\temail = t@t.test\n[commit]\n\tgpgsign = false\n"
@@ -247,7 +248,11 @@ def folder_copy(tmp, cfg, env, behind=False, hook=None):
     git(root, "clone", "--quiet", "--bare", str(seed), str(nsls), env=env)
     copy = cfg / "local-plugins" / "nsls-builder-toolkit"
     copy.parent.mkdir(parents=True)
+    if branch:
+        git(seed, "push", "--quiet", str(nsls), f"main:{branch}", env=env)
     git(root, "clone", "--quiet", str(nsls), str(copy), env=env)
+    if branch:
+        git(copy, "checkout", "--quiet", "-b", branch, "--track", f"origin/{branch}", env=env)
     if behind:
         release("3.7.0")
         git(seed, "push", "--quiet", str(nsls), "main", env=env)
@@ -335,6 +340,42 @@ with tempfile.TemporaryDirectory() as tmp:
           and "newest release" not in out, out)
     check("refused by the checkout: the builder's commit is still there",
           git(copy, "log", "-1", "--format=%s", env=env) == "mine")
+
+with tempfile.TemporaryDirectory() as tmp:
+    # The copy follows a branch of its own. Its pull succeeds and changes
+    # nothing while main moves on: level with its branch is not "the newest
+    # release" (Macroscope on PR #333).
+    cfg, log, env = machine(tmp, installed=False)
+    copy, released = folder_copy(tmp, cfg, env, behind=True, hook=SHIM.format(cfg), branch="feat/x")
+    out = run(env)
+    check("on another branch: never called the newest release",
+          "is level with the branch it follows" in out
+          and "not necessarily the newest release" in out
+          and "the newest release (" not in out and "on the newest release" not in out, out)
+    check("on another branch: the behind-main note a session start gives is kept",
+          "NOTE - nsls-builder-toolkit is 1 commit(s) behind main" in out, out)
+    check("on another branch: the copy is left on its branch",
+          git(copy, "rev-parse", "--abbrev-ref", "HEAD", env=env) == "feat/x"
+          and git(copy, "rev-parse", "HEAD", env=env) != released)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # Pinned to a commit on purpose: it is not moved, and not blamed on the network.
+    cfg, log, env = machine(tmp, installed=False)
+    copy, released = folder_copy(tmp, cfg, env, behind=True, hook=SHIM.format(cfg))
+    pinned = git(copy, "rev-parse", "HEAD", env=env)
+    git(copy, "checkout", "--quiet", "--detach", env=env)
+    out = run(env)
+    check("pinned: says so, and claims neither an update nor a network problem",
+          "pinned to one fixed commit" in out and "no internet" not in out
+          and "newest release" not in out, out)
+    check("pinned: the commit is not moved", git(copy, "rev-parse", "HEAD", env=env) == pinned)
+
+skill = (HOOKS.parent / "skills" / "update-toolkit" / "SKILL.md").read_text(encoding="utf-8")
+no_updater = skill[skill.index("**Nothing on this machine updates it automatically:**"):]
+check("the skill never tells Claude the update worked because the repair was offered",
+      "does not mean the update worked" in no_updater and "was updated just now" not in skill, no_updater)
+check("the skill has an answer for a copy that refused, is pinned, or is on another branch",
+      "**Refused by the copy itself, pinned, or on another branch:**" in skill)
 
 with tempfile.TemporaryDirectory() as tmp:
     cfg, log, env = machine(tmp, release=["quicknote"], cli=False)

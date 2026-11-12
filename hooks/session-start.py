@@ -2527,34 +2527,52 @@ def _update_folder_copy():
         code, out = None, ""
     after = _git_out(PLUGIN_DIR, "rev-parse", "HEAD")
     moved = bool(before and after and before != after)
+    # An update that succeeds says where the copy now stands on ITS branch. Only
+    # a copy that follows NSLS's main can be called "the newest release": one on
+    # another branch pulls cleanly while main moves on, and one pinned to a
+    # commit is not meant to move. Each gets its own sentence, never a guess.
+    branch = _git_out(PLUGIN_DIR, "rev-parse", "--abbrev-ref", "HEAD")
+    follows_main = _git_out(PLUGIN_DIR, "rev-parse", "--abbrev-ref",
+                            "--symbolic-full-name", "@{u}") == "origin/main"
     found = _folder_copy_version()
     on = f" (version {found})" if found else ""
-    if moved:
-        result = f"Updated this machine's copy of the NSLS toolkit to the newest release{on}."
-    elif code == 0:
-        result = f"This machine's copy of the NSLS toolkit is already on the newest release{on}."
+    if branch == "HEAD":
+        result = ("This machine's copy of the NSLS toolkit is pinned to one fixed "
+                  f"commit{on}, so it was left where it is. That is a deliberate "
+                  "setting; a pinned copy does not update.")
+    elif (moved or code == 0) and follows_main:
+        result = (f"Updated this machine's copy of the NSLS toolkit to the newest release{on}."
+                  if moved else
+                  f"This machine's copy of the NSLS toolkit is already on the newest release{on}.")
+    elif moved or code == 0:
+        result = ("This machine's copy of the NSLS toolkit "
+                  + ("was updated" if moved else "is level with the branch it follows")
+                  + f"{on}, but that branch is not NSLS's main, so this is not "
+                  "necessarily the newest release. A note above says so if it is behind.")
+    elif code:
+        # The checkout itself said no (local changes, an unfinished operation,
+        # a branch it cannot protect): not a network problem.
+        result = ("This machine's copy of the NSLS toolkit was not updated"
+                  f"{on}: its own checkout refused the update. A warning above, "
+                  "if there is one, gives the reason and the fix.")
     else:
-        # The same explanations a session start gives for a copy that will not move.
-        plugin = PLUGIN_DIR.name
-        try:
-            if code == OP_IN_PROGRESS:
-                _warn_operation_in_progress(plugin, PLUGIN_DIR)
-            elif code == UNGUARDABLE_BRANCH:
-                _warn_unguardable_branch(plugin, PLUGIN_DIR)
-            elif code:
-                _warn_if_frozen(plugin, PLUGIN_DIR, out, deadline=deadline)
-        except Exception:
-            pass
-        if code:
-            # The checkout itself said no (local changes, an unfinished
-            # operation, a branch it cannot protect): not a network problem.
-            result = ("This machine's copy of the NSLS toolkit was not updated"
-                      f"{on}: its own checkout refused the update. A warning above, "
-                      "if there is one, gives the reason and the fix.")
-        else:
-            result = ("This machine's copy of the NSLS toolkit could not be updated "
-                      f"just now{on}. The usual cause is no internet connection; try "
-                      "again in a few minutes.")
+        result = ("This machine's copy of the NSLS toolkit could not be updated "
+                  f"just now{on}. The usual cause is no internet connection; try "
+                  "again in a few minutes.")
+    # The same explanations a session start gives, in the same order: why an
+    # update was refused, then a copy that pulls cleanly from a branch that is
+    # not main (silent when it follows main or is pinned).
+    plugin = PLUGIN_DIR.name
+    try:
+        if code == OP_IN_PROGRESS:
+            _warn_operation_in_progress(plugin, PLUGIN_DIR)
+        elif code == UNGUARDABLE_BRANCH:
+            _warn_unguardable_branch(plugin, PLUGIN_DIR)
+        elif code:
+            _warn_if_frozen(plugin, PLUGIN_DIR, out, deadline=deadline)
+        _warn_if_stale_by_configuration(plugin, PLUGIN_DIR)
+    except Exception:
+        pass
     new_session = (" This session keeps the old version: tell the builder in one plain "
                    "sentence to open a new session to use the update.") if moved else ""
     if _session_hook_registered():
