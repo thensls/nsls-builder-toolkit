@@ -218,6 +218,32 @@ with tempfile.TemporaryDirectory() as tmp:
     check("so nothing is proven until the organization's copy earns it", pb.proven() == [])
 reset_env()
 
+print("\na switched-off copy's evidence retires nothing")
+for label, body, stale_registry in (
+        ("all syncing switched off", {"syncClaudeAiPlugins": False}, False),
+        ("the copy's own switch off", {"enabledPlugins": {f"{PLUGIN}@synced": False}}, False),
+        ("syncing off, and a registry entry left behind by a removed install", {"syncClaudeAiPlugins": False}, True)):
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg = new_cfg(tmp)
+        root = add_copy(cfg)
+        pb = load("plugin_beacon", cfg)
+        prove(pb, root)
+        check(f"{label}: proven while it was on", sorted(pb.proven()) == sorted(ALL))
+        shim_settings = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [
+            {"type": "command", "command": 'python3 "/Users/someone/.claude/local-plugins/nsls-builder-toolkit/hooks/guardrail-gate.py"'}]}]}}
+        shim_settings.update(body)
+        (cfg / "settings.json").write_text(json.dumps(shim_settings), encoding="utf-8")
+        if stale_registry:
+            gone = add_marketplace(cfg)
+            shutil.rmtree(gone)
+        check(f"{label}: fired() no longer believes any of it", not any(pb.fired(h) for h in ALL))
+        mig = load("migrate_to_plugin", cfg)
+        got = mig._proven_hooks()
+        removed = mig._remove_settings_hooks(only=got)
+        check(f"{label}: so the migration proves nothing and the shim stays",
+              got == set() and removed == 0 and mig._shims_present(), f"proven={got} removed={removed}")
+    reset_env()
+
 print("\nswitches")
 with tempfile.TemporaryDirectory() as tmp:
     cfg = new_cfg(tmp)

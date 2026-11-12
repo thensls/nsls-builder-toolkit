@@ -264,7 +264,9 @@ def fired(hook: str) -> bool:
     * and it must be the copy that is live now, when that can be read, so an
       upgrade re-earns its evidence rather than inheriting it. A marketplace
       upgrade moves to a new folder; a synced copy is replaced in place, so
-      there the version the beacon recorded must still be the copy's version.
+      there the version the beacon recorded must still be the copy's version;
+    * and a synced copy must still be switched on. Its folder stays on disk
+      after the builder, or NSLS, turns syncing off.
     """
     try:
         data = json.loads((BEACON_DIR / f"{hook}.json").read_text(encoding="utf-8"))
@@ -284,6 +286,17 @@ def fired(hook: str) -> bool:
         if installed and str(root) != installed:
             return False
         if synced:
+            # A synced copy that is switched off runs no hooks, whatever it
+            # proved while it was on. Its folder can outlive the switch, and
+            # the migration asks fired() directly, so the question is settled
+            # here: evidence from a copy that is not delivering the toolkit
+            # retires nothing.
+            sc = _synced()
+            try:
+                if not (sc and sc.active(_CONFIG_DIR)):
+                    return False
+            except Exception:
+                return False
             # The version is the only thing that tells a synced copy from the
             # one that replaced it in the same folder. A beacon with none, or a
             # copy whose version cannot be read, is not evidence about THIS
