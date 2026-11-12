@@ -684,7 +684,7 @@ with tempfile.TemporaryDirectory() as tmp:
             f'Remove-Item {env_paths} -ErrorAction Ignore; git -C "{folder}" pull --ff-only --quiet',
             f'unset {names}; GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= git -C "{folder}" pull --ff-only --quiet',
             f"Remove-Item {env_paths} -ErrorAction Ignore; $env:GIT_TERMINAL_PROMPT='0'; $env:GCM_INTERACTIVE='never'; "
-            f'git -C "{folder}" pull --ff-only --quiet',
+            f'Remove-Item Env:GIT_ASKPASS -ErrorAction Ignore; git -c core.askPass= -C "{folder}" pull --ff-only --quiet',
             f'"/opt/homebrew/bin/python3" "{hook_folder}/hooks/session-start.py" --no-pull',
         ]
 
@@ -707,6 +707,12 @@ with tempfile.TemporaryDirectory() as tmp:
     check("a Mac path in another letter case is not what an installer wrote, so it is never removed; "
           "it may still be this folder, so it counts as someone's own pull of it",
           not pd._is_ours(shouted, [mac]) and pd._is_edited(shouted, [mac], "/Users/a b"))
+    proxied = f'unset HTTPS_PROXY; git -C "{mac}" pull --ff-only --quiet'
+    check("an entry that clears a variable no installer clears was written by hand: theirs, never removed",
+          not pd._is_ours(proxied, [mac]) and pd._is_edited(proxied, [mac], "/Users/a b"))
+    nested = f'git -C "{mac}/vendor/their-repo" pull'
+    check("a pull of a checkout nested inside the toolkit folder is not a pull of the toolkit",
+          not pd._is_ours(nested, [mac]) and not pd._is_edited(nested, [mac], "/Users/a b"))
     check("the folder hook's own --no-pull flag is not a pull",
           not pd._is_edited(f'"/usr/bin/python3" "{mac}/hooks/session-start.py" --no-pull --verbose', [mac], "/Users/a b"))
     for cmd in (BUILDER_HOOK["command"], 'echo "nsls-personal-toolkit is great"', f'git -C "{mac}" status',

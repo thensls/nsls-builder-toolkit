@@ -711,8 +711,8 @@ class _Lock:
     """One pass at a time on this computer. Two sessions starting together
     would otherwise both copy into the same folder."""
 
-    def __init__(self, cfg):
-        self.path = Path(cfg) / ".nsls-personal-delivery.flock"
+    def __init__(self, cfg, name=".nsls-personal-delivery.flock"):
+        self.path = Path(cfg) / name
         self.fd = None
 
     def __enter__(self):
@@ -914,13 +914,36 @@ def take_over(cfg, found, shipped=None, origin=None, deadline=None, take_theirs=
 # its own update). Any other entry that pulls this folder was written or
 # changed by hand: it is left alone, and so is its folder.
 
-_GIT_NAMES = r"[A-Z_]+"
-_PULL = r'git -C "(?P<dir>[^"\n]+)" pull --ff-only --quiet'
+# git's own list of the variables that aim it at another repository
+# (`git rev-parse --local-env-vars`). They are the only names an installer's
+# entry ever clears, so an entry that clears anything else (a proxy, say) was
+# written by hand and is its owner's.
+_GIT_REPO_VARS = (
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT", "GIT_OBJECT_DIRECTORY", "GIT_DIR", "GIT_WORK_TREE",
+    "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE", "GIT_INDEX_FILE",
+    "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_PREFIX",
+    "GIT_INTERNAL_SUPER_PREFIX", "GIT_SHALLOW_FILE", "GIT_COMMON_DIR",
+)
+_GIT_NAMES = "(?:" + "|".join(sorted(_GIT_REPO_VARS, key=len, reverse=True)) + ")"
+# What makes a pull unable to ask anyone to sign in, in each shell an entry is
+# written for (see quieten_update_entries). GIT_TERMINAL_PROMPT=0 stops git's
+# own terminal question; GCM_INTERACTIVE=never stops Git Credential Manager's
+# sign-in window, which ignores the first. The third asker is an askpass
+# helper, a program git runs to ask (VS Code's terminal sets one for everything
+# started from it). A POSIX shell switches it off with an empty GIT_ASKPASS.
+# PowerShell cannot hold an empty variable, so there the variable is removed
+# and git is given an empty core.askPass on its command line, which also stops
+# it falling back to a configured helper. Stored credentials still work.
+_BASH_QUIET = "GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= "
+_PS_QUIET = ("$env:GIT_TERMINAL_PROMPT='0'; $env:GCM_INTERACTIVE='never'; "
+             "Remove-Item Env:GIT_ASKPASS -ErrorAction Ignore; ")
+_PS_GIT = "git -c core.askPass= "
+_PULL = r'git (?:-c core\.askPass= )?-C "(?P<dir>[^"\n]+)" pull --ff-only --quiet'
 _PULL_ENTRY = re.compile(
     r"(?:unset(?: " + _GIT_NAMES + r")+; "
     r"|Remove-Item Env:" + _GIT_NAMES + r"(?:,Env:" + _GIT_NAMES + r")* -ErrorAction Ignore; )?"
-    r"(?:GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= "
-    r"|\$env:GIT_TERMINAL_PROMPT='0'; \$env:GCM_INTERACTIVE='never'; )?"
+    r"(?:" + re.escape(_BASH_QUIET) + "|" + re.escape(_PS_QUIET) + r")?"
     + _PULL)
 _SYNC_ENTRY = re.compile(
     r'"[^"\n]+" "(?P<dir>[^"\n]+)[/\\]hooks[/\\]session-start\.py" --no-pull')
@@ -998,9 +1021,13 @@ def _is_edited(command, targets, home=None) -> bool:
     for spelling in spellings:
         at = text.find(spelling)
         while at != -1:
-            after = text[at + len(spelling):at + len(spelling) + 1]
-            if not after or not (after.isalnum() or after in "-_."):
-                return True              # the folder itself, not a longer name
+            # The folder itself: its path ends here, give or take a trailing
+            # slash. A longer name (…-toolkit-experiments) is another folder,
+            # and so is anything inside it (…-toolkit/vendor/thing): a pull of
+            # a checkout nested in the toolkit is not a pull of the toolkit.
+            after = text[at + len(spelling):].lstrip("/")[:1]
+            if not after or not (after.isalnum() or after in "-_.~$%{"):
+                return True
             at = text.find(spelling, at + 1)
     return False
 
@@ -1047,52 +1074,139 @@ def update_entries(cfg):
     return ours, edited
 
 
+# Held by this module from reading settings.json to replacing it, so two of the
+# toolkit's own passes (two sessions starting together) never build on the same
+# snapshot.
+_SETTINGS_LOCK = ".nsls-settings-write.flock"
+
+
+def _save_settings(path, before, settings, backup_name) -> bool:
+    """Write settings.json back in one step. A copy of the file as it was is
+    kept beside it the first time, and whoever wrote the file since it was read
+    wins: ours is dropped and the next session tries again.
+
+    That check narrows a race; it cannot close it. Claude Code and the
+    installers write settings.json too, and none of them takes a lock this
+    module could share, so a write of theirs landing between the comparison
+    below and the replace after it (two system calls apart) would be lost.
+    The callers hold _SETTINGS_LOCK, which settles it among the toolkit's own
+    passes; against everything else, comparing last is all there is."""
+    backup = path.with_name(backup_name)
+    if not backup.exists():
+        shutil.copy2(str(path), str(backup))
+    fd, tmp = tempfile.mkstemp(prefix=".settings.json.", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(settings, fh, indent=2)
+            fh.write("\n")
+        os.chmod(tmp, stat.S_IMODE(path.stat().st_mode))
+        if path.read_bytes() != before:
+            raise OSError("settings.json changed")
+        os.replace(tmp, str(path))
+        return True
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return False
+
+
 def remove_update_entries(cfg) -> bool:
     """Take the installers' own update entries out of settings.json. True when
     none is left. Nothing else in the file changes meaning; a copy of the file
     as it was is kept beside it the first time."""
     try:
-        path = Path(os.path.realpath(Path(cfg) / "settings.json"))
-        before = path.read_bytes()
-        settings = json.loads(before.decode("utf-8-sig"))
-        removed = 0
-        targets = _targets(cfg)
-        hooks = settings.get("hooks") if isinstance(settings, dict) else None
-        for event, group, entries in list(_hook_lists(settings)):
-            kept = [h for h in entries
-                    if not (isinstance(h, dict) and isinstance(h.get("command"), str)
-                            and _is_ours(h["command"], targets))]
-            if len(kept) == len(entries):
-                continue
-            removed += len(entries) - len(kept)
-            if kept:
-                group["hooks"] = kept
-            else:
-                hooks[event] = [g for g in hooks[event] if g is not group]
-                if not hooks[event]:
-                    del hooks[event]
-        if not removed:
-            return True
-        backup = path.with_name("settings.json.pre-personal-delivery")
-        if not backup.exists():
-            shutil.copy2(str(path), str(backup))
-        fd, tmp = tempfile.mkstemp(prefix=".settings.json.", dir=str(path.parent))
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump(settings, fh, indent=2)
-                fh.write("\n")
-            os.chmod(tmp, stat.S_IMODE(path.stat().st_mode))
-            # Whoever wrote settings.json since we read it wins: drop ours and
-            # let the next session try again.
-            if path.read_bytes() != before:
-                raise OSError("settings.json changed")
-            os.replace(tmp, str(path))
-        except Exception:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-            return False
+        with _Lock(cfg, _SETTINGS_LOCK) as held:
+            if not held:
+                return False             # another pass of ours is writing: next session
+            path = Path(os.path.realpath(Path(cfg) / "settings.json"))
+            before = path.read_bytes()
+            settings = json.loads(before.decode("utf-8-sig"))
+            removed = 0
+            targets = _targets(cfg)
+            hooks = settings.get("hooks") if isinstance(settings, dict) else None
+            for event, group, entries in list(_hook_lists(settings)):
+                kept = [h for h in entries
+                        if not (isinstance(h, dict) and isinstance(h.get("command"), str)
+                                and _is_ours(h["command"], targets))]
+                if len(kept) == len(entries):
+                    continue
+                removed += len(entries) - len(kept)
+                if kept:
+                    group["hooks"] = kept
+                else:
+                    hooks[event] = [g for g in hooks[event] if g is not group]
+                    if not hooks[event]:
+                        del hooks[event]
+            if not removed:
+                return True
+            if not _save_settings(path, before, settings, "settings.json.pre-personal-delivery"):
+                return False
         return update_entries(cfg)[0] == 0
     except Exception:
         return False
+
+
+def _quietened(command):
+    """The same pull, unable to ask anyone to sign in. None when it already
+    is, or is the bare form with no shell of its own yet: the installers'
+    upgrades give that one its `unset` or `Remove-Item` prefix first, and only
+    then is it clear which shell the three settings must be written for."""
+    if _BASH_QUIET in command or _PS_QUIET in command:
+        return None
+    at = command.rfind('git -C "')
+    if at < 0:
+        return None
+    if command.startswith("unset "):
+        return command[:at] + _BASH_QUIET + command[at:]
+    if command.startswith("Remove-Item "):
+        return command[:at] + _PS_QUIET + _PS_GIT + command[at + len("git "):]
+    return None
+
+
+def quieten_update_entries(cfg) -> int:
+    """Make this folder's own pull entry unable to ask for a sign-in. Returns
+    how many entries were rewritten (0 when none needed it, or none could be).
+
+    The entry the installers register is a `git pull` with nothing to stop git
+    asking for credentials. Against a public repository it never needs any.
+    Against a private one, on a computer with no GitHub sign-in, Git Credential
+    Manager (the default on Windows) opens a sign-in window: from a hook, at
+    every session start. A folder that follows the delivered copy has no such
+    entry any more, but a fork and a checkout with its owner's own work keep
+    theirs for good, and every checkout keeps it until it is taken over.
+
+    Only an entry exactly as an installer or an upgrade wrote it, for THIS
+    folder, is rewritten, and only by adding the three settings: it pulls the
+    same folder the same way. Anyone's hand-written entry is theirs.
+    """
+    try:
+        path = Path(os.path.realpath(Path(cfg) / "settings.json"))
+        if b"pull --ff-only --quiet" not in path.read_bytes():
+            return 0                     # the usual case: nothing to do, no lock taken
+        with _Lock(cfg, _SETTINGS_LOCK) as held:
+            if not held:
+                return 0                 # another pass of ours is writing: next session
+            before = path.read_bytes()
+            settings = json.loads(before.decode("utf-8-sig"))
+            targets = _targets(cfg)
+            changed = 0
+            for _event, _group, entries in _hook_lists(settings):
+                for hook in entries:
+                    command = hook.get("command") if isinstance(hook, dict) else None
+                    if not isinstance(command, str):
+                        continue
+                    match = _PULL_ENTRY.fullmatch(command)
+                    if not match or not any(_same_folder(match.group("dir"), t) for t in targets):
+                        continue
+                    quiet = _quietened(command)
+                    if quiet is not None:
+                        hook["command"] = quiet
+                        changed += 1
+            if not changed:
+                return 0
+            saved = _save_settings(path, before, settings, "settings.json.pre-personal-quiet-pull")
+            return changed if saved else 0
+    except Exception:
+        return 0

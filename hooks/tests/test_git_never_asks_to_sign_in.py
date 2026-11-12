@@ -161,6 +161,9 @@ check("set before any git call runs", ps1.index("$env:GCM_INTERACTIVE = 'never'"
 check("and so does every bounded git call",
       "$psi.EnvironmentVariables['GCM_INTERACTIVE'] = 'never'" in ps1)
 check("the terminal question is still off as well", "$env:GIT_TERMINAL_PROMPT = '0'" in ps1)
+ASKPASS_OFF = "Remove-Item Env:GIT_ASKPASS, Env:SSH_ASKPASS -ErrorAction SilentlyContinue"
+check("an askpass helper inherited from the environment (VS Code sets one) is removed",
+      ASKPASS_OFF in ps1 and ps1.index(ASKPASS_OFF) < ps1.index("function Invoke-GitBounded"))
 check("session-start.ps1 is ASCII-only", all(ord(c) < 128 for c in ps1))
 
 print()
