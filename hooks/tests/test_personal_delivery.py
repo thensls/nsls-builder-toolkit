@@ -510,6 +510,12 @@ kept_case("an edited file, with the folder already on the delivered version",
 kept_case("a new file of their own", lambda m: write(m.folder / "skills/mine/SKILL.md", "mine\n"), "own-changes")
 kept_case("a commit NSLS does not have", commit_ahead, "own-changes")
 kept_case("a second branch", lambda m: git(m.folder, "branch", "experiment"), "own-changes")
+kept_case("an edit git was told to ignore (assume-unchanged), which `git status` calls clean",
+          lambda m: (git(m.folder, "update-index", "--assume-unchanged", "README.md"),
+                     write(m.folder / "README.md", "edited, and hidden from git status\n")), "own-changes")
+kept_case("an edit git was told to skip (skip-worktree)",
+          lambda m: (git(m.folder, "update-index", "--skip-worktree", "skills/open-day/SKILL.md"),
+                     write(m.folder / "skills/open-day/SKILL.md", "edited, and skipped by git\n")), "own-changes")
 kept_case("a stash", stashed, "own-changes")
 kept_case("a linked worktree (what /unblock sets up)",
           lambda m: git(m.folder, "worktree", "add", "-q", str(m.cfg / "elsewhere"), "-b", "wt"), "own-changes")
@@ -551,6 +557,39 @@ with tempfile.TemporaryDirectory() as tmp:
           outcome(res) == "adopted" and m.text("README.md") == "Personal Toolkit 2.0.0\n"
           and (m.marker() or {}).get("from", {}).get("kind") == "adopted", str(res))
 
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")                         # only to have a repository to hang a worktree on
+    main_repo = Path(tmp) / "main-repo"
+    os.rename(m.folder, main_repo)
+    git(main_repo, "worktree", "add", "-q", str(m.folder), "-b", "linked")
+    write(m.folder / ".env", "SECRET=1\n")
+    m.deliver("2.0.0")
+    pd = m.load()._personal_delivery()
+    pointer = (m.folder / ".git").read_text(encoding="utf-8")
+    res, _ = m.run()
+    check("a folder that is a linked worktree of another repository is never taken over unasked",
+          outcome(res) == "kept" and (m.folder / ".git").read_text(encoding="utf-8") == pointer, str(res))
+    real_unlink = os.unlink
+
+    def held(path, *args, **kwargs):
+        if str(path).endswith(".git"):
+            raise PermissionError("in use")
+        return real_unlink(path, *args, **kwargs)
+
+    os.unlink = held
+    try:
+        res, _ = m.run(request="adopt")
+    finally:
+        os.unlink = real_unlink
+    check("with their yes, but its git pointer cannot be removed: nothing is half done",
+          outcome(res) == "retry" and m.marker() is None and pd.state(m.folder) == "checkout"
+          and (m.folder / ".git").read_text(encoding="utf-8") == pointer
+          and m.text("README.md") == "Personal Toolkit 1.9.0\n", str(res))
+    res, _ = m.run(request="adopt")
+    check("and a later try finishes it", outcome(res) == "adopted" and pd.state(m.folder) == "delivered"
+          and m.text("README.md") == "Personal Toolkit 2.0.0\n", str(res))
+
 print("9. a plain copy with no git")
 with tempfile.TemporaryDirectory() as tmp:
     m = Machine(tmp)
@@ -577,58 +616,101 @@ with tempfile.TemporaryDirectory() as tmp:
           and m.text("README.md") == "Personal Toolkit 2.0.0\n"
           and (Path(res["set_aside"]) / "README.md").read_text(encoding="utf-8") == "Personal Toolkit 1.5.0\n", str(res))
 
-print("10. every update entry an installer ever wrote is recognised, and nothing else")
+print("10. only this folder's own update entries are removed, in every spelling an installer wrote")
 with tempfile.TemporaryDirectory() as tmp:
     m = Machine(tmp)
     pd = m.load()._personal_delivery()
     names = "GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR"
     env_paths = ",".join("Env:" + n for n in names.split())
-    posix, win = "/Users/a b/.claude/local-plugins/nsls-personal-toolkit", r"C:\Users\a b\.claude\local-plugins\nsls-personal-toolkit"
-    ours = [
-        f'git -C "{posix}" pull --ff-only --quiet',
-        f'git -C "{win}" pull --ff-only --quiet',
-        f'unset {names}; git -C "{posix}" pull --ff-only --quiet',
-        f'Remove-Item {env_paths} -ErrorAction Ignore; git -C "{win}" pull --ff-only --quiet',
-        f'unset {names}; GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= git -C "{posix}" pull --ff-only --quiet',
-        f"Remove-Item {env_paths} -ErrorAction Ignore; $env:GIT_TERMINAL_PROMPT='0'; $env:GCM_INTERACTIVE='never'; "
-        f'git -C "{win}" pull --ff-only --quiet',
-        f'"/opt/homebrew/bin/python3" "{posix}/hooks/session-start.py" --no-pull',
-        f'"C:\\Python312\\python.exe" "/c/Users/a b/.claude/local-plugins/nsls-personal-toolkit/hooks/session-start.py" --no-pull',
-    ]
-    theirs = [
-        BUILDER_HOOK["command"],
-        'echo "nsls-personal-toolkit is great"',
-        f'git -C "{posix}-experiments" pull --ff-only --quiet',
-        f'git -C "{posix}" status',
-        f'"/usr/bin/python3" "{posix}/hooks/session-start.py"',
-    ]
-    edited = f'cd /x && git -C "{posix}" pull --ff-only --quiet'
-    for cmd in ours:
-        check(f"ours: {cmd[:60]}...", pd._is_ours(cmd))
-    for cmd in theirs + [edited]:
-        check(f"not ours: {cmd[:60]}", not pd._is_ours(cmd))
+
+    def spellings(folder, hook_folder=None):
+        """Every form an installer or an upgrade has written, for one folder."""
+        hook_folder = hook_folder or folder
+        return [
+            f'git -C "{folder}" pull --ff-only --quiet',
+            f'unset {names}; git -C "{folder}" pull --ff-only --quiet',
+            f'Remove-Item {env_paths} -ErrorAction Ignore; git -C "{folder}" pull --ff-only --quiet',
+            f'unset {names}; GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= git -C "{folder}" pull --ff-only --quiet',
+            f"Remove-Item {env_paths} -ErrorAction Ignore; $env:GIT_TERMINAL_PROMPT='0'; $env:GCM_INTERACTIVE='never'; "
+            f'git -C "{folder}" pull --ff-only --quiet',
+            f'"/opt/homebrew/bin/python3" "{hook_folder}/hooks/session-start.py" --no-pull',
+        ]
+
+    # A Mac folder, and a PC folder as each Windows installer spells it.
+    mac = "/Users/a b/.claude/local-plugins/nsls-personal-toolkit"
+    pc = r"C:\Users\a b\.claude\local-plugins\nsls-personal-toolkit"
+    pc_bash = "/c/Users/a b/.claude/local-plugins/nsls-personal-toolkit"
+    for cmd in spellings(mac):
+        check(f"this Mac folder's: {cmd[:52]}...", pd._is_ours(cmd, [mac]))
+    for cmd in spellings(pc, hook_folder=pc_bash) + spellings(pc_bash) + spellings(pc.lower()):
+        check(f"this PC folder's, any spelling: {cmd[:46]}...", pd._is_ours(cmd, [pc]))
+    for cmd in (spellings("/Users/a b/nsls-skills/nsls-personal-toolkit")
+                + spellings("/Users/someone-else/.claude/local-plugins/nsls-personal-toolkit")
+                + spellings(mac + "-experiments")):
+        check(f"another checkout's, not ours and not in our way: {cmd[:40]}...",
+              not pd._is_ours(cmd, [mac]) and not pd._is_edited(cmd, [mac], "/Users/a b"))
+    check("the same pull with a trailing slash on the folder is still this folder's, and goes with the rest",
+          pd._is_ours(f'git -C "{mac}/" pull --ff-only --quiet', [mac]))
+    shouted = f'git -C "{mac.upper()}" pull --ff-only --quiet'
+    check("a Mac path in another letter case is not what an installer wrote, so it is never removed; "
+          "it may still be this folder, so it counts as someone's own pull of it",
+          not pd._is_ours(shouted, [mac]) and pd._is_edited(shouted, [mac], "/Users/a b"))
+    check("the folder hook's own --no-pull flag is not a pull",
+          not pd._is_edited(f'"/usr/bin/python3" "{mac}/hooks/session-start.py" --no-pull --verbose', [mac], "/Users/a b"))
+    for cmd in (BUILDER_HOOK["command"], 'echo "nsls-personal-toolkit is great"', f'git -C "{mac}" status',
+                f'"/usr/bin/python3" "{mac}/hooks/session-start.py"', f'ls "{mac}-pull"'):
+        check(f"nothing to do with updating this folder: {cmd[:44]}",
+              not pd._is_ours(cmd, [mac]) and not pd._is_edited(cmd, [mac], "/Users/a b"))
+    for cmd in (f'cd /x && git -C "{mac}" pull --ff-only --quiet',
+                f"cd '{mac}' && git pull",
+                f'git -C "{mac}/" pull --rebase',
+                'git -C ~/.claude/local-plugins/nsls-personal-toolkit pull --rebase',
+                'git -C "$HOME/.claude/local-plugins/nsls-personal-toolkit" pull',
+                f'git -C "{mac}" pull --ff-only'):
+        check(f"a pull of this folder someone wrote by hand is theirs: {cmd[:44]}",
+              not pd._is_ours(cmd, [mac]) and pd._is_edited(cmd, [mac], "/Users/a b"))
+    check("a hand-written pull of this PC folder is recognised in Git Bash spelling too",
+          pd._is_edited(f"cd {pc_bash} && git pull", [pc], r"C:\Users\a b")
+          and pd._is_edited(r"git -C $env:USERPROFILE\.claude\local-plugins\nsls-personal-toolkit pull", [pc], r"C:\Users\a b"))
+
+    # And on this machine's own settings.json, with its real folder.
+    here = str(m.folder)
+    other = str(Path(tmp) / "elsewhere" / "nsls-personal-toolkit")
+    ours, others = spellings(here), spellings(other)
     hooks = [{"matcher": "startup|resume", "hooks": [{"type": "command", "command": c} for c in ours[:4]]},
-             {"matcher": "startup", "hooks": [{"type": "command", "command": theirs[0]},
-                                              {"type": "command", "command": ours[6]}]},
-             {"hooks": [{"type": "command", "command": c} for c in theirs[1:]]}]
-    m.settings(hooks, model="opus", permissions={"allow": [f"Bash(git -C {posix} pull:*)"]})
+             {"matcher": "startup", "hooks": [BUILDER_HOOK, {"type": "command", "command": ours[5]}]},
+             {"hooks": [{"type": "command", "command": c} for c in others]}]
+    m.settings(hooks, model="opus", permissions={"allow": [f"Bash(git -C {here} pull:*)"]})
     raw = (m.cfg / "settings.json").read_bytes()
     (m.cfg / "settings.json").write_bytes(b"\xef\xbb\xbf" + raw)       # as an old PowerShell installer left it
-    check("counted: five of ours, none edited", pd.update_entries(m.cfg) == (5, 0), str(pd.update_entries(m.cfg)))
+    check("counted: five of this folder's, none edited, the other checkout's ignored",
+          pd.update_entries(m.cfg) == (5, 0), str(pd.update_entries(m.cfg)))
     check("removed", pd.remove_update_entries(m.cfg) is True and pd.update_entries(m.cfg) == (0, 0))
     after = json.loads((m.cfg / "settings.json").read_text(encoding="utf-8-sig"))
-    check("every other hook, in its own group, is exactly as it was",
+    check("the Builder Toolkit's hook and the other checkout's whole update are exactly as they were",
           after["hooks"]["SessionStart"] == [
-              {"matcher": "startup", "hooks": [{"type": "command", "command": theirs[0]}]},
-              {"hooks": [{"type": "command", "command": c} for c in theirs[1:]]}], str(after["hooks"]))
+              {"matcher": "startup", "hooks": [BUILDER_HOOK]},
+              {"hooks": [{"type": "command", "command": c} for c in others]}], str(after["hooks"]))
     check("and so is the rest of the file", after["model"] == "opus"
-          and after["permissions"] == {"allow": [f"Bash(git -C {posix} pull:*)"]})
+          and after["permissions"] == {"allow": [f"Bash(git -C {here} pull:*)"]})
+    edited = f'cd /x && git -C "{here}" pull --ff-only --quiet'
     m.settings([{"hooks": [{"type": "command", "command": edited}]}])
     still = json.loads((m.cfg / "settings.json").read_text(encoding="utf-8"))
     check("an entry someone edited is counted as theirs and never removed",
           pd.update_entries(m.cfg) == (0, 1) and pd.remove_update_entries(m.cfg) is True
           and json.loads((m.cfg / "settings.json").read_text(encoding="utf-8")) == still
           and still["hooks"]["SessionStart"][0]["hooks"][0]["command"] == edited)
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")
+    m.deliver("2.0.0")
+    other = str(Path(tmp) / "elsewhere" / "nsls-personal-toolkit")
+    m.settings([{"hooks": [pull_entry(other), sync_entry(other)]}])
+    settings_before = (m.cfg / "settings.json").read_bytes()
+    res, _ = m.run()
+    check("another checkout's update entries neither delay this folder's take-over nor are touched by it",
+          outcome(res) == "converted" and (m.cfg / "settings.json").read_bytes() == settings_before, str(res))
 
 print("11. NSLS reshapes the toolkit, the owner reshapes their folder, a copy stops half way")
 with tempfile.TemporaryDirectory() as tmp:

@@ -793,9 +793,16 @@ def take_over(cfg, found, tracked=(), origin=None, deadline=None, take_theirs=Fa
                 record["from"]["kept_git"] = kept.name
             elif _plain_file(git):
                 try:
-                    git.unlink()             # a worktree pointer: the owner said yes
+                    os.unlink(str(git))      # a worktree pointer: the owner said yes
                 except OSError:
-                    pass
+                    # Still git's. With the record left behind the folder would
+                    # read as following the delivered copy while git still
+                    # owned it: forget the record and let a later try do it.
+                    try:
+                        (target / MARKER).unlink()
+                    except OSError:
+                        pass
+                    return _result("retry", why="git-held")
             _ensure_tombstone(target)
             aside = _aside_dir(target) if take_theirs else None
             return _finish(target, found, record, deadline, aside,
@@ -811,11 +818,13 @@ def take_over(cfg, found, tracked=(), origin=None, deadline=None, take_theirs=Fa
 # the folder follows the delivered copy both are wrong: the pull has nothing to
 # pull and would print a hook error at every session start, and with .git gone
 # it could reach a parent repository. They are removed, and only they: every
-# spelling an installer or an upgrade has ever written, matched whole. An entry
-# its owner edited matches none of them and is left alone, and so is its folder.
+# spelling an installer or an upgrade has ever written, matched whole, and only
+# for THIS folder (another checkout that happens to end in the same name keeps
+# its own update). Any other entry that pulls this folder was written or
+# changed by hand: it is left alone, and so is its folder.
 
 _GIT_NAMES = r"[A-Z_]+"
-_PULL = r'git -C "[^"\n]*[/\\]nsls-personal-toolkit" pull --ff-only --quiet'
+_PULL = r'git -C "(?P<dir>[^"\n]+)" pull --ff-only --quiet'
 _PULL_ENTRY = re.compile(
     r"(?:unset(?: " + _GIT_NAMES + r")+; "
     r"|Remove-Item Env:" + _GIT_NAMES + r"(?:,Env:" + _GIT_NAMES + r")* -ErrorAction Ignore; )?"
@@ -823,13 +832,93 @@ _PULL_ENTRY = re.compile(
     r"|\$env:GIT_TERMINAL_PROMPT='0'; \$env:GCM_INTERACTIVE='never'; )?"
     + _PULL)
 _SYNC_ENTRY = re.compile(
-    r'"[^"\n]+" "[^"\n]*[/\\]nsls-personal-toolkit[/\\]hooks[/\\]session-start\.py" --no-pull')
-# Any pull of the folder, however it is spelled.
-_ANY_PULL = re.compile(r'nsls-personal-toolkit["\']?\s+pull\b')
+    r'"[^"\n]+" "(?P<dir>[^"\n]+)[/\\]hooks[/\\]session-start\.py" --no-pull')
+# The word, not the folder hook's own `--no-pull` flag.
+_PULL_WORD = re.compile(r"(?<![-\w])pull\b")
+# How a hand-written entry may spell the home folder.
+_HOME_WORDS = ("~", "$HOME", "${HOME}", "%USERPROFILE%", "$env:USERPROFILE", "$env:HOME")
 
 
-def _is_ours(command) -> bool:
-    return bool(_PULL_ENTRY.fullmatch(command) or _SYNC_ENTRY.fullmatch(command))
+def _slashes(text) -> str:
+    return str(text).replace("\\", "/").rstrip("/")
+
+
+def _same_folder(written, target) -> bool:
+    """True when a path an installer wrote names `target`.
+
+    install.sh writes forward slashes; under Git Bash on Windows it writes
+    /c/Users/...; install.ps1 writes C:\\Users\\... . A Windows path compares
+    without regard to case or slash direction; any other path must match
+    exactly. A path that merely ends in the same folder name is another
+    checkout, with an update of its own that is not ours to remove.
+    """
+    wrote, want = _slashes(written), _slashes(target)
+    drive = re.match(r"^([A-Za-z]):(/.*)$", want)
+    if not drive:
+        return wrote == want
+    bash = re.match(r"^/([A-Za-z])(/.*)$", wrote)
+    if bash:
+        wrote = f"{bash.group(1)}:{bash.group(2)}"
+    return wrote.lower() == want.lower()
+
+
+def _targets(cfg) -> list:
+    """The toolkit folder as settings.json may name it: as built, and with any
+    link in the path resolved."""
+    target = folder(cfg)
+    found = [str(target)]
+    try:
+        real = os.path.realpath(target)
+        if real not in found:
+            found.append(real)
+    except Exception:
+        pass
+    return found
+
+
+def _is_ours(command, targets) -> bool:
+    """True for an entry exactly as an installer or an upgrade wrote it, for
+    THIS toolkit folder."""
+    for form in (_PULL_ENTRY, _SYNC_ENTRY):
+        match = form.fullmatch(command)
+        if match:
+            return any(_same_folder(match.group("dir"), target) for target in targets)
+    return False
+
+
+def _is_edited(command, targets, home=None) -> bool:
+    """True for any other entry that pulls THIS toolkit folder: someone wrote
+    or changed it by hand, so it is theirs, and so is the folder's update."""
+    if not _PULL_WORD.search(command):
+        return False
+    text = _slashes(command).lower()
+    spellings = set()
+    for target in targets:
+        want = _slashes(target)
+        spellings.add(want.lower())
+        drive = re.match(r"^([A-Za-z]):(/.*)$", want)
+        if drive:
+            spellings.add(f"/{drive.group(1)}{drive.group(2)}".lower())   # Git Bash
+        if home:
+            base = _slashes(home)
+            if want.lower().startswith(base.lower() + "/"):
+                for word in _HOME_WORDS:
+                    spellings.add((word + want[len(base):]).lower())
+    for spelling in spellings:
+        at = text.find(spelling)
+        while at != -1:
+            after = text[at + len(spelling):at + len(spelling) + 1]
+            if not after or not (after.isalnum() or after in "-_."):
+                return True              # the folder itself, not a longer name
+            at = text.find(spelling, at + 1)
+    return False
+
+
+def _home():
+    try:
+        return str(Path.home())
+    except Exception:
+        return None
 
 
 def _hook_lists(settings):
@@ -854,14 +943,15 @@ def update_entries(cfg):
     except Exception:
         return 0, 0
     ours = edited = 0
+    targets, home = _targets(cfg), _home()
     for _event, _group, entries in _hook_lists(settings):
         for hook in entries:
             command = hook.get("command") if isinstance(hook, dict) else None
             if not isinstance(command, str):
                 continue
-            if _is_ours(command):
+            if _is_ours(command, targets):
                 ours += 1
-            elif _ANY_PULL.search(command):
+            elif _is_edited(command, targets, home):
                 edited += 1
     return ours, edited
 
@@ -875,11 +965,12 @@ def remove_update_entries(cfg) -> bool:
         before = path.read_bytes()
         settings = json.loads(before.decode("utf-8-sig"))
         removed = 0
+        targets = _targets(cfg)
         hooks = settings.get("hooks") if isinstance(settings, dict) else None
         for event, group, entries in list(_hook_lists(settings)):
             kept = [h for h in entries
                     if not (isinstance(h, dict) and isinstance(h.get("command"), str)
-                            and _is_ours(h["command"]))]
+                            and _is_ours(h["command"], targets))]
             if len(kept) == len(entries):
                 continue
             removed += len(entries) - len(kept)

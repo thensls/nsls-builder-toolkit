@@ -1360,10 +1360,21 @@ def _personal_checkout_verdict(plugin_dir, deadline):
                 return no("own-changes", origin)   # /unblock works in one
         except OSError:
             pass
-        rc, listed = git("ls-files", "-z", cap=5)
+        # -v: each file with its index flag. Anything but a plain "H" is a
+        # file git has been told to stop looking at (assume-unchanged shows in
+        # lower case, skip-worktree as "S"): `git status` calls it clean
+        # whatever its owner has done to it, so nothing above vouches for it.
+        rc, listed = git("ls-files", "-v", "-z", cap=5)
         if rc != 0:
             return no("unknown", origin)
-        tracked = [name for name in listed.split("\0") if name]
+        tracked = []
+        for entry in listed.split("\0"):
+            if not entry:
+                continue
+            flag, _, name = entry.partition(" ")
+            if flag != "H" or not name:
+                return no("own-changes", origin)
+            tracked.append(name)
         return {"plain": True, "tracked": tracked, "origin": origin}
     except Exception:
         return no("unknown")
