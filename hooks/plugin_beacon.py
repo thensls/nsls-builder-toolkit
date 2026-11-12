@@ -134,16 +134,25 @@ def _installed_root() -> str:
     """The plugin copy that is live on this machine, or "" if that is unreadable.
 
     A marketplace install first: Claude Code loads it ahead of a synced copy of
-    the same plugin, so where the registry names one that is switched on, that
-    is the live copy. Otherwise the copy NSLS's Claude organization delivers,
-    and failing that whatever the registry names.
+    the same plugin, so where the registry names one that is switched on AND
+    still on disk, that is the live copy. Otherwise the copy NSLS's Claude
+    organization delivers, and failing that whatever the registry names.
+
+    "Still on disk" matters: the registry can outlive the folder it names, and
+    a folder that is gone runs nothing. Naming it the live copy hid a working
+    synced copy behind it: active() said no plugin, and the synced copy's own
+    beacons were refused.
 
     This is the strongest available statement of which copy is live. Without
     it, a beacon left by a version that has since been replaced would keep
     vouching for a hook shape that no longer exists.
     """
     registered = _registry_root()
-    if registered and not _marketplace_switched_off():
+    try:
+        on_disk = bool(registered) and Path(registered).is_dir()
+    except Exception:
+        on_disk = False
+    if on_disk and not _marketplace_switched_off():
         return registered
     return _synced_root() or registered
 
@@ -175,14 +184,16 @@ def plugin_root(running_file) -> str:
 def _copy_version(root) -> str:
     """What to call the copy at `root`: a marketplace install's folder is named
     for its version; a synced copy's folder is named for the plugin, so its
-    version comes from its own plugin.json."""
+    version comes from its own plugin.json. "" when a synced copy's version
+    cannot be read: there is then nothing to tell this copy from the one that
+    replaces it, and fired() believes no beacon that carries no version."""
     try:
         if Path(root).resolve().parent == _cache_prefix().resolve():
             return Path(root).name
         sc = _synced()
-        return (sc.version(root) if sc else None) or "synced"
+        return (sc.version(root) if sc else None) or ""
     except Exception:
-        return Path(root).name
+        return ""
 
 
 def record(hook: str, running_file) -> bool:
@@ -272,10 +283,14 @@ def fired(hook: str) -> bool:
         installed = _installed_root()
         if installed and str(root) != installed:
             return False
-        if synced and str(data.get("version") or "") not in (_copy_version(root), "synced"):
-            # "synced" is what a writer records when it could not read the
-            # copy's version at all; it is still this copy's own evidence.
-            return False
+        if synced:
+            # The version is the only thing that tells a synced copy from the
+            # one that replaced it in the same folder. A beacon with none, or a
+            # copy whose version cannot be read, is not evidence about THIS
+            # copy: the shim stays one more session, which is the cheap mistake.
+            current = _copy_version(root)
+            if not current or str(data.get("version") or "") != current:
+                return False
         return True
     except Exception:
         return False

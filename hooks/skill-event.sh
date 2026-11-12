@@ -46,10 +46,12 @@ case "$_nsls_src" in
       _nsls_ver="${_nsls_root##*/}"
       case "$_nsls_src" in
         */plugins/synced/*)
-          # One line of plugin.json, digits and dots only, or the literal "synced".
+          # The version from plugin.json, digits and dots only. If it cannot
+          # be read the beacon is written without one, and plugin_beacon.fired()
+          # then believes it for nothing: no version, no way to tell this copy
+          # from the one that replaces it in the same folder.
           _nsls_ver=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' \
             "$(dirname "$_nsls_src")/../.claude-plugin/plugin.json" 2>/dev/null | head -n 1)
-          [ -n "$_nsls_ver" ] || _nsls_ver="synced"
           ;;
       esac
       _nsls_ver=$(printf '%s' "$_nsls_ver" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g')

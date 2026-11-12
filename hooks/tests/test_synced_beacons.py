@@ -144,9 +144,19 @@ with tempfile.TemporaryDirectory() as tmp:
     check("and is re-earned the next time the hook runs", pb.fired("session-start"))
 
     rec = beacon(cfg, "session-start")
-    rec["version"] = "synced"
-    (cfg / ".nsls-plugin-beacons" / "session-start.json").write_text(json.dumps(rec), encoding="utf-8")
-    check("a writer that could not read the version is still this copy's evidence", pb.fired("session-start"))
+    for blank in ("", "synced"):
+        rec["version"] = blank
+        (cfg / ".nsls-plugin-beacons" / "session-start.json").write_text(json.dumps(rec), encoding="utf-8")
+        check(f"a beacon carrying no real version ({blank!r}) proves nothing about this copy",
+              not pb.fired("session-start"))
+    (root / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": PLUGIN, "version": "not-a-version"}), encoding="utf-8")
+    pb.record("session-start", root / "hooks" / "session-start.py")
+    check("and a copy whose own version cannot be read earns no evidence at all",
+          beacon(cfg, "session-start").get("version") == "" and not pb.fired("session-start"))
+    set_version(root, "3.51.0")
+    pb.record("session-start", root / "hooks" / "session-start.py")
+    check("with its version readable again, the next run earns it back", pb.fired("session-start"))
 
     market = add_marketplace(cfg)
     check("a marketplace install outranks it: the synced beacon stops counting",
@@ -156,6 +166,10 @@ with tempfile.TemporaryDirectory() as tmp:
     check("unless that install is switched off, when the synced copy is the live one again",
           pb.fired("session-start") and pb.active())
     (cfg / "settings.json").unlink()
+
+    shutil.rmtree(market)
+    check("a registry entry whose folder is gone is not the live copy: the synced copy is",
+          pb._installed_root() == str(root.resolve()) and pb.active() and pb.fired("session-start"))
     (cfg / "plugins" / "installed_plugins.json").unlink()
 
     shutil.rmtree(root)
