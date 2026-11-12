@@ -33,8 +33,34 @@ if [ -f "$FULL_SKILL" ]; then echo "PERSONAL_KIT_PRESENT"; else echo "PERSONAL_K
 
 ## Step 2: Install + enable the personal toolkit (only if missing)
 
-Tell the builder: "One sec — grabbing the personal productivity skills." Then
-install, **preserving any existing `.env`** (the org `/nsls-setmeup` may have written
+Tell the builder: "One sec — grabbing the personal productivity skills."
+
+### 2a. First, the copy NSLS delivers through Claude (no GitHub)
+
+NSLS's Claude organization can deliver the personal toolkit, and this toolkit's
+session hook copies it into place. Ask it to do that now:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh" personal-delivery now
+```
+
+`${CLAUDE_PLUGIN_ROOT}` is this toolkit's own folder; Claude Code fills it in.
+If it appears here as written, use the folder two levels above this SKILL.md.
+
+Read the first word of what it prints:
+
+- **`PERSONAL_TOOLKIT_READY`** → the personal toolkit is installed, kept current
+  by Claude, and its skills are already pointed at. **Skip the rest of Step 2**
+  (no clone, no settings change, no pointer sync) and go to Step 3.
+- **`PERSONAL_TOOLKIT_NOT_DELIVERED`** → NSLS is not delivering it to this
+  account on this computer. Carry on with 2b.
+- **Anything else, or nothing** → the delivered copy is still arriving, or this
+  toolkit is an older one without the command. Wait a minute and run it once
+  more; if the answer is the same, carry on with 2b.
+
+### 2b. Otherwise, from GitHub
+
+Install, **preserving any existing `.env`** (the org `/nsls-setmeup` may have written
 `BUILDER_EMAIL` into this dir before the kit was cloned — cloning into a
 non-empty dir would otherwise fail and silently no-op):
 
@@ -65,8 +91,19 @@ else
 fi
 ```
 
-If it prints `CLONE_FAILED`, tell the builder network/permission blocked the
-clone and offer to retry — don't proceed.
+If it prints `CLONE_FAILED`, don't proceed, and don't assume it was the network.
+The personal toolkit's repository may be private, and then a clone needs a
+GitHub sign-in that most people don't have and don't need. Say one plain
+sentence: *"The personal toolkit comes through Claude now, and it isn't switched
+on for you here yet."* Then offer the way forward that fits:
+
+- **Most people:** in Claude's settings, under plugins, install
+  **nsls-personal-toolkit** from NSLS's list, start a new session, and say
+  `/personal-setup` again. If it isn't in the list, they should message the NSLS
+  AI team.
+- **Someone who keeps their own copy on GitHub** (and says so): help them sign in
+  to GitHub (`gh auth login`), then run this step again.
+- **Offline:** try again once they are back online.
 
 Enable it in settings.json (merge, don't clobber other keys). **Use the block
 for the builder's platform.**
