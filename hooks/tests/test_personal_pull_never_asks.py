@@ -185,7 +185,23 @@ with tempfile.TemporaryDirectory() as tmp:
             check("and the askpass helper this session inherited is gone from git's environment",
                   bool(got) and got[0]["env"].get("GIT_ASKPASS") is None, str(got))
 
-print("5. nothing to rewrite: nothing is written")
+print("5. two of the toolkit's own passes never write settings.json at once")
+with tempfile.TemporaryDirectory() as tmp:
+    cfg = Path(tmp) / "home" / ".claude"
+    folder = cfg / "local-plugins" / PLUGIN
+    folder.mkdir(parents=True)
+    write_settings(cfg, [bash_form(folder)])
+    raw = (cfg / "settings.json").read_bytes()
+    pd = load(cfg)._personal_delivery()
+    with pd._Lock(cfg, pd._SETTINGS_LOCK) as held:          # another session's pass is mid-write
+        waited = pd.quieten_update_entries(cfg)
+        removed = pd.remove_update_entries(cfg)
+    check("while another pass holds the file, this one changes nothing and tries again next session",
+          held and waited == 0 and removed is False and (cfg / "settings.json").read_bytes() == raw)
+    check("and once it is free, the rewrite goes through", pd.quieten_update_entries(cfg) == 1
+          and commands(cfg) == [f"unset {NAMES}; {BASH_QUIET}" + bare(folder)])
+
+print("6. nothing to rewrite: nothing is written")
 with tempfile.TemporaryDirectory() as tmp:
     cfg = Path(tmp) / "home" / ".claude"
     cfg.mkdir(parents=True)
