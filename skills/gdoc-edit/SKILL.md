@@ -29,7 +29,7 @@ S="${CLAUDE_PLUGIN_ROOT}/skills/gdoc-edit/scripts/gdoc.py"
 python3 $S read --doc <DOC_ID>        # <- shape of EVERY call: python3 $S <action> --doc ID
 ```
 
-`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the folder two levels above this SKILL.md.
+`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the toolkit's top folder, the one that holds `skills/` and `hooks/` (two folders up from the folder this SKILL.md is in).
 
 Dropping to raw `gws` is fine only for a plain read or a single literal `replaceAllText`.
 

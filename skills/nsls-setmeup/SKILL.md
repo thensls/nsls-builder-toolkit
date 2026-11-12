@@ -98,7 +98,7 @@ a few minutes on a slow connection):
   ```
   Never run `install.sh` on Windows.
 
-`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the folder two levels above this SKILL.md.
+`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the toolkit's top folder, the one that holds `skills/` and `hooks/` (two folders up from the folder this SKILL.md is in).
 
 Tell the builder one plain sentence about what you are doing ("I'm checking
 this computer has the tools the skills use") and do not show them the output.
@@ -525,7 +525,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/gws/scripts/gws_doctor.py"
 ```powershell
 & "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe" "${CLAUDE_PLUGIN_ROOT}/skills/gws/scripts/gws_doctor.py"
 ```
-`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the folder two levels above this SKILL.md.
+`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the toolkit's top folder, the one that holds `skills/` and `hooks/` (two folders up from the folder this SKILL.md is in).
 The doctor's login step **prints a consent URL and starts a local listener** — on
 Windows it does **not** open a browser at all, and on Mac you can't verify from
 your side that one opened. So, always, all three parts: run it in the background,

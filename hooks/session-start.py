@@ -1294,7 +1294,7 @@ def _follows_delivered_copy(plugin_dir):
 def _personal_checkout_verdict(plugin_dir, deadline):
     """What git says about a checkout sitting in the Personal Toolkit folder.
 
-    {"plain": True, "tracked": [...], "origin": {...}} only when it is NSLS's
+    {"plain": True, "shipped": {...}, "origin": {...}} only when it is NSLS's
     own repository, on main, and holds nothing of its owner's: no unsaved or
     untracked file, no commit NSLS lacks, no other branch, no stash, no linked
     worktree, no operation in progress. Anything else is {"plain": False,
@@ -1333,14 +1333,21 @@ def _personal_checkout_verdict(plugin_dir, deadline):
         rc, sparse = git("config", "--bool", "--get", "core.sparseCheckout")
         if sparse == "true":
             return no("own-changes", origin)
+        pd = _personal_delivery()
+        if pd is None:
+            return no("unknown", origin)
+
+        def theirs_in(status):
+            # The record a take-over writes just before it moves .git is ours,
+            # not the owner's: one interrupted at that point must be able to
+            # finish.
+            own_record = f"?? {pd.MARKER}"
+            return [line for line in status.splitlines() if line.strip() and line != own_record]
+
         rc, dirty = git(*PERSONAL_STATUS_ARGS)
         if rc != 0:
             return no("unknown", origin)
-        # The record a take-over writes just before it moves .git is ours, not
-        # the owner's: one interrupted at that point must be able to finish.
-        pd = _personal_delivery()
-        own_record = f"?? {pd.MARKER}" if pd else None
-        if [line for line in dirty.splitlines() if line.strip() and line != own_record]:
+        if theirs_in(dirty):
             return no("own-changes", origin)
         rc, ahead = git("rev-list", "--count", "@{upstream}..HEAD")
         if rc != 0 or not ahead.isdigit():
@@ -1375,7 +1382,21 @@ def _personal_checkout_verdict(plugin_dir, deadline):
             if flag != "H" or not name:
                 return no("own-changes", origin)
             tracked.append(name)
-        return {"plain": True, "tracked": tracked, "origin": origin}
+        # What git vouches for, pinned down. Every tracked file is hashed as it
+        # is on disk, and then git is asked once more whether the checkout is
+        # still clean and still on the same commit. Hashes taken between two
+        # clean answers are a clean checkout's. They travel with this verdict:
+        # an edit saved even a moment later makes its file differ from them,
+        # and a file that differs is its owner's, never overwritten. (Hashing
+        # the folder again at take-over time would fold that edit in.)
+        shipped = pd.hashes_of(plugin_dir, tracked)
+        rc, dirty = git(*PERSONAL_STATUS_ARGS)
+        rc_head, head_now = git("rev-parse", "HEAD")
+        if rc != 0 or rc_head != 0:
+            return no("unknown", origin)
+        if theirs_in(dirty) or head_now != origin["head"]:
+            return no("own-changes", origin)
+        return {"plain": True, "shipped": shipped, "origin": origin}
     except Exception:
         return no("unknown")
 
@@ -1390,14 +1411,14 @@ def _take_over_personal_folder(pd, found, plugin_dir, kind, deadline, adopt):
 
     if not adopt and (plugin_dir / pd.KEEP_ON_GITHUB).exists():
         return kept("opt-out")
-    tracked, origin = (), {}
+    shipped, origin = {}, {}
     if kind in ("checkout", "taking"):
         verdict = _personal_checkout_verdict(plugin_dir, deadline)
         origin = verdict.get("origin") or {}
         if not adopt:
             if not verdict["plain"]:
                 return kept(verdict["why"])
-            tracked = verdict["tracked"]
+            shipped = verdict["shipped"]
     ours, edited = pd.update_entries(CONFIG_DIR)
     if not adopt:
         # Every reason to leave the folder alone is checked before anything is
@@ -1406,7 +1427,7 @@ def _take_over_personal_folder(pd, found, plugin_dir, kind, deadline, adopt):
             return kept("older")         # GitHub is ahead of the delivered copy
         if edited:
             return kept("edited-entry")
-        theirs = pd.standing_in_the_way(CONFIG_DIR, found, tracked)
+        theirs = pd.standing_in_the_way(CONFIG_DIR, found, shipped)
         if theirs:
             return kept("own-changes", changed=theirs)
     if ours:
@@ -1417,7 +1438,7 @@ def _take_over_personal_folder(pd, found, plugin_dir, kind, deadline, adopt):
             # right now, started by this same session. Take the folder over at
             # the next start, when nothing else is pulling it.
             return {"outcome": "entries"}
-    res = pd.take_over(CONFIG_DIR, found, tracked=tracked, origin=origin,
+    res = pd.take_over(CONFIG_DIR, found, shipped=shipped, origin=origin,
                        deadline=deadline, take_theirs=adopt)
     if edited:
         res["edited_entry"] = True
