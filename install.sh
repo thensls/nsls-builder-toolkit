@@ -4,11 +4,22 @@
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash
 #   curl -fsSL .../install.sh | bash -s -- --test      # isolated "new user" test install
+#   bash <toolkit>/install.sh --machine-only           # set up THIS COMPUTER only (see below)
 #
 # What this does:
 #   1. Installs the NSLS org skills (local plugin)
 #   2. Installs superpowers + compound-engineering plugins (marketplace)
 #   3. Tells you to run /nsls-setmeup to connect your tools
+#
+# --machine-only: the toolkit is already here (delivered as a Claude plugin),
+# and only the things it needs ON THIS COMPUTER are missing: the gws CLI, the
+# Python libraries and nsls-python launcher for the document skills, and a
+# Node.js check. It runs those three steps and nothing else: no git, no
+# download of the toolkit, nothing written to Claude's settings, no plugins, no
+# pointers. /nsls-setmeup and the document skills' repair step run it from the
+# plugin's own folder, so it works on a machine with no GitHub access at all.
+# The `curl` line above only works while the repository can be read without a
+# sign-in.
 
 set -euo pipefail
 
@@ -21,9 +32,11 @@ set -euo pipefail
 # ~/.claude. To reset back to "new user", delete that dir. Launch a test
 # install with:  CLAUDE_CONFIG_DIR="$HOME/.claude-kit-test" claude
 TEST_MODE=0
+MACHINE_ONLY=0
 for arg in "$@"; do
   case "$arg" in
     -t|--test) TEST_MODE=1 ;;
+    --machine-only) MACHINE_ONLY=1 ;;
     *) ;;
   esac
 done
@@ -39,11 +52,21 @@ REPO_URL="${NSLS_TOOLKIT_REPO:-https://github.com/thensls/nsls-builder-toolkit.g
 REPO_BRANCH="${NSLS_TOOLKIT_BRANCH:-main}"
 
 echo ""
-echo "=== NSLS Builder Toolkit ==="
-if [ "$TEST_MODE" = "1" ]; then
+if [ "$MACHINE_ONLY" = "1" ]; then
+  echo "=== NSLS Builder Toolkit: setting up this computer ==="
+else
+  echo "=== NSLS Builder Toolkit ==="
+fi
+if [ "$TEST_MODE" = "1" ] && [ "$MACHINE_ONLY" != "1" ]; then
   echo "  (TEST MODE — installing into $CONFIG_DIR; your real ~/.claude is untouched)"
 fi
 echo ""
+
+# Everything from here to the gws step installs the TOOLKIT ITSELF: the clone,
+# Claude's settings, the tracker event, the marketplace plugins, the MCP
+# servers. --machine-only skips all of it (see the header). The block is not
+# indented under this `if`, so the installer's own lines read as they always did.
+if [ "$MACHINE_ONLY" != "1" ]; then
 
 # --- Prerequisites ---
 
@@ -726,6 +749,8 @@ else
   fi
 fi
 
+fi   # end of the toolkit-itself steps (skipped by --machine-only)
+
 # --- Step 3.7: Install the gws CLI (Google Workspace) ---
 #
 # Two flagship skills — /gdoc-build and /gdoc-edit — shell out to `gws` and are
@@ -1051,6 +1076,19 @@ else
   else
     echo "  Install Node LTS from https://nodejs.org, then restart Claude Code and run /signal-setup."
   fi
+fi
+
+# --machine-only ends here: this computer has what the toolkit needs, and the
+# rest (pointers, the shell shortcut, the "installed" banner) belongs to a full
+# install. Same un-indented `if` as above.
+if [ "$MACHINE_ONLY" = "1" ]; then
+  echo ""
+  echo "==============================="
+  echo "  This computer is set up for the NSLS toolkit."
+  echo "  Any line above that starts with Note still needs attention."
+  echo "==============================="
+  echo ""
+  exit 0
 fi
 
 # --- Step 4: Create slash-command pointer skills ---

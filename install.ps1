@@ -27,8 +27,18 @@ depends on $PSScriptRoot. Also runs from a local checkout.
 Idempotent: re-running updates the clone and no-ops anything already in place.
   -Test   install into a throwaway $HOME\.claude-kit-test (or $env:CLAUDE_KIT_TEST_DIR;
           an $env:CLAUDE_CONFIG_DIR already set wins), the claude CLI's plugins included
+  -MachineOnly   set up THIS COMPUTER only. The toolkit is already here
+          (delivered as a Claude plugin) and only what it needs on this PC is
+          missing: Git for Windows, Python and the document libraries with the
+          nsls-python launcher, the gws CLI, Node.js. It runs the prerequisite
+          check and Step 0, prints the report, and stops: no download of the
+          toolkit, nothing written to Claude's settings, no plugins, no
+          pointers. /nsls-setmeup and the document skills' repair step run it
+          with -File from the plugin's own folder, so it works on a PC with no
+          GitHub access at all. The web-paste line above only works while the
+          repository can be read without a sign-in.
 #>
-param([switch]$Test)
+param([switch]$Test, [switch]$MachineOnly)
 $ErrorActionPreference = 'Stop'
 
 # TLS 1.2 for the web calls below (gws zip, VC_redist, tracker ping). Win11
@@ -509,6 +519,23 @@ if ($GwsResolved) {
     else { $PrereqReport += "  [warn] gws installed but not runnable - reopen PowerShell (PATH refresh) and retry: gws --version" }
 } else {
     $PrereqReport += "  [warn] gws not installed - /gdoc-build & /gdoc-edit need it (see skills/gws Windows install)."
+}
+
+# --- This computer only (-MachineOnly): report and stop ---
+# Everything above set up the PC; everything below installs the toolkit itself
+# (clone, settings, tracker event, plugins, MCP servers, pointers). With the
+# toolkit delivered as a Claude plugin none of that applies, so stop here.
+if ($MachineOnly) {
+    Write-Host ""
+    Write-Host "Prerequisite check:"
+    $PrereqReport | ForEach-Object { Write-Host $_ }
+    Write-Host ""
+    Write-Host "==============================="
+    Write-Host "  This computer is set up for the NSLS toolkit."
+    Write-Host "  Any line above marked [warn] or [ACTION NEEDED] still needs attention."
+    Write-Host "==============================="
+    Write-Host ""
+    if ($RunningFromFile) { exit 0 } else { return }
 }
 
 # --- Step 1: Clone / update the org toolkit ---

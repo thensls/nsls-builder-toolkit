@@ -29,6 +29,7 @@ Show the roadmap upfront so the builder knows the shape:
 Welcome to the NSLS Builder Toolkit! Let's get you set up.
 
 This takes about 5 minutes, and I'll do it with you one step at a time:
+  0. Check this computer has the tools the skills use (automatic, about a minute)
   1. Confirm your builder email + GitHub username (so the tracker credits your work and your merged PRs)
   2. Connect your tools — Slack, Google Drive, Calendar, Gmail, Asana, Fathom
   3. Check your plugins are working
@@ -47,6 +48,88 @@ if it doesn't match, re-ask, and never "clean it up" by guessing.
 - **Email:** `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$`
 - **GitHub username:** `^[A-Za-z0-9-]{1,39}$`
 - **Full name:** no backtick, `$`, `\`, `"`, `;`, `|`, `&`, `<`, `>` or line breaks
+
+## Step 0: Set up this computer (automatic, ~1 min)
+
+The toolkit's skills call a few tools that live on the computer, not in the
+toolkit: the Google Workspace tool (`gws`), Python with the document libraries
+(through the `nsls-python` launcher), and Node.js. The toolkit carries its own
+setup for these. It downloads nothing from the toolkit's repository, so it
+works on a machine with no GitHub sign-in.
+
+**Detect first.** Two tools decide whether the setup needs to run:
+
+```bash
+~/.local/bin/nsls-python -c 'import docx, pptx' && gws --version
+```
+
+(On Windows use plain `nsls-python`.)
+
+Node.js is checked separately and never holds setup up, because the setup
+cannot install it on a Mac and only sometimes can on a PC:
+
+```bash
+node --version
+```
+
+- **Both tools answer:** say "This computer already has what the toolkit
+  needs" and go to Step 1. If Node.js is missing, give the builder its one
+  action item (below) on the way.
+- **Either tool is missing, and the setup has not finished a run yet in this
+  conversation:** run it for them, as below. A Windows run that stopped after
+  installing Git (see below) did not finish: it set up nothing else, so it
+  does not count, and the setup runs again after that restart.
+- **Either tool is still missing after the setup finished a run and the
+  builder restarted:** do not run it again and do not ask for another restart. Say in
+  one plain sentence what is still missing and that documents and slides will
+  not work until it is fixed, suggest they tell the NSLS AI team, and go on to
+  Step 1. Everything else in the toolkit works.
+
+**Run the setup**, with a generous timeout (it downloads tools, which can take
+a few minutes on a slow connection):
+
+- *Mac/Linux:*
+  ```bash
+  bash "${CLAUDE_PLUGIN_ROOT}/install.sh" --machine-only
+  ```
+- *Windows:*
+  ```powershell
+  powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/install.ps1" -MachineOnly
+  ```
+  Never run `install.sh` on Windows.
+
+`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the folder two levels above this SKILL.md.
+
+Tell the builder one plain sentence about what you are doing ("I'm checking
+this computer has the tools the skills use") and do not show them the output.
+Then pass on, in plain words, only the lines that need them:
+
+- **`Node.js not found`** (Mac/Linux), or a **`[warn]`** or
+  **`[ACTION NEEDED]`** line naming Node (Windows): Node.js is missing, so the
+  Signal connection and the day-planner dashboard will not work until it is
+  installed. Give them the install step the output names (on a Mac,
+  `brew install node` or the installer from nodejs.org). This is an action
+  item for later, not a reason to stop.
+- **Any other line starting with `Note`, `[warn]` or `[ACTION NEEDED]`:** that
+  item, with the one thing they need to do.
+- **Windows says Git was installed and asks for a re-run:** the setup stopped
+  there, before Python, `gws` or Node. Ask the builder to quit Claude fully,
+  reopen it, and say `/nsls-setmeup` again, and then **run the setup again**:
+  that second run is the one that sets the PC up. It ends with "This computer
+  is set up for the NSLS toolkit"; the Git-only run does not.
+
+**Then one restart, because the setup just installed tools.** A program only
+sees tools that were on its PATH when it started, so this session cannot find
+what was installed a moment ago: on Windows `nsls-python` and `gws` would both
+come back "not found", and on a Mac `gws` would. Ask the builder to quit Claude
+fully and reopen it (Mac: Cmd+Q; Windows: Task Manager, End task on every
+Claude entry), come back to this conversation and say `/nsls-setmeup` again.
+Do not go on to Step 1 in this session.
+
+One restart per finished run. When the builder comes back, run the detect step
+again and follow the three cases above: a missing Node.js, or a tool the setup
+could not install, never sends them round again. The only second run is the
+one after Windows installed Git.
 
 ## Step 1: Confirm Your Builder Email (~15 sec)
 
@@ -383,7 +466,13 @@ esac
 
 **If macOS or Linux**: skip silently — the bash hooks work natively.
 
-**If Windows**: run the installer for them:
+**If Windows, and the toolkit reached this PC as a Claude plugin** (the file
+`$HOME\.claude\local-plugins\nsls-builder-toolkit\install.ps1` does not
+exist): skip silently too. The plugin brings its own hooks, and Step 0 already
+set up the PC.
+
+**If Windows, and that file exists** (a PC set up by the installer): run the
+installer for them:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\.claude\local-plugins\nsls-builder-toolkit\install.ps1"
