@@ -43,7 +43,8 @@ The fastest path for a builder asking for a Google Doc:
    **If you don't see `PREFLIGHT_OK`, do not continue to step 3.** Tell the builder in one plain
    sentence that the document tooling needs repairing and run the repair below for them.
    `${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears
-   here as written, use the folder two levels above this SKILL.md.
+   here as written, use the toolkit's top folder, the one that holds `skills/` and
+   `hooks/` (two folders up from the folder this SKILL.md is in).
    **Repair, by platform** (a launcher the setup just wrote isn't on this session's PATH yet). This
    runs the toolkit's own setup for this computer from the toolkit's folder; it needs no GitHub access:
    - *Mac/Linux:* `bash "${CLAUDE_PLUGIN_ROOT}/install.sh" --machine-only`,

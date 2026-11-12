@@ -111,7 +111,7 @@ These are installed automatically by the install script:
 
 ## Personal Productivity Skills (Optional)
 
-During `/nsls-setmeup`, you can optionally install personal productivity skills — daily planning, weekly reviews, project logging, relationship tracking. These are Kevin's personal template — fork them, edit them, make them yours. They live in a [separate repo](https://github.com/thensls/nsls-personal-toolkit).
+During `/nsls-setmeup`, you can optionally install personal productivity skills — daily planning, weekly reviews, project logging, relationship tracking. These are Kevin's personal template, and they live in a [separate repo](https://github.com/thensls/nsls-personal-toolkit). When NSLS delivers them through Claude, `/personal-setup` sets them up with no GitHub sign-in.
 ## First-Time Setup
 
 After installing, run `/connect` in Claude Code to connect your data systems (PostHog, Airtable, Slack, Customer.io, n8n, and more). Each connection persists across sessions — you only do it once per system.
