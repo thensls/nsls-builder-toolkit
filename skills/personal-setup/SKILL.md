@@ -54,9 +54,21 @@ Read the first word of what it prints:
   (no clone, no settings change, no pointer sync) and go to Step 3.
 - **`PERSONAL_TOOLKIT_NOT_DELIVERED`** → NSLS is not delivering it to this
   account on this computer. Carry on with 2b.
-- **Anything else, or nothing** → the delivered copy is still arriving, or this
-  toolkit is an older one without the command. Wait a minute and run it once
-  more; if the answer is the same, carry on with 2b.
+- **`PERSONAL_TOOLKIT_PAUSED`** or **`PERSONAL_TOOLKIT_KEPT`** → a personal
+  toolkit folder is already there, and it holds the builder's own changes (or is
+  their own copy). **Stop. Never go on to 2b**: it would clone over that folder.
+  Tell the builder in one plain sentence what the answer said (it names the
+  files, or the reason), and offer what it offers: keep things as they are, or,
+  with their yes, run the same command with `adopt` in place of `now`, which
+  moves their changed files into a `.set-aside` folder first. Then go to Step 3
+  if the folder now has the personal-setup skill, or stop if they chose to keep
+  things as they are.
+- **`PERSONAL_TOOLKIT_PENDING`** or **`PERSONAL_TOOLKIT_RETRY`** → the delivered
+  copy is still arriving. Wait a minute and run it once more. If the answer is
+  the same, stop and tell the builder to start a new session and say
+  `/personal-setup` again. Do not go on to 2b.
+- **Nothing at all** → this toolkit is an older one without the command. Carry
+  on with 2b.
 
 ### 2b. Otherwise, from GitHub
 
@@ -74,8 +86,15 @@ PERSONAL_BRANCH="${NSLS_PERSONAL_BRANCH:-main}"
 if [ -d "$PT/.git" ]; then
   git -C "$PT" pull --ff-only 2>/dev/null || true
   echo "Personal toolkit updated."
+elif [ -f "$PT/.delivered-by-claude.json" ]; then
+  # A folder Claude keeps current: not a checkout, and never to be cloned over.
+  echo "DELIVERED_FOLDER"
+elif [ -d "$PT" ] && [ -n "$(ls -A "$PT" 2>/dev/null | grep -v '^\.env$')" ]; then
+  # Something other than a pre-written .env is in there, and it is not a
+  # checkout. Whatever it is, it is not ours to delete.
+  echo "FOLDER_NOT_EMPTY"
 else
-  # Preserve a pre-written .env across the clone.
+  # Nothing there, or only a pre-written .env: preserve it across the clone.
   SAVED_ENV=""
   if [ -f "$PT/.env" ]; then SAVED_ENV="$(mktemp)"; cp "$PT/.env" "$SAVED_ENV"; fi
   rm -rf "$PT"
@@ -90,6 +109,12 @@ else
   [ -n "$SAVED_ENV" ] && rm -f "$SAVED_ENV"
 fi
 ```
+
+If it prints `DELIVERED_FOLDER` or `FOLDER_NOT_EMPTY`, nothing was changed and
+nothing may be: the folder already holds a personal toolkit (kept current by
+Claude, or a copy from somewhere) that is missing its personal-setup skill. Don't
+clone, don't delete. Tell the builder plainly what is there and go back to 2a's
+answer; if 2a had none, ask them how they would like to proceed.
 
 If it prints `CLONE_FAILED`, don't proceed, and don't assume it was the network.
 The personal toolkit's repository may be private, and then a clone needs a
