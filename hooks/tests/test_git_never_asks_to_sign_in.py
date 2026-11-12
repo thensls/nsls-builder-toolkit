@@ -116,7 +116,10 @@ with tempfile.TemporaryDirectory() as tmp:
             ss._heal_plugin_drift(claude, {"installPath": "", "sha": None, "version": "?"}, "0" * 40,
                                   time.monotonic() + 10)
             ss._find_claude = lambda: claude
+            # "update my toolkit" only reaches the CLI where a marketplace
+            # install exists; say there is one.
             ss.org_plugin_installed = lambda: True
+            ss.marketplace_plugin_installed = lambda: True
             ss.update_now()
             got = recorded(log)
             kinds = sorted({" ".join(c["argv"][:2]) for c in got})
