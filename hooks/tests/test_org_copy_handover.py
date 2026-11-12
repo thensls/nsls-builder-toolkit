@@ -90,7 +90,7 @@ FAKE_CLAUDE = textwrap.dedent('''\
                         "installPath": registry["plugins"][key][0]["installPath"]})
         root = os.environ.get("FAKE_SYNCED_ROOT", "")
         if root and Path(root).is_dir() and behave != "not-listed":
-            shadowed = market_on or behave == "never-loads"
+            shadowed = market_on or "never-loads" in behave
             out.append({"id": synced, "scope": "synced",
                         "enabled": behave != "listed-disabled" and enabled.get(synced) is not False,
                         "installPath": "" if shadowed else root})
@@ -101,6 +101,8 @@ FAKE_CLAUDE = textwrap.dedent('''\
             sys.exit(1)
         enabled[key] = False
     elif args[:2] == ["plugin", "enable"] and args[2:] == [key]:
+        if "enable-fails" in behave:
+            sys.exit(1)
         enabled[key] = True
     elif args[:2] == ["plugin", "uninstall"] and args[2:] == [key]:
         if behave == "uninstall-fails":
@@ -231,6 +233,54 @@ with tempfile.TemporaryDirectory() as tmp:
     ss.hand_over_to_org_copy()
     check("it does not try again every session", calls(log) == [])
 
+print("\nthe undo itself must not fail quietly")
+with tempfile.TemporaryDirectory() as tmp:
+    cfg, root, log = machine(tmp, behave="never-loads enable-fails")
+    ss = load(HOOKS / "session-start.py")
+    did = ss.hand_over_to_org_copy()
+    seen = calls(log)
+    check("the CLI refused to switch the install back on",
+          seen[-1] == f"plugin enable {KEY}" and did is False, str(seen))
+    check("so the hook set the switch back itself: the machine still has its toolkit",
+          enabled(cfg).get(KEY) is True and ss.marketplace_plugin_active())
+    check("and no marker is left", not (cfg / ".nsls-org-copy-handover").exists())
+
+with tempfile.TemporaryDirectory() as tmp:
+    import contextlib, io
+    cfg, root, log = machine(tmp, behave="never-loads enable-fails")
+    ss = load(HOOKS / "session-start.py")
+    ss._force_marketplace_on = lambda: False     # the settings file cannot be written either
+    said = io.StringIO()
+    with contextlib.redirect_stdout(said):
+        did = ss.hand_over_to_org_copy()
+    out = said.getvalue()
+    check("if even that fails, Claude is told now, while a session can still pass it on",
+          did is False and out.startswith("WARNING") and f"claude plugin enable {KEY}" in out, out[:200])
+    check("in toolkit-authored words only (no CLI output)", "Traceback" not in out and "\n" == out[-1])
+
+print("\na builder who switches the marketplace install back on has chosen it")
+with tempfile.TemporaryDirectory() as tmp:
+    cfg, root, log = machine(tmp)
+    ss = load(HOOKS / "session-start.py")
+    check("the hand-over happens", ss.hand_over_to_org_copy() is True and enabled(cfg).get(KEY) is False)
+    # ...and the builder turns the marketplace install back on.
+    current = json.loads((cfg / "settings.json").read_text(encoding="utf-8"))
+    current["enabledPlugins"][KEY] = True
+    (cfg / "settings.json").write_text(json.dumps(current), encoding="utf-8")
+    (cfg / ".nsls-org-copy-handover-check").unlink()
+    log.write_text("", encoding="utf-8")
+    did = ss.hand_over_to_org_copy()
+    check("the hook does not switch it off again", did is False and calls(log) == [] and enabled(cfg).get(KEY) is True)
+    check("it records the choice and drops its marker",
+          (cfg / ".nsls-org-copy-handover-declined").is_file() and not (cfg / ".nsls-org-copy-handover").exists())
+    did = ss.hand_over_to_org_copy()
+    check("and never tries again on this machine", did is False and calls(log) == [])
+    # Later the builder switches that install off for reasons of their own.
+    current["enabledPlugins"][KEY] = False
+    (cfg / "settings.json").write_text(json.dumps(current), encoding="utf-8")
+    check("with no marker, nothing authorises the clean-up",
+          not (cfg / ".nsls-org-copy-handover").exists())
+
 print("\nstep 1 never starts without every precondition")
 CASES = [
     ("no synced copy on disk (today's machines)", dict(synced=None), {}, []),
@@ -319,6 +369,14 @@ with tempfile.TemporaryDirectory() as tmp:
     (cfg / ".nsls-org-copy-handover").write_text(json.dumps({"at": 1}), encoding="utf-8")
     got, raw = run_from_synced(root)
     check("an install someone switched back on is left alone, marker or not",
+          got.get("did") is False and calls(log) == [] and registered(cfg), raw)
+    check("and the stale marker is dropped, so it cannot authorise a clean-up later",
+          not (cfg / ".nsls-org-copy-handover").exists() and (cfg / ".nsls-org-copy-handover-declined").is_file())
+    # The builder later switches that install off themselves.
+    (cfg / "settings.json").write_text(json.dumps({"enabledPlugins": {KEY: False}}), encoding="utf-8")
+    log.write_text("", encoding="utf-8")
+    got, raw = run_from_synced(root)
+    check("which the hook then leaves exactly as they left it",
           got.get("did") is False and calls(log) == [] and registered(cfg), raw)
 
 with tempfile.TemporaryDirectory() as tmp:

@@ -2141,6 +2141,11 @@ HANDOVER_STAMP = CONFIG_DIR / ".nsls-org-copy-handover-check"
 # only ever removes an install the toolkit itself retired, never one a builder
 # switched off for their own reasons.
 HANDOVER_MARKER = CONFIG_DIR / ".nsls-org-copy-handover"
+# Written when someone switched the marketplace install back ON after a
+# hand-over. That is a builder choosing the marketplace install (a developer
+# pinned to a test branch, say), and the hook never hands this machine over
+# again while the file is there. Delete it to let the hand-over resume.
+HANDOVER_DECLINED = CONFIG_DIR / ".nsls-org-copy-handover-declined"
 # Each CLI call here is local bookkeeping (measured under a second); the cap is
 # for a machine that is struggling. Step 1 makes at most four of them, and the
 # fourth is the undo, so it starts only with room for all four: a hook killed
@@ -2206,6 +2211,68 @@ def _listed_org_copy(claude):
     return None
 
 
+def _decline_handover():
+    """Record that a builder switched the marketplace install back on, and
+    drop the marker: a hand-over that was cancelled must never authorise the
+    clean-up later, when the builder switches that install off for reasons of
+    their own."""
+    try:
+        HANDOVER_DECLINED.write_text(f"{int(time.time())}\n", encoding="utf-8")
+    except Exception:
+        pass
+    try:
+        HANDOVER_MARKER.unlink()
+    except Exception:
+        pass
+
+
+def _force_marketplace_on():
+    """Last resort for the undo: set the marketplace install's switch back to
+    on in settings.json directly, when the CLI would not. One key, written the
+    way the migration writes this file (temp file, then replace). True when the
+    file now says on."""
+    try:
+        path = CONFIG_DIR / "settings.json"
+        settings = json.loads(path.read_text(encoding="utf-8-sig"))
+        if not isinstance(settings, dict):
+            return False
+        plugins = settings.setdefault("enabledPlugins", {})
+        if not isinstance(plugins, dict):
+            return False
+        plugins[ORG_PLUGIN_KEY] = True
+        tmp = path.with_name(path.name + ".nsls-tmp")
+        tmp.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        return False
+
+
+def _undo_handover(claude):
+    """Switch the marketplace install back on, and make sure it took.
+
+    This runs when the organization's copy did not take over. If it fails
+    quietly the machine has NO toolkit: the marketplace install off, the
+    organization's copy not loading, and no hook left to notice. So: the CLI
+    first, then the settings file directly, and if neither worked, say so now,
+    while this session can still pass it on.
+    """
+    _cli_ok(claude, "plugin", "enable", ORG_PLUGIN_KEY)
+    if marketplace_plugin_active():
+        return True
+    if _force_marketplace_on() and marketplace_plugin_active():
+        return True
+    print(
+        "WARNING - the NSLS toolkit was switched off on this computer during an "
+        "update that did not finish, and switching it back on failed. It will "
+        "not load in the next session. Tell the builder now, in one plain "
+        "sentence, and offer the repair: run `claude plugin enable "
+        f"{ORG_PLUGIN_KEY}`, then ask them to open a new session. If that "
+        "fails too, suggest they tell the NSLS AI team today."
+    )
+    return False
+
+
 def _write_handover_marker(record, synced_version):
     try:
         tmp = HANDOVER_MARKER.with_name(HANDOVER_MARKER.name + ".tmp")
@@ -2250,6 +2317,10 @@ def hand_over_to_org_copy(reserve=MAIN_RESERVE_S):
     repository. A marketplace install a builder switched off themselves has no
     marker and is never touched.
 
+    A builder who switches the marketplace install back ON after a hand-over
+    has chosen it. The hook records that, drops its marker, and leaves this
+    machine alone from then on (see HANDOVER_DECLINED).
+
     NSLS_NO_PLUGIN_MIGRATION=1 freezes this, as it freezes the migration.
     """
     if os.environ.get("NSLS_NO_PLUGIN_MIGRATION"):
@@ -2285,10 +2356,17 @@ def _handover_due(now):
 
 
 def _start_handover(reserve):
+    if HANDOVER_DECLINED.is_file():
+        return False
     if any(os.environ.get(name) for name in _NO_SYNC_ENV):
         return False
     record = _installed_plugin_record()
     if not record or not marketplace_plugin_active():
+        return False
+    if HANDOVER_MARKER.is_file():
+        # This hook switched the install off, and it is on again: a builder
+        # switched it back. Theirs to keep.
+        _decline_handover()
         return False
     sc = _synced_copy()
     root = sc.live_root(CONFIG_DIR) if sc else None
@@ -2318,7 +2396,7 @@ def _start_handover(reserve):
         if not (after and after["enabled"] and after["path"]):
             # Claude Code would not load the organization's copy after all.
             # Put things back exactly as they were; this needs no network.
-            _cli_ok(claude, "plugin", "enable", ORG_PLUGIN_KEY)
+            _undo_handover(claude)
             return False
         _write_handover_marker(record, synced_version)
         return True
@@ -2341,7 +2419,11 @@ def _finish_handover(reserve):
             pass
         return False
     if marketplace_plugin_active():
-        return False  # someone switched it back on: theirs to decide
+        # Someone switched it back on: theirs to keep. Drop the marker now, or
+        # it would authorise this clean-up later, when they switch the install
+        # off for reasons of their own.
+        _decline_handover()
+        return False
     claude = _find_claude()
     if not claude or not _handover_has_time(reserve):
         return False  # a later session does it
