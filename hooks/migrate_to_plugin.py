@@ -389,6 +389,21 @@ def _budget_left():
     return _DEADLINE - time.monotonic()
 
 
+def _no_prompt_env():
+    """This process's environment, with every way git can ask for a sign-in
+    switched off. `plugin marketplace add`, `plugin install` and `plugin update`
+    make the CLI run git against the toolkit's repository; from a hook, a remote
+    that wants credentials must fail, never open a sign-in window (Git
+    Credential Manager does exactly that on Windows). Same three settings as
+    _git_env() in session-start.py.
+    """
+    env = dict(os.environ)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GCM_INTERACTIVE"] = "never"
+    env["GIT_ASKPASS"] = ""
+    return env
+
+
 def _claude(args, timeout):
     """Run a claude CLI subcommand. Returns (ok, stdout+stderr).
 
@@ -406,6 +421,7 @@ def _claude(args, timeout):
     try:
         result = subprocess.run(
             [*claude, *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=effective,
+            env=_no_prompt_env(),
         )
         return result.returncode == 0, (result.stdout or "") + (result.stderr or "")
     except subprocess.TimeoutExpired:

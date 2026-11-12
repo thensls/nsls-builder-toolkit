@@ -54,6 +54,12 @@ function Clear-GitRepoEnv {
 }
 Clear-GitRepoEnv
 $env:GIT_TERMINAL_PROMPT = '0'   # credentialed remotes fail fast, never prompt-hang the hook
+# GIT_TERMINAL_PROMPT only stops git's own terminal question. Git Credential
+# Manager, the default on Windows, ignores it and opens a sign-in WINDOW when a
+# remote wants credentials it does not hold. From a hook that is a window nobody
+# asked for, at every session start. 'never' makes it fail instead; stored
+# credentials still work.
+$env:GCM_INTERACTIVE = 'never'
 
 # git's markers for an operation in progress. A checkout mid-bisect, mid-rebase,
 # mid-am or mid-revert can look clean and sit on its branch, and moving that branch
@@ -120,6 +126,7 @@ function Invoke-GitBounded {
         $psi.StandardOutputEncoding = New-Object System.Text.UTF8Encoding $false
         $psi.CreateNoWindow = $true
         $psi.EnvironmentVariables['GIT_TERMINAL_PROMPT'] = '0'
+        $psi.EnvironmentVariables['GCM_INTERACTIVE'] = 'never'
         $p = [System.Diagnostics.Process]::Start($psi)
         # Drain both pipes while waiting - a chatty child deadlocks on a full pipe
         # otherwise. stdout is kept (for the count); stderr is discarded.
