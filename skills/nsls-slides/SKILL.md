@@ -193,20 +193,22 @@ repairing and re-run the toolkit installer for them. See "Python environment" un
   then have the builder fully restart Claude Code (Task Manager → End task on every Claude entry,
   reopen, say "back") and preflight again. Never run `install.sh` on Windows.
 
+`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the folder two levels above this SKILL.md.
+
 ```bash
 # Society brand
 echo '<json>' | ~/.local/bin/nsls-python \
-  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  "${CLAUDE_PLUGIN_ROOT}/skills/nsls-slides/scripts/pptx_creator.py" \
   --brand society --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx
 
 # NSLS brand
 echo '<json>' | ~/.local/bin/nsls-python \
-  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  "${CLAUDE_PLUGIN_ROOT}/skills/nsls-slides/scripts/pptx_creator.py" \
   --brand nsls --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx
 
 # Mac only: add --pdf for a font-safe PDF export (needs Keynote; works with either brand)
 echo '<json>' | ~/.local/bin/nsls-python \
-  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  "${CLAUDE_PLUGIN_ROOT}/skills/nsls-slides/scripts/pptx_creator.py" \
   --brand society --output ~/nsls-deck-<YYYYMMDD-HHMM>.pptx --pdf
 ```
 
@@ -346,7 +348,7 @@ JSON
 
 # 2. Build .pptx
 ~/.local/bin/nsls-python \
-  ~/.claude/local-plugins/nsls-builder-toolkit/skills/nsls-slides/scripts/pptx_creator.py \
+  "${CLAUDE_PLUGIN_ROOT}/skills/nsls-slides/scripts/pptx_creator.py" \
   --brand society \
   --input ~/nsls-deck-20260302-1405.json \
   --output ~/nsls-deck-20260302-1405.pptx
