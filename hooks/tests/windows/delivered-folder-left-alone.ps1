@@ -79,3 +79,6 @@ try {
 
 if ($script:failures -gt 0) { Write-Host "FAILED: $($script:failures)"; exit 1 }
 Write-Host 'all checks passed'
+# The last git call above fails on purpose. The wrapper CI puts around a
+# PowerShell step ends with `exit $LASTEXITCODE`, so say the real result.
+exit 0
