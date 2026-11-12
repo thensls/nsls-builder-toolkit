@@ -157,12 +157,10 @@ if not WINDOWS:
                              env=env, timeout=120, stdin=subprocess.DEVNULL)
         check("without git, the full install stops at its git check (as before)",
               run.returncode == 1 and "Error: git is not installed." in run.stdout, run.stdout[-300:] + run.stderr[-300:])
-        run = subprocess.run([str(bindir / "bash"), str(SH), "--machine-only"], capture_output=True, text=True,
-                             env={**env, "PIP_INDEX_URL": "http://127.0.0.1:9/simple", "PIP_RETRIES": "0",
-                                  "PIP_DEFAULT_TIMEOUT": "2", "PIP_DISABLE_PIP_VERSION_CHECK": "1"},
-                             timeout=300, stdin=subprocess.DEVNULL)
-        check("machine-only on that same computer needs no git at all",
-              run.returncode == 0 and "git is not installed" not in run.stdout, run.stdout[-300:] + run.stderr[-300:])
+        # Machine-only is not run on this stripped PATH: on a CI runner git
+        # shares /usr/bin with mktemp, curl and tar, so taking git away takes
+        # the machine steps' own tools with it. That it never CALLS git is
+        # proven above, with a git that records every call.
 
 print("install.ps1: where the mode stops")
 stop = ps1.index("if ($MachineOnly) {")

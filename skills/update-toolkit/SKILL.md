@@ -22,3 +22,6 @@ sentences, with no technical detail.
 - **Already up to date:** say so. If they were looking for a particular skill,
   it has probably not been released yet.
 - **Did not finish:** suggest trying again in a few minutes.
+- **Kept up to date by NSLS's Claude organization:** nothing was run and nothing
+  needs to be. Tell the builder to open a new session, and a second one if the
+  first still shows the old version.

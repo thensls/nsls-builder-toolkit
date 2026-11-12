@@ -1232,8 +1232,71 @@ def git_pull(deadline=None):
         pass
 
 
-def org_plugin_installed():
-    """True once the toolkit is installed as a real Claude Code plugin."""
+SYNCED_PLUGIN_KEY = "nsls-builder-toolkit@synced"
+
+
+def _synced_copy():
+    """The synced_copy module beside this file, or None.
+
+    It knows what a copy delivered by NSLS's Claude organization looks like
+    (see hooks/synced_copy.py). None when this file runs without one beside it:
+    then nothing here treats the machine as synced, which is exactly how every
+    copy behaved before organization sync existed.
+    """
+    try:
+        here = str(_own_hooks_dir())
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import synced_copy
+
+        return synced_copy
+    except Exception:
+        return None
+
+
+def _own_hooks_dir():
+    """The hooks folder this file runs from. __file__ is undefined when the
+    settings shim runs this file through `python3 -c`: then it is the clone's."""
+    if "__file__" in globals():
+        return Path(__file__).resolve().parent
+    return PLUGIN_DIR / "hooks"
+
+
+def org_copy_root():
+    """The organization-synced copy THIS file is running from, or "".
+
+    Non-empty is proof that Claude Code loaded the synced copy this session.
+    """
+    sc = _synced_copy()
+    if sc is None or "__file__" not in globals():
+        return ""
+    try:
+        return sc.running_root(__file__, CONFIG_DIR)
+    except Exception:
+        return ""
+
+
+def org_copy_present():
+    """True when the organization's copy is on this machine for this account."""
+    sc = _synced_copy()
+    try:
+        return bool(sc and (org_copy_root() or sc.present(CONFIG_DIR)))
+    except Exception:
+        return False
+
+
+def org_copy_active():
+    """True when the organization's copy delivers the toolkit here: this file
+    runs from it, or it is on disk and the builder has not switched it off."""
+    sc = _synced_copy()
+    try:
+        return bool(sc and (org_copy_root() or sc.active(CONFIG_DIR)))
+    except Exception:
+        return False
+
+
+def marketplace_plugin_installed():
+    """True when the toolkit has a marketplace install record on this machine."""
     try:
         # utf-8-sig: tolerate a UTF-8 BOM (PowerShell-written files carry one).
         registry = json.loads(
@@ -1249,6 +1312,39 @@ def org_plugin_installed():
         return False
 
 
+def marketplace_plugin_active():
+    """A marketplace install the builder has not switched off.
+
+    The synced copy's own switch (`nsls-builder-toolkit@synced`) is not this
+    one's: turning the organization's copy off says nothing about a marketplace
+    install beside it.
+    """
+    if not marketplace_plugin_installed():
+        return False
+    try:
+        settings = json.loads(
+            (CONFIG_DIR / "settings.json").read_text(encoding="utf-8-sig")
+        )
+        for key, enabled in settings.get("enabledPlugins", {}).items():
+            if (key.startswith("nsls-builder-toolkit@") and key != SYNCED_PLUGIN_KEY
+                    and enabled is False):
+                return False
+    except Exception:
+        pass
+    return True
+
+
+def org_plugin_installed():
+    """True once the toolkit is on this machine as a real Claude Code plugin:
+    installed from the marketplace, or delivered by NSLS's Claude organization.
+
+    The organization's copy has no record in installed_plugins.json, so reading
+    that file alone called such a machine "not installed", and the toolkit then
+    tried to install the marketplace plugin beside it.
+    """
+    return marketplace_plugin_installed() or org_copy_present()
+
+
 def org_plugin_active():
     """Installed AND not explicitly disabled.
 
@@ -1257,18 +1353,7 @@ def org_plugin_active():
     anything that hands responsibility over to the plugin gates on active,
     never on merely installed.
     """
-    if not org_plugin_installed():
-        return False
-    try:
-        settings = json.loads(
-            (CONFIG_DIR / "settings.json").read_text(encoding="utf-8-sig")
-        )
-        for key, enabled in settings.get("enabledPlugins", {}).items():
-            if key.startswith("nsls-builder-toolkit@") and enabled is False:
-                return False
-    except Exception:
-        pass
-    return True
+    return marketplace_plugin_active() or org_copy_active()
 
 
 def run_plugin_migration():
@@ -1301,8 +1386,16 @@ def run_plugin_migration():
     same point every session and never finished.
 
     Returns True when this session belonged to stage A.
+
+    A copy delivered by NSLS's Claude organization runs its OWN migration file,
+    not the clone's. The clone updates by `git pull`, which needs a GitHub
+    sign-in once the repository is private, so on many machines it stops
+    moving; the organization's copy is the one Claude Code keeps current. Such
+    a machine never needs stage A (the plugin is already here), and stage B
+    still retires whatever shims an old installer left behind.
     """
-    script = PLUGIN_DIR / "hooks" / "migrate_to_plugin.py"
+    own = org_copy_root()
+    script = ((Path(own) if own else PLUGIN_DIR) / "hooks" / "migrate_to_plugin.py")
     if not script.exists():
         return False
     stage_a = not org_plugin_installed()
@@ -1849,8 +1942,14 @@ def ensure_plugin_fresh(reserve=MAIN_RESERVE_S):
     literals, validated versions, validated skill names and validated 40-hex
     shas are echoed — never CLI or git output, which a hostile marketplace
     could shape.
+
+    Only a marketplace install is kept fresh here. A copy delivered by NSLS's
+    Claude organization has no install record and no marketplace clone: Claude
+    Code replaces it when NSLS publishes, and `claude plugin update` has
+    nothing to act on. Asking GitHub about it would be a network call per
+    session that can change nothing.
     """
-    if not org_plugin_active():
+    if org_copy_root() or not marketplace_plugin_active():
         return
     try:
         now = time.time()
@@ -2034,7 +2133,33 @@ def update_now():
     session-start path, it echoes only our own words, validated versions and
     validated skill names.
     """
-    if not org_plugin_installed():
+    if org_copy_root() or (org_copy_active() and not marketplace_plugin_active()):
+        # Delivered by NSLS's Claude organization. Before this branch existed
+        # the builder was told the toolkit "is not installed as a Claude Code
+        # plugin", which is false, and pointed at a folder copy that may not
+        # exist.
+        sc = _synced_copy()
+        root = org_copy_root() or (sc.live_root(CONFIG_DIR) if sc else None)
+        found = sc.version(root) if sc and root else None
+        on = f" It is on version {found}." if found else ""
+        print("This machine gets the NSLS toolkit through NSLS's Claude "
+              "organization, and Claude keeps it up to date by itself, so there "
+              f"is nothing to run.{on} A new release arrives the next time Claude "
+              "starts after NSLS publishes it. Tell the builder in one plain "
+              "sentence to open a new session, and a second one if the first "
+              "still shows the old version. If a skill they expected is still "
+              "missing after that, it has probably not been released yet.")
+        return
+    if org_copy_present() and not marketplace_plugin_installed():
+        # On disk from the organization, switched off in this machine's own
+        # settings, and no other install to update.
+        print("This machine gets the NSLS toolkit through NSLS's Claude "
+              "organization, but it is switched off in this machine's Claude "
+              "settings, so there is nothing to update. Ask the builder whether "
+              f"to turn it back on; if yes, run `claude plugin enable "
+              f"{SYNCED_PLUGIN_KEY}` and tell them to open a new session.")
+        return
+    if not marketplace_plugin_installed():
         print("The NSLS toolkit is not installed as a Claude Code plugin on this "
               "machine, so there is nothing to update this way. Its folder copy "
               "already updates itself at every session start.")

@@ -85,15 +85,25 @@ Tell the builder one plain sentence about what you are doing ("I'm checking
 this computer has the tools the skills use") and do not show them the output.
 Then:
 
-- **It ends with "This computer is set up for the NSLS toolkit" and nothing is
-  flagged:** say so in one sentence and go on.
 - **A line starts with `Note`, `[warn]` or `[ACTION NEEDED]`:** pass on only
   that item, in plain words, with the one thing they need to do (for example
   "Node.js is missing, so the Signal connection won't work until it's
   installed; here is the page"). Everything else in the toolkit works
-  meanwhile, so carry on with Step 1.
+  meanwhile.
 - **Windows says Git was installed and asks for a re-run:** ask the builder to
   quit Claude fully, reopen it, and say `/nsls-setmeup` again.
+
+**Then one restart, because the setup just installed tools.** A program only
+sees tools that were on its PATH when it started, so this session cannot find
+what was installed a moment ago: on Windows `nsls-python` and `gws` would both
+come back "not found", and on a Mac `gws` would. Ask the builder to quit Claude
+fully and reopen it (Mac: Cmd+Q; Windows: Task Manager, End task on every
+Claude entry), come back to this conversation and say `/nsls-setmeup` again.
+The detect step above then passes and setup carries on from Step 1. Do not go
+on to Step 1 in this session.
+
+No restart is needed when the detect step passed first time: nothing was
+installed.
 
 ## Step 1: Confirm Your Builder Email (~15 sec)
 
