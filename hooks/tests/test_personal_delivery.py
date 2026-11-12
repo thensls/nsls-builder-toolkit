@@ -816,6 +816,37 @@ with tempfile.TemporaryDirectory() as tmp:
     check("and a NEWER delivery still finishes it: the files it had already written are not taken for the owner's edits",
           outcome(res) == "updated" and said == "" and m.text("README.md") == "Personal Toolkit 2.2.0\n", f"{res} {said}")
 
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    copy = m.deliver("2.0.0")
+    pd = m.load()._personal_delivery()
+    found = pd.offer(m.cfg)
+    found.hashes                                   # the copy is listed and hashed...
+    readme = copy / "README.md"
+    info = readme.stat()
+    readme.write_text("Personal Toolkit 9.9.9\n", encoding="utf-8")   # ...then Claude rewrites one file, same size
+    os.utime(readme, ns=(info.st_atime_ns, info.st_mtime_ns))      # too fast for the listing to notice
+    res = pd.refresh(m.cfg, found)
+    check("a delivered file rewritten between the hashing and the copy is not installed",
+          outcome(res) == "retry" and not (m.folder / "README.md").exists()
+          and (m.marker() or {}).get("complete") is False, str(res))
+    res, said = m.load() and m.run()
+    check("and the next pass installs the real one, without taking anything for the owner's edit",
+          outcome(res) in ("created", "updated") and said == "" and m.text("README.md") == "Personal Toolkit 9.9.9\n"
+          and (m.marker() or {}).get("complete") is True, f"{res} {said}")
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    pd = m.load()._personal_delivery()
+    first, second = pd._aside_dir(m.folder), pd._aside_dir(m.folder)
+    check("two passes in the same second never share a set-aside folder", first != second and not first.exists())
+    for text in ("their first version\n", "their second version\n"):
+        write(m.folder / "skills/x/SKILL.md", text)
+        pd._move_aside(m.folder / "skills/x/SKILL.md", first, "skills/x/SKILL.md")
+    kept = sorted(path.read_text(encoding="utf-8") for path in (first / "skills/x").iterdir())
+    check("and a second version of the same file set aside is kept beside the first, never on top of it",
+          kept == ["their first version\n", "their second version\n"], str(kept))
+
 print("12. on request: the launcher's `personal-delivery` command")
 with tempfile.TemporaryDirectory() as tmp:
     m = Machine(tmp)

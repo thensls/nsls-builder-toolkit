@@ -52,6 +52,7 @@ import stat
 import sys
 import tempfile
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -469,10 +470,22 @@ def _starts_with_shebang(path) -> bool:
         return False
 
 
-def _copy_file(src, dst):
+class _SourceMoved(Exception):
+    """The delivered file is no longer the one that was listed and hashed."""
+
+
+def _copy_file(src, dst, expect):
     """Replace dst with src's bytes in one step, so nothing ever reads half a
-    file. A script stays runnable: the mode is not trusted to survive delivery,
-    so a file that was executable, is delivered executable, or starts with a
+    file, and only when those bytes are the ones that were hashed (`expect`).
+
+    Claude can rewrite the delivered copy at any moment, also between the
+    hashing and this copy. The bytes are hashed again as they are written, and
+    a file that changed in between is not installed at all: installed, it
+    would not match its own record, and the next pass would take it for its
+    owner's edit and pause every update.
+
+    A script stays runnable: the mode is not trusted to survive delivery, so a
+    file that was executable, is delivered executable, or starts with a
     shebang is written executable."""
     dst.parent.mkdir(parents=True, exist_ok=True)
     runnable = _starts_with_shebang(src)
@@ -483,8 +496,13 @@ def _copy_file(src, dst):
             pass
     fd, tmp = tempfile.mkstemp(prefix=".nsls-copy-", dir=str(dst.parent))
     try:
+        digest = hashlib.sha256()
         with os.fdopen(fd, "wb") as out, open(src, "rb") as inp:
-            shutil.copyfileobj(inp, out)
+            for chunk in iter(lambda: inp.read(1 << 16), b""):
+                digest.update(chunk)
+                out.write(chunk)
+        if digest.hexdigest() != expect:
+            raise _SourceMoved(str(src))
         os.chmod(tmp, (0o777 if runnable else 0o666) & ~_UMASK)
         os.replace(tmp, str(dst))
     except Exception:
@@ -496,8 +514,15 @@ def _copy_file(src, dst):
 
 
 def _move_aside(path, aside, rel):
+    """Move something of the owner's into the set-aside folder. Never on top of
+    anything already there: a second version of the same file gets its own
+    name beside the first."""
     dest = aside / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
+    count = 1
+    while _there(dest):
+        count += 1
+        dest = dest.with_name(f"{Path(rel).name}.{count}")
     shutil.move(str(path), str(dest))
 
 
@@ -583,7 +608,7 @@ def _mirror(target, found, record, deadline=None, aside=None):
                 _move_aside(dst, aside, rel)     # their version, kept
         if not _clear_way(target, rel, before, hashes, aside):
             return False                         # theirs, and nobody said yes
-        _copy_file(found.files[rel], dst)
+        _copy_file(found.files[rel], dst, hashes[rel])
         record["files"][rel] = hashes[rel]
 
     files, pending = dict(hashes), []
@@ -661,7 +686,11 @@ class _Lock:
 
 
 def _aside_dir(target):
-    return Path(target) / SET_ASIDE / datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    """A set-aside folder of this pass's own. The name is not created here (a
+    pass that moves nothing leaves nothing behind), so it carries a random
+    part: two passes in the same second must never share one."""
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return Path(target) / SET_ASIDE / f"{stamp}-{uuid.uuid4().hex[:6]}"
 
 
 def _finish(target, found, record, deadline, aside, done_as):
