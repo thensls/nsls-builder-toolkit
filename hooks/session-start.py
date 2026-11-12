@@ -2466,6 +2466,114 @@ def _finish_handover(reserve):
 
 
 UPDATE_NOW_TIMEOUT_S = 120
+# The folder copy's on-request update: one fetch and one fast-forward.
+UPDATE_NOW_PULL_S = 60
+_SESSION_HOOK_MARKER = "nsls-builder-toolkit/hooks/session-start"
+
+
+def _session_hook_registered():
+    """True when this machine's settings.json runs the toolkit's session hook.
+
+    That entry (session-start.py on a Mac, session-start.ps1 on a PC) is the
+    only thing that updates a folder copy. The installers write it; nothing
+    else does.
+    """
+    try:
+        settings = json.loads(
+            (CONFIG_DIR / "settings.json").read_text(encoding="utf-8-sig"))
+        for entry in (settings.get("hooks") or {}).get("SessionStart") or []:
+            for hook in entry.get("hooks") or []:
+                command = str(hook.get("command", "")).replace("\\", "/")
+                if _SESSION_HOOK_MARKER in command:
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def _folder_copy_version():
+    """The folder copy's own version, or None. Only a value shaped like one."""
+    try:
+        version = json.loads(
+            (PLUGIN_DIR / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8-sig")
+        ).get("version")
+        if isinstance(version, str) and _PLUGIN_VERSION.fullmatch(version):
+            return version
+    except Exception:
+        pass
+    return None
+
+
+def _update_folder_copy():
+    """"Update my NSLS toolkit" on a machine with the folder copy and no plugin.
+
+    This used to print "its folder copy already updates itself at every session
+    start" and run nothing. That sentence was never checked. On a Mac where the
+    installer had registered no session hook and found no claude CLI, nothing
+    updated the copy at all, and a builder who asked for an update was told
+    there was nothing to do while 125 commits behind (2026-11). So: update the
+    copy now, then look at what would update it next time, and say which.
+    """
+    if not (PLUGIN_DIR / ".git").exists():
+        print("The NSLS toolkit is not on this machine in a form this command "
+              "can update. Suggest the builder run the NSLS toolkit installer "
+              "again, or tell the NSLS AI team.")
+        return
+    deadline = time.monotonic() + UPDATE_NOW_PULL_S
+    before = _git_out(PLUGIN_DIR, "rev-parse", "HEAD")
+    try:
+        code, out = _update_checkout(PLUGIN_DIR, deadline)
+    except Exception:
+        code, out = None, ""
+    after = _git_out(PLUGIN_DIR, "rev-parse", "HEAD")
+    moved = bool(before and after and before != after)
+    found = _folder_copy_version()
+    on = f" (version {found})" if found else ""
+    if moved:
+        result = f"Updated this machine's copy of the NSLS toolkit to the newest release{on}."
+    elif code == 0:
+        result = f"This machine's copy of the NSLS toolkit is already on the newest release{on}."
+    else:
+        # The same explanations a session start gives for a copy that will not move.
+        plugin = PLUGIN_DIR.name
+        try:
+            if code == OP_IN_PROGRESS:
+                _warn_operation_in_progress(plugin, PLUGIN_DIR)
+            elif code == UNGUARDABLE_BRANCH:
+                _warn_unguardable_branch(plugin, PLUGIN_DIR)
+            elif code:
+                _warn_if_frozen(plugin, PLUGIN_DIR, out, deadline=deadline)
+        except Exception:
+            pass
+        if code:
+            # The checkout itself said no (local changes, an unfinished
+            # operation, a branch it cannot protect): not a network problem.
+            result = ("This machine's copy of the NSLS toolkit was not updated"
+                      f"{on}: its own checkout refused the update. A warning above, "
+                      "if there is one, gives the reason and the fix.")
+        else:
+            result = ("This machine's copy of the NSLS toolkit could not be updated "
+                      f"just now{on}. The usual cause is no internet connection; try "
+                      "again in a few minutes.")
+    new_session = (" This session keeps the old version: tell the builder in one plain "
+                   "sentence to open a new session to use the update.") if moved else ""
+    if _session_hook_registered():
+        print(f"{result} It also updates itself each time a Claude Code session "
+              f"starts.{new_session}")
+        return
+    # The installer is the one writer of that hook, so the repair is to run it
+    # again from the copy already here: the README's own command on each system.
+    if os.name == "nt":
+        repair = ("powershell -NoProfile -ExecutionPolicy Bypass -File "
+                  f"\"{PLUGIN_DIR / 'install.ps1'}\"")
+    else:
+        repair = f"bash \"{PLUGIN_DIR / 'install.sh'}\""
+    print(f"{result} But nothing on this machine updates it automatically: the "
+          "toolkit's session hook is not registered and its plugin is not "
+          "installed, so it will fall behind again. Tell the builder that in one "
+          "plain sentence and offer the repair, which takes a few minutes: run "
+          f"`{repair}`, then have them quit and reopen Claude. If the repair does "
+          "not finish, suggest they tell the NSLS AI team.")
 
 
 def update_now():
@@ -2504,9 +2612,7 @@ def update_now():
               f"{SYNCED_PLUGIN_KEY}` and tell them to open a new session.")
         return
     if not marketplace_plugin_installed():
-        print("The NSLS toolkit is not installed as a Claude Code plugin on this "
-              "machine, so there is nothing to update this way. Its folder copy "
-              "already updates itself at every session start.")
+        _update_folder_copy()
         return
     claude = _find_claude()
     if not claude:

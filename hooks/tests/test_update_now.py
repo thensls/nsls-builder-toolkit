@@ -200,7 +200,141 @@ check("the lock outlives the longest holder (update now + its 60s heal)", stale 
 with tempfile.TemporaryDirectory() as tmp:
     cfg, log, env = machine(tmp, installed=False)
     out = run(env)
-    check("not a plugin install: says there is nothing to update", "not installed as a Claude Code plugin" in out, out)
+    check("no plugin and no folder copy: says it cannot update from here, never 'up to date'",
+          "not on this machine in a form this command can update" in out
+          and "up to date" not in out and "newest release" not in out, out)
+
+
+# --- the folder copy: a clone and no plugin ----------------------------------
+#
+# What install.sh leaves on a machine where it found no claude CLI. This branch
+# used to print "its folder copy already updates itself at every session start"
+# and run nothing. On a builder's Mac (2026-11) no session hook was registered
+# either, so nothing updated the copy at all, and he was told there was nothing
+# to do while 125 commits behind.
+
+SHIM = ("python3 -c \"exec(open('{}/local-plugins/nsls-builder-toolkit/hooks/"
+        "session-start.py').read())\"")
+
+
+def git(cwd, *args, env=None):
+    return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True,
+                          text=True, env=env).stdout.strip()
+
+
+def folder_copy(tmp, cfg, env, behind=False, hook=None):
+    """NSLS's repo (a local bare repo) and this machine's clone of it, tracking
+    main, as install.sh leaves it. `behind`: NSLS has released 3.7.0 since.
+    `hook`: the SessionStart command in settings.json, if any. git runs with an
+    isolated config so a builder's own settings cannot change the fixture."""
+    root = Path(tmp)
+    (root / "gitconfig").write_text(
+        "[user]\n\tname = T\n\temail = t@t.test\n[commit]\n\tgpgsign = false\n"
+        "[init]\n\tdefaultBranch = main\n[protocol \"file\"]\n\tallow = always\n")
+    env.update(GIT_CONFIG_GLOBAL=str(root / "gitconfig"), GIT_CONFIG_NOSYSTEM="1")
+    seed, nsls = root / "seed", root / "nsls.git"
+
+    def release(version):
+        (seed / ".claude-plugin").mkdir(exist_ok=True)
+        (seed / ".claude-plugin" / "plugin.json").write_text(json.dumps({"version": version}))
+        git(seed, "add", ".", env=env)
+        git(seed, "commit", "--quiet", "-m", f"release {version}", env=env)
+
+    seed.mkdir()
+    git(seed, "init", "--quiet", env=env)
+    git(seed, "checkout", "--quiet", "-b", "main", env=env)
+    release("3.6.0")
+    git(root, "clone", "--quiet", "--bare", str(seed), str(nsls), env=env)
+    copy = cfg / "local-plugins" / "nsls-builder-toolkit"
+    copy.parent.mkdir(parents=True)
+    git(root, "clone", "--quiet", str(nsls), str(copy), env=env)
+    if behind:
+        release("3.7.0")
+        git(seed, "push", "--quiet", str(nsls), "main", env=env)
+    settings = {}
+    if hook:
+        settings["hooks"] = {"SessionStart": [{"matcher": "startup", "hooks": [
+            {"type": "command", "command": hook}]}]}
+    (cfg / "settings.json").write_text(json.dumps(settings))
+    return copy, git(nsls, "rev-parse", "main", env=env)
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    cfg, log, env = machine(tmp, installed=False)
+    copy, released = folder_copy(tmp, cfg, env, behind=True, hook=SHIM.format(cfg))
+    out = run(env)
+    check("folder copy, behind: it is updated now, not described",
+          git(copy, "rev-parse", "HEAD", env=env) == released, out)
+    check("folder copy, behind: says so, with the version",
+          "Updated this machine's copy of the NSLS toolkit to the newest release (version 3.7.0)." in out, out)
+    check("folder copy, behind: says to open a new session", "open a new session" in out, out)
+    check("folder copy with its session hook: says it updates itself",
+          "updates itself each time a Claude Code session starts" in out
+          and "nothing on this machine updates it" not in out, out)
+    check("folder copy: the plugin CLI is never called", log.read_text() == "", log.read_text())
+    check("the old sentence is gone", "already updates itself at every session start" not in out, out)
+
+with tempfile.TemporaryDirectory() as tmp:
+    cfg, log, env = machine(tmp, installed=False)
+    copy, released = folder_copy(tmp, cfg, env, hook=SHIM.format(cfg))
+    out = run(env)
+    check("folder copy, level: says it is already on the newest release",
+          "already on the newest release (version 3.6.0)" in out and "open a new session" not in out, out)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # The builder's Mac: a clone, no plugin, and no session hook in settings.
+    cfg, log, env = machine(tmp, installed=False)
+    copy, released = folder_copy(tmp, cfg, env, behind=True)
+    out = run(env)
+    check("no session hook: the copy is still updated now",
+          git(copy, "rev-parse", "HEAD", env=env) == released, out)
+    check("no session hook: says nothing updates it automatically",
+          "nothing on this machine updates it automatically" in out
+          and "updates itself each time" not in out, out)
+    check("no session hook: gives the repair, from the copy already here",
+          f'bash "{copy / "install.sh"}"' in out, out)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # A PC's hook is session-start.ps1, written with backslashes.
+    cfg, log, env = machine(tmp, installed=False)
+    copy, released = folder_copy(
+        tmp, cfg, env,
+        hook='powershell -NoProfile -ExecutionPolicy Bypass -File '
+             '"C:\\Users\\b\\.claude\\local-plugins\\nsls-builder-toolkit\\hooks\\session-start.ps1"')
+    out = run(env)
+    check("a PC's session hook counts as registered", "updates itself each time" in out, out)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # Somebody else's SessionStart hook is not ours.
+    cfg, log, env = machine(tmp, installed=False)
+    copy, released = folder_copy(tmp, cfg, env, hook="python3 /opt/other/hooks/session-start.py")
+    out = run(env)
+    check("another tool's session hook does not count",
+          "nothing on this machine updates it automatically" in out, out)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # NSLS cannot be reached: nothing is claimed.
+    cfg, log, env = machine(tmp, installed=False)
+    copy, released = folder_copy(tmp, cfg, env, behind=True, hook=SHIM.format(cfg))
+    git(copy, "remote", "set-url", "origin", str(Path(tmp) / "gone.git"), env=env)
+    out = run(env)
+    check("unreachable: says it could not be updated, never 'newest release'",
+          "could not be updated just now" in out and "newest release" not in out, out)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # The builder committed to the copy and NSLS moved on: a fast-forward is
+    # refused. That is the checkout's doing, never "no internet".
+    cfg, log, env = machine(tmp, installed=False)
+    copy, released = folder_copy(tmp, cfg, env, behind=True, hook=SHIM.format(cfg))
+    (copy / "mine.md").write_text("mine\n")
+    git(copy, "add", ".", env=env)
+    git(copy, "commit", "--quiet", "-m", "mine", env=env)
+    out = run(env)
+    check("refused by the checkout: says so, and does not blame the internet",
+          "its own checkout refused the update" in out and "no internet" not in out
+          and "newest release" not in out, out)
+    check("refused by the checkout: the builder's commit is still there",
+          git(copy, "log", "-1", "--format=%s", env=env) == "mine")
 
 with tempfile.TemporaryDirectory() as tmp:
     cfg, log, env = machine(tmp, release=["quicknote"], cli=False)

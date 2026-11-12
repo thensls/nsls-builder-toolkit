@@ -25,3 +25,7 @@ sentences, with no technical detail.
 - **Kept up to date by NSLS's Claude organization:** nothing was run and nothing
   needs to be. Tell the builder to open a new session, and a second one if the
   first still shows the old version.
+- **Nothing on this machine updates it automatically:** the copy was updated
+  just now, but it will fall behind again. Say so in one plain sentence, offer
+  the repair it prints, and run that command if they say yes. Then have them
+  quit and reopen Claude.
