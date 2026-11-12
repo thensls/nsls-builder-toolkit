@@ -208,11 +208,19 @@ class Offer:
 
 def _listing(root):
     """({path: file}, {path: (size, mtime_ns)}) for every regular file in a
-    delivered copy, or None when it cannot be read whole. Links are never
-    followed and never copied."""
+    delivered copy. None when it is too big to be one; raises when any part of
+    it cannot be read (the callers treat that as no copy at all). Links are
+    never followed and never copied."""
     files, stats, total = {}, {}, 0
     root = Path(root)
-    for here, dirs, names in os.walk(root, followlinks=False):
+
+    def unreadable(error):
+        # os.walk skips a folder it cannot read. Skipped, its files would look
+        # like files NSLS had stopped shipping, and two passes later they
+        # would be deleted from the toolkit folder. No listing beats a short one.
+        raise error
+
+    for here, dirs, names in os.walk(root, followlinks=False, onerror=unreadable):
         dirs[:] = sorted(d for d in dirs
                          if d not in _SKIP_NAMES and d not in _SKIP_DIRS
                          and not os.path.islink(os.path.join(here, d)))
@@ -312,36 +320,97 @@ def is_delivered(target) -> bool:
     return state(target) == "delivered"
 
 
+def _ancestor_in_the_way(target, rel):
+    """The first thing on the way down to `rel` that is not a real folder, as
+    (path inside the toolkit folder, "link" or "file"); None when every folder
+    on the way is a real one or is not there yet.
+
+    A link matters most: everything past it is in some other place, which this
+    module must never read as the toolkit's, write to or delete from.
+    """
+    here = Path(target)
+    walked = []
+    for part in rel.split("/")[:-1]:
+        here = here / part
+        walked.append(part)
+        try:
+            mode = os.lstat(here).st_mode
+        except OSError:
+            return None
+        if stat.S_ISLNK(mode):
+            return "/".join(walked), "link"
+        if not stat.S_ISDIR(mode):
+            return "/".join(walked), "file"
+    return None
+
+
+def _retired_file(target, rel, baseline, incoming) -> bool:
+    """True for a file NSLS delivered, no longer ships, and nobody has touched."""
+    path = Path(target) / rel
+    return (rel in baseline and rel not in incoming and _plain_file(path)
+            and _sha(path) == baseline[rel])
+
+
+def _retired_tree(target, rel, baseline, incoming) -> bool:
+    """True for a real folder holding nothing but files NSLS delivered, no
+    longer ships, and nobody has touched (NSLS turned a folder into a file)."""
+    top = Path(target) / rel
+    try:
+        if not stat.S_ISDIR(os.lstat(top).st_mode):
+            return False
+        for here, dirs, names in os.walk(top, followlinks=False):
+            for name in dirs:
+                if os.path.islink(os.path.join(here, name)):
+                    return False
+            for name in names:
+                inner = (Path(here) / name).relative_to(target).as_posix()
+                if not _retired_file(target, inner, baseline, incoming):
+                    return False
+        return True
+    except OSError:
+        return False
+
+
 def owner_changes(target, baseline, incoming) -> list:
-    """Paths in the folder that are their owner's, not NSLS's.
+    """Paths in the folder that are their owner's, not NSLS's, and that stand
+    where NSLS delivers something.
 
     `baseline` is what NSLS last put there ({path: sha256}); `incoming` is what
     NSLS delivers now. A file is NSLS's while it still matches either (matching
-    the incoming one covers a copy that was interrupted half way). Everything
-    else is its owner's: a delivered file they edited, replaced or removed, and
-    a file of their own sitting where NSLS now ships one.
+    the incoming one covers a copy that was interrupted half way). Theirs, and
+    in the way: a delivered file they edited, replaced or removed; a file or
+    folder of their own sitting where NSLS now ships something; and anything
+    reached through a link they put in place of a folder, which is reported as
+    the link and never looked behind.
+
+    Not in the way, so not reported: a file NSLS has stopped shipping. Edited
+    or not, NSLS wants nothing there any more; an edited one is simply theirs
+    from now on (see _mirror). And what NSLS itself retired to make room (a
+    file where a folder now goes, or the reverse) is NSLS's to clear.
     """
     target = Path(target)
-    changed = []
-    for rel, was in baseline.items():
+    changed = set()
+    for rel in sorted(set(baseline) | set(incoming)):
+        was, wanted = baseline.get(rel), incoming.get(rel)
+        above = _ancestor_in_the_way(target, rel)
+        if above is not None:
+            where, kind = above
+            if kind == "link":
+                changed.add(where)
+            elif wanted is not None and not _retired_file(target, where, baseline, incoming):
+                changed.add(where)       # a file of theirs where NSLS ships a folder
+            continue
+        if wanted is None:
+            continue                     # retired: nothing of NSLS's goes here now
         path = target / rel
-        wanted = incoming.get(rel)
         if _plain_file(path):
             if _sha(path) not in (was, wanted):
-                changed.append(rel)
+                changed.add(rel)
         elif _there(path):
-            changed.append(rel)          # a folder or link where a file was
-        elif wanted is not None:
-            changed.append(rel)          # they removed a file NSLS still ships
-    for rel, wanted in incoming.items():
-        if rel in baseline:
-            continue
-        path = target / rel
-        if _plain_file(path):
-            if _sha(path) != wanted:
-                changed.append(rel)
-        elif _there(path):
-            changed.append(rel)
+            if not (was is None and _retired_tree(target, rel, baseline, incoming)):
+                changed.add(rel)         # a folder or link of theirs where a file goes
+        elif was is not None:
+            changed.add(rel)             # they removed a file NSLS still ships
     return sorted(changed)
 
 
@@ -401,46 +470,89 @@ def _out_of_time(deadline) -> bool:
     return deadline is not None and time.monotonic() > deadline
 
 
+def _clear_way(target, rel, baseline, incoming, aside) -> bool:
+    """Make room for the delivered file `rel`. What NSLS itself retired there
+    is removed (a file where a folder now goes, a folder where a file now
+    goes). Anything else is its owner's: with their yes (`aside`) it is moved
+    there, link and all, and without it this returns False and nothing moves.
+    """
+    above = _ancestor_in_the_way(target, rel)
+    if above is not None:
+        where, kind = above
+        path = Path(target) / where
+        if kind == "file" and _retired_file(target, where, baseline, incoming):
+            path.unlink()
+        elif aside is not None:
+            _move_aside(path, aside, where)
+        else:
+            return False
+    dst = Path(target) / rel
+    if not _there(dst) or _plain_file(dst):
+        return True
+    if _retired_tree(target, rel, baseline, incoming):
+        for here, dirs, names in os.walk(dst, topdown=False, followlinks=False):
+            for name in names:
+                os.unlink(os.path.join(here, name))
+            os.rmdir(here)
+        return True
+    if aside is not None:
+        _move_aside(dst, aside, rel)
+        return True
+    return False
+
+
 def _mirror(target, found, record, deadline=None, aside=None):
     """Make the folder carry the delivered files. True when it finished.
 
-    Writes only files that differ. A file NSLS stopped shipping is removed on
-    the SECOND pass that finds it gone, and only while it is still exactly
-    what NSLS delivered: one look at a copy Claude was in the middle of
-    replacing must not delete anything. `record` is the marker being built; it
-    is saved by the caller. With `aside`, a file that differs is moved there
-    before its replacement is written.
+    Writes only files that differ, and records each one in `record` as it
+    lands, so a pass that stops half way leaves a true account of the folder:
+    the next pass, even against a newer delivery, does not mistake its own
+    half-copy for the owner's edits. `record` is saved by the caller.
+
+    A file NSLS stopped shipping is removed on the SECOND pass that finds it
+    gone, and only while it is still exactly what NSLS delivered: one look at
+    a copy Claude was in the middle of replacing must not delete anything. One
+    its owner edited is not removed at all: it is theirs now, and no longer
+    tracked.
+
+    With `aside` (the owner's yes), a file they changed is moved there before
+    NSLS's version is written.
     """
     target = Path(target)
-    baseline = record["files"]
+    before = dict(record["files"])
     waiting = set(record.get("pending") or [])
     hashes = found.hashes
     for rel in sorted(found.files):
         if _out_of_time(deadline):
             return False
         dst = target / rel
-        if _plain_file(dst) and _sha(dst) == hashes[rel]:
-            continue
-        if _there(dst) and not _plain_file(dst):
-            if aside is None:
-                return False             # a folder where a file goes: theirs
-            _move_aside(dst, aside, rel)
-        elif aside is not None and _plain_file(dst):
-            _move_aside(dst, aside, rel)
+        clear = _ancestor_in_the_way(target, rel) is None
+        if clear and _plain_file(dst):
+            have = _sha(dst)
+            if have == hashes[rel]:
+                record["files"][rel] = have
+                continue
+            if aside is not None and have != before.get(rel):
+                _move_aside(dst, aside, rel)     # their version, kept
+        if not _clear_way(target, rel, before, hashes, aside):
+            return False                         # theirs, and nobody said yes
         _copy_file(found.files[rel], dst)
+        record["files"][rel] = hashes[rel]
 
     files, pending = dict(hashes), []
-    for rel, was in baseline.items():
+    for rel, was in before.items():
         if rel in hashes:
             continue
         path = target / rel
-        if not _plain_file(path):
-            continue                     # already gone
-        if rel in waiting and _sha(path) == was:
+        if _ancestor_in_the_way(target, rel) is not None or not _plain_file(path):
+            continue                             # already gone, or behind something of theirs
+        if _sha(path) != was:
+            continue                             # they edited it: theirs now, no longer tracked
+        if rel in waiting:
             path.unlink()
             _prune_empty(target, path)
             continue
-        files[rel] = was                 # keep watching it for one more pass
+        files[rel] = was                         # keep watching it for one more pass
         pending.append(rel)
     record["files"] = files
     record["pending"] = sorted(pending)

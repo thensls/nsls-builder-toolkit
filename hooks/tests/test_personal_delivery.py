@@ -27,6 +27,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -114,6 +115,10 @@ class Machine:
             files.pop(rel, None)
             if (copy / rel).exists():
                 (copy / rel).unlink()
+                parent = (copy / rel).parent
+                while parent != copy and not any(parent.iterdir()):
+                    parent.rmdir()
+                    parent = parent.parent
         lay(copy, files)
         return copy
 
@@ -403,7 +408,111 @@ with tempfile.TemporaryDirectory() as tmp:
     check("the hook's own pull and fork check leave a folder that follows the delivered copy alone, silently",
           out.getvalue() == "" and m.text("README.md") == "Personal Toolkit 2.0.0\n", out.getvalue())
 
-print("7. on request: the launcher's `personal-delivery` command")
+print("7. NSLS reshapes the toolkit, the owner reshapes their folder, a copy stops half way")
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.deliver("2.0.0", extra={"notes": "a file\n", "refs/a.md": "a\n", "refs/b.md": "b\n"})
+    m.run()
+    m.deliver("2.1.0", extra={"notes/one.md": "one\n", "refs": "now a file\n"},
+              drop=("notes", "refs/a.md", "refs/b.md"))
+    res, _ = m.load() and m.run()
+    check("a file NSLS turned into a folder is replaced in one pass, not retried for ever",
+          outcome(res) == "updated" and m.text("notes/one.md") == "one\n", str(res))
+    check("and so is a folder NSLS turned into a file", (m.folder / "refs").is_file() and m.text("refs") == "now a file\n")
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.deliver("2.0.0", extra={"notes": "a file\n"})
+    m.run()
+    write(m.folder / "notes", "MY notes\n")
+    m.deliver("2.1.0", extra={"notes/one.md": "one\n"}, drop=("notes",))
+    res, _ = m.load() and m.run()
+    check("but a file they edited, where NSLS now ships a folder, is theirs: updates pause",
+          outcome(res) == "paused" and res.get("changed") == ["notes"] and m.text("notes") == "MY notes\n", str(res))
+    res, _ = m.run(request="adopt")
+    check("and with their yes it is moved aside before the folder is written",
+          outcome(res) == "updated" and m.text("notes/one.md") == "one\n"
+          and (Path(res.get("set_aside", "missing")) / "notes").read_text(encoding="utf-8") == "MY notes\n", str(res))
+
+if not WINDOWS:   # making a link needs a privilege a Windows test run may not have
+    with tempfile.TemporaryDirectory() as tmp:
+        m = Machine(tmp)
+        m.deliver("2.0.0")
+        m.run()
+        outside = Path(tmp) / "their-dotfiles" / "open-day"
+        write(outside / "SKILL.md", "their own, kept somewhere else\n")
+        shutil.rmtree(m.folder / "skills/open-day")
+        os.symlink(outside, m.folder / "skills/open-day")
+        m.deliver("2.1.0")
+        res, _ = m.load() and m.run()
+        check("a folder they replaced with a link is theirs: updates pause, and the link is what is named",
+              outcome(res) == "paused" and res.get("changed") == ["skills/open-day"], str(res))
+        check("nothing behind the link was read as the toolkit's or written to",
+              (outside / "SKILL.md").read_text(encoding="utf-8") == "their own, kept somewhere else\n")
+        res, _ = m.run(request="adopt")
+        aside = Path(res.get("set_aside", "missing"))
+        check("with their yes the link itself is moved aside and a real folder takes its place",
+              outcome(res) == "updated" and not (m.folder / "skills/open-day").is_symlink()
+              and m.text("skills/open-day/SKILL.md").endswith("open day 2.1.0\n")
+              and (aside / "skills/open-day").is_symlink(), str(res))
+        check("and the place it pointed at is still untouched",
+              (outside / "SKILL.md").read_text(encoding="utf-8") == "their own, kept somewhere else\n")
+
+    if os.geteuid() != 0:   # root reads anything, so there is nothing to prove
+        with tempfile.TemporaryDirectory() as tmp:
+            m = Machine(tmp)
+            m.deliver("2.0.0")
+            m.run()
+            copy = m.deliver("2.1.0")
+            before = tree(m.folder)
+            os.chmod(copy / "skills/close-day", 0)
+            try:
+                first, _ = m.load() and m.run()
+                second, _ = m.run()
+            finally:
+                os.chmod(copy / "skills/close-day", 0o755)
+            check("a delivered copy with a folder that cannot be read is no copy at all: nothing is updated",
+                  first is None and second is None and tree(m.folder) == before, f"{first} {second}")
+            check("so a skill in that folder is never mistaken for one NSLS stopped shipping",
+                  (m.folder / "skills/close-day/SKILL.md").exists())
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.deliver("2.0.0")
+    m.run()
+    write(m.folder / "skills/old-skill/SKILL.md", "MY version of the old skill\n")
+    m.deliver("2.1.0", drop=("skills/old-skill/SKILL.md",))
+    res, said = m.load() and m.run()
+    check("a file they edited that NSLS then stops shipping does not hold updates back",
+          outcome(res) == "updated" and said == "" and m.text("README.md") == "Personal Toolkit 2.1.0\n", str(res))
+    check("it is simply theirs from then on: kept, and no longer tracked",
+          m.text("skills/old-skill/SKILL.md") == "MY version of the old skill\n"
+          and "skills/old-skill/SKILL.md" not in (m.marker() or {}).get("files", {"skills/old-skill/SKILL.md": 1})
+          and (m.marker() or {}).get("pending") == [])
+    res, _ = m.run()
+    check("and the next pass has nothing left to ask about", outcome(res) == "current", str(res))
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.deliver("2.0.0")
+    m.run()
+    m.deliver("2.1.0")
+    pd = m.load()._personal_delivery()
+    real, asked = pd._out_of_time, []
+    pd._out_of_time = lambda deadline: (asked.append(1), len(asked) > 2)[1]   # stops after two files
+    try:
+        res, _ = m.run()
+    finally:
+        pd._out_of_time = real
+    check("a copy stopped after its first files says so", outcome(res) == "retry"
+          and '"version": "2.1.0"' in m.text(".claude-plugin/plugin.json")
+          and m.text("README.md") == "Personal Toolkit 2.0.0\n", str(res))
+    m.deliver("2.2.0")                                   # NSLS publishes again before the next session
+    res, said = m.load() and m.run()
+    check("and a NEWER delivery still finishes it: the files it had already written are not taken for the owner's edits",
+          outcome(res) == "updated" and said == "" and m.text("README.md") == "Personal Toolkit 2.2.0\n", f"{res} {said}")
+
+print("8. on request: the launcher's `personal-delivery` command")
 with tempfile.TemporaryDirectory() as tmp:
     m = Machine(tmp)
     env = dict(os.environ, CLAUDE_CONFIG_DIR=str(m.cfg), NSLS_NO_PLUGIN_MIGRATION="1", PYTHONUTF8="1")
