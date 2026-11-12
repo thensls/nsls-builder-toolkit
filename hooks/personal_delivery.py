@@ -372,6 +372,53 @@ def _retired_tree(target, rel, baseline, incoming) -> bool:
         return False
 
 
+def _same_file(one, other) -> bool:
+    try:
+        return os.path.samefile(one, other)
+    except OSError:
+        return False
+
+
+def _respelled(target, baseline, incoming) -> dict:
+    """`baseline` with any path NSLS renamed only in letter case moved to its
+    new spelling, where the folder's file system treats both as ONE file.
+
+    Macs and PCs ignore letter case in file names by default. There, a file
+    delivered as ref.md and now shipped as REF.md is a single file on disk.
+    Read by name alone it is two: a retired ref.md, and a REF.md of unknown
+    origin sitting where NSLS ships one. The first would be deleted two passes
+    later, taking the real file with it; the second would pause every update.
+    Where the two names are different files (Linux), nothing is moved.
+    """
+    folded = {}
+    for rel in incoming:
+        folded.setdefault(rel.casefold(), rel)
+    moved = dict(baseline)
+    target = Path(target)
+    for old in baseline:
+        new = folded.get(old.casefold())
+        if old in incoming or new is None or new in baseline:
+            continue
+        if _same_file(target / old, target / new):
+            moved[new] = moved.pop(old)
+    return moved
+
+
+def _spell_as_shipped(dst) -> None:
+    """Give a file the letter case NSLS ships it under, where the file system
+    kept an older spelling of the same name."""
+    try:
+        names = os.listdir(dst.parent)
+        if dst.name in names:
+            return
+        for name in names:
+            if name.casefold() == dst.name.casefold():
+                os.rename(str(dst.parent / name), str(dst))
+                return
+    except OSError:
+        pass
+
+
 def owner_changes(target, baseline, incoming) -> list:
     """Paths in the folder that are their owner's, not NSLS's, and that stand
     where NSLS delivers something.
@@ -393,16 +440,14 @@ def owner_changes(target, baseline, incoming) -> list:
     changed = set()
     for rel in sorted(set(baseline) | set(incoming)):
         was, wanted = baseline.get(rel), incoming.get(rel)
+        if wanted is None:
+            continue                     # retired: nothing of NSLS's goes here now
         above = _ancestor_in_the_way(target, rel)
         if above is not None:
             where, kind = above
-            if kind == "link":
-                changed.add(where)
-            elif wanted is not None and not _retired_file(target, where, baseline, incoming):
-                changed.add(where)       # a file of theirs where NSLS ships a folder
+            if kind == "link" or not _retired_file(target, where, baseline, incoming):
+                changed.add(where)       # a link, or a file of theirs where NSLS ships a folder
             continue
-        if wanted is None:
-            continue                     # retired: nothing of NSLS's goes here now
         path = target / rel
         if _plain_file(path):
             if _sha(path) not in (was, wanted):
@@ -544,9 +589,10 @@ def _mirror(target, found, record, deadline=None, aside=None):
     NSLS's version is written.
     """
     target = Path(target)
+    hashes = found.hashes
+    record["files"] = _respelled(target, record["files"], hashes)
     before = dict(record["files"])
     waiting = set(record.get("pending") or [])
-    hashes = found.hashes
     for rel in sorted(found.files):
         if _out_of_time(deadline):
             return False
@@ -555,13 +601,19 @@ def _mirror(target, found, record, deadline=None, aside=None):
         if clear and _plain_file(dst):
             have = _sha(dst)
             if have == hashes[rel]:
+                _spell_as_shipped(dst)
                 record["files"][rel] = have
                 continue
-            if aside is not None and have != before.get(rel):
+            if have != before.get(rel):
+                # Not what NSLS last put here: theirs, even if they changed
+                # it a moment ago, after this pass looked for such files.
+                if aside is None:
+                    return False                 # the next pass reports it
                 _move_aside(dst, aside, rel)     # their version, kept
         if not _clear_way(target, rel, before, hashes, aside):
             return False                         # theirs, and nobody said yes
         _copy_file(found.files[rel], dst, hashes[rel])
+        _spell_as_shipped(dst)
         record["files"][rel] = hashes[rel]
 
     files, pending = dict(hashes), []
@@ -698,7 +750,7 @@ def refresh(cfg, found, deadline=None, take_theirs=False):
                 return _result("current", version=record.get("version"))
             if not found.settled():
                 return _result("retry", why="settling")
-            baseline = record["files"] if record else {}
+            baseline = _respelled(target, record["files"], found.hashes) if record else {}
             changed = owner_changes(target, baseline, found.hashes)
             if changed and not take_theirs:
                 return _result("paused", changed=changed, version=found.version,

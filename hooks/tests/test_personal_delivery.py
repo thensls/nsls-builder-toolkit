@@ -520,7 +520,7 @@ with tempfile.TemporaryDirectory() as tmp:
     found.hashes                                   # the copy is listed and hashed...
     readme = copy / "README.md"
     info = readme.stat()
-    readme.write_text("Personal Toolkit 9.9.9\n", encoding="utf-8")   # ...then Claude rewrites one file, same size
+    readme.write_bytes(b"Personal Toolkit 9.9.9\n")                 # ...then Claude rewrites one file, same size
     os.utime(readme, ns=(info.st_atime_ns, info.st_mtime_ns))      # too fast for the listing to notice
     res = pd.refresh(m.cfg, found)
     check("a delivered file rewritten between the hashing and the copy is not installed",
@@ -530,6 +530,73 @@ with tempfile.TemporaryDirectory() as tmp:
     check("and the next pass installs the real one, without taking anything for the owner's edit",
           outcome(res) in ("created", "updated") and said == "" and m.text("README.md") == "Personal Toolkit 9.9.9\n"
           and (m.marker() or {}).get("complete") is True, f"{res} {said}")
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.deliver("2.0.0")
+    m.run()
+    m.deliver("2.1.0")
+    pd = m.load()._personal_delivery()
+    real = pd.owner_changes
+
+    def edits_right_after(target, baseline, incoming):
+        found = real(target, baseline, incoming)     # the pass looks: nothing of theirs...
+        write(m.folder / "README.md", "edited a moment after the pass looked\n")
+        return found                                  # ...and then they save a file
+
+    pd.owner_changes = edits_right_after
+    try:
+        res, _ = m.run()
+    finally:
+        pd.owner_changes = real
+    check("an edit saved a moment after the pass looked for edits is still never overwritten",
+          outcome(res) == "retry" and m.text("README.md") == "edited a moment after the pass looked\n", str(res))
+    res, said = m.run()
+    check("and the next pass reports it like any other edit", outcome(res) == "paused"
+          and res.get("changed") == ["README.md"] and "README.md" in said, f"{res} {said}")
+
+if not WINDOWS:
+    with tempfile.TemporaryDirectory() as tmp:
+        m = Machine(tmp)
+        m.deliver("2.0.0")
+        m.run()
+        outside = Path(tmp) / "their-dotfiles" / "old-skill"
+        write(outside / "SKILL.md", "their own, kept somewhere else\n")
+        shutil.rmtree(m.folder / "skills/old-skill")
+        os.symlink(outside, m.folder / "skills/old-skill")
+        m.deliver("2.1.0", drop=("skills/old-skill/SKILL.md",))
+        res, said = m.load() and m.run()
+        check("a link they put where NSLS has since stopped shipping anything holds nothing back",
+              outcome(res) == "updated" and said == "" and m.text("README.md") == "Personal Toolkit 2.1.0\n", f"{res} {said}")
+        check("and neither the link nor the place it points at is touched",
+              (m.folder / "skills/old-skill").is_symlink()
+              and (outside / "SKILL.md").read_text(encoding="utf-8") == "their own, kept somewhere else\n")
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    probe = Path(tmp) / "Probe.txt"
+    probe.write_text("x", encoding="utf-8")
+    ignores_case = (Path(tmp) / "PROBE.TXT").exists()       # Macs and PCs by default; not Linux
+    m.deliver("2.0.0", extra={"skills/open-day/ref.md": "reference, first edition\n"})
+    m.run()
+    m.deliver("2.1.0", extra={"skills/open-day/REF.md": "reference, second edition\n"},
+              drop=("skills/open-day/ref.md",))
+    res, said = m.load() and m.run()
+    check("a file NSLS renamed only in letter case updates like any other", outcome(res) == "updated" and said == ""
+          and m.text("skills/open-day/REF.md") == "reference, second edition\n", f"{res} {said}")
+    check("and carries the new spelling on disk", "REF.md" in os.listdir(m.folder / "skills/open-day"),
+          str(os.listdir(m.folder / "skills/open-day")))
+    m.run()
+    res, _ = m.run()
+    names = os.listdir(m.folder / "skills/open-day")
+    if ignores_case:
+        check("where letter case is ignored it is one file, and later passes never delete it as the old name",
+              outcome(res) == "current" and "REF.md" in names and "ref.md" not in names
+              and m.text("skills/open-day/REF.md") == "reference, second edition\n"
+              and "skills/open-day/ref.md" not in (m.marker() or {}).get("files", {}), f"{res} {names}")
+    else:
+        check("where letter case matters they are two files: the old one retires, the new one stays",
+              outcome(res) == "current" and "REF.md" in names and "ref.md" not in names, f"{res} {names}")
 
 with tempfile.TemporaryDirectory() as tmp:
     m = Machine(tmp)
