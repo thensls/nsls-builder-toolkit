@@ -20,11 +20,17 @@ files can live (it is replaced whole), and nothing in the toolkit points at it.
 So the folder stays, and this module copies the delivered files into it:
 
 * no folder yet            -> the folder is made from the delivered copy;
-* a folder this module
-  made                     -> brought to the delivered version, file by file;
-* anything else (a git
-  checkout, a fork, a copy
-  from somewhere)          -> never touched.
+* a folder this module set
+  up or took over          -> brought to the delivered version, file by file;
+* a git checkout of NSLS's
+  repository holding
+  nothing of its owner's   -> taken over: its .git is kept under another name,
+                              and from then on the folder follows the delivered
+                              copy (session-start.py decides whether a checkout
+                              qualifies; this module knows nothing about git);
+* anything else (a fork, a
+  checkout or folder with
+  the owner's own work)    -> never touched, unless its owner asks.
 
 The rule that matters: a file its owner changed is never overwritten or removed
 without being asked. A folder holding such a file is left exactly as it is and
@@ -58,14 +64,19 @@ NEEDS = ("skills",)
 # delivered, file by file, so the next pass can tell NSLS's files from changes
 # their owner made.
 MARKER = ".delivered-by-claude.json"
+# A checkout's own .git, kept under this name when the folder is taken over.
+KEPT_GIT = ".git.before-claude-delivery"
 # Where a file is copied before it is replaced at its owner's request.
 SET_ASIDE = ".set-aside"
-# What stands where a checkout's .git would be. A folder with no .git at all
-# is not safe: git climbs to the nearest parent repository, and the Windows
-# session hook runs `git -C <folder> fetch` and a fast-forward on every toolkit
-# folder that exists, so it would update a person's dotfiles repository in
-# ~/.claude or ~ instead. A .git FILE naming a folder that does not exist makes
-# every git command stop here at once, with no network and no climbing.
+# An empty file with this name keeps a checkout on GitHub for good.
+KEEP_ON_GITHUB = ".keep-on-github"
+# What stands where a checkout's .git was, or would be. A folder with no .git
+# at all is not safe: git climbs to the nearest parent repository, so the
+# Windows session hook (which runs `git -C <folder> fetch` and a fast-forward
+# on every toolkit folder that exists) and any old `git -C <folder> pull` still
+# registered somewhere would update a person's dotfiles repository in ~/.claude
+# or ~ instead. A .git FILE naming a folder that does not exist makes every git
+# command stop here at once, with no network and no climbing.
 TOMBSTONE = "gitdir: .git.delivered-by-claude\n"
 
 SCHEMA = 1
@@ -81,7 +92,8 @@ MAX_BYTES = 250 * 1024 * 1024
 # never update.)
 SETTLE_SECONDS = 0.3
 
-_SKIP_NAMES = {".git", MARKER, SET_ASIDE, ".DS_Store", "Thumbs.db", "desktop.ini"}
+_SKIP_NAMES = {".git", MARKER, KEPT_GIT, SET_ASIDE, KEEP_ON_GITHUB,
+               ".DS_Store", "Thumbs.db", "desktop.ini"}
 _SKIP_DIRS = {"__pycache__"}
 _VERSION = re.compile(r"^\d{1,5}\.\d{1,5}\.\d{1,5}\Z")
 
@@ -297,14 +309,16 @@ def state(target) -> str:
 
     "none"       nothing, or a shell holding no toolkit (a pre-written .env)
     "delivered"  a folder that follows the delivered copy
+    "taking"     a checkout whose take-over was interrupted before .git moved
     "checkout"   a git checkout
     "copy"       toolkit files with no git and no record: a copy from somewhere
     """
     target = Path(target)
     git = target / ".git"
+    marked = read_marker(target) is not None
     if git.is_dir():
-        return "checkout"
-    if read_marker(target) is not None:
+        return "taking" if marked else "checkout"
+    if marked:
         return "delivered"
     if _plain_file(git):
         try:
@@ -458,6 +472,48 @@ def owner_changes(target, baseline, incoming) -> list:
         elif was is not None:
             changed.add(rel)             # they removed a file NSLS still ships
     return sorted(changed)
+
+
+def standing_in_the_way(cfg, found, shipped=None) -> list:
+    """Files of the owner's that stop a take-over nobody asked for: anything in
+    the folder, sitting where a delivered file goes, that is neither a file git
+    vouched for (`shipped`: its hash when git called the checkout clean) nor
+    identical to what NSLS delivers. Reads only. Asked BEFORE anything is
+    changed, settings included, so a folder that will not be taken over is left
+    exactly as it is."""
+    try:
+        target = folder(cfg)
+        return owner_changes(target, _respelled(target, dict(shipped or {}), found.hashes), found.hashes)
+    except Exception:
+        return ["?"]
+
+
+def hashes_of(target, paths) -> dict:
+    """{path: sha256} of each of these files as it is on disk right now.
+
+    For the caller that vouches for a checkout: it hashes git's tracked files
+    between two clean answers from git, and hands those hashes to take_over.
+    They are then the ONLY account of what NSLS shipped. Nothing here hashes
+    the folder again later and calls the result shipped: an edit saved in the
+    meantime would be hashed along with everything else and overwritten.
+    """
+    shipped = {}
+    for rel in paths:
+        path = Path(target) / rel
+        if _plain_file(path):
+            shipped[rel] = _sha(path)
+    return shipped
+
+
+def forget_unfinished(target) -> None:
+    """Drop the record a take-over wrote before it moved .git, when the folder
+    turns out not to be one to take over after all. The folder is then an
+    ordinary checkout again."""
+    try:
+        if state(target) == "taking":
+            (Path(target) / MARKER).unlink()
+    except Exception:
+        pass
 
 
 def _starts_with_shebang(path) -> bool:
@@ -739,7 +795,7 @@ def refresh(cfg, found, deadline=None, take_theirs=False):
                 return _result("retry", why="busy")
             kind = state(target)
             if kind not in ("none", "delivered"):
-                return _result("kept", why=kind)   # a checkout or a copy: not ours
+                return _result("kept", why=kind)
             record = read_marker(target) if kind == "delivered" else None
             # Nothing new, nothing unfinished, and no removed file still
             # waiting for its second look: the folder is where it should be.
@@ -767,3 +823,276 @@ def refresh(cfg, found, deadline=None, take_theirs=False):
                            "created" if kind == "none" else "updated")
     except Exception:
         return _result("retry", why="error")
+
+
+def take_over(cfg, found, shipped=None, origin=None, deadline=None, take_theirs=False):
+    """Switch a checkout (or a plain copy) to following the delivered copy.
+
+    The caller has already decided this folder may be taken over: either git
+    showed it holds nothing of its owner's (`shipped` is then the hash of every
+    file git tracks there, taken while git called the checkout clean; see
+    hashes_of), or its owner said yes (`take_theirs`: every file about to be
+    replaced is moved to .set-aside/ first). A file that no longer matches
+    `shipped` was changed after git looked: it is its owner's, it stops a
+    take-over nobody asked for, and the copy never overwrites it.
+
+    .git is renamed, never removed, so the history, any branches and any
+    stashes stay on the computer. Outcomes: "converted", "adopted", "kept"
+    (with `changed`), "retry".
+    """
+    try:
+        target = folder(cfg)
+        with _Lock(cfg) as held:
+            if not held:
+                return _result("retry", why="busy")
+            kind = state(target)
+            if kind not in ("checkout", "taking", "copy"):
+                return _result("kept", why=kind)
+            if not found.settled():
+                return _result("retry", why="settling")
+            baseline = {}
+            if not take_theirs:
+                baseline = _respelled(target, dict(shipped or {}), found.hashes)
+                changed = owner_changes(target, baseline, found.hashes)
+                if changed:
+                    return _result("kept", why="own-changes", changed=changed)
+            git = target / ".git"
+            if (git / "index.lock").exists():
+                return _result("retry", why="git-busy")
+            record = {"schema": SCHEMA, "plugin": PLUGIN, "files": baseline, "pending": [],
+                      "complete": False, "signature": "", "version": version_of(target),
+                      "from": dict(origin or {}, kind="adopted" if take_theirs else "checkout",
+                                   at=_now())}
+            _write_marker(target, record)
+            if git.is_dir():
+                kept = target / KEPT_GIT
+                count = 1
+                while _there(kept):
+                    count += 1
+                    kept = target / f"{KEPT_GIT}-{count}"
+                try:
+                    os.rename(str(git), str(kept))
+                except OSError:
+                    # Something holds the repository open (a git command, an
+                    # indexer). Nothing has changed: forget the record and let
+                    # the next session try.
+                    try:
+                        (target / MARKER).unlink()
+                    except OSError:
+                        pass
+                    return _result("retry", why="git-held")
+                record["from"]["kept_git"] = kept.name
+            elif _plain_file(git):
+                try:
+                    os.unlink(str(git))      # a worktree pointer: the owner said yes
+                except OSError:
+                    # Still git's. With the record left behind the folder would
+                    # read as following the delivered copy while git still
+                    # owned it: forget the record and let a later try do it.
+                    try:
+                        (target / MARKER).unlink()
+                    except OSError:
+                        pass
+                    return _result("retry", why="git-held")
+            _ensure_tombstone(target)
+            aside = _aside_dir(target) if take_theirs else None
+            return _finish(target, found, record, deadline, aside,
+                           "adopted" if take_theirs else "converted")
+    except Exception:
+        return _result("retry", why="error")
+
+
+# --- the update entries the Personal Toolkit's installers wrote ---------------
+#
+# install.sh and install.ps1 register the folder's own update in settings.json:
+# a `git pull` of the folder, and (install.sh) the folder's session hook. Once
+# the folder follows the delivered copy both are wrong: the pull has nothing to
+# pull and would print a hook error at every session start, and with .git gone
+# it could reach a parent repository. They are removed, and only they: every
+# spelling an installer or an upgrade has ever written, matched whole, and only
+# for THIS folder (another checkout that happens to end in the same name keeps
+# its own update). Any other entry that pulls this folder was written or
+# changed by hand: it is left alone, and so is its folder.
+
+_GIT_NAMES = r"[A-Z_]+"
+_PULL = r'git -C "(?P<dir>[^"\n]+)" pull --ff-only --quiet'
+_PULL_ENTRY = re.compile(
+    r"(?:unset(?: " + _GIT_NAMES + r")+; "
+    r"|Remove-Item Env:" + _GIT_NAMES + r"(?:,Env:" + _GIT_NAMES + r")* -ErrorAction Ignore; )?"
+    r"(?:GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= "
+    r"|\$env:GIT_TERMINAL_PROMPT='0'; \$env:GCM_INTERACTIVE='never'; )?"
+    + _PULL)
+_SYNC_ENTRY = re.compile(
+    r'"[^"\n]+" "(?P<dir>[^"\n]+)[/\\]hooks[/\\]session-start\.py" --no-pull')
+# The word, not the folder hook's own `--no-pull` flag.
+_PULL_WORD = re.compile(r"(?<![-\w])pull\b")
+# How a hand-written entry may spell the home folder.
+_HOME_WORDS = ("~", "$HOME", "${HOME}", "%USERPROFILE%", "$env:USERPROFILE", "$env:HOME")
+
+
+def _slashes(text) -> str:
+    return str(text).replace("\\", "/").rstrip("/")
+
+
+def _same_folder(written, target) -> bool:
+    """True when a path an installer wrote names `target`.
+
+    install.sh writes forward slashes; under Git Bash on Windows it writes
+    /c/Users/...; install.ps1 writes C:\\Users\\... . A Windows path compares
+    without regard to case or slash direction; any other path must match
+    exactly. A path that merely ends in the same folder name is another
+    checkout, with an update of its own that is not ours to remove.
+    """
+    wrote, want = _slashes(written), _slashes(target)
+    drive = re.match(r"^([A-Za-z]):(/.*)$", want)
+    if not drive:
+        return wrote == want
+    bash = re.match(r"^/([A-Za-z])(/.*)$", wrote)
+    if bash:
+        wrote = f"{bash.group(1)}:{bash.group(2)}"
+    return wrote.lower() == want.lower()
+
+
+def _targets(cfg) -> list:
+    """The toolkit folder as settings.json may name it: as built, and with any
+    link in the path resolved."""
+    target = folder(cfg)
+    found = [str(target)]
+    try:
+        real = os.path.realpath(target)
+        if real not in found:
+            found.append(real)
+    except Exception:
+        pass
+    return found
+
+
+def _is_ours(command, targets) -> bool:
+    """True for an entry exactly as an installer or an upgrade wrote it, for
+    THIS toolkit folder."""
+    for form in (_PULL_ENTRY, _SYNC_ENTRY):
+        match = form.fullmatch(command)
+        if match:
+            return any(_same_folder(match.group("dir"), target) for target in targets)
+    return False
+
+
+def _is_edited(command, targets, home=None) -> bool:
+    """True for any other entry that pulls THIS toolkit folder: someone wrote
+    or changed it by hand, so it is theirs, and so is the folder's update."""
+    if not _PULL_WORD.search(command):
+        return False
+    text = _slashes(command).lower()
+    spellings = set()
+    for target in targets:
+        want = _slashes(target)
+        spellings.add(want.lower())
+        drive = re.match(r"^([A-Za-z]):(/.*)$", want)
+        if drive:
+            spellings.add(f"/{drive.group(1)}{drive.group(2)}".lower())   # Git Bash
+        if home:
+            base = _slashes(home)
+            if want.lower().startswith(base.lower() + "/"):
+                for word in _HOME_WORDS:
+                    spellings.add((word + want[len(base):]).lower())
+    for spelling in spellings:
+        at = text.find(spelling)
+        while at != -1:
+            after = text[at + len(spelling):at + len(spelling) + 1]
+            if not after or not (after.isalnum() or after in "-_."):
+                return True              # the folder itself, not a longer name
+            at = text.find(spelling, at + 1)
+    return False
+
+
+def _home():
+    try:
+        return str(Path.home())
+    except Exception:
+        return None
+
+
+def _hook_lists(settings):
+    hooks = settings.get("hooks") if isinstance(settings, dict) else None
+    if not isinstance(hooks, dict):
+        return
+    for event, groups in hooks.items():
+        if not isinstance(groups, list):
+            continue
+        for group in groups:
+            entries = group.get("hooks") if isinstance(group, dict) else None
+            if isinstance(entries, list):
+                yield event, group, entries
+
+
+def update_entries(cfg):
+    """(ours, edited): how many of the installers' own update entries are
+    registered, and how many pulls of the folder someone has edited by hand.
+    (0, 0) when settings cannot be read."""
+    try:
+        settings = _read_json(Path(cfg) / "settings.json")
+    except Exception:
+        return 0, 0
+    ours = edited = 0
+    targets, home = _targets(cfg), _home()
+    for _event, _group, entries in _hook_lists(settings):
+        for hook in entries:
+            command = hook.get("command") if isinstance(hook, dict) else None
+            if not isinstance(command, str):
+                continue
+            if _is_ours(command, targets):
+                ours += 1
+            elif _is_edited(command, targets, home):
+                edited += 1
+    return ours, edited
+
+
+def remove_update_entries(cfg) -> bool:
+    """Take the installers' own update entries out of settings.json. True when
+    none is left. Nothing else in the file changes meaning; a copy of the file
+    as it was is kept beside it the first time."""
+    try:
+        path = Path(os.path.realpath(Path(cfg) / "settings.json"))
+        before = path.read_bytes()
+        settings = json.loads(before.decode("utf-8-sig"))
+        removed = 0
+        targets = _targets(cfg)
+        hooks = settings.get("hooks") if isinstance(settings, dict) else None
+        for event, group, entries in list(_hook_lists(settings)):
+            kept = [h for h in entries
+                    if not (isinstance(h, dict) and isinstance(h.get("command"), str)
+                            and _is_ours(h["command"], targets))]
+            if len(kept) == len(entries):
+                continue
+            removed += len(entries) - len(kept)
+            if kept:
+                group["hooks"] = kept
+            else:
+                hooks[event] = [g for g in hooks[event] if g is not group]
+                if not hooks[event]:
+                    del hooks[event]
+        if not removed:
+            return True
+        backup = path.with_name("settings.json.pre-personal-delivery")
+        if not backup.exists():
+            shutil.copy2(str(path), str(backup))
+        fd, tmp = tempfile.mkstemp(prefix=".settings.json.", dir=str(path.parent))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(settings, fh, indent=2)
+                fh.write("\n")
+            os.chmod(tmp, stat.S_IMODE(path.stat().st_mode))
+            # Whoever wrote settings.json since we read it wins: drop ours and
+            # let the next session try again.
+            if path.read_bytes() != before:
+                raise OSError("settings.json changed")
+            os.replace(tmp, str(path))
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            return False
+        return update_entries(cfg)[0] == 0
+    except Exception:
+        return False

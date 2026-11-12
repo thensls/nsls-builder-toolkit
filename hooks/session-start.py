@@ -1224,6 +1224,8 @@ def git_pull(deadline=None):
             continue
         if _follows_delivered_copy(plugin_dir):
             continue   # kept current from the copy Claude delivers; its .git is a placeholder
+        if plugin == PERSONAL_PLUGIN and _PERSONAL_DELIVERY_BUSY:
+            continue   # another session's hook is taking this folder over right now
         if deadline - time.monotonic() <= 0:
             break
         try:
@@ -1259,6 +1261,10 @@ PERSONAL_DELIVERY_NOTICE_EVERY_H = 24
 # A session start spends at most this long copying. A first copy that needs
 # longer carries on at the next start; an update is a handful of small files.
 PERSONAL_DELIVERY_BUDGET_S = 4
+# True for the rest of this run when another session's hook holds the delivery
+# lock: it may be moving the folder's .git this second, so this run keeps its
+# own git out of that folder.
+_PERSONAL_DELIVERY_BUSY = False
 
 
 def _personal_delivery():
@@ -1283,6 +1289,160 @@ def _follows_delivered_copy(plugin_dir):
         return bool(pd and pd.is_delivered(plugin_dir))
     except Exception:
         return False
+
+
+def _personal_checkout_verdict(plugin_dir, deadline):
+    """What git says about a checkout sitting in the Personal Toolkit folder.
+
+    {"plain": True, "shipped": {...}, "origin": {...}} only when it is NSLS's
+    own repository, on main, and holds nothing of its owner's: no unsaved or
+    untracked file, no commit NSLS lacks, no other branch, no stash, no linked
+    worktree, no operation in progress. Anything else is {"plain": False,
+    "why": ...}: "fork", "own-changes", or "unknown" when git could not say.
+    Unknown is never read as plain. Reads only; changes nothing.
+    """
+    def no(why, origin=None):
+        return {"plain": False, "why": why, "origin": origin or {}}
+
+    def git(*args, cap=3):
+        left = deadline - time.monotonic()
+        if left < 0.5:
+            raise TimeoutError
+        return _git_rc(plugin_dir, *args, timeout=min(cap, left))
+
+    try:
+        if not (plugin_dir / ".git").is_dir():
+            return no("unknown")         # a linked worktree's pointer, or nothing
+        url = _pull_source_url(git)
+        rc, head = git("rev-parse", "HEAD")
+        origin = {"remote": _safe_text(url), "head": head if rc == 0 else ""}
+        if not url:
+            return no("unknown", origin)
+        if not _is_canonical_origin(url):
+            return no("fork", origin)
+        rc, branch = git("symbolic-ref", "--short", "-q", "HEAD")
+        if rc != 0 or branch != "main":
+            return no("own-changes", origin)
+        rc, paths = git("rev-parse", *[a for name in GIT_OP_STATE for a in ("--git-path", name)])
+        if rc != 0:
+            return no("unknown", origin)
+        if any(_git_path_exists(plugin_dir, rel) for rel in paths.splitlines()):
+            return no("own-changes", origin)
+        if (plugin_dir / ".gitmodules").exists():
+            return no("own-changes", origin)
+        rc, sparse = git("config", "--bool", "--get", "core.sparseCheckout")
+        if sparse == "true":
+            return no("own-changes", origin)
+        pd = _personal_delivery()
+        if pd is None:
+            return no("unknown", origin)
+
+        def theirs_in(status):
+            # The record a take-over writes just before it moves .git is ours,
+            # not the owner's: one interrupted at that point must be able to
+            # finish.
+            own_record = f"?? {pd.MARKER}"
+            return [line for line in status.splitlines() if line.strip() and line != own_record]
+
+        rc, dirty = git(*PERSONAL_STATUS_ARGS)
+        if rc != 0:
+            return no("unknown", origin)
+        if theirs_in(dirty):
+            return no("own-changes", origin)
+        rc, ahead = git("rev-list", "--count", "@{upstream}..HEAD")
+        if rc != 0 or not ahead.isdigit():
+            return no("unknown", origin)
+        if ahead != "0":
+            return no("own-changes", origin)
+        rc, heads = git("for-each-ref", "--format=%(refname)", "refs/heads")
+        if rc != 0:
+            return no("unknown", origin)
+        if set(heads.split()) != {"refs/heads/main"}:
+            return no("own-changes", origin)
+        rc, _ = git("rev-parse", "-q", "--verify", "refs/stash")
+        if rc == 0:
+            return no("own-changes", origin)
+        try:
+            if any((plugin_dir / ".git" / "worktrees").iterdir()):
+                return no("own-changes", origin)   # /unblock works in one
+        except OSError:
+            pass
+        # -v: each file with its index flag. Anything but a plain "H" is a
+        # file git has been told to stop looking at (assume-unchanged shows in
+        # lower case, skip-worktree as "S"): `git status` calls it clean
+        # whatever its owner has done to it, so nothing above vouches for it.
+        rc, listed = git("ls-files", "-v", "-z", cap=5)
+        if rc != 0:
+            return no("unknown", origin)
+        tracked = []
+        for entry in listed.split("\0"):
+            if not entry:
+                continue
+            flag, _, name = entry.partition(" ")
+            if flag != "H" or not name:
+                return no("own-changes", origin)
+            tracked.append(name)
+        # What git vouches for, pinned down. Every tracked file is hashed as it
+        # is on disk, and then git is asked once more whether the checkout is
+        # still clean and still on the same commit. Hashes taken between two
+        # clean answers are a clean checkout's. They travel with this verdict:
+        # an edit saved even a moment later makes its file differ from them,
+        # and a file that differs is its owner's, never overwritten. (Hashing
+        # the folder again at take-over time would fold that edit in.)
+        shipped = pd.hashes_of(plugin_dir, tracked)
+        rc, dirty = git(*PERSONAL_STATUS_ARGS)
+        rc_head, head_now = git("rev-parse", "HEAD")
+        if rc != 0 or rc_head != 0:
+            return no("unknown", origin)
+        if theirs_in(dirty) or head_now != origin["head"]:
+            return no("own-changes", origin)
+        return {"plain": True, "shipped": shipped, "origin": origin}
+    except Exception:
+        return no("unknown")
+
+
+def _take_over_personal_folder(pd, found, plugin_dir, kind, deadline, adopt):
+    """Decide whether a checkout or a plain copy may follow the delivered copy,
+    and switch it if so. Without the owner's say-so (`adopt`), only a folder
+    holding nothing of theirs is switched, and never to an older version."""
+    def kept(why, **extra):
+        pd.forget_unfinished(plugin_dir)
+        return dict(extra, outcome="kept", why=why)
+
+    if not adopt and (plugin_dir / pd.KEEP_ON_GITHUB).exists():
+        return kept("opt-out")
+    shipped, origin = {}, {}
+    if kind in ("checkout", "taking"):
+        verdict = _personal_checkout_verdict(plugin_dir, deadline)
+        origin = verdict.get("origin") or {}
+        if not adopt:
+            if not verdict["plain"]:
+                return kept(verdict["why"])
+            shipped = verdict["shipped"]
+    ours, edited = pd.update_entries(CONFIG_DIR)
+    if not adopt:
+        # Every reason to leave the folder alone is checked before anything is
+        # changed, settings.json included.
+        if pd.older(found.version, pd.version_of(plugin_dir)):
+            return kept("older")         # GitHub is ahead of the delivered copy
+        if edited:
+            return kept("edited-entry")
+        theirs = pd.standing_in_the_way(CONFIG_DIR, found, shipped)
+        if theirs:
+            return kept("own-changes", changed=theirs)
+    if ours:
+        if not pd.remove_update_entries(CONFIG_DIR):
+            return {"outcome": "retry", "why": "settings"}
+        if not adopt:
+            # The pull that entry registered may be running in this folder
+            # right now, started by this same session. Take the folder over at
+            # the next start, when nothing else is pulling it.
+            return {"outcome": "entries"}
+    res = pd.take_over(CONFIG_DIR, found, shipped=shipped, origin=origin,
+                       deadline=deadline, take_theirs=adopt)
+    if edited:
+        res["edited_entry"] = True
+    return res
 
 
 def _personal_delivery_command(request):
@@ -1312,10 +1472,22 @@ def _named(paths, limit=5):
 def _say_personal_delivery(pd, res, found, plugin_dir):
     """What a session start says about the pass it just made. Almost always
     nothing: a folder that was made, updated or already current is not news.
-    One thing is: updates held back by the owner's own changes. Our own words
-    and verified values only."""
+    Only two things are: the one-time switch away from GitHub, and updates held
+    back by the owner's own changes. Our own words and verified values only."""
     outcome = res.get("outcome")
     where = _safe_text(plugin_dir)
+    was_checkout = res.get("was") in ("checkout", "taking")
+    if outcome == "converted":
+        history = (f" instead of pulling from GitHub. Its git history is kept inside the folder "
+                   f"as {pd.KEPT_GIT}." if was_checkout else ".")
+        print(
+            f"[NSLS Personal Toolkit] This computer's Personal Toolkit folder ({where}) now "
+            f"follows the copy NSLS delivers through Claude{history} It is on version "
+            f"{found.version} and keeps itself current; nobody needs a GitHub sign-in for it. "
+            f"There is nothing for the builder to do: mention this only if they ask about "
+            f"updating the Personal Toolkit or about that folder."
+        )
+        return
     if outcome == "paused":
         changed = res.get("changed") or []
         if not changed or not _personal_delivery_notice_due():
@@ -1332,6 +1504,31 @@ def _say_personal_delivery(pd, res, found, plugin_dir):
             f"{_personal_delivery_command('adopt')} . NEVER hand them a command."
         )
         return
+    if outcome == "kept" and res.get("why") == "own-changes":
+        have = pd.version_of(plugin_dir)
+        if not pd.older(have, found.version) or not _personal_delivery_notice_due():
+            return   # not behind what NSLS delivers: nothing to offer
+        if was_checkout:
+            what = ("holds work of their own (edited files, commits or branches), so it was not "
+                    "switched to the copy NSLS now delivers through Claude. It still updates "
+                    "from GitHub, which needs a GitHub sign-in, and it is behind")
+            stay = "stay on GitHub (their work stays as it is; updates need them signed in to GitHub)"
+            keeps = "keeps their git history inside the folder and "
+        else:
+            what = ("is a plain copy with nothing keeping it current, and it differs from the "
+                    "copy NSLS now delivers through Claude in ways that may be their own "
+                    "changes, so it was left alone. It is behind")
+            stay = "leave the folder as it is (it will not update)"
+            keeps = ""
+        print(
+            f"[NSLS Personal Toolkit] This person's Personal Toolkit folder ({where}) {what}: "
+            f"NSLS delivers version {found.version}, the folder is on "
+            f"{_safe_text(have or 'an unknown version', 20)}. Mention it in ONE plain sentence "
+            f"at a natural moment and offer the choice: {stay}, or switch the folder to the "
+            f"delivered copy, which {keeps}moves every file it replaces into a .set-aside folder "
+            f"there, so nothing is lost. If they choose to switch, run this yourself: "
+            f"{_personal_delivery_command('adopt')} . NEVER hand them a command."
+        )
 
 
 def deliver_personal_toolkit(deadline=None, request=None):
@@ -1340,10 +1537,9 @@ def deliver_personal_toolkit(deadline=None, request=None):
     Returns None, having done nothing, when NSLS's Claude organization delivers
     no Personal Toolkit to the signed-in account: that is every computer until
     delivery is switched on. Otherwise one pass (see personal_delivery.py): make
-    the folder when there is none, or update a folder made that way. A git
-    checkout, a fork and a copy from anywhere else are never touched.
-    `request` is "adopt" when the owner has said yes to replacing their own
-    changes, "now" when a skill wants the result said out loud.
+    the folder, update it, or take over a checkout that holds nothing of its
+    owner's. `request` is "adopt" when the owner has said yes to replacing
+    their own changes, "now" when a skill wants the result said out loud.
     """
     pd = _personal_delivery()
     if pd is None:
@@ -1359,12 +1555,16 @@ def deliver_personal_toolkit(deadline=None, request=None):
     if kind in ("none", "delivered"):
         res = pd.refresh(CONFIG_DIR, found, deadline, take_theirs=adopt)
     else:
-        res = {"outcome": "kept", "why": kind}   # a checkout or a copy: git's, or its owner's
+        res = _take_over_personal_folder(pd, found, plugin_dir, kind, deadline, adopt)
     res.setdefault("version", found.version)
     res["folder"] = str(plugin_dir)
+    res["was"] = kind
+    if res.get("outcome") == "retry" and res.get("why") == "busy":
+        global _PERSONAL_DELIVERY_BUSY
+        _PERSONAL_DELIVERY_BUSY = True
     if request is None:
         _say_personal_delivery(pd, res, found, plugin_dir)
-        if res.get("outcome") in ("created", "updated"):
+        if res.get("outcome") in ("created", "updated", "converted"):
             print(f"personal toolkit {res['outcome']}: version {found.version}", file=sys.stderr)
     return res
 
@@ -1379,12 +1579,16 @@ def personal_delivery_request(request):
         return
     outcome, where = res.get("outcome"), _safe_text(res.get("folder", ""))
     version = _safe_text(res.get("version") or "", 20)
-    if outcome in ("created", "updated", "current"):
+    if outcome in ("created", "updated", "current", "converted", "adopted"):
         print(f"PERSONAL_TOOLKIT_READY: version {version} is in {where}, kept current from the "
               f"copy NSLS delivers through Claude.")
         if res.get("set_aside"):
             print(f"The files it replaced were moved to {_safe_text(res['set_aside'])}; nothing "
                   f"was deleted. Tell the builder where they are.")
+        if res.get("edited_entry"):
+            print("An update entry for this folder that someone edited by hand is still in "
+                  "settings.json and will now fail at every session start. Show it to the "
+                  "builder and offer to remove it.")
         try:
             sync_pointers()   # a new folder's skills show up without a restart
         except Exception:
@@ -1394,10 +1598,18 @@ def personal_delivery_request(request):
               f"{len(res.get('changed') or [])} file(s) in {where} ({_named(res.get('changed') or [])}), "
               f"so nothing was replaced. With their yes, `personal-delivery adopt` moves those "
               f"files to a .set-aside folder and takes NSLS's version.")
+    elif outcome == "entries":
+        print(f"PERSONAL_TOOLKIT_PENDING: {where} switches to the delivered copy at the next "
+              f"session start. Nothing is needed from the builder.")
     elif outcome == "kept":
-        what = "a git checkout" if res.get("why") == "checkout" else "a copy this hook did not make"
-        print(f"PERSONAL_TOOLKIT_KEPT: {where} is {what}, so it was left exactly as it is and "
-              f"still updates the way it did before.")
+        why = {"fork": "it is the builder's own fork", "own-changes": "it holds the builder's own work",
+               "opt-out": "the builder chose to keep it on GitHub",
+               "older": "it is already newer than the delivered copy",
+               "edited-entry": "its update entry in settings.json was edited by hand"}.get(
+                   res.get("why"), "it could not be checked")
+        print(f"PERSONAL_TOOLKIT_KEPT: {where} was left exactly as it is because {why}. With the "
+              f"builder's yes, `personal-delivery adopt` switches it to the delivered copy, "
+              f"keeping its git history and moving every replaced file to a .set-aside folder.")
     else:
         print("PERSONAL_TOOLKIT_RETRY: the copy could not be finished just now (the delivered "
               "copy is still arriving, or a file is in use). Nothing is broken; try again in a "

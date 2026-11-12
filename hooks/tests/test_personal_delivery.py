@@ -13,8 +13,12 @@ already points at. What this pins, in order of how much it would hurt:
    That is every computer today.
 2. A file its owner changed is never overwritten or removed without their yes,
    and with their yes it is moved aside first, never deleted.
-3. A git checkout and a copy from anywhere else are left exactly as they are.
-4. A folder that follows the delivered copy picks up each new version, and a
+3. A fork, a checkout with the owner's own work, and a checkout that is newer
+   than the delivered copy are left exactly as they are.
+4. A checkout holding nothing of its owner's is taken over: its .git is kept
+   under another name, the installers' update entries leave settings.json, and
+   git can no longer act on the folder or climb past it.
+5. A folder that follows the delivered copy picks up each new version, and a
    file NSLS stopped shipping goes only on the second look.
 
 Real git, real files, temporary folders. No network: the "GitHub" remote is a
@@ -122,12 +126,12 @@ class Machine:
         lay(copy, files)
         return copy
 
-    def checkout(self, version, url=NSLS_URL):
+    def checkout(self, version, url=NSLS_URL, extra=None):
         """The folder as install.sh leaves it: a clone of NSLS's repository."""
         if not self.upstream.exists():
             self.upstream.mkdir(parents=True)
             git(self.upstream, "init", "-q", "-b", "main")
-        lay(self.upstream, toolkit_files(version))
+        lay(self.upstream, toolkit_files(version, extra))
         git(self.upstream, "add", "-A")
         git(self.upstream, "commit", "-q", "-m", f"release {version}")
         self.folder.parent.mkdir(parents=True, exist_ok=True)
@@ -189,6 +193,9 @@ def pull_entry(folder):
 def sync_entry(folder):
     return {"type": "command", "timeout": 20,
             "command": f'"/usr/bin/python3" "{folder}/hooks/session-start.py" --no-pull'}
+
+
+BUILDER_HOOK = {"type": "command", "command": 'bash "/x/nsls-builder-toolkit/hooks/run-hook.sh" session-start'}
 
 
 def outcome(res):
@@ -375,40 +382,389 @@ with tempfile.TemporaryDirectory() as tmp:
     check("a delivered copy still being written is left for the next session",
           outcome(res) == "retry" and not (m.folder / "skills").exists(), str(res))
 
-print("6. a git checkout, a fork and a plain copy are not this change's to touch")
-for label, url, as_checkout in (("a checkout of NSLS's repository", NSLS_URL, True),
-                                ("the person's own fork", "https://github.com/someone/nsls-personal-toolkit.git", True),
-                                ("a plain copy with no git", None, False)):
-    with tempfile.TemporaryDirectory() as tmp:
-        m = Machine(tmp)
-        if as_checkout:
-            m.checkout("1.9.0", url=url)
-        else:
-            lay(m.folder, toolkit_files("1.9.0"))
-        m.deliver("2.0.0")
-        m.settings([{"matcher": "startup|resume", "hooks": [pull_entry(m.folder), sync_entry(m.folder)]}])
-        before, settings_before = tree(m.folder), (m.cfg / "settings.json").read_bytes()
-        res, said = m.run()
-        check(f"{label}: left exactly as it is, with a newer copy delivered beside it",
-              outcome(res) == "kept" and tree(m.folder) == before
-              and (m.cfg / "settings.json").read_bytes() == settings_before, str(res))
-        check(f"{label}: nothing is said, and it is not counted as following the delivered copy",
-              said == "" and not m.ss._follows_delivered_copy(m.folder), said)
-        res, said = m.run(request="adopt")
-        check(f"{label}: even a yes does not touch it", outcome(res) == "kept" and tree(m.folder) == before, str(res))
-
+print("6. a checkout holding nothing of its owner's is taken over")
 with tempfile.TemporaryDirectory() as tmp:
     m = Machine(tmp)
-    m.deliver("2.0.0")
-    m.run()
+    git(tmp, "init", "-q", "-b", "main")        # the home directory is itself a repository (dotfiles)
+    m.checkout("1.9.0")
+    m.deliver("2.0.0", extra={"skills/new-skill/SKILL.md": "new\n"})
+    m.settings([{"matcher": "startup|resume", "hooks": [BUILDER_HOOK]},
+                {"matcher": "startup|resume", "hooks": [pull_entry(m.folder), sync_entry(m.folder)]}])
+    res, said = m.run()
+    check("first the installers' update entries leave settings.json", outcome(res) == "entries" and said == "", str(res))
+    left = json.loads((m.cfg / "settings.json").read_text(encoding="utf-8"))["hooks"]["SessionStart"]
+    check("only those: the Builder Toolkit's hook stays", left == [{"matcher": "startup|resume", "hooks": [BUILDER_HOOK]}], str(left))
+    check("settings.json as it was is kept beside it", (m.cfg / "settings.json.pre-personal-delivery").exists())
+    check("the checkout itself is not touched yet", (m.folder / ".git").is_dir() and m.marker() is None)
+    res, said = m.run()
+    check("at the next session the folder is taken over", outcome(res) == "converted", str(res))
+    check("it carries the delivered version", m.text("skills/open-day/SKILL.md").endswith("open day 2.0.0\n")
+          and m.text("skills/new-skill/SKILL.md") == "new\n")
+    check("its .git is kept under another name, whole", (m.folder / ".git.before-claude-delivery" / "HEAD").is_file())
+    check(".git is now a placeholder file", (m.folder / ".git").is_file())
+    rc, top = git(m.folder, "rev-parse", "--show-toplevel")
+    check("so git stops there and never climbs to the repository above", rc != 0, top)
+    check("their own ignored files are untouched", m.text(".env") == "SECRET=1\n"
+          and m.text("companion/.venv/pyvenv.cfg") == "home = somewhere\n")
+    check("Claude is told once, with nothing for the builder to do",
+          "now follows the copy NSLS delivers through Claude" in said and "nothing for the builder to do" in said, said)
+    check("the record says where it came from", (m.marker() or {}).get("from", {}).get("kind") == "checkout"
+          and len((m.marker() or {}).get("from", {}).get("head", "")) == 40)
     out = io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
         m.ss.git_pull(deadline=time.monotonic() + 5)
         m.ss.report_personal_fork_drift(deadline=time.monotonic() + 5)
-    check("the hook's own pull and fork check leave a folder that follows the delivered copy alone, silently",
-          out.getvalue() == "" and m.text("README.md") == "Personal Toolkit 2.0.0\n", out.getvalue())
+    check("the hook's own pull and fork check leave it alone, silently", out.getvalue() == "", out.getvalue())
+    res, said = m.run()
+    check("from then on it is simply current", outcome(res) == "current" and said == "", str(res))
+    m.deliver("2.1.0")
+    res, _ = m.load() and m.run()
+    check("and the next version arrives with no GitHub involved", outcome(res) == "updated"
+          and m.text("README.md") == "Personal Toolkit 2.1.0\n", str(res))
 
-print("7. NSLS reshapes the toolkit, the owner reshapes their folder, a copy stops half way")
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")
+    m.deliver("1.9.0")
+    res, _ = m.run()
+    check("with no update entries registered it is taken over at once", outcome(res) == "converted", str(res))
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")
+    m.deliver("2.0.0")
+    ss = m.load()
+    pd = ss._personal_delivery()
+    calls = []
+    real_update = ss._update_checkout
+    ss._update_checkout = lambda plugin_dir, deadline: (calls.append(Path(plugin_dir).name), (None, ""))[1]
+    with pd._Lock(m.cfg) as held:               # another session's hook is mid take-over
+        res, _ = m.run()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            ss.git_pull(deadline=time.monotonic() + 5)
+    ss._update_checkout = real_update
+    check("while another session takes the folder over, this one waits its turn",
+          held and outcome(res) == "retry" and res.get("why") == "busy" and (m.folder / ".git").is_dir(), str(res))
+    check("and keeps its own git pull out of that folder for this run", PLUGIN not in calls, str(calls))
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")
+    m.deliver("2.0.0")
+    pd = m.load()._personal_delivery()
+    write(m.folder / ".delivered-by-claude.json", json.dumps(
+        {"schema": 1, "plugin": PLUGIN, "files": {}, "complete": False}))   # stopped before .git moved
+    check("a take-over interrupted before .git moved is still a checkout to everything else",
+          pd.state(m.folder) == "taking" and not m.ss._follows_delivered_copy(m.folder))
+    res, _ = m.run()
+    check("and is finished at the next session", outcome(res) == "converted" and (m.folder / ".git").is_file(), str(res))
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")
+    m.deliver("2.0.0")
+    pd = m.load()._personal_delivery()
+    write(m.folder / ".delivered-by-claude.json", json.dumps(
+        {"schema": 1, "plugin": PLUGIN, "files": {}, "complete": False}))
+    write(m.folder / "README.md", "edited since\n")
+    res, _ = m.run()
+    check("an interrupted take-over of a folder its owner has since edited is dropped, not finished",
+          outcome(res) == "kept" and pd.state(m.folder) == "checkout" and m.text("README.md") == "edited since\n", str(res))
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    probe = Path(tmp) / "Probe.txt"
+    probe.write_text("x", encoding="utf-8")
+    if (Path(tmp) / "PROBE.TXT").exists():                  # a Mac or a PC: letter case is ignored
+        m.checkout("1.9.0", extra={"skills/open-day/ref.md": "reference, first edition\n"})
+        m.deliver("2.0.0", extra={"skills/open-day/REF.md": "reference, second edition\n"})
+        res, _ = m.run()
+        check("a file NSLS renamed only in letter case since the checkout was last pulled does not read as the owner's",
+              outcome(res) == "converted" and m.text("skills/open-day/REF.md") == "reference, second edition\n"
+              and "REF.md" in os.listdir(m.folder / "skills/open-day"), str(res))
+
+print("7. anything of the owner's keeps the checkout on GitHub, untouched")
+
+
+def kept_case(name, prepare, why, version="2.0.0", url=NSLS_URL, expect_notice=None):
+    with tempfile.TemporaryDirectory() as tmp:
+        m = Machine(tmp)
+        m.checkout("1.9.0", url=url)
+        m.deliver(version)
+        m.settings([{"matcher": "startup|resume", "hooks": [pull_entry(m.folder)]}])
+        prepare(m)
+        before, settings_before = tree(m.folder), (m.cfg / "settings.json").read_bytes()
+        res, said = m.run()
+        ok = (outcome(res) == "kept" and res.get("why") == why and tree(m.folder) == before
+              and (m.cfg / "settings.json").read_bytes() == settings_before)
+        check(f"{name}: left exactly as it is", ok, f"{res} said={said!r}")
+        if expect_notice is True:
+            check(f"{name}: Claude is told, with the choice", "holds work of their own" in said
+                  and "stay on GitHub" in said and "personal-delivery adopt" in said, said)
+        elif expect_notice is False:
+            check(f"{name}: nothing is said", said == "", said)
+        return m
+
+
+def commit_ahead(m):
+    write(m.folder / "skills/open-day/SKILL.md", "my committed change\n")
+    git(m.folder, "commit", "-q", "-am", "mine")
+
+
+def stashed(m):
+    write(m.folder / "README.md", "stashed\n")
+    git(m.folder, "stash", "-q")
+
+
+kept_case("an edited file", lambda m: write(m.folder / "README.md", "edited\n"), "own-changes", expect_notice=True)
+kept_case("an edited file, with the folder already on the delivered version",
+          lambda m: write(m.folder / "README.md", "edited\n"), "own-changes", version="1.9.0", expect_notice=False)
+kept_case("a new file of their own", lambda m: write(m.folder / "skills/mine/SKILL.md", "mine\n"), "own-changes")
+kept_case("a commit NSLS does not have", commit_ahead, "own-changes")
+kept_case("a second branch", lambda m: git(m.folder, "branch", "experiment"), "own-changes")
+kept_case("an edit git was told to ignore (assume-unchanged), which `git status` calls clean",
+          lambda m: (git(m.folder, "update-index", "--assume-unchanged", "README.md"),
+                     write(m.folder / "README.md", "edited, and hidden from git status\n")), "own-changes")
+kept_case("an edit git was told to skip (skip-worktree)",
+          lambda m: (git(m.folder, "update-index", "--skip-worktree", "skills/open-day/SKILL.md"),
+                     write(m.folder / "skills/open-day/SKILL.md", "edited, and skipped by git\n")), "own-changes")
+kept_case("a stash", stashed, "own-changes")
+kept_case("a linked worktree (what /unblock sets up)",
+          lambda m: git(m.folder, "worktree", "add", "-q", str(m.cfg / "elsewhere"), "-b", "wt"), "own-changes")
+kept_case("their own fork", lambda m: None, "fork", url="https://github.com/someone/nsls-personal-toolkit.git", expect_notice=False)
+kept_case("the keep-on-GitHub file", lambda m: write(m.folder / ".keep-on-github", ""), "opt-out", expect_notice=False)
+kept_case("a checkout newer than the delivered copy", lambda m: None, "older", version="1.8.0", expect_notice=False)
+kept_case("an ignored file of theirs where NSLS now ships one",
+          lambda m: (write(m.folder / "notes.local", "mine\n"), m.deliver("2.0.0", extra={"notes.local": "NSLS\n"})),
+          "own-changes")
+kept_case("an update entry they edited by hand",
+          lambda m: m.settings([{"hooks": [{"type": "command",
+                                            "command": f'cd /tmp; git -C "{m.folder}" pull --rebase'}]}]),
+          "edited-entry", expect_notice=False)
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")
+    m.deliver("2.0.0")
+    ss = m.load()
+    real_verdict = ss._personal_checkout_verdict
+
+    def they_save_right_after(plugin_dir, deadline):
+        verdict = real_verdict(plugin_dir, deadline)     # git calls the checkout clean...
+        write(m.folder / "README.md", "saved a moment after git called the checkout clean\n")
+        return verdict                                    # ...and then they save a file
+
+    ss._personal_checkout_verdict = they_save_right_after
+    res, _ = m.run()
+    check("an edit saved a moment after git called the checkout clean still stops the take-over",
+          outcome(res) == "kept" and res.get("why") == "own-changes" and res.get("changed") == ["README.md"]
+          and (m.folder / ".git").is_dir() and m.marker() is None, str(res))
+    check("and is never overwritten", m.text("README.md") == "saved a moment after git called the checkout clean\n")
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")
+    m.deliver("2.0.0")
+    pd = m.load()._personal_delivery()
+    real_hashes = pd.hashes_of
+
+    def they_save_while_hashing(target, paths):
+        found = real_hashes(target, paths)
+        write(m.folder / "skills/open-day/SKILL.md", "saved while the checkout was being vouched for\n")
+        return found
+
+    pd.hashes_of = they_save_while_hashing
+    try:
+        res, _ = m.run()
+    finally:
+        pd.hashes_of = real_hashes
+    check("an edit saved while the checkout is being vouched for is caught by git's second look",
+          outcome(res) == "kept" and res.get("why") == "own-changes" and (m.folder / ".git").is_dir()
+          and m.text("skills/open-day/SKILL.md") == "saved while the checkout was being vouched for\n", str(res))
+
+print("8. with their yes, a checkout with their own work is switched, and nothing is lost")
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")
+    m.deliver("2.0.0")
+    m.settings([{"matcher": "startup|resume", "hooks": [pull_entry(m.folder)]}])
+    write(m.folder / "skills/open-day/SKILL.md", "MY edited open day\n")
+    write(m.folder / "skills/mine/SKILL.md", "my own skill\n")
+    res, _ = m.run(request="adopt")
+    aside = Path(res.get("set_aside", "missing"))
+    check("the folder is switched in one go", outcome(res) == "adopted" and (m.folder / ".git").is_file(), str(res))
+    check("NSLS's version is in place", m.text("skills/open-day/SKILL.md").endswith("open day 2.0.0\n"))
+    check("their edited file was moved aside", aside.exists()
+          and (aside / "skills/open-day/SKILL.md").read_text(encoding="utf-8") == "MY edited open day\n", str(res))
+    check("a skill of their own that NSLS does not ship stays where it was", m.text("skills/mine/SKILL.md") == "my own skill\n")
+    check("the git history is kept", (m.folder / ".git.before-claude-delivery" / "HEAD").is_file())
+    check("the update entry is gone", "pull" not in (m.cfg / "settings.json").read_text(encoding="utf-8"))
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0", url="https://github.com/someone/nsls-personal-toolkit.git")
+    m.deliver("2.0.0")
+    res, _ = m.run(request="adopt")
+    check("a fork's owner can point their computer back at the standard copy the same way",
+          outcome(res) == "adopted" and m.text("README.md") == "Personal Toolkit 2.0.0\n"
+          and (m.marker() or {}).get("from", {}).get("kind") == "adopted", str(res))
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")                         # only to have a repository to hang a worktree on
+    main_repo = Path(tmp) / "main-repo"
+    os.rename(m.folder, main_repo)
+    git(main_repo, "worktree", "add", "-q", str(m.folder), "-b", "linked")
+    write(m.folder / ".env", "SECRET=1\n")
+    m.deliver("2.0.0")
+    pd = m.load()._personal_delivery()
+    pointer = (m.folder / ".git").read_text(encoding="utf-8")
+    res, _ = m.run()
+    check("a folder that is a linked worktree of another repository is never taken over unasked",
+          outcome(res) == "kept" and (m.folder / ".git").read_text(encoding="utf-8") == pointer, str(res))
+    real_unlink = os.unlink
+
+    def held(path, *args, **kwargs):
+        if str(path).endswith(".git"):
+            raise PermissionError("in use")
+        return real_unlink(path, *args, **kwargs)
+
+    os.unlink = held
+    try:
+        res, _ = m.run(request="adopt")
+    finally:
+        os.unlink = real_unlink
+    check("with their yes, but its git pointer cannot be removed: nothing is half done",
+          outcome(res) == "retry" and m.marker() is None and pd.state(m.folder) == "checkout"
+          and (m.folder / ".git").read_text(encoding="utf-8") == pointer
+          and m.text("README.md") == "Personal Toolkit 1.9.0\n", str(res))
+    res, _ = m.run(request="adopt")
+    check("and a later try finishes it", outcome(res) == "adopted" and pd.state(m.folder) == "delivered"
+          and m.text("README.md") == "Personal Toolkit 2.0.0\n", str(res))
+
+print("9. a plain copy with no git")
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    lay(m.folder, toolkit_files("2.0.0"))
+    m.deliver("2.0.0")
+    res, said = m.run()
+    check("identical to the delivered copy: it simply starts following it", outcome(res) == "converted", str(res))
+    check("and what Claude is told claims no git history that never existed",
+          "now follows the copy NSLS delivers through Claude." in said and "git" not in said, said)
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    lay(m.folder, toolkit_files("1.5.0"))
+    m.deliver("2.0.0")
+    before = tree(m.folder)
+    res, said = m.run()
+    check("different from it: nobody can say whose the differences are, so it is left alone",
+          outcome(res) == "kept" and res.get("why") == "own-changes" and tree(m.folder) == before, str(res))
+    check("and Claude is told, because it is behind, without any talk of GitHub",
+          "plain copy with nothing keeping it current" in said and "personal-delivery adopt" in said
+          and "GitHub" not in said, said)
+    res, _ = m.run(request="adopt")
+    check("with their yes it is switched, the old files moved aside", outcome(res) == "adopted"
+          and m.text("README.md") == "Personal Toolkit 2.0.0\n"
+          and (Path(res["set_aside"]) / "README.md").read_text(encoding="utf-8") == "Personal Toolkit 1.5.0\n", str(res))
+
+print("10. only this folder's own update entries are removed, in every spelling an installer wrote")
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    pd = m.load()._personal_delivery()
+    names = "GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR"
+    env_paths = ",".join("Env:" + n for n in names.split())
+
+    def spellings(folder, hook_folder=None):
+        """Every form an installer or an upgrade has written, for one folder."""
+        hook_folder = hook_folder or folder
+        return [
+            f'git -C "{folder}" pull --ff-only --quiet',
+            f'unset {names}; git -C "{folder}" pull --ff-only --quiet',
+            f'Remove-Item {env_paths} -ErrorAction Ignore; git -C "{folder}" pull --ff-only --quiet',
+            f'unset {names}; GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= git -C "{folder}" pull --ff-only --quiet',
+            f"Remove-Item {env_paths} -ErrorAction Ignore; $env:GIT_TERMINAL_PROMPT='0'; $env:GCM_INTERACTIVE='never'; "
+            f'git -C "{folder}" pull --ff-only --quiet',
+            f'"/opt/homebrew/bin/python3" "{hook_folder}/hooks/session-start.py" --no-pull',
+        ]
+
+    # A Mac folder, and a PC folder as each Windows installer spells it.
+    mac = "/Users/a b/.claude/local-plugins/nsls-personal-toolkit"
+    pc = r"C:\Users\a b\.claude\local-plugins\nsls-personal-toolkit"
+    pc_bash = "/c/Users/a b/.claude/local-plugins/nsls-personal-toolkit"
+    for cmd in spellings(mac):
+        check(f"this Mac folder's: {cmd[:52]}...", pd._is_ours(cmd, [mac]))
+    for cmd in spellings(pc, hook_folder=pc_bash) + spellings(pc_bash) + spellings(pc.lower()):
+        check(f"this PC folder's, any spelling: {cmd[:46]}...", pd._is_ours(cmd, [pc]))
+    for cmd in (spellings("/Users/a b/nsls-skills/nsls-personal-toolkit")
+                + spellings("/Users/someone-else/.claude/local-plugins/nsls-personal-toolkit")
+                + spellings(mac + "-experiments")):
+        check(f"another checkout's, not ours and not in our way: {cmd[:40]}...",
+              not pd._is_ours(cmd, [mac]) and not pd._is_edited(cmd, [mac], "/Users/a b"))
+    check("the same pull with a trailing slash on the folder is still this folder's, and goes with the rest",
+          pd._is_ours(f'git -C "{mac}/" pull --ff-only --quiet', [mac]))
+    shouted = f'git -C "{mac.upper()}" pull --ff-only --quiet'
+    check("a Mac path in another letter case is not what an installer wrote, so it is never removed; "
+          "it may still be this folder, so it counts as someone's own pull of it",
+          not pd._is_ours(shouted, [mac]) and pd._is_edited(shouted, [mac], "/Users/a b"))
+    check("the folder hook's own --no-pull flag is not a pull",
+          not pd._is_edited(f'"/usr/bin/python3" "{mac}/hooks/session-start.py" --no-pull --verbose', [mac], "/Users/a b"))
+    for cmd in (BUILDER_HOOK["command"], 'echo "nsls-personal-toolkit is great"', f'git -C "{mac}" status',
+                f'"/usr/bin/python3" "{mac}/hooks/session-start.py"', f'ls "{mac}-pull"'):
+        check(f"nothing to do with updating this folder: {cmd[:44]}",
+              not pd._is_ours(cmd, [mac]) and not pd._is_edited(cmd, [mac], "/Users/a b"))
+    for cmd in (f'cd /x && git -C "{mac}" pull --ff-only --quiet',
+                f"cd '{mac}' && git pull",
+                f'git -C "{mac}/" pull --rebase',
+                'git -C ~/.claude/local-plugins/nsls-personal-toolkit pull --rebase',
+                'git -C "$HOME/.claude/local-plugins/nsls-personal-toolkit" pull',
+                f'git -C "{mac}" pull --ff-only'):
+        check(f"a pull of this folder someone wrote by hand is theirs: {cmd[:44]}",
+              not pd._is_ours(cmd, [mac]) and pd._is_edited(cmd, [mac], "/Users/a b"))
+    check("a hand-written pull of this PC folder is recognised in Git Bash spelling too",
+          pd._is_edited(f"cd {pc_bash} && git pull", [pc], r"C:\Users\a b")
+          and pd._is_edited(r"git -C $env:USERPROFILE\.claude\local-plugins\nsls-personal-toolkit pull", [pc], r"C:\Users\a b"))
+
+    # And on this machine's own settings.json, with its real folder.
+    here = str(m.folder)
+    other = str(Path(tmp) / "elsewhere" / "nsls-personal-toolkit")
+    ours, others = spellings(here), spellings(other)
+    hooks = [{"matcher": "startup|resume", "hooks": [{"type": "command", "command": c} for c in ours[:4]]},
+             {"matcher": "startup", "hooks": [BUILDER_HOOK, {"type": "command", "command": ours[5]}]},
+             {"hooks": [{"type": "command", "command": c} for c in others]}]
+    m.settings(hooks, model="opus", permissions={"allow": [f"Bash(git -C {here} pull:*)"]})
+    raw = (m.cfg / "settings.json").read_bytes()
+    (m.cfg / "settings.json").write_bytes(b"\xef\xbb\xbf" + raw)       # as an old PowerShell installer left it
+    check("counted: five of this folder's, none edited, the other checkout's ignored",
+          pd.update_entries(m.cfg) == (5, 0), str(pd.update_entries(m.cfg)))
+    check("removed", pd.remove_update_entries(m.cfg) is True and pd.update_entries(m.cfg) == (0, 0))
+    after = json.loads((m.cfg / "settings.json").read_text(encoding="utf-8-sig"))
+    check("the Builder Toolkit's hook and the other checkout's whole update are exactly as they were",
+          after["hooks"]["SessionStart"] == [
+              {"matcher": "startup", "hooks": [BUILDER_HOOK]},
+              {"hooks": [{"type": "command", "command": c} for c in others]}], str(after["hooks"]))
+    check("and so is the rest of the file", after["model"] == "opus"
+          and after["permissions"] == {"allow": [f"Bash(git -C {here} pull:*)"]})
+    edited = f'cd /x && git -C "{here}" pull --ff-only --quiet'
+    m.settings([{"hooks": [{"type": "command", "command": edited}]}])
+    still = json.loads((m.cfg / "settings.json").read_text(encoding="utf-8"))
+    check("an entry someone edited is counted as theirs and never removed",
+          pd.update_entries(m.cfg) == (0, 1) and pd.remove_update_entries(m.cfg) is True
+          and json.loads((m.cfg / "settings.json").read_text(encoding="utf-8")) == still
+          and still["hooks"]["SessionStart"][0]["hooks"][0]["command"] == edited)
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")
+    m.deliver("2.0.0")
+    other = str(Path(tmp) / "elsewhere" / "nsls-personal-toolkit")
+    m.settings([{"hooks": [pull_entry(other), sync_entry(other)]}])
+    settings_before = (m.cfg / "settings.json").read_bytes()
+    res, _ = m.run()
+    check("another checkout's update entries neither delay this folder's take-over nor are touched by it",
+          outcome(res) == "converted" and (m.cfg / "settings.json").read_bytes() == settings_before, str(res))
+
+print("11. NSLS reshapes the toolkit, the owner reshapes their folder, a copy stops half way")
 with tempfile.TemporaryDirectory() as tmp:
     m = Machine(tmp)
     m.deliver("2.0.0", extra={"notes": "a file\n", "refs/a.md": "a\n", "refs/b.md": "b\n"})
@@ -610,7 +966,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("and a second version of the same file set aside is kept beside the first, never on top of it",
           kept == ["their first version\n", "their second version\n"], str(kept))
 
-print("8. on request: the launcher's `personal-delivery` command")
+print("12. on request: the launcher's `personal-delivery` command")
 with tempfile.TemporaryDirectory() as tmp:
     m = Machine(tmp)
     env = dict(os.environ, CLAUDE_CONFIG_DIR=str(m.cfg), NSLS_NO_PLUGIN_MIGRATION="1", PYTHONUTF8="1")
