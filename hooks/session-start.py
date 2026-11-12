@@ -50,9 +50,23 @@ _GIT_REPO_ENV = (
 
 
 def _git_env():
-    """The environment for every git call aimed at a toolkit checkout."""
+    """The environment for every git call aimed at a toolkit checkout, and for
+    every `claude plugin` call that makes git fetch one.
+
+    A hook must never ask anyone for a sign-in. GIT_TERMINAL_PROMPT=0 stops
+    git's own terminal question, but two other askers ignore it. Git Credential
+    Manager, the default on Windows, opens a sign-in WINDOW when a remote wants
+    credentials it does not hold; GCM_INTERACTIVE=never makes it fail instead.
+    An askpass helper is a second program git runs to ask; an empty GIT_ASKPASS
+    turns that off (git treats empty as "none", and stops looking for another).
+    Stored credentials still work: only the asking is switched off. With these
+    a remote this machine cannot read fails in a moment and silently, which is
+    what every caller here already treats as "offline".
+    """
     env = {k: v for k, v in os.environ.items() if k not in _GIT_REPO_ENV}
     env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GCM_INTERACTIVE"] = "never"
+    env["GIT_ASKPASS"] = ""
     return env
 
 # When a session-ping can't be delivered (timeout / network / proxy down), we
@@ -1575,7 +1589,7 @@ def _heal_plugin_drift(claude, record, head, deadline):
         try:
             return subprocess.run(
                 [*claude, "plugin", *args, ORG_PLUGIN_KEY],
-                capture_output=True, timeout=timeout,
+                capture_output=True, timeout=timeout, env=_git_env(),
             ).returncode == 0
         except Exception:
             return False
@@ -1993,6 +2007,7 @@ def _run_plugin_update(claude):
         return subprocess.run(
             [*claude, "plugin", "update", ORG_PLUGIN_KEY],
             capture_output=True, timeout=UPDATE_TIMEOUT_S, stdin=subprocess.DEVNULL,
+            env=_git_env(),
         ).returncode == 0
     except Exception:  # TimeoutExpired included: too slow here, try again later
         return False
@@ -2180,6 +2195,7 @@ def update_now():
             updated = subprocess.run(
                 [*claude, "plugin", "update", ORG_PLUGIN_KEY],
                 capture_output=True, timeout=UPDATE_NOW_TIMEOUT_S, stdin=subprocess.DEVNULL,
+                env=_git_env(),
             ).returncode == 0
         except Exception:
             updated = False
