@@ -50,7 +50,7 @@ This is the #1 reason `signal_*` tools never appear even when Node and the token
 
 **First, check whether the toolkit is installed and enabled as a plugin** (`claude plugin list` shows `nsls-builder-toolkit` and does not mark it disabled). If it is enabled, the plugin registers signal itself: do **not** add a user-scope entry, because a second `signal` beside the plugin's is exactly the duplicate the toolkit's migration removes, and it shows as two "Connection closed" errors. Skip to Step 2. If it is installed but disabled, it registers nothing: ask the builder whether to enable it (`claude plugin enable nsls-builder-toolkit@nsls-toolkit`) and skip to Step 2 if they do. Only a machine without an enabled plugin needs the registration below.
 
-Fix it by registering the server explicitly at user scope, pointing at the absolute path of this plugin (the toolkit folder this skill loaded from, two levels above this SKILL.md — `${CLAUDE_PLUGIN_ROOT}`). Substitute the real path; don't rely on `$CLAUDE_PLUGIN_ROOT` being exported into a plain terminal (it usually isn't). `claude mcp add` is idempotent — if it's already registered it prints "already exists" and changes nothing, so it's always safe to run.
+Fix it by registering the server explicitly at user scope, pointing at the absolute path of this plugin (the toolkit's top folder, the one that holds `skills/` and `hooks/`: two folders up from the folder this SKILL.md is in — `${CLAUDE_PLUGIN_ROOT}`). Substitute the real path; don't rely on `$CLAUDE_PLUGIN_ROOT` being exported into a plain terminal (it usually isn't). `claude mcp add` is idempotent — if it's already registered it prints "already exists" and changes nothing, so it's always safe to run.
 
 First check whether it's already there:
 

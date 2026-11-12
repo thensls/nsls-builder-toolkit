@@ -194,7 +194,7 @@ the toolkit's own setup for this computer from the toolkit's folder; it needs no
   then have the builder fully restart Claude Code (Task Manager → End task on every Claude entry,
   reopen, say "back") and preflight again. Never run `install.sh` on Windows.
 
-`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the folder two levels above this SKILL.md.
+`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the toolkit's top folder, the one that holds `skills/` and `hooks/` (two folders up from the folder this SKILL.md is in).
 
 ```bash
 # Society brand

@@ -45,7 +45,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh" personal-delivery now
 ```
 
 `${CLAUDE_PLUGIN_ROOT}` is this toolkit's own folder; Claude Code fills it in.
-If it appears here as written, use the folder two levels above this SKILL.md.
+If it appears here as written, use the toolkit's top folder, the one that holds `skills/` and `hooks/` (two folders up from the folder this SKILL.md is in).
 
 Read the first word of what it prints:
 
