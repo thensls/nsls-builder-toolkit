@@ -75,10 +75,12 @@ node --version
 - **Both tools answer:** say "This computer already has what the toolkit
   needs" and go to Step 1. If Node.js is missing, give the builder its one
   action item (below) on the way.
-- **Either tool is missing, and the setup has not run yet in this
-  conversation:** run it for them, as below.
-- **Either tool is still missing after the setup ran and the builder
-  restarted:** do not run it again and do not ask for another restart. Say in
+- **Either tool is missing, and the setup has not finished a run yet in this
+  conversation:** run it for them, as below. A Windows run that stopped after
+  installing Git (see below) did not finish: it set up nothing else, so it
+  does not count, and the setup runs again after that restart.
+- **Either tool is still missing after the setup finished a run and the
+  builder restarted:** do not run it again and do not ask for another restart. Say in
   one plain sentence what is still missing and that documents and slides will
   not work until it is fixed, suggest they tell the NSLS AI team, and go on to
   Step 1. Everything else in the toolkit works.
@@ -110,8 +112,11 @@ Then pass on, in plain words, only the lines that need them:
   item for later, not a reason to stop.
 - **Any other line starting with `Note`, `[warn]` or `[ACTION NEEDED]`:** that
   item, with the one thing they need to do.
-- **Windows says Git was installed and asks for a re-run:** ask the builder to
-  quit Claude fully, reopen it, and say `/nsls-setmeup` again.
+- **Windows says Git was installed and asks for a re-run:** the setup stopped
+  there, before Python, `gws` or Node. Ask the builder to quit Claude fully,
+  reopen it, and say `/nsls-setmeup` again, and then **run the setup again**:
+  that second run is the one that sets the PC up. It ends with "This computer
+  is set up for the NSLS toolkit"; the Git-only run does not.
 
 **Then one restart, because the setup just installed tools.** A program only
 sees tools that were on its PATH when it started, so this session cannot find
@@ -121,9 +126,10 @@ fully and reopen it (Mac: Cmd+Q; Windows: Task Manager, End task on every
 Claude entry), come back to this conversation and say `/nsls-setmeup` again.
 Do not go on to Step 1 in this session.
 
-One restart, once. When the builder comes back, run the detect step again and
-follow the three cases above: a missing Node.js, or a tool the setup could not
-install, never sends them round again.
+One restart per finished run. When the builder comes back, run the detect step
+again and follow the three cases above: a missing Node.js, or a tool the setup
+could not install, never sends them round again. The only second run is the
+one after Windows installed Git.
 
 ## Step 1: Confirm Your Builder Email (~15 sec)
 
