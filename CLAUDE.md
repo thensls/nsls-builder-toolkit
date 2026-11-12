@@ -21,8 +21,9 @@ The install script sets up three things:
 - These are lightweight — find root cause, verify the fix, move on
 
 ### Feature work (multi-step, needs a plan)
-- Use **Compound Engineering** pipeline: `ce-brainstorm` → `ce-plan` → `ce-work`
+- Use **Compound Engineering** pipeline: `ce-brainstorm` → `ce-plan` → `ce-work` → `/browser-check` (anything with a web UI) → `ce-code-review` → PR
 - Produces durable requirements docs and implementation plans
+- **`/browser-check`** runs Expect (`expect-cli`) — reads the git diff, writes a test plan, drives a real headless browser. Tests and code review read the code; this opens the page. For UI work it is the evidence `verification-before-completion` asks for. Always through the skill's wrapper script, never `npx expect-cli` directly and never `expect init`. The wrapper blocks Expect's vendor telemetry (PostHog, Axiom, expect.dev), never copies browser cookies, and fails the run if a session loaded any. Put the one-line result in the PR description.
 - Use `ce-code-review` for code review (parallel reviewer personas, structured findings); `ce-doc-review` for plan/requirements docs
 
 ### Data intelligence (any question about users, systems, or operations)
