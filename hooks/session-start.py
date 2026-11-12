@@ -2136,6 +2136,235 @@ def _heal_and_announce(claude, record, head, deadline):
     return False
 
 
+HANDOVER_STAMP = CONFIG_DIR / ".nsls-org-copy-handover-check"
+# Written when THIS hook switched the marketplace install off, so the clean-up
+# only ever removes an install the toolkit itself retired, never one a builder
+# switched off for their own reasons.
+HANDOVER_MARKER = CONFIG_DIR / ".nsls-org-copy-handover"
+# Each CLI call here is local bookkeeping (measured under a second); the cap is
+# for a machine that is struggling. Step 1 makes at most four of them, and the
+# fourth is the undo, so it starts only with room for all four: a hook killed
+# between the switch-off and its check would leave the switch-off unchecked.
+HANDOVER_CALL_S = 8
+HANDOVER_CALLS = 4
+# Sessions that sign in some other way than a claude.ai account neither
+# download nor load synced plugins (Claude Code's plugin-loading reference).
+# On such a session the marketplace install is the only toolkit there is.
+_NO_SYNC_ENV = (
+    "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK",
+    "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+)
+
+
+def _version_tuple(text):
+    try:
+        return tuple(int(part) for part in str(text).split("."))
+    except Exception:
+        return None
+
+
+def _cli_json(claude, *args, timeout=HANDOVER_CALL_S):
+    """A `claude` call that prints JSON, parsed; None on any failure."""
+    try:
+        done = subprocess.run(
+            [*claude, *args], capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=timeout, stdin=subprocess.DEVNULL,
+        )
+        return json.loads(done.stdout) if done.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def _cli_ok(claude, *args, timeout=HANDOVER_CALL_S):
+    try:
+        return subprocess.run(
+            [*claude, *args], capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL,
+        ).returncode == 0
+    except Exception:
+        return False
+
+
+def _listed_org_copy(claude):
+    """What Claude Code ITSELF says about the organization's copy, or None when
+    it lists none: {"enabled": bool, "path": str}.
+
+    `claude plugin list --json` shows a synced plugin with `scope: "synced"`,
+    and leaves its installPath empty while another install of the same name
+    outranks it. That listing is the one statement about this account that this
+    hook does not have to infer: which account is signed in, whether NSLS turned
+    the plugin on for it, and whether the builder switched it off are all
+    already settled in it.
+    """
+    listing = _cli_json(claude, "plugin", "list", "--json")
+    if not isinstance(listing, list):
+        return None
+    for entry in listing:
+        if isinstance(entry, dict) and entry.get("id") == SYNCED_PLUGIN_KEY:
+            return {"enabled": entry.get("enabled") is True,
+                    "path": str(entry.get("installPath") or "")}
+    return None
+
+
+def _write_handover_marker(record, synced_version):
+    try:
+        tmp = HANDOVER_MARKER.with_name(HANDOVER_MARKER.name + ".tmp")
+        tmp.write_text(json.dumps({
+            "at": int(time.time()), "from": record["version"], "to": synced_version,
+        }) + "\n", encoding="utf-8")
+        os.replace(tmp, HANDOVER_MARKER)
+    except Exception:
+        pass
+
+
+def hand_over_to_org_copy(reserve=MAIN_RESERVE_S):
+    """Let the copy NSLS's Claude organization delivers take over from a
+    marketplace install. True when this session did something.
+
+    Claude Code loads one plugin per name, and a marketplace install outranks a
+    synced copy. So a machine that has both keeps running the marketplace one,
+    and once the repository is private that one can no longer update on a
+    machine with no GitHub sign-in: the organization's copy sits beside it,
+    current and unused. This is the switch.
+
+    Two steps, a session apart, because the second needs proof the first worked.
+
+    Step 1, running from the marketplace install: switch that install OFF.
+    Not uninstall. Switching it off leaves its files and its record in place, so
+    the undo is one setting and needs no network; an uninstall could only be
+    undone by fetching the repository again, which is exactly what this machine
+    may be unable to do. It happens only when all of this holds:
+      * the marketplace install is on, and this session can load synced
+        plugins at all (see _NO_SYNC_ENV);
+      * the organization's copy is on disk for the signed-in account, whole,
+        not switched off, new enough to know it is one (it carries
+        hooks/synced_copy.py), and not older than the install it replaces;
+      * Claude Code itself lists it as enabled for this account.
+    Then Claude Code is asked again. If it does not now show the organization's
+    copy as the one it will load, the marketplace install is switched back on
+    at once and nothing has changed.
+
+    Step 2, running from the organization's copy: the proof. If this hook's own
+    marker says it switched the marketplace install off, uninstall that install
+    and drop its marketplace, so nothing on the machine still points at the
+    repository. A marketplace install a builder switched off themselves has no
+    marker and is never touched.
+
+    NSLS_NO_PLUGIN_MIGRATION=1 freezes this, as it freezes the migration.
+    """
+    if os.environ.get("NSLS_NO_PLUGIN_MIGRATION"):
+        return False
+    try:
+        if org_copy_root():
+            return _finish_handover(reserve)
+        return _start_handover(reserve)
+    except Exception:
+        return False
+
+
+def _handover_has_time(reserve):
+    """Room for every call a hand-over step can make, and for what follows it."""
+    return HOOK_BUDGET_S - _hook_elapsed() >= HANDOVER_CALLS * HANDOVER_CALL_S + reserve
+
+
+def _handover_due(now):
+    """At most one attempt per FRESH_RETRY_AFTER_TROUBLE_S: each costs CLI calls.
+    Claimed only once an attempt is really starting, so a session that was
+    merely short of time does not postpone the next one by two hours."""
+    try:
+        nxt = float(HANDOVER_STAMP.read_text(encoding="utf-8").strip())
+        if now < nxt <= now + FRESH_RETRY_AFTER_TROUBLE_S:
+            return False
+    except Exception:
+        pass
+    try:
+        HANDOVER_STAMP.write_text(f"{int(now + FRESH_RETRY_AFTER_TROUBLE_S)}\n", encoding="utf-8")
+    except Exception:
+        pass
+    return True
+
+
+def _start_handover(reserve):
+    if any(os.environ.get(name) for name in _NO_SYNC_ENV):
+        return False
+    record = _installed_plugin_record()
+    if not record or not marketplace_plugin_active():
+        return False
+    sc = _synced_copy()
+    root = sc.live_root(CONFIG_DIR) if sc else None
+    if root is None or sc.switched_off(CONFIG_DIR, root):
+        return False
+    if not (Path(root) / "hooks" / "synced_copy.py").is_file():
+        return False  # a copy from before the toolkit knew how to run as one
+    synced_version = sc.version(root)
+    have, want = _version_tuple(record["version"]), _version_tuple(synced_version)
+    if not have or not want or want < have:
+        return False  # never trade a newer toolkit for an older one
+    claude = _find_claude()
+    if not claude or not _handover_has_time(reserve):
+        return False  # a later session does it
+    if not _handover_due(time.time()):
+        return False
+    lock = _acquire_heal_lock()
+    if lock is None:
+        return False
+    try:
+        before = _listed_org_copy(claude)
+        if not before or not before["enabled"]:
+            return False  # Claude Code does not offer it to this account
+        if not _cli_ok(claude, "plugin", "disable", ORG_PLUGIN_KEY):
+            return False
+        after = _listed_org_copy(claude)
+        if not (after and after["enabled"] and after["path"]):
+            # Claude Code would not load the organization's copy after all.
+            # Put things back exactly as they were; this needs no network.
+            _cli_ok(claude, "plugin", "enable", ORG_PLUGIN_KEY)
+            return False
+        _write_handover_marker(record, synced_version)
+        return True
+    finally:
+        _release_heal_lock(lock)
+
+
+def _finish_handover(reserve):
+    """Running from the organization's copy: remove the marketplace install
+    this hook switched off, and its marketplace."""
+    if not HANDOVER_MARKER.is_file():
+        return False
+    record = _installed_plugin_record()
+    if not record:
+        # Already gone (a builder, or an earlier session cut short after the
+        # uninstall): only the marker is left to clear.
+        try:
+            HANDOVER_MARKER.unlink()
+        except Exception:
+            pass
+        return False
+    if marketplace_plugin_active():
+        return False  # someone switched it back on: theirs to decide
+    claude = _find_claude()
+    if not claude or not _handover_has_time(reserve):
+        return False  # a later session does it
+    if not _handover_due(time.time()):
+        return False
+    lock = _acquire_heal_lock()
+    if lock is None:
+        return False
+    try:
+        if not _cli_ok(claude, "plugin", "uninstall", ORG_PLUGIN_KEY):
+            return False
+        # Best-effort: with no plugin installed from it, the marketplace is
+        # only a pointer at a repository this machine may not be able to read.
+        _cli_ok(claude, "plugin", "marketplace", "remove", ORG_MARKETPLACE)
+        try:
+            HANDOVER_MARKER.unlink()
+        except Exception:
+            pass
+        return True
+    finally:
+        _release_heal_lock(lock)
+
+
 UPDATE_NOW_TIMEOUT_S = 120
 
 
@@ -3231,7 +3460,11 @@ def main():
     git_pull()
     stage_a = run_plugin_migration()
     if not stage_a:  # stage A spent this session's freshness budget
-        ensure_plugin_fresh()
+        # Hand over first: a marketplace install that has just been switched
+        # off has nothing left to keep fresh, and the hand-over's CLI calls
+        # spent the time a freshness check would have used.
+        if not hand_over_to_org_copy():
+            ensure_plugin_fresh()
     sync_pointers()
     notice_own_skills()
     if not _policy_hook_owns_policy():
@@ -3300,7 +3533,10 @@ if __name__ == "__guardrails__":
     # margin; the .ps1's own start time arrives in NSLS_HOOK_STARTED_AT.
     try:
         if not stage_a:  # stage A spent this session's freshness budget
-            ensure_plugin_fresh(reserve=5)
+            # Same order as main(): hand over first, and keep fresh only what
+            # is still the live install.
+            if not hand_over_to_org_copy(reserve=5):
+                ensure_plugin_fresh(reserve=5)
     except Exception:
         pass
 
