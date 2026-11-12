@@ -286,7 +286,50 @@ def _find_claude():
         if candidate.exists():
             return [str(candidate)]
     found = _windows_cli()
-    return _cli_argv(found) if found else None
+    if found:
+        return _cli_argv(found)
+    found = _mac_app_cli()
+    return [str(found)] if found else None
+
+
+_IS_MAC = sys.platform == "darwin"
+
+
+def _mac_app_cli(folder=None):
+    """The Mac desktop app's bundled claude CLI, or None.
+
+    This file's own fallback, for the same reason as _windows_cli below: the
+    session-start.py already running may predate the finder that knows this
+    place, and this file is read fresh from the clone. A Mac with the app and no
+    separate CLI has no other `claude`, so without this stage A found nothing
+    and the plugin never installed. Same search as session-start.py's
+    _mac_app_cli: every shape the app has used under claude-code/<version>/,
+    newest version first, never the Linux build it keeps for its VM.
+    """
+    if folder is None:
+        if not _IS_MAC:
+            return None
+        folder = Path.home() / "Library" / "Application Support" / "Claude" / "claude-code"
+    best = None
+    for pattern in ("*/*/claude.app/Contents/MacOS/claude",
+                    "*/claude.app/Contents/MacOS/claude", "*/claude"):
+        try:
+            hits = list(folder.glob(pattern))
+        except OSError:
+            continue
+        for exe in hits:
+            try:
+                if not (exe.is_file() and os.access(exe, os.X_OK)):
+                    continue
+                with open(exe, "rb") as f:
+                    if f.read(4) == b"\x7fELF":
+                        continue
+                key = (_version_tuple(exe.relative_to(folder).parts[0]), exe.stat().st_mtime)
+            except (OSError, ValueError):
+                continue
+            if best is None or key > best[0]:
+                best = (key, exe)
+    return best[1] if best else None
 
 
 def _cli_argv(path):

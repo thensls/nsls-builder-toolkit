@@ -392,25 +392,48 @@ if [ -z "$CLAUDE_BIN" ]; then
   CLAUDE_BIN="$(command -v claude 2>/dev/null || true)"
 fi
 
-# Desktop-app bundled CLI (no separate CLI install). macOS ships it under
-# ~/Library/Application Support/Claude/claude-code[-vm]/<version>/claude.
-# NOTE: on Apple Silicon that binary is a Linux build that runs inside the app's
-# VM and is NOT executable from the host shell (verified: `exec format error`),
-# so accept it ONLY if it actually runs. Otherwise fall through to the honest
-# "no claude" path rather than selecting a binary that exec-fails on every call.
+# --- Desktop app CLI (begin) ---
+# Desktop-app bundled CLI (no separate CLI install). The Mac app keeps it under
+# ~/Library/Application Support/Claude/claude-code/<version>/, and has used
+# more than one shape there:
+#   <version>/claude
+#   <version>/claude.app/Contents/MacOS/claude
+#   <version>/<hash>/claude.app/Contents/MacOS/claude     (seen 2026-11-12)
+# This looked only for the first. Once the app moved on, a Mac with the app and
+# no separate CLI found nothing here, so the toolkit plugin was never installed
+# (found on a builder's Mac, 2026-11: a folder copy and nothing else, for 81
+# days). Windows had the same move and the same miss in October.
+# The claude-code-vm folder holds a Linux build that runs inside the app's VM
+# and is NOT executable from the host shell (verified: `exec format error`), so
+# a candidate counts ONLY if it actually runs. Newest version first; the first
+# one that runs wins. Otherwise fall through to the honest "no claude" path
+# rather than selecting a binary that exec-fails on every call.
 if [ -z "$CLAUDE_BIN" ]; then
   for base in \
     "$HOME/Library/Application Support/Claude/claude-code" \
     "$HOME/Library/Application Support/Claude/claude-code-vm"; do
     [ -d "$base" ] || continue
-    # sort -V => highest version last (falls back gracefully if -V is unsupported).
-    cand=$(ls -1d "$base"/*/claude 2>/dev/null | sort -V | tail -1) || true
-    if [ -n "$cand" ] && [ -x "$cand" ] && "$cand" --version >/dev/null 2>&1; then
-      CLAUDE_BIN="$cand"
-      break
-    fi
+    cands=$(ls -1d "$base"/*/claude \
+                   "$base"/*/claude.app/Contents/MacOS/claude \
+                   "$base"/*/*/claude.app/Contents/MacOS/claude 2>/dev/null || true)
+    [ -n "$cands" ] || continue
+    # sort -rV => highest version first. A sort without -V still gets a plain
+    # reverse sort, which is right whenever the versions have equal digits.
+    sorted=$(printf '%s\n' "$cands" | sort -rV 2>/dev/null) ||
+      sorted=$(printf '%s\n' "$cands" | sort -r)
+    while IFS= read -r cand; do
+      # </dev/null: the candidate must not read this loop's own list.
+      if [ -n "$cand" ] && [ -x "$cand" ] && "$cand" --version </dev/null >/dev/null 2>&1; then
+        CLAUDE_BIN="$cand"
+        break
+      fi
+    done <<CANDIDATES
+$sorted
+CANDIDATES
+    [ -z "$CLAUDE_BIN" ] || break
   done
 fi
+# --- Desktop app CLI (end) ---
 
 # Set when a plugin the toolkit cannot work without fails to install, and
 # reported again at the end. Nothing else reads it.
