@@ -542,6 +542,46 @@ kept_case("an update entry they edited by hand",
                                             "command": f'cd /tmp; git -C "{m.folder}" pull --rebase'}]}]),
           "edited-entry", expect_notice=False)
 
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")
+    m.deliver("2.0.0")
+    ss = m.load()
+    real_verdict = ss._personal_checkout_verdict
+
+    def they_save_right_after(plugin_dir, deadline):
+        verdict = real_verdict(plugin_dir, deadline)     # git calls the checkout clean...
+        write(m.folder / "README.md", "saved a moment after git called the checkout clean\n")
+        return verdict                                    # ...and then they save a file
+
+    ss._personal_checkout_verdict = they_save_right_after
+    res, _ = m.run()
+    check("an edit saved a moment after git called the checkout clean still stops the take-over",
+          outcome(res) == "kept" and res.get("why") == "own-changes" and res.get("changed") == ["README.md"]
+          and (m.folder / ".git").is_dir() and m.marker() is None, str(res))
+    check("and is never overwritten", m.text("README.md") == "saved a moment after git called the checkout clean\n")
+
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    m.checkout("1.9.0")
+    m.deliver("2.0.0")
+    pd = m.load()._personal_delivery()
+    real_hashes = pd.hashes_of
+
+    def they_save_while_hashing(target, paths):
+        found = real_hashes(target, paths)
+        write(m.folder / "skills/open-day/SKILL.md", "saved while the checkout was being vouched for\n")
+        return found
+
+    pd.hashes_of = they_save_while_hashing
+    try:
+        res, _ = m.run()
+    finally:
+        pd.hashes_of = real_hashes
+    check("an edit saved while the checkout is being vouched for is caught by git's second look",
+          outcome(res) == "kept" and res.get("why") == "own-changes" and (m.folder / ".git").is_dir()
+          and m.text("skills/open-day/SKILL.md") == "saved while the checkout was being vouched for\n", str(res))
+
 print("8. with their yes, a checkout with their own work is switched, and nothing is lost")
 with tempfile.TemporaryDirectory() as tmp:
     m = Machine(tmp)

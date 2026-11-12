@@ -474,24 +474,31 @@ def owner_changes(target, baseline, incoming) -> list:
     return sorted(changed)
 
 
-def standing_in_the_way(cfg, found, tracked=()) -> list:
+def standing_in_the_way(cfg, found, shipped=None) -> list:
     """Files of the owner's that stop a take-over nobody asked for: anything in
-    the folder that is neither a file git tracks (`tracked`, each still as NSLS
-    shipped it) nor identical to what NSLS delivers, sitting where a delivered
-    file goes. Reads only. Asked BEFORE anything is changed, settings included,
-    so a folder that will not be taken over is left exactly as it is."""
+    the folder, sitting where a delivered file goes, that is neither a file git
+    vouched for (`shipped`: its hash when git called the checkout clean) nor
+    identical to what NSLS delivers. Reads only. Asked BEFORE anything is
+    changed, settings included, so a folder that will not be taken over is left
+    exactly as it is."""
     try:
         target = folder(cfg)
-        shipped = _respelled(target, _as_shipped(target, tracked), found.hashes)
-        return owner_changes(target, shipped, found.hashes)
+        return owner_changes(target, _respelled(target, dict(shipped or {}), found.hashes), found.hashes)
     except Exception:
         return ["?"]
 
 
-def _as_shipped(target, tracked) -> dict:
-    """{path: sha256} of each tracked file as it is on disk right now."""
+def hashes_of(target, paths) -> dict:
+    """{path: sha256} of each of these files as it is on disk right now.
+
+    For the caller that vouches for a checkout: it hashes git's tracked files
+    between two clean answers from git, and hands those hashes to take_over.
+    They are then the ONLY account of what NSLS shipped. Nothing here hashes
+    the folder again later and calls the result shipped: an edit saved in the
+    meantime would be hashed along with everything else and overwritten.
+    """
     shipped = {}
-    for rel in tracked:
+    for rel in paths:
         path = Path(target) / rel
         if _plain_file(path):
             shipped[rel] = _sha(path)
@@ -818,15 +825,16 @@ def refresh(cfg, found, deadline=None, take_theirs=False):
         return _result("retry", why="error")
 
 
-def take_over(cfg, found, tracked=(), origin=None, deadline=None, take_theirs=False):
+def take_over(cfg, found, shipped=None, origin=None, deadline=None, take_theirs=False):
     """Switch a checkout (or a plain copy) to following the delivered copy.
 
     The caller has already decided this folder may be taken over: either git
-    showed it holds nothing of its owner's (`tracked` is then every file git
-    tracks there, each one still as NSLS shipped it), or its owner said yes
-    (`take_theirs`: every file about to be replaced is moved to .set-aside/
-    first). This function re-checks only what it can see without git: a file of
-    the owner's sitting where NSLS ships one stops a take-over nobody asked for.
+    showed it holds nothing of its owner's (`shipped` is then the hash of every
+    file git tracks there, taken while git called the checkout clean; see
+    hashes_of), or its owner said yes (`take_theirs`: every file about to be
+    replaced is moved to .set-aside/ first). A file that no longer matches
+    `shipped` was changed after git looked: it is its owner's, it stops a
+    take-over nobody asked for, and the copy never overwrites it.
 
     .git is renamed, never removed, so the history, any branches and any
     stashes stay on the computer. Outcomes: "converted", "adopted", "kept"
@@ -844,7 +852,7 @@ def take_over(cfg, found, tracked=(), origin=None, deadline=None, take_theirs=Fa
                 return _result("retry", why="settling")
             baseline = {}
             if not take_theirs:
-                baseline = _respelled(target, _as_shipped(target, tracked), found.hashes)
+                baseline = _respelled(target, dict(shipped or {}), found.hashes)
                 changed = owner_changes(target, baseline, found.hashes)
                 if changed:
                     return _result("kept", why="own-changes", changed=changed)
