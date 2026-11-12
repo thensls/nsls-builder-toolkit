@@ -39,6 +39,10 @@ from pathlib import Path
 
 PLUGIN = "nsls-builder-toolkit"
 SYNCED_ID = PLUGIN + "@synced"
+# What a copy of this toolkit must hold to count as whole. Another NSLS plugin
+# delivered the same way (the Personal Toolkit, see personal_delivery.py) asks
+# the same questions with its own name and its own list.
+_NEEDS = ("hooks/hooks.json",)
 
 # Both halves of the account folder name are UUIDs. Anything else is not a
 # folder name this module will build a path from.
@@ -66,15 +70,16 @@ def _synced_dir(cfg) -> Path:
     return Path(cfg) / "plugins" / "synced"
 
 
-def _is_copy(root) -> bool:
-    """A folder that holds this plugin, whole enough to run its hooks."""
+def _is_copy(root, plugin=PLUGIN, needs=_NEEDS) -> bool:
+    """A folder that holds `plugin`, whole enough to use: its manifest names
+    it, and everything in `needs` is there."""
     try:
         root = Path(root)
         if not root.is_dir():
             return False
         manifest = _read_json(root / ".claude-plugin" / "plugin.json")
-        return (isinstance(manifest, dict) and manifest.get("name") == PLUGIN
-                and (root / "hooks" / "hooks.json").is_file())
+        return (isinstance(manifest, dict) and manifest.get("name") == plugin
+                and all((root / need).exists() for need in needs))
     except Exception:
         return False
 
@@ -107,7 +112,7 @@ def _account_folder(cfg):
     return None
 
 
-def copies(cfg=None) -> dict:
+def copies(cfg=None, plugin=PLUGIN, needs=_NEEDS) -> dict:
     """{account folder name: plugin root} for every complete synced copy on disk."""
     cfg = config_dir() if cfg is None else Path(cfg)
     found = {}
@@ -115,15 +120,15 @@ def copies(cfg=None) -> dict:
         for folder in sorted(_synced_dir(cfg).iterdir()):
             if folder.name.startswith(".") or not folder.is_dir():
                 continue
-            root = folder / PLUGIN
-            if _is_copy(root):
+            root = folder / plugin
+            if _is_copy(root, plugin, needs):
                 found[folder.name] = root
     except Exception:
         pass
     return found
 
 
-def live_root(cfg=None):
+def live_root(cfg=None, plugin=PLUGIN, needs=_NEEDS):
     """The synced copy Claude Code holds for the signed-in account, or None.
 
     With the account readable, only that account's folder counts: a copy left
@@ -132,7 +137,7 @@ def live_root(cfg=None):
     to confuse it with.
     """
     cfg = config_dir() if cfg is None else Path(cfg)
-    found = copies(cfg)
+    found = copies(cfg, plugin, needs)
     if not found:
         return None
     folder = _account_folder(cfg)
@@ -177,12 +182,12 @@ def required(root) -> bool:
         return False
 
 
-def switched_off(cfg=None, root=None) -> bool:
+def switched_off(cfg=None, root=None, plugin=PLUGIN) -> bool:
     """True when this machine's own settings stop the synced copy loading.
 
     Two switches exist: `syncClaudeAiPlugins: false` stops every synced plugin,
-    and `"nsls-builder-toolkit@synced": false` stops this one, unless NSLS made
-    it required. Settings that cannot be read are not a switch.
+    and `"<plugin>@synced": false` stops this one, unless NSLS made it
+    required. Settings that cannot be read are not a switch.
 
     The machine's own settings file, on purpose, and not a project's. What
     this answer gates is machine-wide: pointer files in ~/.claude/skills, the
@@ -200,7 +205,7 @@ def switched_off(cfg=None, root=None) -> bool:
     if settings.get("syncClaudeAiPlugins") is False:
         return True
     plugins = settings.get("enabledPlugins")
-    if isinstance(plugins, dict) and plugins.get(SYNCED_ID) is False:
+    if isinstance(plugins, dict) and plugins.get(f"{plugin}@synced") is False:
         return not (root is not None and required(root))
     return False
 
