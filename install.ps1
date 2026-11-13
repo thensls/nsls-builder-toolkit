@@ -545,7 +545,72 @@ New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null
 # A failed FETCH changes nothing on disk, so warn and carry on. A failed RESET
 # may leave files half-updated, so that one stops rather than claim "unchanged".
 $UpdateFailed = $false   # read by the closing banner, so it doesn't claim success
+
+# --- A copy that follows another repository (begin) ---
+# The update below fetches from the copy's own `origin`. A copy cloned from
+# somewhere else, most often a builder's own fork made to contribute a skill,
+# then "updates" from that fork: never NSLS's releases, and a hard reset onto a
+# main hundreds of commits old, reported as installed (a builder's Mac, 2026-11;
+# install.sh has the same check). So a copy whose origin is not $RepoUrl is
+# moved aside untouched, branches and uncommitted edits kept, and a fresh copy
+# cloned. The same repository written another way counts as the same.
+function Get-RepoKey([string]$Url) {
+    $k = "$Url".Trim().ToLowerInvariant()
+    $k = $k -replace '^[a-z][a-z0-9+.-]*://', ''
+    $k = $k -replace '^[^@/]+@', ''
+    $k = $k -replace '^([^/:]+):', '$1/'
+    $k = $k -replace '\\', '/'
+    $k = $k -replace '/+$', ''
+    $k = $k -replace '\.git$', ''
+    return ($k -replace '/+$', '')
+}
+$KeptCopy = $null
+$KeptFrom = ''
 if (Test-Path (Join-Path $PluginDir '.git')) {
+    $KeptFrom = Invoke-Native 'git' @('-C', $PluginDir, 'remote', 'get-url', 'origin')
+    if ($LASTEXITCODE -ne 0) { $KeptFrom = '' }
+    if ((Get-RepoKey $KeptFrom) -ne (Get-RepoKey $RepoUrl)) {
+        $shownFrom = if ($KeptFrom) { $KeptFrom } else { 'nowhere' }
+        Write-Host "  The toolkit folder here updates from $shownFrom instead of NSLS, so it never got NSLS's releases."
+        Write-Host "  Downloading a fresh copy to put in its place..."
+        # Download first, swap second: a failed download must leave the old
+        # folder exactly where it was, never a toolkit that is simply gone.
+        $Staging = "$PluginDir.new-$PID"
+        $null = Invoke-Native 'git' @('clone', '--branch', $RepoBranch, $RepoUrl, $Staging, '--quiet')
+        if ($LASTEXITCODE -ne 0) {
+            Remove-Item -Recurse -Force -LiteralPath $Staging -ErrorAction SilentlyContinue
+            Write-Host "  ERROR: couldn't download a fresh copy of the toolkit. Nothing was changed:"
+            Write-Host "  your folder is exactly as it was. Check your internet connection, then re-run this installer."
+            if ($RunningFromFile) { exit 1 } else { return }
+        }
+        $KeptCopy = "$PluginDir.kept-" + (Get-Date -Format 'yyyyMMdd-HHmmss')
+        try {
+            Move-Item -LiteralPath $PluginDir -Destination $KeptCopy -ErrorAction Stop
+        } catch {
+            Remove-Item -Recurse -Force -LiteralPath $Staging -ErrorAction SilentlyContinue
+            Write-Host "  ERROR: the toolkit folder could not be moved aside to make room for the fresh copy."
+            Write-Host "  Nothing was changed. Close Claude and any editor using that folder, then re-run this installer."
+            if ($RunningFromFile) { exit 1 } else { return }
+        }
+        try {
+            Move-Item -LiteralPath $Staging -Destination $PluginDir -ErrorAction Stop
+        } catch {
+            Move-Item -LiteralPath $KeptCopy -Destination $PluginDir -ErrorAction SilentlyContinue
+            Remove-Item -Recurse -Force -LiteralPath $Staging -ErrorAction SilentlyContinue
+            Write-Host "  ERROR: the fresh copy could not be put in place, so your old folder was put back."
+            Write-Host "  Re-run this installer; if it happens again, tell the NSLS AI team."
+            if ($RunningFromFile) { exit 1 } else { return }
+        }
+        Write-Host "  Done. Your old folder is kept, untouched, at: $KeptCopy"
+    } else {
+        $KeptFrom = ''
+    }
+}
+# --- A copy that follows another repository (end) ---
+
+if ($KeptCopy) {
+    # just cloned fresh above: nothing to update
+} elseif (Test-Path (Join-Path $PluginDir '.git')) {
     Write-Host "  Updating existing installation..."
     $updOut = Invoke-Native 'git' @('-C', $PluginDir, 'fetch', 'origin', $RepoBranch, '--quiet')
     if ($LASTEXITCODE -ne 0) {
@@ -1004,6 +1069,14 @@ if ($Test) {
     Write-Host "  Try it with: `$env:CLAUDE_CONFIG_DIR = `"$ConfigDir`"; claude"
     Write-Host "  Reset with:  Remove-Item -Recurse -Force `"$ConfigDir`""
 } else {
+    if ($KeptCopy) {
+        $shownFrom = if ($KeptFrom) { $KeptFrom } else { 'nowhere' }
+        Write-Host "=== YOUR OLD COPY IS KEPT ==="
+        Write-Host "  The toolkit folder that was here updated from $shownFrom, not NSLS,"
+        Write-Host "  so a fresh copy replaced it. Nothing in the old one was changed or deleted:"
+        Write-Host "    $KeptCopy"
+        Write-Host ""
+    }
     Write-Host "=== NEXT STEP ==="
     Write-Host "  1. Restart Claude Code (quit and reopen - a restart loads the MCP servers"
     Write-Host "     and hooks). In the desktop app, click Code (top left) when it reopens."
