@@ -104,6 +104,7 @@
     "update-toolkit": "Runs the toolkit's update command.",
     "value-moment": "Runs its own script.",
     "web-research": "Installs and runs a helper in Claude Code's folders, with a browser window.",
+    "wins": "Runs its own script on large Fathom results saved on the computer.",
     "write-like-me": "Reads the person's Claude Code sessions with its own script."
   }
 }
