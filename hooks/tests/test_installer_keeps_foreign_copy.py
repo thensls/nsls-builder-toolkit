@@ -148,6 +148,30 @@ with tempfile.TemporaryDirectory() as tmp:
     check("the same repository written another way is the same",
           rc == 0 and kept(cfg) == [], out[-400:])
 
+print("\nwhat Macroscope found on PR #343")
+with tempfile.TemporaryDirectory() as tmp:
+    nsls, fork, cfg, plugin = world(tmp)
+    git(cfg / "local-plugins", "clone", "--quiet", str(fork), str(plugin))
+    git(plugin, "remote", "set-url", "origin",
+        "https://x-access-token:SECRET123@github.com/nsls-royce/nsls-builder-toolkit.git")
+    rc, out = step1(cfg, plugin, nsls)
+    check("a sign-in in the old copy's address is never printed",
+          rc == 0 and "SECRET123" not in out and "x-access-token" not in out
+          and "https://github.com/nsls-royce/nsls-builder-toolkit.git" in out, out[-400:])
+
+with tempfile.TemporaryDirectory() as tmp:
+    nsls, fork, cfg, plugin = world(tmp)
+    git(cfg / "local-plugins", "clone", "--quiet", str(fork), str(plugin))
+    extra = Path(tmp) / "my-other-checkout"
+    git(plugin, "worktree", "add", "--quiet", "-b", "side-work", str(extra))
+    rc, out = step1(cfg, plugin, nsls)
+    copies = kept(cfg)
+    linked = subprocess.run(["git", "-C", str(extra), "status", "--short"],
+                            capture_output=True, text=True, env=ENV)
+    check("an extra working folder made from the old copy still works after the move",
+          rc == 0 and len(copies) == 1 and linked.returncode == 0
+          and str(extra) in git(copies[0], "worktree", "list"), f"{linked.stderr} {out[-300:]}")
+
 print("\nnever left with no toolkit")
 with tempfile.TemporaryDirectory() as tmp:
     nsls, fork, cfg, plugin = world(tmp)

@@ -120,6 +120,9 @@ KEPT_COPY=""
 KEPT_FROM=""
 if [ -e "$PLUGIN_DIR/.git" ]; then
   KEPT_FROM=$(git -C "$PLUGIN_DIR" remote get-url origin 2>/dev/null || true)
+  # Shown on screen, and in Claude's transcript when Claude runs this: never a
+  # sign-in. An origin like https://user:token@host/... keeps only host/path.
+  KEPT_FROM=$(printf '%s' "$KEPT_FROM" | sed -E 's#^([A-Za-z][A-Za-z0-9+.-]*://)[^@/]*@#\1#')
   if [ "$(repo_key "$KEPT_FROM")" != "$(repo_key "$REPO_URL")" ]; then
     echo "  The toolkit folder here updates from ${KEPT_FROM:-nowhere} instead of NSLS, so it never got NSLS's releases."
     echo "  Downloading a fresh copy to put in its place..."
@@ -146,6 +149,9 @@ if [ -e "$PLUGIN_DIR/.git" ]; then
       echo "  Re-run this installer; if it happens again, tell the NSLS AI team."
       exit 1
     fi
+    # A builder may have made extra working folders from that copy (`git
+    # worktree add`); the move broke their links to it, and this mends them.
+    git -C "$KEPT_COPY" worktree repair >/dev/null 2>&1 || true
     echo "  Done. Your old folder is kept, untouched, at: $KEPT_COPY"
   else
     KEPT_FROM=""

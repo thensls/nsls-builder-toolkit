@@ -569,6 +569,9 @@ $KeptFrom = ''
 if (Test-Path (Join-Path $PluginDir '.git')) {
     $KeptFrom = Invoke-Native 'git' @('-C', $PluginDir, 'remote', 'get-url', 'origin')
     if ($LASTEXITCODE -ne 0) { $KeptFrom = '' }
+    # Shown on screen, and in Claude's transcript when Claude runs this: never a
+    # sign-in. An origin like https://user:token@host/... keeps only host/path.
+    $KeptFrom = "$KeptFrom".Trim() -replace '^([A-Za-z][A-Za-z0-9+.-]*://)[^@/]*@', '$1'
     if ((Get-RepoKey $KeptFrom) -ne (Get-RepoKey $RepoUrl)) {
         $shownFrom = if ($KeptFrom) { $KeptFrom } else { 'nowhere' }
         Write-Host "  The toolkit folder here updates from $shownFrom instead of NSLS, so it never got NSLS's releases."
@@ -601,6 +604,9 @@ if (Test-Path (Join-Path $PluginDir '.git')) {
             Write-Host "  Re-run this installer; if it happens again, tell the NSLS AI team."
             if ($RunningFromFile) { exit 1 } else { return }
         }
+        # A builder may have made extra working folders from that copy (`git
+        # worktree add`); the move broke their links to it, and this mends them.
+        $null = Invoke-Native 'git' @('-C', $KeptCopy, 'worktree', 'repair')
         Write-Host "  Done. Your old folder is kept, untouched, at: $KeptCopy"
     } else {
         $KeptFrom = ''

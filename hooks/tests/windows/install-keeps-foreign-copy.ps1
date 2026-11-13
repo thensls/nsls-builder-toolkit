@@ -112,6 +112,27 @@ try {
         (G $w.Plugin rev-parse HEAD) -eq (G $w.Nsls rev-parse main) -and
         (G $w.Plugin remote get-url fork) -eq $w.Fork) $r.Out
 
+    # Macroscope on PR #343: a sign-in in the old address is never printed.
+    $w = New-World 'signin'
+    $null = G $w.Local clone --quiet $w.Fork $w.Plugin
+    $null = G $w.Plugin remote set-url origin 'https://x-access-token:SECRET123@github.com/bdoyer-nsls/nsls-builder-toolkit.git'
+    $r = Invoke-Step1 $w $w.Nsls
+    Check 'a sign-in in the old copy''s address is never printed' (
+        $r.Code -eq 0 -and $r.Out -notlike '*SECRET123*' -and $r.Out -notlike '*x-access-token*' -and
+        $r.Out -like '*https://github.com/bdoyer-nsls/nsls-builder-toolkit.git*') $r.Out
+
+    # Macroscope on PR #343: an extra working folder made from the old copy survives the move.
+    $w = New-World 'worktree'
+    $null = G $w.Local clone --quiet $w.Fork $w.Plugin
+    $extra = Join-Path $w.Root 'my-other-checkout'
+    $null = G $w.Plugin worktree add --quiet -b side-work $extra
+    $r = Invoke-Step1 $w $w.Nsls
+    $kept = Kept $w
+    $null = & git -C $extra status --short 2>&1
+    $linkedOk = ($LASTEXITCODE -eq 0)
+    Check 'an extra working folder made from the old copy still works after the move' (
+        $r.Code -eq 0 -and $kept.Count -eq 1 -and $linkedOk) $r.Out
+
     # A fresh copy that cannot be downloaded: the old folder stays exactly as it was.
     $w = New-World 'offline'
     $null = G $w.Local clone --quiet $w.Fork $w.Plugin
