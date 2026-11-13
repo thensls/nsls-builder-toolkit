@@ -214,16 +214,21 @@ is the route that reaches the margin.
 3. **Show it** by passing that output, unchanged, to the visual widget tool
    (`show_widget`). Each comment appears as the passage reads in the document, the
    anchored words in brackets with a highlighter behind them, and the comment
-   underneath. **Skip** is one click and greys the card (click again to undo).
-   **Edit** rewrites the comment in place. One button at the bottom sends the go.
+   underneath. Each comment has **Accept**, **Edit** and **Skip**. Accept and Skip are
+   one click each (click again to undo); Edit rewrites the comment in place, and pressing
+   Done on an edit accepts it. The button at the bottom won't send until every comment
+   is accepted or skipped, then sends the go once and locks, so a second press can't
+   post twice.
    If the document has unaccepted suggested edits, the card says so at the top and marks
    them in each passage the way Docs does: struck through for a suggested deletion,
    underlined for a suggested insertion.
-4. **Post on the go.** The button sends a message such as
-   `Go: post comments 2, 3, 4 on "<title>".`, followed by the new wording of any comment
-   that was edited. Post exactly those numbers with `comment`, one call each, using the
-   edited wording where the message gives it. Pressing the button does not post
-   anything by itself; you do, when that message arrives.
+4. **Post on the go, quietly.** A card can't post by itself: its only line to you is a
+   chat message, such as `Go: post comments 2, 3, 4 on "<title>".`, followed by the new
+   wording of any comment that was edited. Post exactly those numbers with `comment`,
+   one call each, using the edited wording where the message gives it. Then answer in
+   one line (how many posted, on which document, with its link) and carry on with
+   whatever the conversation was doing. The person pressed a button mid-flow; don't
+   turn it into a new topic.
 
 **That message is the approval.** On a colleague's document, post nothing it doesn't
 list, and nothing in words other than the ones it shows. A later change to a comment
