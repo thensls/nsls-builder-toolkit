@@ -50,9 +50,23 @@ _GIT_REPO_ENV = (
 
 
 def _git_env():
-    """The environment for every git call aimed at a toolkit checkout."""
+    """The environment for every git call aimed at a toolkit checkout, and for
+    every `claude plugin` call that makes git fetch one.
+
+    A hook must never ask anyone for a sign-in. GIT_TERMINAL_PROMPT=0 stops
+    git's own terminal question, but two other askers ignore it. Git Credential
+    Manager, the default on Windows, opens a sign-in WINDOW when a remote wants
+    credentials it does not hold; GCM_INTERACTIVE=never makes it fail instead.
+    An askpass helper is a second program git runs to ask; an empty GIT_ASKPASS
+    turns that off (git treats empty as "none", and stops looking for another).
+    Stored credentials still work: only the asking is switched off. With these
+    a remote this machine cannot read fails in a moment and silently, which is
+    what every caller here already treats as "offline".
+    """
     env = {k: v for k, v in os.environ.items() if k not in _GIT_REPO_ENV}
     env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GCM_INTERACTIVE"] = "never"
+    env["GIT_ASKPASS"] = ""
     return env
 
 # When a session-ping can't be delivered (timeout / network / proxy down), we
@@ -1016,7 +1030,7 @@ def report_personal_fork_drift(deadline=None):
     onto it (see _fast_forward_clean_fork); any other fork gets the offer.
     """
     plugin_dir = CONFIG_DIR / "local-plugins" / PERSONAL_PLUGIN
-    if not (plugin_dir / ".git").exists():
+    if not (plugin_dir / ".git").exists() or _follows_delivered_copy(plugin_dir):
         return
 
     def remaining():
@@ -1208,6 +1222,10 @@ def git_pull(deadline=None):
         plugin_dir = CONFIG_DIR / "local-plugins" / plugin
         if not (plugin_dir / ".git").exists():
             continue
+        if _follows_delivered_copy(plugin_dir):
+            continue   # kept current from the copy Claude delivers; its .git is a placeholder
+        if plugin == PERSONAL_PLUGIN and _PERSONAL_DELIVERY_BUSY:
+            continue   # another session's hook is taking this folder over right now
         if deadline - time.monotonic() <= 0:
             break
         try:
@@ -1232,8 +1250,451 @@ def git_pull(deadline=None):
         pass
 
 
-def org_plugin_installed():
-    """True once the toolkit is installed as a real Claude Code plugin."""
+# --- the Personal Toolkit folder follows the copy NSLS delivers through Claude ---
+# Once NSLS's repository is private, a computer with no GitHub sign-in can no
+# longer pull the Personal Toolkit. NSLS's Claude organization can deliver it
+# instead (see hooks/personal_delivery.py). Everything here does nothing at all
+# until such a copy exists for the signed-in account, so a computer without one
+# updates from GitHub exactly as before.
+PERSONAL_DELIVERY_NOTICE_STAMP = CONFIG_DIR / ".nsls-personal-delivery-notice"
+PERSONAL_DELIVERY_NOTICE_EVERY_H = 24
+# A session start spends at most this long copying. A first copy that needs
+# longer carries on at the next start; an update is a handful of small files.
+PERSONAL_DELIVERY_BUDGET_S = 4
+# True for the rest of this run when another session's hook holds the delivery
+# lock: it may be moving the folder's .git this second, so this run keeps its
+# own git out of that folder.
+_PERSONAL_DELIVERY_BUSY = False
+
+
+def _personal_delivery():
+    """The personal_delivery module beside this file, or None. None when this
+    file runs without one beside it: then nothing here acts, as before."""
+    try:
+        here = str(_own_hooks_dir())
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import personal_delivery
+
+        return personal_delivery
+    except Exception:
+        return None
+
+
+def _follows_delivered_copy(plugin_dir):
+    """True when this folder is kept current from the copy Claude delivers.
+    It is then not a checkout: no git command belongs in it."""
+    pd = _personal_delivery()
+    try:
+        return bool(pd and pd.is_delivered(plugin_dir))
+    except Exception:
+        return False
+
+
+def _personal_checkout_verdict(plugin_dir, deadline):
+    """What git says about a checkout sitting in the Personal Toolkit folder.
+
+    {"plain": True, "shipped": {...}, "origin": {...}} only when it is NSLS's
+    own repository, on main, and holds nothing of its owner's: no unsaved or
+    untracked file, no commit NSLS lacks, no other branch, no stash, no linked
+    worktree, no operation in progress. Anything else is {"plain": False,
+    "why": ...}: "fork", "own-changes", or "unknown" when git could not say.
+    Unknown is never read as plain. Reads only; changes nothing.
+    """
+    def no(why, origin=None):
+        return {"plain": False, "why": why, "origin": origin or {}}
+
+    def git(*args, cap=3):
+        left = deadline - time.monotonic()
+        if left < 0.5:
+            raise TimeoutError
+        return _git_rc(plugin_dir, *args, timeout=min(cap, left))
+
+    try:
+        if not (plugin_dir / ".git").is_dir():
+            return no("unknown")         # a linked worktree's pointer, or nothing
+        url = _pull_source_url(git)
+        rc, head = git("rev-parse", "HEAD")
+        origin = {"remote": _safe_text(url), "head": head if rc == 0 else ""}
+        if not url:
+            return no("unknown", origin)
+        if not _is_canonical_origin(url):
+            return no("fork", origin)
+        rc, branch = git("symbolic-ref", "--short", "-q", "HEAD")
+        if rc != 0 or branch != "main":
+            return no("own-changes", origin)
+        rc, paths = git("rev-parse", *[a for name in GIT_OP_STATE for a in ("--git-path", name)])
+        if rc != 0:
+            return no("unknown", origin)
+        if any(_git_path_exists(plugin_dir, rel) for rel in paths.splitlines()):
+            return no("own-changes", origin)
+        if (plugin_dir / ".gitmodules").exists():
+            return no("own-changes", origin)
+        rc, sparse = git("config", "--bool", "--get", "core.sparseCheckout")
+        if sparse == "true":
+            return no("own-changes", origin)
+        pd = _personal_delivery()
+        if pd is None:
+            return no("unknown", origin)
+
+        def theirs_in(status):
+            # The record a take-over writes just before it moves .git is ours,
+            # not the owner's: one interrupted at that point must be able to
+            # finish.
+            own_record = f"?? {pd.MARKER}"
+            return [line for line in status.splitlines() if line.strip() and line != own_record]
+
+        rc, dirty = git(*PERSONAL_STATUS_ARGS)
+        if rc != 0:
+            return no("unknown", origin)
+        if theirs_in(dirty):
+            return no("own-changes", origin)
+        rc, ahead = git("rev-list", "--count", "@{upstream}..HEAD")
+        if rc != 0 or not ahead.isdigit():
+            return no("unknown", origin)
+        if ahead != "0":
+            return no("own-changes", origin)
+        rc, heads = git("for-each-ref", "--format=%(refname)", "refs/heads")
+        if rc != 0:
+            return no("unknown", origin)
+        if set(heads.split()) != {"refs/heads/main"}:
+            return no("own-changes", origin)
+        rc, _ = git("rev-parse", "-q", "--verify", "refs/stash")
+        if rc == 0:
+            return no("own-changes", origin)
+        try:
+            if any((plugin_dir / ".git" / "worktrees").iterdir()):
+                return no("own-changes", origin)   # /unblock works in one
+        except OSError:
+            pass
+        # -v: each file with its index flag. Anything but a plain "H" is a
+        # file git has been told to stop looking at (assume-unchanged shows in
+        # lower case, skip-worktree as "S"): `git status` calls it clean
+        # whatever its owner has done to it, so nothing above vouches for it.
+        rc, listed = git("ls-files", "-v", "-z", cap=5)
+        if rc != 0:
+            return no("unknown", origin)
+        tracked = []
+        for entry in listed.split("\0"):
+            if not entry:
+                continue
+            flag, _, name = entry.partition(" ")
+            if flag != "H" or not name:
+                return no("own-changes", origin)
+            tracked.append(name)
+        # What git vouches for, pinned down. Every tracked file is hashed as it
+        # is on disk, and then git is asked once more whether the checkout is
+        # still clean and still on the same commit. Hashes taken between two
+        # clean answers are a clean checkout's. They travel with this verdict:
+        # an edit saved even a moment later makes its file differ from them,
+        # and a file that differs is its owner's, never overwritten. (Hashing
+        # the folder again at take-over time would fold that edit in.)
+        shipped = pd.hashes_of(plugin_dir, tracked)
+        rc, dirty = git(*PERSONAL_STATUS_ARGS)
+        rc_head, head_now = git("rev-parse", "HEAD")
+        if rc != 0 or rc_head != 0:
+            return no("unknown", origin)
+        if theirs_in(dirty) or head_now != origin["head"]:
+            return no("own-changes", origin)
+        return {"plain": True, "shipped": shipped, "origin": origin}
+    except Exception:
+        return no("unknown")
+
+
+def _take_over_personal_folder(pd, found, plugin_dir, kind, deadline, adopt):
+    """Decide whether a checkout or a plain copy may follow the delivered copy,
+    and switch it if so. Without the owner's say-so (`adopt`), only a folder
+    holding nothing of theirs is switched, and never to an older version."""
+    def kept(why, **extra):
+        pd.forget_unfinished(plugin_dir)
+        return dict(extra, outcome="kept", why=why)
+
+    if not adopt and (plugin_dir / pd.KEEP_ON_GITHUB).exists():
+        return kept("opt-out")
+    shipped, origin = {}, {}
+    if kind in ("checkout", "taking"):
+        verdict = _personal_checkout_verdict(plugin_dir, deadline)
+        origin = verdict.get("origin") or {}
+        if not adopt:
+            if not verdict["plain"]:
+                return kept(verdict["why"])
+            shipped = verdict["shipped"]
+    ours, edited = pd.update_entries(CONFIG_DIR)
+    if not adopt:
+        # Every reason to leave the folder alone is checked before anything is
+        # changed, settings.json included.
+        if pd.older(found.version, pd.version_of(plugin_dir)):
+            return kept("older")         # GitHub is ahead of the delivered copy
+        if edited:
+            return kept("edited-entry")
+        theirs = pd.standing_in_the_way(CONFIG_DIR, found, shipped)
+        if theirs:
+            return kept("own-changes", changed=theirs)
+    if ours:
+        if not pd.remove_update_entries(CONFIG_DIR):
+            return {"outcome": "retry", "why": "settings"}
+        if not adopt:
+            # The pull that entry registered may be running in this folder
+            # right now, started by this same session. Take the folder over at
+            # the next start, when nothing else is pulling it.
+            return {"outcome": "entries"}
+    res = pd.take_over(CONFIG_DIR, found, shipped=shipped, origin=origin,
+                       deadline=deadline, take_theirs=adopt)
+    if edited:
+        res["edited_entry"] = True
+    return res
+
+
+def _personal_delivery_command(request):
+    return f'bash "{_own_hooks_dir() / "run-hook.sh"}" personal-delivery {request}'
+
+
+def _personal_delivery_notice_due():
+    """At most one "your changes are holding updates back" notice a day."""
+    try:
+        if PERSONAL_DELIVERY_NOTICE_STAMP.exists():
+            age_h = (time.time() - PERSONAL_DELIVERY_NOTICE_STAMP.stat().st_mtime) / 3600
+            if 0 <= age_h < PERSONAL_DELIVERY_NOTICE_EVERY_H:
+                return False
+        PERSONAL_DELIVERY_NOTICE_STAMP.parent.mkdir(parents=True, exist_ok=True)
+        PERSONAL_DELIVERY_NOTICE_STAMP.touch()
+    except OSError:
+        pass
+    return True
+
+
+def _named(paths, limit=5):
+    shown = ", ".join(_safe_text(p, 80) for p in list(paths)[:limit])
+    more = len(paths) - limit
+    return shown + (f" and {more} more" if more > 0 else "")
+
+
+def _say_personal_delivery(pd, res, found, plugin_dir):
+    """What a session start says about the pass it just made. Almost always
+    nothing: a folder that was made, updated or already current is not news.
+    Only two things are: the one-time switch away from GitHub, and updates held
+    back by the owner's own changes. Our own words and verified values only."""
+    outcome = res.get("outcome")
+    where = _safe_text(plugin_dir)
+    was_checkout = res.get("was") in ("checkout", "taking")
+    if outcome == "converted":
+        history = (f" instead of pulling from GitHub. Its git history is kept inside the folder "
+                   f"as {pd.KEPT_GIT}." if was_checkout else ".")
+        print(
+            f"[NSLS Personal Toolkit] This computer's Personal Toolkit folder ({where}) now "
+            f"follows the copy NSLS delivers through Claude{history} It is on version "
+            f"{found.version} and keeps itself current; nobody needs a GitHub sign-in for it. "
+            f"There is nothing for the builder to do: mention this only if they ask about "
+            f"updating the Personal Toolkit or about that folder."
+        )
+        return
+    if outcome == "paused":
+        changed = res.get("changed") or []
+        if not changed or not _personal_delivery_notice_due():
+            return
+        print(
+            f"[NSLS Personal Toolkit] Updates to this person's Personal Toolkit are paused: "
+            f"they changed or removed {len(changed)} file(s) in its folder ({_named(changed)}), "
+            f"so NSLS's newer version ({found.version}; the folder is on "
+            f"{_safe_text(res.get('have') or 'an earlier one', 20)}) was not applied. Nothing of "
+            f"theirs was touched. Mention it in ONE plain sentence at a natural moment and offer "
+            f"the choice: keep their changes as they are (updates stay paused), or take NSLS's "
+            f"version, which first moves each file they changed into a .set-aside folder inside "
+            f"{where} so nothing is lost. If they choose NSLS's version, run this yourself: "
+            f"{_personal_delivery_command('adopt')} . NEVER hand them a command."
+        )
+        return
+    if outcome == "kept" and res.get("why") == "own-changes":
+        have = pd.version_of(plugin_dir)
+        if not pd.older(have, found.version) or not _personal_delivery_notice_due():
+            return   # not behind what NSLS delivers: nothing to offer
+        if was_checkout:
+            what = ("holds work of their own (edited files, commits or branches), so it was not "
+                    "switched to the copy NSLS now delivers through Claude. It still updates "
+                    "from GitHub, which needs a GitHub sign-in, and it is behind")
+            stay = "stay on GitHub (their work stays as it is; updates need them signed in to GitHub)"
+            keeps = "keeps their git history inside the folder and "
+        else:
+            what = ("is a plain copy with nothing keeping it current, and it differs from the "
+                    "copy NSLS now delivers through Claude in ways that may be their own "
+                    "changes, so it was left alone. It is behind")
+            stay = "leave the folder as it is (it will not update)"
+            keeps = ""
+        print(
+            f"[NSLS Personal Toolkit] This person's Personal Toolkit folder ({where}) {what}: "
+            f"NSLS delivers version {found.version}, the folder is on "
+            f"{_safe_text(have or 'an unknown version', 20)}. Mention it in ONE plain sentence "
+            f"at a natural moment and offer the choice: {stay}, or switch the folder to the "
+            f"delivered copy, which {keeps}moves every file it replaces into a .set-aside folder "
+            f"there, so nothing is lost. If they choose to switch, run this yourself: "
+            f"{_personal_delivery_command('adopt')} . NEVER hand them a command."
+        )
+
+
+def deliver_personal_toolkit(deadline=None, request=None):
+    """Keep the Personal Toolkit folder in step with the copy Claude delivers.
+
+    Returns None, having done nothing, when NSLS's Claude organization delivers
+    no Personal Toolkit to the signed-in account: that is every computer until
+    delivery is switched on. Otherwise one pass (see personal_delivery.py): make
+    the folder, update it, or take over a checkout that holds nothing of its
+    owner's. `request` is "adopt" when the owner has said yes to replacing
+    their own changes, "now" when a skill wants the result said out loud.
+    """
+    pd = _personal_delivery()
+    if pd is None:
+        return None
+    found = pd.offer(CONFIG_DIR)
+    if found is None:
+        return None
+    if deadline is None:
+        deadline = time.monotonic() + PERSONAL_DELIVERY_BUDGET_S
+    plugin_dir = pd.folder(CONFIG_DIR)
+    adopt = request == "adopt"
+    kind = pd.state(plugin_dir)
+    if kind in ("none", "delivered"):
+        res = pd.refresh(CONFIG_DIR, found, deadline, take_theirs=adopt)
+    else:
+        res = _take_over_personal_folder(pd, found, plugin_dir, kind, deadline, adopt)
+    res.setdefault("version", found.version)
+    res["folder"] = str(plugin_dir)
+    res["was"] = kind
+    if res.get("outcome") == "retry" and res.get("why") == "busy":
+        global _PERSONAL_DELIVERY_BUSY
+        _PERSONAL_DELIVERY_BUSY = True
+    if request is None:
+        _say_personal_delivery(pd, res, found, plugin_dir)
+        if res.get("outcome") in ("created", "updated", "converted"):
+            print(f"personal toolkit {res['outcome']}: version {found.version}", file=sys.stderr)
+    return res
+
+
+def quieten_personal_pull():
+    """Make the Personal Toolkit's own update entry unable to ask for a sign-in.
+
+    hooks/personal_delivery.py has the why. This is the one part of that module
+    that acts with nothing delivered: the entry must already be quiet on the
+    day the repository goes private, on every computer that still has it.
+    """
+    pd = _personal_delivery()
+    if pd is None:
+        return
+    if pd.quieten_update_entries(CONFIG_DIR):
+        print("personal-toolkit update hook can no longer ask for a GitHub sign-in", file=sys.stderr)
+
+
+def personal_delivery_request(request):
+    """`run-hook.sh personal-delivery now|adopt`: one pass, with time to finish,
+    and the result in plain words for the skill (or Claude) that asked."""
+    res = deliver_personal_toolkit(deadline=time.monotonic() + 60, request=request)
+    if res is None:
+        print("PERSONAL_TOOLKIT_NOT_DELIVERED: NSLS's Claude organization delivers no Personal "
+              "Toolkit to this account on this computer, so nothing was changed.")
+        return
+    outcome, where = res.get("outcome"), _safe_text(res.get("folder", ""))
+    version = _safe_text(res.get("version") or "", 20)
+    if outcome in ("created", "updated", "current", "converted", "adopted"):
+        print(f"PERSONAL_TOOLKIT_READY: version {version} is in {where}, kept current from the "
+              f"copy NSLS delivers through Claude.")
+        if res.get("set_aside"):
+            print(f"The files it replaced were moved to {_safe_text(res['set_aside'])}; nothing "
+                  f"was deleted. Tell the builder where they are.")
+        if res.get("edited_entry"):
+            print("An update entry for this folder that someone edited by hand is still in "
+                  "settings.json and will now fail at every session start. Show it to the "
+                  "builder and offer to remove it.")
+        try:
+            sync_pointers()   # a new folder's skills show up without a restart
+        except Exception:
+            pass
+    elif outcome == "paused":
+        print(f"PERSONAL_TOOLKIT_PAUSED: the builder changed or removed "
+              f"{len(res.get('changed') or [])} file(s) in {where} ({_named(res.get('changed') or [])}), "
+              f"so nothing was replaced. With their yes, `personal-delivery adopt` moves those "
+              f"files to a .set-aside folder and takes NSLS's version.")
+    elif outcome == "entries":
+        print(f"PERSONAL_TOOLKIT_PENDING: {where} switches to the delivered copy at the next "
+              f"session start. Nothing is needed from the builder.")
+    elif outcome == "kept":
+        why = {"fork": "it is the builder's own fork", "own-changes": "it holds the builder's own work",
+               "opt-out": "the builder chose to keep it on GitHub",
+               "older": "it is already newer than the delivered copy",
+               "edited-entry": "its update entry in settings.json was edited by hand"}.get(
+                   res.get("why"), "it could not be checked")
+        print(f"PERSONAL_TOOLKIT_KEPT: {where} was left exactly as it is because {why}. With the "
+              f"builder's yes, `personal-delivery adopt` switches it to the delivered copy, "
+              f"keeping its git history and moving every replaced file to a .set-aside folder.")
+    else:
+        print("PERSONAL_TOOLKIT_RETRY: the copy could not be finished just now (the delivered "
+              "copy is still arriving, or a file is in use). Nothing is broken; try again in a "
+              "minute or at the next session start.")
+
+
+SYNCED_PLUGIN_KEY = "nsls-builder-toolkit@synced"
+
+
+def _synced_copy():
+    """The synced_copy module beside this file, or None.
+
+    It knows what a copy delivered by NSLS's Claude organization looks like
+    (see hooks/synced_copy.py). None when this file runs without one beside it:
+    then nothing here treats the machine as synced, which is exactly how every
+    copy behaved before organization sync existed.
+    """
+    try:
+        here = str(_own_hooks_dir())
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import synced_copy
+
+        return synced_copy
+    except Exception:
+        return None
+
+
+def _own_hooks_dir():
+    """The hooks folder this file runs from. __file__ is undefined when the
+    settings shim runs this file through `python3 -c`: then it is the clone's."""
+    if "__file__" in globals():
+        return Path(__file__).resolve().parent
+    return PLUGIN_DIR / "hooks"
+
+
+def org_copy_root():
+    """The organization-synced copy THIS file is running from, or "".
+
+    Non-empty is proof that Claude Code loaded the synced copy this session.
+    """
+    sc = _synced_copy()
+    if sc is None or "__file__" not in globals():
+        return ""
+    try:
+        return sc.running_root(__file__, CONFIG_DIR)
+    except Exception:
+        return ""
+
+
+def org_copy_present():
+    """True when the organization's copy is on this machine for this account."""
+    sc = _synced_copy()
+    try:
+        return bool(sc and (org_copy_root() or sc.present(CONFIG_DIR)))
+    except Exception:
+        return False
+
+
+def org_copy_active():
+    """True when the organization's copy delivers the toolkit here: this file
+    runs from it, or it is on disk and the builder has not switched it off."""
+    sc = _synced_copy()
+    try:
+        return bool(sc and (org_copy_root() or sc.active(CONFIG_DIR)))
+    except Exception:
+        return False
+
+
+def marketplace_plugin_installed():
+    """True when the toolkit has a marketplace install record on this machine."""
     try:
         # utf-8-sig: tolerate a UTF-8 BOM (PowerShell-written files carry one).
         registry = json.loads(
@@ -1249,6 +1710,39 @@ def org_plugin_installed():
         return False
 
 
+def marketplace_plugin_active():
+    """A marketplace install the builder has not switched off.
+
+    The synced copy's own switch (`nsls-builder-toolkit@synced`) is not this
+    one's: turning the organization's copy off says nothing about a marketplace
+    install beside it.
+    """
+    if not marketplace_plugin_installed():
+        return False
+    try:
+        settings = json.loads(
+            (CONFIG_DIR / "settings.json").read_text(encoding="utf-8-sig")
+        )
+        for key, enabled in settings.get("enabledPlugins", {}).items():
+            if (key.startswith("nsls-builder-toolkit@") and key != SYNCED_PLUGIN_KEY
+                    and enabled is False):
+                return False
+    except Exception:
+        pass
+    return True
+
+
+def org_plugin_installed():
+    """True once the toolkit is on this machine as a real Claude Code plugin:
+    installed from the marketplace, or delivered by NSLS's Claude organization.
+
+    The organization's copy has no record in installed_plugins.json, so reading
+    that file alone called such a machine "not installed", and the toolkit then
+    tried to install the marketplace plugin beside it.
+    """
+    return marketplace_plugin_installed() or org_copy_present()
+
+
 def org_plugin_active():
     """Installed AND not explicitly disabled.
 
@@ -1257,18 +1751,7 @@ def org_plugin_active():
     anything that hands responsibility over to the plugin gates on active,
     never on merely installed.
     """
-    if not org_plugin_installed():
-        return False
-    try:
-        settings = json.loads(
-            (CONFIG_DIR / "settings.json").read_text(encoding="utf-8-sig")
-        )
-        for key, enabled in settings.get("enabledPlugins", {}).items():
-            if key.startswith("nsls-builder-toolkit@") and enabled is False:
-                return False
-    except Exception:
-        pass
-    return True
+    return marketplace_plugin_active() or org_copy_active()
 
 
 def run_plugin_migration():
@@ -1301,8 +1784,16 @@ def run_plugin_migration():
     same point every session and never finished.
 
     Returns True when this session belonged to stage A.
+
+    A copy delivered by NSLS's Claude organization runs its OWN migration file,
+    not the clone's. The clone updates by `git pull`, which needs a GitHub
+    sign-in once the repository is private, so on many machines it stops
+    moving; the organization's copy is the one Claude Code keeps current. Such
+    a machine never needs stage A (the plugin is already here), and stage B
+    still retires whatever shims an old installer left behind.
     """
-    script = PLUGIN_DIR / "hooks" / "migrate_to_plugin.py"
+    own = org_copy_root()
+    script = ((Path(own) if own else PLUGIN_DIR) / "hooks" / "migrate_to_plugin.py")
     if not script.exists():
         return False
     stage_a = not org_plugin_installed()
@@ -1482,7 +1973,7 @@ def _heal_plugin_drift(claude, record, head, deadline):
         try:
             return subprocess.run(
                 [*claude, "plugin", *args, ORG_PLUGIN_KEY],
-                capture_output=True, timeout=timeout,
+                capture_output=True, timeout=timeout, env=_git_env(),
             ).returncode == 0
         except Exception:
             return False
@@ -1519,6 +2010,9 @@ def _find_claude():
     shell may not have on PATH yet. Without this the daily update silently did
     nothing on most Windows machines — the exact silent failure this file exists
     to prevent.
+
+    On a Mac, last of all, the desktop app's own bundled CLI (see _mac_app_cli):
+    a builder who only ever uses the app has no other `claude` anywhere.
     """
     found = shutil.which("claude")
     if found:
@@ -1585,6 +2079,18 @@ def _find_claude():
                 continue
         if best:
             return _claude_argv(best[1])
+    # The Mac desktop app's bundled CLI. Nothing here looked for it, so on a Mac
+    # with the app and no separate CLI every caller came back empty-handed: the
+    # self-install could never install the plugin (it said "the claude command
+    # could not be found" once a day, for good), and the machine stayed on its
+    # folder copy with no agents and none of the plugin's own hooks.
+    if _IS_MAC:
+        try:
+            found = _mac_app_cli(home / "Library" / "Application Support" / "Claude" / "claude-code")
+        except Exception:
+            found = None
+        if found:
+            return _claude_argv(found)
     return None
 
 
@@ -1613,6 +2119,50 @@ def _bundled_clis(folder):
             except OSError:
                 continue
     return found
+
+
+_IS_MAC = sys.platform == "darwin"
+# Where the Mac app has kept its CLI under claude-code/<version>/. The newest
+# shape is <version>/<hash>/claude.app/Contents/MacOS/claude (seen 2026-11-12).
+_MAC_APP_CLI_PATTERNS = (
+    "*/*/claude.app/Contents/MacOS/claude",
+    "*/claude.app/Contents/MacOS/claude",
+    "*/claude",
+)
+
+
+def _mac_app_cli(folder):
+    """The newest CLI the Mac desktop app keeps under `folder`, or None.
+
+    The version is the folder directly under claude-code, compared numerically
+    (2.1.321 is newer than 2.1.99); the newest file breaks a tie. A Linux build
+    is skipped: the app keeps one for its VM, and it cannot run from a hook
+    (`exec format error` on every call, which would read as "installed nothing"
+    forever). Reading four bytes is cheaper than running it to find out.
+    """
+    best = None
+    for pattern in _MAC_APP_CLI_PATTERNS:
+        try:
+            hits = list(folder.glob(pattern))
+        except OSError:
+            continue
+        for exe in hits:
+            try:
+                if not (exe.is_file() and os.access(exe, os.X_OK)):
+                    continue
+                with open(exe, "rb") as f:
+                    if f.read(4) == b"\x7fELF":
+                        continue
+                try:
+                    ver = tuple(int(x) for x in exe.relative_to(folder).parts[0].split("."))
+                except ValueError:
+                    ver = (0,)
+                key = (ver, exe.stat().st_mtime)
+            except (OSError, ValueError):
+                continue
+            if best is None or key > best[0]:
+                best = (key, exe)
+    return best[1] if best else None
 
 
 def _claude_argv(path):
@@ -1849,8 +2399,14 @@ def ensure_plugin_fresh(reserve=MAIN_RESERVE_S):
     literals, validated versions, validated skill names and validated 40-hex
     shas are echoed — never CLI or git output, which a hostile marketplace
     could shape.
+
+    Only a marketplace install is kept fresh here. A copy delivered by NSLS's
+    Claude organization has no install record and no marketplace clone: Claude
+    Code replaces it when NSLS publishes, and `claude plugin update` has
+    nothing to act on. Asking GitHub about it would be a network call per
+    session that can change nothing.
     """
-    if not org_plugin_active():
+    if org_copy_root() or not marketplace_plugin_active():
         return
     try:
         now = time.time()
@@ -1894,6 +2450,7 @@ def _run_plugin_update(claude):
         return subprocess.run(
             [*claude, "plugin", "update", ORG_PLUGIN_KEY],
             capture_output=True, timeout=UPDATE_TIMEOUT_S, stdin=subprocess.DEVNULL,
+            env=_git_env(),
         ).returncode == 0
     except Exception:  # TimeoutExpired included: too slow here, try again later
         return False
@@ -2022,7 +2579,462 @@ def _heal_and_announce(claude, record, head, deadline):
     return False
 
 
+HANDOVER_STAMP = CONFIG_DIR / ".nsls-org-copy-handover-check"
+# Written when THIS hook switched the marketplace install off, so the clean-up
+# only ever removes an install the toolkit itself retired, never one a builder
+# switched off for their own reasons.
+HANDOVER_MARKER = CONFIG_DIR / ".nsls-org-copy-handover"
+# Written when someone switched the marketplace install back ON after a
+# hand-over. That is a builder choosing the marketplace install (a developer
+# pinned to a test branch, say), and the hook never hands this machine over
+# again while the file is there. Delete it to let the hand-over resume.
+HANDOVER_DECLINED = CONFIG_DIR / ".nsls-org-copy-handover-declined"
+# Each CLI call here is local bookkeeping (measured under a second); the cap is
+# for a machine that is struggling. Step 1 makes at most four of them, and the
+# fourth is the undo, so it starts only with room for all four: a hook killed
+# between the switch-off and its check would leave the switch-off unchecked.
+HANDOVER_CALL_S = 8
+HANDOVER_CALLS = 4
+# Every CLI call that changes the install names the scope. The install this
+# hook reads (_installed_plugin_record) and the switch it reads
+# (marketplace_plugin_active) are the USER-scope ones, and `plugin disable`
+# picks a scope by itself when none is given: in a project that also enables
+# the toolkit it could switch that project's entry off and leave the user one
+# on, which is not the install being handed over.
+_USER_SCOPE = ("--scope", "user")
+# Sessions that sign in some other way than a claude.ai account neither
+# download nor load synced plugins (Claude Code's plugin-loading reference).
+# On such a session the marketplace install is the only toolkit there is.
+_NO_SYNC_ENV = (
+    "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK",
+    "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+)
+
+
+def _version_tuple(text):
+    try:
+        return tuple(int(part) for part in str(text).split("."))
+    except Exception:
+        return None
+
+
+def _cli_json(claude, *args, timeout=HANDOVER_CALL_S):
+    """A `claude` call that prints JSON, parsed; None on any failure."""
+    try:
+        done = subprocess.run(
+            [*claude, *args], capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=timeout, stdin=subprocess.DEVNULL,
+        )
+        return json.loads(done.stdout) if done.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def _cli_ok(claude, *args, timeout=HANDOVER_CALL_S):
+    try:
+        return subprocess.run(
+            [*claude, *args], capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL,
+        ).returncode == 0
+    except Exception:
+        return False
+
+
+def _listed_org_copy(claude):
+    """What Claude Code ITSELF says about the organization's copy, or None when
+    it lists none: {"enabled": bool, "path": str}.
+
+    `claude plugin list --json` shows a synced plugin with `scope: "synced"`,
+    and leaves its installPath empty while another install of the same name
+    outranks it. That listing is the one statement about this account that this
+    hook does not have to infer: which account is signed in, whether NSLS turned
+    the plugin on for it, and whether the builder switched it off are all
+    already settled in it.
+    """
+    listing = _cli_json(claude, "plugin", "list", "--json")
+    if not isinstance(listing, list):
+        return None
+    for entry in listing:
+        if isinstance(entry, dict) and entry.get("id") == SYNCED_PLUGIN_KEY:
+            return {"enabled": entry.get("enabled") is True,
+                    "path": str(entry.get("installPath") or "")}
+    return None
+
+
+def _decline_handover():
+    """Record that a builder switched the marketplace install back on, and
+    drop the marker: a hand-over that was cancelled must never authorise the
+    clean-up later, when the builder switches that install off for reasons of
+    their own."""
+    try:
+        HANDOVER_DECLINED.write_text(f"{int(time.time())}\n", encoding="utf-8")
+    except Exception:
+        pass
+    try:
+        HANDOVER_MARKER.unlink()
+    except Exception:
+        pass
+
+
+def _force_marketplace_on():
+    """Last resort for the undo: set the marketplace install's switch back to
+    on in settings.json directly, when the CLI would not. One key, written the
+    way the migration writes this file (temp file, then replace). True when the
+    file now says on."""
+    try:
+        path = CONFIG_DIR / "settings.json"
+        settings = json.loads(path.read_text(encoding="utf-8-sig"))
+        if not isinstance(settings, dict):
+            return False
+        plugins = settings.setdefault("enabledPlugins", {})
+        if not isinstance(plugins, dict):
+            return False
+        plugins[ORG_PLUGIN_KEY] = True
+        tmp = path.with_name(path.name + ".nsls-tmp")
+        tmp.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        return False
+
+
+def _undo_handover(claude):
+    """Switch the marketplace install back on, and make sure it took.
+
+    This runs when the organization's copy did not take over. If it fails
+    quietly the machine has NO toolkit: the marketplace install off, the
+    organization's copy not loading, and no hook left to notice. So: the CLI
+    first, then the settings file directly, and if neither worked, say so now,
+    while this session can still pass it on.
+    """
+    _cli_ok(claude, "plugin", "enable", ORG_PLUGIN_KEY, *_USER_SCOPE)
+    if marketplace_plugin_active():
+        return True
+    if _force_marketplace_on() and marketplace_plugin_active():
+        return True
+    print(
+        "WARNING - the NSLS toolkit was switched off on this computer during an "
+        "update that did not finish, and switching it back on failed. It will "
+        "not load in the next session. Tell the builder now, in one plain "
+        "sentence, and offer the repair: run `claude plugin enable "
+        f"{ORG_PLUGIN_KEY}`, then ask them to open a new session. If that "
+        "fails too, suggest they tell the NSLS AI team today."
+    )
+    return False
+
+
+def _write_handover_marker(record, synced_version):
+    try:
+        tmp = HANDOVER_MARKER.with_name(HANDOVER_MARKER.name + ".tmp")
+        tmp.write_text(json.dumps({
+            "at": int(time.time()), "from": record["version"], "to": synced_version,
+        }) + "\n", encoding="utf-8")
+        os.replace(tmp, HANDOVER_MARKER)
+    except Exception:
+        pass
+
+
+def hand_over_to_org_copy(reserve=MAIN_RESERVE_S):
+    """Let the copy NSLS's Claude organization delivers take over from a
+    marketplace install. True when this session did something.
+
+    Claude Code loads one plugin per name, and a marketplace install outranks a
+    synced copy. So a machine that has both keeps running the marketplace one,
+    and once the repository is private that one can no longer update on a
+    machine with no GitHub sign-in: the organization's copy sits beside it,
+    current and unused. This is the switch.
+
+    Two steps, a session apart, because the second needs proof the first worked.
+
+    Step 1, running from the marketplace install: switch that install OFF.
+    Not uninstall. Switching it off leaves its files and its record in place, so
+    the undo is one setting and needs no network; an uninstall could only be
+    undone by fetching the repository again, which is exactly what this machine
+    may be unable to do. It happens only when all of this holds:
+      * the marketplace install is on, and this session can load synced
+        plugins at all (see _NO_SYNC_ENV);
+      * the organization's copy is on disk for the signed-in account, whole,
+        not switched off, new enough to know it is one (it carries
+        hooks/synced_copy.py), and not older than the install it replaces;
+      * Claude Code itself lists it as enabled for this account.
+    Then Claude Code is asked again. If it does not now show the organization's
+    copy as the one it will load, the marketplace install is switched back on
+    at once and nothing has changed.
+
+    Step 2, running from the organization's copy: the proof. If this hook's own
+    marker says it switched the marketplace install off, uninstall that install
+    and drop its marketplace, so nothing on the machine still points at the
+    repository. A marketplace install a builder switched off themselves has no
+    marker and is never touched.
+
+    A builder who switches the marketplace install back ON after a hand-over
+    has chosen it. The hook records that, drops its marker, and leaves this
+    machine alone from then on (see HANDOVER_DECLINED).
+
+    NSLS_NO_PLUGIN_MIGRATION=1 freezes this, as it freezes the migration.
+    """
+    if os.environ.get("NSLS_NO_PLUGIN_MIGRATION"):
+        return False
+    try:
+        if org_copy_root():
+            return _finish_handover(reserve)
+        return _start_handover(reserve)
+    except Exception:
+        return False
+
+
+def _handover_has_time(reserve):
+    """Room for every call a hand-over step can make, and for what follows it."""
+    return HOOK_BUDGET_S - _hook_elapsed() >= HANDOVER_CALLS * HANDOVER_CALL_S + reserve
+
+
+def _handover_due(now):
+    """At most one attempt per FRESH_RETRY_AFTER_TROUBLE_S: each costs CLI calls.
+    Claimed only once an attempt is really starting, so a session that was
+    merely short of time does not postpone the next one by two hours."""
+    try:
+        nxt = float(HANDOVER_STAMP.read_text(encoding="utf-8").strip())
+        if now < nxt <= now + FRESH_RETRY_AFTER_TROUBLE_S:
+            return False
+    except Exception:
+        pass
+    try:
+        HANDOVER_STAMP.write_text(f"{int(now + FRESH_RETRY_AFTER_TROUBLE_S)}\n", encoding="utf-8")
+    except Exception:
+        pass
+    return True
+
+
+def _start_handover(reserve):
+    if HANDOVER_DECLINED.is_file():
+        return False
+    if any(os.environ.get(name) for name in _NO_SYNC_ENV):
+        return False
+    record = _installed_plugin_record()
+    if not record or not marketplace_plugin_active():
+        return False
+    if HANDOVER_MARKER.is_file():
+        # This hook switched the install off, and it is on again: a builder
+        # switched it back. Theirs to keep.
+        _decline_handover()
+        return False
+    sc = _synced_copy()
+    root = sc.live_root(CONFIG_DIR) if sc else None
+    if root is None or sc.switched_off(CONFIG_DIR, root):
+        return False
+    if not (Path(root) / "hooks" / "synced_copy.py").is_file():
+        return False  # a copy from before the toolkit knew how to run as one
+    synced_version = sc.version(root)
+    have, want = _version_tuple(record["version"]), _version_tuple(synced_version)
+    if not have or not want or want < have:
+        return False  # never trade a newer toolkit for an older one
+    claude = _find_claude()
+    if not claude or not _handover_has_time(reserve):
+        return False  # a later session does it
+    if not _handover_due(time.time()):
+        return False
+    lock = _acquire_heal_lock()
+    if lock is None:
+        return False
+    try:
+        before = _listed_org_copy(claude)
+        if not before or not before["enabled"]:
+            return False  # Claude Code does not offer it to this account
+        if not _cli_ok(claude, "plugin", "disable", ORG_PLUGIN_KEY, *_USER_SCOPE):
+            # "Failed" includes "timed out after doing it": the setting can be
+            # written before the CLI is cut off. Left like that, the install
+            # is off with nothing checked and no marker. Put it back.
+            if not marketplace_plugin_active():
+                _undo_handover(claude)
+            return False
+        if marketplace_plugin_active():
+            # The CLI said yes, and the switch this hook reads is still on:
+            # whatever it switched off was not this install. No marker, or the
+            # next session would read "on again" as a builder's choice and
+            # give up on this machine for good.
+            return False
+        after = _listed_org_copy(claude)
+        if not (after and after["enabled"] and after["path"]):
+            # Claude Code would not load the organization's copy after all.
+            # Put things back exactly as they were; this needs no network.
+            _undo_handover(claude)
+            return False
+        _write_handover_marker(record, synced_version)
+        return True
+    finally:
+        _release_heal_lock(lock)
+
+
+def _finish_handover(reserve):
+    """Running from the organization's copy: remove the marketplace install
+    this hook switched off, and its marketplace."""
+    if not HANDOVER_MARKER.is_file():
+        return False
+    record = _installed_plugin_record()
+    if not record:
+        # Already gone (a builder, or an earlier session cut short after the
+        # uninstall): only the marker is left to clear.
+        try:
+            HANDOVER_MARKER.unlink()
+        except Exception:
+            pass
+        return False
+    if marketplace_plugin_active():
+        # Someone switched it back on: theirs to keep. Drop the marker now, or
+        # it would authorise this clean-up later, when they switch the install
+        # off for reasons of their own.
+        _decline_handover()
+        return False
+    claude = _find_claude()
+    if not claude or not _handover_has_time(reserve):
+        return False  # a later session does it
+    if not _handover_due(time.time()):
+        return False
+    lock = _acquire_heal_lock()
+    if lock is None:
+        return False
+    try:
+        if not _cli_ok(claude, "plugin", "uninstall", ORG_PLUGIN_KEY, *_USER_SCOPE):
+            return False
+        # Best-effort: with no plugin installed from it, the marketplace is
+        # only a pointer at a repository this machine may not be able to read.
+        _cli_ok(claude, "plugin", "marketplace", "remove", ORG_MARKETPLACE)
+        try:
+            HANDOVER_MARKER.unlink()
+        except Exception:
+            pass
+        return True
+    finally:
+        _release_heal_lock(lock)
+
+
 UPDATE_NOW_TIMEOUT_S = 120
+# The folder copy's on-request update: one fetch and one fast-forward.
+UPDATE_NOW_PULL_S = 60
+_SESSION_HOOK_MARKER = "nsls-builder-toolkit/hooks/session-start"
+
+
+def _session_hook_registered():
+    """True when this machine's settings.json runs the toolkit's session hook.
+
+    That entry (session-start.py on a Mac, session-start.ps1 on a PC) is the
+    only thing that updates a folder copy. The installers write it; nothing
+    else does.
+    """
+    try:
+        settings = json.loads(
+            (CONFIG_DIR / "settings.json").read_text(encoding="utf-8-sig"))
+        for entry in (settings.get("hooks") or {}).get("SessionStart") or []:
+            for hook in entry.get("hooks") or []:
+                command = str(hook.get("command", "")).replace("\\", "/")
+                if _SESSION_HOOK_MARKER in command:
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def _folder_copy_version():
+    """The folder copy's own version, or None. Only a value shaped like one."""
+    try:
+        version = json.loads(
+            (PLUGIN_DIR / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8-sig")
+        ).get("version")
+        if isinstance(version, str) and _PLUGIN_VERSION.fullmatch(version):
+            return version
+    except Exception:
+        pass
+    return None
+
+
+def _update_folder_copy():
+    """"Update my NSLS toolkit" on a machine with the folder copy and no plugin.
+
+    This used to print "its folder copy already updates itself at every session
+    start" and run nothing. That sentence was never checked. On a Mac where the
+    installer had registered no session hook and found no claude CLI, nothing
+    updated the copy at all, and a builder who asked for an update was told
+    there was nothing to do while 125 commits behind (2026-11). So: update the
+    copy now, then look at what would update it next time, and say which.
+    """
+    if not (PLUGIN_DIR / ".git").exists():
+        print("The NSLS toolkit is not on this machine in a form this command "
+              "can update. Suggest the builder run the NSLS toolkit installer "
+              "again, or tell the NSLS AI team.")
+        return
+    deadline = time.monotonic() + UPDATE_NOW_PULL_S
+    before = _git_out(PLUGIN_DIR, "rev-parse", "HEAD")
+    try:
+        code, out = _update_checkout(PLUGIN_DIR, deadline)
+    except Exception:
+        code, out = None, ""
+    after = _git_out(PLUGIN_DIR, "rev-parse", "HEAD")
+    moved = bool(before and after and before != after)
+    # An update that succeeds says where the copy now stands on ITS branch. Only
+    # a copy that follows NSLS's main can be called "the newest release": one on
+    # another branch pulls cleanly while main moves on, and one pinned to a
+    # commit is not meant to move. Each gets its own sentence, never a guess.
+    branch = _git_out(PLUGIN_DIR, "rev-parse", "--abbrev-ref", "HEAD")
+    follows_main = _git_out(PLUGIN_DIR, "rev-parse", "--abbrev-ref",
+                            "--symbolic-full-name", "@{u}") == "origin/main"
+    found = _folder_copy_version()
+    on = f" (version {found})" if found else ""
+    if branch == "HEAD":
+        result = ("This machine's copy of the NSLS toolkit is pinned to one fixed "
+                  f"commit{on}, so it was left where it is. That is a deliberate "
+                  "setting; a pinned copy does not update.")
+    elif (moved or code == 0) and follows_main:
+        result = (f"Updated this machine's copy of the NSLS toolkit to the newest release{on}."
+                  if moved else
+                  f"This machine's copy of the NSLS toolkit is already on the newest release{on}.")
+    elif moved or code == 0:
+        result = ("This machine's copy of the NSLS toolkit "
+                  + ("was updated" if moved else "is level with the branch it follows")
+                  + f"{on}, but that branch is not NSLS's main, so this is not "
+                  "necessarily the newest release. A note above says so if it is behind.")
+    elif code:
+        # The checkout itself said no (local changes, an unfinished operation,
+        # a branch it cannot protect): not a network problem.
+        result = ("This machine's copy of the NSLS toolkit was not updated"
+                  f"{on}: its own checkout refused the update. A warning above, "
+                  "if there is one, gives the reason and the fix.")
+    else:
+        result = ("This machine's copy of the NSLS toolkit could not be updated "
+                  f"just now{on}. The usual cause is no internet connection; try "
+                  "again in a few minutes.")
+    # The same explanations a session start gives, in the same order: why an
+    # update was refused, then a copy that pulls cleanly from a branch that is
+    # not main (silent when it follows main or is pinned).
+    plugin = PLUGIN_DIR.name
+    try:
+        if code == OP_IN_PROGRESS:
+            _warn_operation_in_progress(plugin, PLUGIN_DIR)
+        elif code == UNGUARDABLE_BRANCH:
+            _warn_unguardable_branch(plugin, PLUGIN_DIR)
+        elif code:
+            _warn_if_frozen(plugin, PLUGIN_DIR, out, deadline=deadline)
+        _warn_if_stale_by_configuration(plugin, PLUGIN_DIR)
+    except Exception:
+        pass
+    new_session = (" This session keeps the old version: tell the builder in one plain "
+                   "sentence to open a new session to use the update.") if moved else ""
+    if _session_hook_registered():
+        print(f"{result} It also updates itself each time a Claude Code session "
+              f"starts.{new_session}")
+        return
+    # The installer is the one writer of that hook, so the repair is to run it
+    # again from the copy already here: the README's own command on each system.
+    if os.name == "nt":
+        repair = ("powershell -NoProfile -ExecutionPolicy Bypass -File "
+                  f"\"{PLUGIN_DIR / 'install.ps1'}\"")
+    else:
+        repair = f"bash \"{PLUGIN_DIR / 'install.sh'}\""
+    print(f"{result} But nothing on this machine updates it automatically: the "
+          "toolkit's session hook is not registered and its plugin is not "
+          "installed, so it will fall behind again. Tell the builder that in one "
+          "plain sentence and offer the repair, which takes a few minutes: run "
+          f"`{repair}`, then have them quit and reopen Claude. If the repair does "
+          "not finish, suggest they tell the NSLS AI team.")
 
 
 def update_now():
@@ -2034,10 +3046,34 @@ def update_now():
     session-start path, it echoes only our own words, validated versions and
     validated skill names.
     """
-    if not org_plugin_installed():
-        print("The NSLS toolkit is not installed as a Claude Code plugin on this "
-              "machine, so there is nothing to update this way. Its folder copy "
-              "already updates itself at every session start.")
+    if org_copy_root() or (org_copy_active() and not marketplace_plugin_active()):
+        # Delivered by NSLS's Claude organization. Before this branch existed
+        # the builder was told the toolkit "is not installed as a Claude Code
+        # plugin", which is false, and pointed at a folder copy that may not
+        # exist.
+        sc = _synced_copy()
+        root = org_copy_root() or (sc.live_root(CONFIG_DIR) if sc else None)
+        found = sc.version(root) if sc and root else None
+        on = f" It is on version {found}." if found else ""
+        print("This machine gets the NSLS toolkit through NSLS's Claude "
+              "organization, and Claude keeps it up to date by itself, so there "
+              f"is nothing to run.{on} A new release arrives the next time Claude "
+              "starts after NSLS publishes it. Tell the builder in one plain "
+              "sentence to open a new session, and a second one if the first "
+              "still shows the old version. If a skill they expected is still "
+              "missing after that, it has probably not been released yet.")
+        return
+    if org_copy_present() and not marketplace_plugin_installed():
+        # On disk from the organization, switched off in this machine's own
+        # settings, and no other install to update.
+        print("This machine gets the NSLS toolkit through NSLS's Claude "
+              "organization, but it is switched off in this machine's Claude "
+              "settings, so there is nothing to update. Ask the builder whether "
+              f"to turn it back on; if yes, run `claude plugin enable "
+              f"{SYNCED_PLUGIN_KEY}` and tell them to open a new session.")
+        return
+    if not marketplace_plugin_installed():
+        _update_folder_copy()
         return
     claude = _find_claude()
     if not claude:
@@ -2055,6 +3091,7 @@ def update_now():
             updated = subprocess.run(
                 [*claude, "plugin", "update", ORG_PLUGIN_KEY],
                 capture_output=True, timeout=UPDATE_NOW_TIMEOUT_S, stdin=subprocess.DEVNULL,
+                env=_git_env(),
             ).returncode == 0
         except Exception:
             updated = False
@@ -3087,10 +4124,23 @@ def _policy_hook_owns_policy():
 
 def main():
     _utf8_stdio()
+    # Before the pull: a folder this takes over is no longer git's to update.
+    try:
+        deliver_personal_toolkit()
+    except Exception:
+        pass
+    try:
+        quieten_personal_pull()
+    except Exception:
+        pass
     git_pull()
     stage_a = run_plugin_migration()
     if not stage_a:  # stage A spent this session's freshness budget
-        ensure_plugin_fresh()
+        # Hand over first: a marketplace install that has just been switched
+        # off has nothing left to keep fresh, and the hand-over's CLI calls
+        # spent the time a freshness check would have used.
+        if not hand_over_to_org_copy():
+            ensure_plugin_fresh()
     sync_pointers()
     notice_own_skills()
     if not _policy_hook_owns_policy():
@@ -3129,9 +4179,17 @@ if __name__ == "__guardrails__":
     try:
         for _plugin in SYNC_PLUGINS:
             _dir = CONFIG_DIR / "local-plugins" / _plugin
-            if (_dir / ".git").exists():
+            if (_dir / ".git").exists() and not _follows_delivered_copy(_dir):
                 _warn_if_stale_by_configuration(
                     _plugin, _dir, deadline=time.monotonic() + 10)
+    except Exception:
+        pass
+    # The Personal Toolkit's own pull entry, made unable to ask for a sign-in.
+    # Git Credential Manager, whose window this is about, is the Windows
+    # default, and on a PC whose plugin hooks do not fire this is the only run
+    # that can do it.
+    try:
+        quieten_personal_pull()
     except Exception:
         pass
     # Stage A on Windows. This run_name is the ONLY path from the PowerShell
@@ -3159,7 +4217,10 @@ if __name__ == "__guardrails__":
     # margin; the .ps1's own start time arrives in NSLS_HOOK_STARTED_AT.
     try:
         if not stage_a:  # stage A spent this session's freshness budget
-            ensure_plugin_fresh(reserve=5)
+            # Same order as main(): hand over first, and keep fresh only what
+            # is still the live install.
+            if not hand_over_to_org_copy(reserve=5):
+                ensure_plugin_fresh(reserve=5)
     except Exception:
         pass
 
@@ -3179,5 +4240,10 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["--update-now"]:
         _utf8_stdio()
         update_now()
+    elif sys.argv[1:2] == ["--personal-delivery"]:
+        # `run-hook.sh personal-delivery now|adopt` (skills/personal-setup, and
+        # Claude when a builder says yes to the offer the session start made).
+        _utf8_stdio()
+        personal_delivery_request("adopt" if sys.argv[2:3] == ["adopt"] else "now")
     else:
         main()

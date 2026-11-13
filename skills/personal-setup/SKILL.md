@@ -33,8 +33,46 @@ if [ -f "$FULL_SKILL" ]; then echo "PERSONAL_KIT_PRESENT"; else echo "PERSONAL_K
 
 ## Step 2: Install + enable the personal toolkit (only if missing)
 
-Tell the builder: "One sec — grabbing the personal productivity skills." Then
-install, **preserving any existing `.env`** (the org `/nsls-setmeup` may have written
+Tell the builder: "One sec — grabbing the personal productivity skills."
+
+### 2a. First, the copy NSLS delivers through Claude (no GitHub)
+
+NSLS's Claude organization can deliver the personal toolkit, and this toolkit's
+session hook copies it into place. Ask it to do that now:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh" personal-delivery now
+```
+
+`${CLAUDE_PLUGIN_ROOT}` is this toolkit's own folder; Claude Code fills it in.
+If it appears here as written, use the toolkit's top folder, the one that holds `skills/` and `hooks/` (two folders up from the folder this SKILL.md is in).
+
+Read the first word of what it prints:
+
+- **`PERSONAL_TOOLKIT_READY`** → the personal toolkit is installed, kept current
+  by Claude, and its skills are already pointed at. **Skip the rest of Step 2**
+  (no clone, no settings change, no pointer sync) and go to Step 3.
+- **`PERSONAL_TOOLKIT_NOT_DELIVERED`** → NSLS is not delivering it to this
+  account on this computer. Carry on with 2b.
+- **`PERSONAL_TOOLKIT_PAUSED`** or **`PERSONAL_TOOLKIT_KEPT`** → a personal
+  toolkit folder is already there, and it holds the builder's own changes (or is
+  their own copy). **Stop. Never go on to 2b**: it would clone over that folder.
+  Tell the builder in one plain sentence what the answer said (it names the
+  files, or the reason), and offer what it offers: keep things as they are, or,
+  with their yes, run the same command with `adopt` in place of `now`, which
+  moves their changed files into a `.set-aside` folder first. Then go to Step 3
+  if the folder now has the personal-setup skill, or stop if they chose to keep
+  things as they are.
+- **`PERSONAL_TOOLKIT_PENDING`** or **`PERSONAL_TOOLKIT_RETRY`** → the delivered
+  copy is still arriving. Wait a minute and run it once more. If the answer is
+  the same, stop and tell the builder to start a new session and say
+  `/personal-setup` again. Do not go on to 2b.
+- **Nothing at all** → this toolkit is an older one without the command. Carry
+  on with 2b.
+
+### 2b. Otherwise, from GitHub
+
+Install, **preserving any existing `.env`** (the org `/nsls-setmeup` may have written
 `BUILDER_EMAIL` into this dir before the kit was cloned — cloning into a
 non-empty dir would otherwise fail and silently no-op):
 
@@ -48,8 +86,15 @@ PERSONAL_BRANCH="${NSLS_PERSONAL_BRANCH:-main}"
 if [ -d "$PT/.git" ]; then
   git -C "$PT" pull --ff-only 2>/dev/null || true
   echo "Personal toolkit updated."
+elif [ -f "$PT/.delivered-by-claude.json" ]; then
+  # A folder Claude keeps current: not a checkout, and never to be cloned over.
+  echo "DELIVERED_FOLDER"
+elif [ -d "$PT" ] && [ -n "$(ls -A "$PT" 2>/dev/null | grep -v '^\.env$')" ]; then
+  # Something other than a pre-written .env is in there, and it is not a
+  # checkout. Whatever it is, it is not ours to delete.
+  echo "FOLDER_NOT_EMPTY"
 else
-  # Preserve a pre-written .env across the clone.
+  # Nothing there, or only a pre-written .env: preserve it across the clone.
   SAVED_ENV=""
   if [ -f "$PT/.env" ]; then SAVED_ENV="$(mktemp)"; cp "$PT/.env" "$SAVED_ENV"; fi
   rm -rf "$PT"
@@ -65,8 +110,25 @@ else
 fi
 ```
 
-If it prints `CLONE_FAILED`, tell the builder network/permission blocked the
-clone and offer to retry — don't proceed.
+If it prints `DELIVERED_FOLDER` or `FOLDER_NOT_EMPTY`, nothing was changed and
+nothing may be: the folder already holds a personal toolkit (kept current by
+Claude, or a copy from somewhere) that is missing its personal-setup skill. Don't
+clone, don't delete. Tell the builder plainly what is there and go back to 2a's
+answer; if 2a had none, ask them how they would like to proceed.
+
+If it prints `CLONE_FAILED`, don't proceed, and don't assume it was the network.
+The personal toolkit's repository may be private, and then a clone needs a
+GitHub sign-in that most people don't have and don't need. Say one plain
+sentence: *"The personal toolkit comes through Claude now, and it isn't switched
+on for you here yet."* Then offer the way forward that fits:
+
+- **Most people:** in Claude's settings, under plugins, install
+  **nsls-personal-toolkit** from NSLS's list, start a new session, and say
+  `/personal-setup` again. If it isn't in the list, they should message the NSLS
+  AI team.
+- **Someone who keeps their own copy on GitHub** (and says so): help them sign in
+  to GitHub (`gh auth login`), then run this step again.
+- **Offline:** try again once they are back online.
 
 Enable it in settings.json (merge, don't clobber other keys). **Use the block
 for the builder's platform.**

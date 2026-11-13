@@ -251,7 +251,7 @@ Also create the first session log at `sessions/YYYY-MM-DD.md`.
 
 If the automation has user-facing interactions (Slack messages, emails, web UI, scheduled prompts), generate a DESIGN.md.
 
-Read the full template at: `~/.claude/local-plugins/nsls-builder-toolkit/skills/product-design/references/design-md-template.md`
+Read the full template at: `${CLAUDE_PLUGIN_ROOT}/skills/product-design/references/design-md-template.md`
 
 Map interrogation answers to template sections:
 - **What This Is** ← Step 1 problem/solution

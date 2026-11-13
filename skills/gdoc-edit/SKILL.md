@@ -25,9 +25,11 @@ edits landed. Hand-building a `gws docs documents batchUpdate` request means doi
 math yourself — the #1 way to silently mangle a doc.
 
 ```bash
-S=~/.claude/local-plugins/nsls-builder-toolkit/skills/gdoc-edit/scripts/gdoc.py
+S="${CLAUDE_PLUGIN_ROOT}/skills/gdoc-edit/scripts/gdoc.py"
 python3 $S read --doc <DOC_ID>        # <- shape of EVERY call: python3 $S <action> --doc ID
 ```
+
+`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the toolkit's top folder, the one that holds `skills/` and `hooks/` (two folders up from the folder this SKILL.md is in).
 
 Dropping to raw `gws` is fine only for a plain read or a single literal `replaceAllText`.
 
@@ -101,7 +103,7 @@ no more, no less. That is the security model: your permissions, your audit trail
 ## Quick Start
 
 ```bash
-S=~/.claude/local-plugins/nsls-builder-toolkit/skills/gdoc-edit/scripts/gdoc.py
+S="${CLAUDE_PLUGIN_ROOT}/skills/gdoc-edit/scripts/gdoc.py"
 DOC=<google-doc-id>                       # the part of the URL after /document/d/
 
 python3 $S read   --doc $DOC              # full text (use to plan exact edits)

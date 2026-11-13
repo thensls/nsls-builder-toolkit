@@ -16,13 +16,13 @@ description: >-
 
 Signal (the people-ops bot powering Quick Notes, wins, and friction signals) exposes a read-only HTTP API at `https://employee-profiles-production.up.railway.app/api/mcp/*`. This skill writes your personal bearer token to `~/.config/nsls/signal-token` so the bundled MCP server can authenticate. Scope follows the token — execs see org-wide on cross-team endpoints, managers see their reporting subtree.
 
-After setup you'll have six new tools in Claude Code: `signal_team_summary`, `signal_wins`, `signal_friction`, `signal_person`, `signal_person_history`, `signal_person_goals`.
+After setup you'll have seven new tools in Claude Code: `signal_team_summary`, `signal_wins`, `signal_friction`, `signal_person`, `signal_person_history`, `signal_person_goals`, `signal_contractors`.
 
 **Works on macOS, Linux, and Windows.** The MCP server is launched directly as `node signal-mcp.js` (no shell wrapper), so it runs identically on every OS. The only host requirement is **Node.js 20+ on the PATH** — the bundle is built for Node 20 (and CI tests on it), so older majors may hit unsupported syntax. Each step below gives a macOS/Linux (`sh`) form and a Windows (PowerShell) form; use whichever matches the builder's machine.
 
 ## Who can use this
 
-- **Executives** (people.app_role = 'executive'): org-wide on `wins`, `friction`, `person/*`. `team_summary` returns your own direct reports unless you pass `manager_slug`.
+- **Executives** (people.app_role = 'executive'): org-wide on `wins`, `friction`, `person/*`. `signal_contractors` (the current contractor list, which harvest uses) is executives only. `team_summary` returns your own direct reports unless you pass `manager_slug`.
 - **Managers** (anyone with direct reports): your reporting subtree.
 - **Everyone else (self scope)**: `signal_person`, `signal_person_history`, and `signal_person_goals` work for **your own slug only** — your Quick Notes history and goal updates, with sentiment excluded server-side. Every other slug and every team endpoint returns 403. This is what powers `/role-coach` for individual contributors.
 
@@ -50,7 +50,7 @@ This is the #1 reason `signal_*` tools never appear even when Node and the token
 
 **First, check whether the toolkit is installed and enabled as a plugin** (`claude plugin list` shows `nsls-builder-toolkit` and does not mark it disabled). If it is enabled, the plugin registers signal itself: do **not** add a user-scope entry, because a second `signal` beside the plugin's is exactly the duplicate the toolkit's migration removes, and it shows as two "Connection closed" errors. Skip to Step 2. If it is installed but disabled, it registers nothing: ask the builder whether to enable it (`claude plugin enable nsls-builder-toolkit@nsls-toolkit`) and skip to Step 2 if they do. Only a machine without an enabled plugin needs the registration below.
 
-Fix it by registering the server explicitly at user scope, pointing at the absolute path of this plugin (the directory this skill loaded from — `$CLAUDE_PLUGIN_ROOT`, e.g. `~/.claude/local-plugins/nsls-builder-toolkit`). Substitute the real path; don't rely on `$CLAUDE_PLUGIN_ROOT` being exported into a plain terminal (it usually isn't). `claude mcp add` is idempotent — if it's already registered it prints "already exists" and changes nothing, so it's always safe to run.
+Fix it by registering the server explicitly at user scope, pointing at the absolute path of this plugin (the toolkit's top folder, the one that holds `skills/` and `hooks/`: two folders up from the folder this SKILL.md is in — `${CLAUDE_PLUGIN_ROOT}`). Substitute the real path; don't rely on `$CLAUDE_PLUGIN_ROOT` being exported into a plain terminal (it usually isn't). `claude mcp add` is idempotent — if it's already registered it prints "already exists" and changes nothing, so it's always safe to run.
 
 First check whether it's already there:
 
@@ -130,13 +130,13 @@ The most reliable cross-platform check is the server's own self-test — it conf
 macOS/Linux:
 ```sh
 node "$CLAUDE_PLUGIN_ROOT/mcp-servers/signal/signal-mcp.js" --selftest
-# expect: signal-mcp: selftest OK — 6 tools registered, <platform>, node <version>
+# expect: signal-mcp: selftest OK — 7 tools registered, <platform>, node <version>
 ```
 
 Windows (PowerShell — note `$env:` prefix and backslashes):
 ```powershell
 node "$env:CLAUDE_PLUGIN_ROOT\mcp-servers\signal\signal-mcp.js" --selftest
-# expect: signal-mcp: selftest OK — 6 tools registered, <platform>, node <version>
+# expect: signal-mcp: selftest OK — 7 tools registered, <platform>, node <version>
 ```
 
 `CLAUDE_PLUGIN_ROOT` is set inside the plugin's `.mcp.json`/hook context but is not guaranteed to be exported into a plain terminal. When running this by hand, substitute the real path — the `mcp-servers/signal/signal-mcp.js` inside the installed `nsls-builder-toolkit` plugin directory (the same folder this skill loaded from).

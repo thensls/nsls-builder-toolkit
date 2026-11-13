@@ -20,7 +20,19 @@ description: >-
 
 ## Purpose
 
-The Campus Roadshow pipeline turns Fathom recordings and Airtable survey responses into a navigable stakeholder report site — not just a document dump, but a structured intelligence layer where every school's meeting notes are timestamped to the actual recording, survey data is rendered per-respondent, and product insights are cross-attributed across all discovery meetings. The site deploys statically to Vercel and is accessible to any stakeholder with the URL. This skill exists so any CS rep can run the pipeline without reverse-engineering three Python scripts from scratch.
+The Campus Roadshow pipeline turns Fathom recordings and Airtable survey responses into a navigable stakeholder report site — not just a document dump, but a structured intelligence layer where every school's meeting notes are timestamped to the actual recording, survey data is rendered per-respondent, and product insights are cross-attributed across all discovery meetings. The site deploys to Vercel at roadshow.nsls.org, behind an NSLS login. This skill exists so any CS rep can run the pipeline without reverse-engineering three Python scripts from scratch.
+
+## Before You Start — Get the Repo
+
+The pipeline lives in **`thensls/campus-roadshow`, a private repo**. You need a local
+clone of it; every path in this skill (`Scripts/`, `report/`) is relative to its root.
+
+```bash
+git clone https://github.com/thensls/campus-roadshow.git "Campus Roadshow"
+```
+
+If GitHub answers **Not Found**, your account has not been given access to the repo
+(it does not mean the repo is gone). Ask Chris Higbee or Kevin Prentiss to add you.
 
 ## Quick Start — Full Pipeline for a New School
 
@@ -37,7 +49,7 @@ python3 Scripts/generate_survey.py \
   --school "Mott Community College"
 
 # 3. Deploy
-cd report && npx vercel --prod
+cd report && npx vercel --prod --scope nsls
 ```
 
 **Note:** `generate_school.py` now automatically runs `add_timestamps.py` on the new meeting report immediately after writing it. Stage 2 (manual timestamp injection) is no longer a separate step. Run `add_timestamps.py --slug` manually only if re-annotating an existing report.
@@ -56,7 +68,7 @@ Five stages, always in this order:
 | 2. Annotate timestamps | `add_timestamps.py` | Fathom transcript → injected `?t=` links (auto via Stage 1; run manually to re-annotate) |
 | 3. Generate survey | `generate_survey.py` | Airtable respondent record → `survey.html` |
 | 4. Update ideas grid | Manual edit of `index.html` | Cross-school product insight cards with attribution |
-| 5. Deploy | `cd report && npx vercel --prod` | Push all changes to production |
+| 5. Deploy | `cd report && npx vercel --prod --scope nsls` | Push all changes to production |
 
 All scripts live in `Scripts/`. All output lands in `report/schools/{slug}/`.
 
@@ -249,7 +261,7 @@ The ideas grid in `report/index.html` (lines ~1222–1504) tracks product insigh
 ```bash
 cd "/path/to/Campus Roadshow/report"
 source ~/.zshrc
-npx vercel --prod
+npx vercel --prod --scope nsls
 ```
 
 Always confirm with the user before deploying. The deploy completes in ~10 seconds. There is no rollback — verify the site looks correct locally before running.
@@ -301,7 +313,7 @@ These are the decisions where skipping the check silently produces wrong output:
 → Run `generate_school.py --slug` first to create the school's directory structure before generating the survey page.
 
 **Vercel deploy fails with socket hang up:**
-→ Transient network error. Retry `npx vercel --prod`.
+→ Transient network error. Retry `npx vercel --prod --scope nsls`.
 
 ---
 

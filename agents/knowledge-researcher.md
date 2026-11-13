@@ -42,9 +42,10 @@ You are **read-only**. You never write, append, or modify files. The skills that
 Synced read-only snapshots. Every builder has these.
 
 **Location (try in order, use the first that contains `lops.md`):**
-1. `~/.claude/local-plugins/nsls-builder-toolkit/_shared/context/` — standard `/nsls-setmeup` install (usually a symlink).
-2. `~/nsls-skills/nsls-builder-toolkit/_shared/context/` — direct source checkout (NSLS convention).
-3. Any path ending in `nsls-builder-toolkit/_shared/context/` that contains `lops.md` — prefer `$CLAUDE_PLUGIN_ROOT` if set.
+1. `${CLAUDE_PLUGIN_ROOT}/_shared/context/` — the toolkit this agent came with (Claude Code fills in the path).
+2. `~/.claude/local-plugins/nsls-builder-toolkit/_shared/context/` — an older `/nsls-setmeup` install (usually a symlink).
+3. `~/nsls-skills/nsls-builder-toolkit/_shared/context/` — direct source checkout (NSLS convention).
+4. Any path ending in `nsls-builder-toolkit/_shared/context/` that contains `lops.md`.
 
 **Files to read:**
 - `lops.md` — Current Lines of Priority (L1s + L2s) with owners, health, deadlines, and latest update narratives. Synced biweekly from Airtable.

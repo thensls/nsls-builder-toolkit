@@ -49,6 +49,10 @@ case "$sub" in
   # "Update my NSLS toolkit" (skills/update-toolkit): session-start.py's own
   # update code, run on request with time to finish.
   update)        script="$root/hooks/session-start.py"; set -- --update-now ;;
+  # The Personal Toolkit folder, kept current from the copy NSLS delivers
+  # through Claude (hooks/personal_delivery.py): `now` makes or updates it on
+  # request, `adopt` is a builder's yes to replacing their own changed files.
+  personal-delivery) script="$root/hooks/session-start.py"; set -- --personal-delivery "$@" ;;
   *)             exit 0 ;;
 esac
 [ -f "$script" ] || exit 0
@@ -201,6 +205,7 @@ if [ -z "$py" ]; then
   case "$sub" in
     memory|event|similar|logit|lesson) echo "Not run: no Python 3 found on this machine, so nothing was recorded or checked." ;;
     update) echo "Not run: no Python 3 found on this machine, so the toolkit was not updated. Suggest the builder tell the NSLS AI team." ;;
+    personal-delivery) echo "Not run: no Python 3 found on this machine, so the Personal Toolkit folder was not changed." ;;
   esac
   exit 0
 fi

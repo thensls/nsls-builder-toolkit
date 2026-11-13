@@ -1,5 +1,5 @@
 # NSLS Org Chart
-_Last synced: 2026-11-02_
+_Last synced: 2026-11-09_
 
 ## Business Intelligence
 
@@ -20,7 +20,6 @@ _Last synced: 2026-11-02_
 | Arianne Stinson | Chapter Success Manager (Silver) | James Corriveau | astinson@nsls.org | U0393VBME00 |
 | Ashleigh Smith | Chief Revenue Officer | Gary Tuerack | asmith@nsls.org | UEWBC2R08 |
 | Brielle Jones | Chapter Success Manager (Silver) | James Corriveau | bjones@nsls.org | U091ZV57M29 |
-| Chris Higbee | Contractor | Ashleigh Smith | chigbee@nsls.org | U0A955W2BS4 |
 | Dejeahn Brown | Chapter Success Manager (Silver) | James Corriveau | dbrown@nsls.org | U098M2E1M5X |
 | Dillon Cook | Chapter Success Manager (Silver) | James Corriveau | dcook@nsls.org | U0A2A9Q95JN |
 | Gregg Gudelinis | Chapter Success Manager (Gold) | James Corriveau | ggudelinis@nsls.org | U034ZAPBHAT |
@@ -51,7 +50,6 @@ _Last synced: 2026-11-02_
 | David Adams | Vice President of Technology | Kevin Prentiss | dadams@nsls.org | U0A9KTSG4J2 |
 | Evgeny Pokrovskiy | Software QA Automation Eng | Juan Maggi | epokrovskiy@nsls.org | U01AEB1JQ8Y |
 | Juan Maggi | Lead AI/ML Developer & Architect | Kevin Prentiss | jmaggi@nsls.org | U02G96B39GQ |
-| Kevin Prentiss | Ignite | Gary Tuerack | kprentiss@nsls.org | U07TS8X7T7X |
 | Kibaek Kim | Software Developer | Juan Maggi | kkim@nsls.org | UJAC5NDKK |
 | Vadim Geroim | PHP Developer | Juan Maggi | vgeroim@nsls.org | U0895SB7DGF |
 
@@ -61,6 +59,7 @@ _Last synced: 2026-11-02_
 |------|-------|---------|-------|-------|
 | Cory Capoccia | Board Member |  | ccapoccia@nsls.org | U097DDH3371 |
 | Gary Tuerack | Founder and Chief Visionary |  | gtuerack@nsls.org | U040YTX56DP |
+| Kevin Prentiss | Chief Executive Officer | Gary Tuerack | kprentiss@nsls.org | U07TS8X7T7X |
 
 ## Finance
 
@@ -128,6 +127,7 @@ _Last synced: 2026-11-02_
 | Dasha Cherkasov | Chapter Event Manager | Jordan Perry | dcherkasov@nsls.org | U02A8NJN1QF |
 | Derald Dryman | Senior Manager of Brand and Community Engagement | Joseph Cupka | ddryman@nsls.org | UCG6HQQ05 |
 | Freda Hobbs | Chapter Events Manager | Jordan Perry | fhobbs@nsls.org | U06QJ0XDH0E |
+| Janine Walsh | National Events Virtual Coordinator | Jordan Perry | jwalsh@nsls.org | U0ADTNZUB8D |
 | Jordan Perry | Director, Programming | Chelsea Byers | jperry@nsls.org | UCG43J6JW |
 | Joseph Cupka | National Organizing Director | Adam Stone | jcupka@nsls.org | U08U4FS008H |
 | Judy Mai-Vargas | Operations Enablement Coordinator | Jordan Perry | jvargas@nsls.org | U090NHBA79A |
@@ -183,7 +183,6 @@ _Last synced: 2026-11-02_
 | Gabriela Cordeiro | Contractor | Michael O'Brien | gcordeiro@nsls.org | U0AF9KUEVAM |
 | Ionut Mutascu | Contractor | Juan Maggi | imutascu@nsls.org | U08EJFSTVPS |
 | Jake Arcangeli | Contractor | Andrew Hesse | jarcangeli@nsls.org | U0ACL36HJ2F |
-| Janine Walsh | Contractor | Jordan Perry | jwalsh@nsls.org | U0ADTNZUB8D |
 | Jasmine Artis | Contractor | Jordan Perry | jartis@nsls.org | U0ABXMAAVEU |
 | Jose Perdomo | Contractor | Alejandro Gabriel | jperdomo@nsls.org | U0BELDDRV60 |
 | Leila McAvoy | Contractor |  |  |  |

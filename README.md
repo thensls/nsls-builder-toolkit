@@ -63,6 +63,7 @@ Then open Claude Code and say `/nsls-setmeup` to connect your tools and optional
 | **/society-invite-llm-email-prompt** | Build the LLM-node prompt for personalized Society member-invitation emails — NSLS data fields and fill rates, life-stage resolution, voice rules, and the failure catalogue from real testing |
 | **/llm-email-workflow** | The pipeline around an LLM email — data profiling, audience segmentation, node wiring, safety nodes, sandbox-to-live rollout |
 | **/feature-branch-protocol-template** | Template for building your own work-discipline skill — setup, checkpoints, irreversible-step rules, final handoff. Copy to `~/.claude/skills/` and fill in your own preferences. Red's developer version included as a seed. |
+| **/browser-check** | Check a web change in a real browser before you call it done. Runs [Expect](https://www.expect.dev/): reads your git diff, writes a test plan from it and your acceptance criteria, and has Claude click through it headless. Pass/fail per step in 1–5 minutes. Runs through an NSLS wrapper that blocks the vendor's telemetry and never copies your browser cookies. Never point it at production for flows that write. |
 | **/receipts** | Find Ramp transactions missing receipts, fetch them from Anthropic billing or Gmail, upload to Ramp (dry run by default; `--send` executes) |
 | **/email-ab-test-analysis** | Read an email A/B test end to end — join the copy that shipped to the outcomes it got, gate on significance and on whether the arms were comparable at all, and refuse to name a cause the data cannot carry. Customer.io, HubSpot, or numbers read off any screen |
 
@@ -79,7 +80,7 @@ For non-software work — campaigns, strategy docs, briefs, research synthesis. 
 
 Type the `kw:` part: `/kw:plan`, not `/plan`. On their own, `/plan` and `/review` start Claude Code's built-in plan mode and code review. Or just ask in plain words: "help me plan the spring roadshow", "save what we learned".
 
-Use these for strategy/knowledge work. For software features use `/ce-brainstorm` → `/ce-plan` → `/ce-work` → `/ce-code-review` from the Compound Engineering plugin. For new automations start with `/interrogate`.
+Use these for strategy/knowledge work. For software features use `/ce-brainstorm` → `/ce-plan` → `/ce-work` → `/browser-check` → `/ce-code-review` (Compound Engineering, plus this toolkit's browser check for anything with a web UI). For new automations start with `/interrogate`.
 
 ## Strategy Studio
 
@@ -111,7 +112,7 @@ These are installed automatically by the install script:
 
 ## Personal Productivity Skills (Optional)
 
-During `/nsls-setmeup`, you can optionally install personal productivity skills — daily planning, weekly reviews, project logging, relationship tracking. These are Kevin's personal template — fork them, edit them, make them yours. They live in a [separate repo](https://github.com/thensls/nsls-personal-toolkit).
+During `/nsls-setmeup`, you can optionally install personal productivity skills — daily planning, weekly reviews, project logging, relationship tracking. These are Kevin's personal template, and they live in a [separate repo](https://github.com/thensls/nsls-personal-toolkit). When NSLS delivers them through Claude, `/personal-setup` sets them up with no GitHub sign-in.
 ## First-Time Setup
 
 After installing, run `/connect` in Claude Code to connect your data systems (PostHog, Airtable, Slack, Customer.io, n8n, and more). Each connection persists across sessions — you only do it once per system.

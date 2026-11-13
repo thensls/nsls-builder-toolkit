@@ -22,3 +22,14 @@ sentences, with no technical detail.
 - **Already up to date:** say so. If they were looking for a particular skill,
   it has probably not been released yet.
 - **Did not finish:** suggest trying again in a few minutes.
+- **Refused by the copy itself, pinned, or on another branch:** trying again
+  will not help. Pass on the reason it gives, and offer the fix from the
+  warning or note printed with it, if there is one.
+- **Kept up to date by NSLS's Claude organization:** nothing was run and nothing
+  needs to be. Tell the builder to open a new session, and a second one if the
+  first still shows the old version.
+- **Nothing on this machine updates it automatically:** this is printed on top
+  of one of the results above, and does not mean the update worked. Report that
+  result first, as it is. Then say in one plain sentence that the copy will fall
+  behind again, offer the repair it prints, and run that command if they say
+  yes. Then have them quit and reopen Claude.
