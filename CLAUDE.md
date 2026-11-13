@@ -82,6 +82,25 @@ Sitting above the whole field means nothing landing ahead of you knocks your PR
 back to a failing gate. Whoever merges after you bumps again — one of the two
 always has to, and it may as well be the PR that is not ready yet.
 
+## Every skill says where it works
+
+NSLS delivers this toolkit to every Claude seat, so its skills are listed in an
+ordinary Claude chat and in Cowork as well as in Claude Code. Most only work in
+Claude Code on the person's own computer. Each skill folder is therefore listed
+once in `_shared/references/skill-surfaces.json`:
+
+- **`anywhere`**: it can do its main job in chat and Cowork too.
+- **`claude_code_only`**: it runs a script or a command, uses the toolkit's own
+  folder, reads or writes Claude Code's files, or needs a tool connection set up
+  on the computer. It carries a short note at the top of its SKILL.md and its
+  description starts with "Claude Code only." Opened in chat or Cowork, it tells
+  the person to switch to Claude Code and stops.
+
+Adding a skill: read it, add it to one group with a one-line reason, then run
+`python3 .github/scripts/check_skill_surfaces.py --fix`. Never hand-write the
+note or reword it in one skill: the words live in that JSON file, and `--fix`
+copies them. The `skill-surfaces` check fails a PR that skips this.
+
 ## Hooks are registered in `hooks/hooks.json`. Nowhere else.
 
 The plugin's own `hooks/hooks.json` is the only place a toolkit hook may be

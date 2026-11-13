@@ -1,7 +1,22 @@
 ---
 name: kw:compound
-description: "Extract and save learnings from a completed session so future work finds them. Routes each learning to the right home — Claude's memory, one of your own skills, personal Obsidian, team-shareable _shared/learnings/, or SLT knowledge graph. Also answers the toolkit's lesson check, offered after you've corrected Claude, so you stop repeating yourself to Claude. Trigger phrases: compound this, save what we learned, what should we remember, kw:compound, /kw:compound, close the loop, extract learnings, lesson check, turn off lesson checks, turn lesson checks back on, lesson check status. Run at the end of meaningful work sessions — after a plan ships, after a bug is fixed with a surprising root cause, after a meeting that changed your mind."
+description: "Claude Code only. Extract and save learnings from a completed session so future work finds them. Routes each learning to the right home — Claude's memory, one of your own skills, personal Obsidian, team-shareable _shared/learnings/, or SLT knowledge graph. Also answers the toolkit's lesson check, offered after you've corrected Claude, so you stop repeating yourself to Claude. Trigger phrases: compound this, save what we learned, what should we remember, kw:compound, /kw:compound, close the loop, extract learnings, lesson check, turn off lesson checks, turn lesson checks back on, lesson check status. Run at the end of meaningful work sessions — after a plan ships, after a bug is fixed with a surprising root cause, after a meeting that changed your mind."
 ---
+
+<!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
+> **Claude Code only.** This skill needs the person's own computer, so check
+> where you are first, going by what your own instructions say you are running in.
+> In **Claude Code** (a terminal, or the Code tab in the Claude app), skip this
+> note. In **an ordinary Claude chat or a Cowork task** (its files live in a
+> sandbox such as `/sessions/...`, not on their computer), stop and follow
+> nothing else in this skill. If the person asked for this skill, or what they
+> want can't be done here without it, reply with only this sentence:
+> "This skill only works in Claude Code on your computer, so switch to Claude Code (the Code tab in the Claude app) and run it there."
+> Otherwise don't mention this skill; help the way you would without it.
+> Unsure which? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell:
+> `$env:CLAUDE_CODE_ENTRYPOINT`): `local-agent` is Cowork, and any other
+> answer, blank included, is Claude Code. No way to run a command means chat.
+<!-- claude-code-only:end -->
 
 # /kw:compound — Close the Loop
 

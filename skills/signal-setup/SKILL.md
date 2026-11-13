@@ -1,6 +1,7 @@
 ---
 name: signal-setup
 description: >-
+  Claude Code only.
   Configure the Signal MCP server so Claude Code can query Quick Notes,
   wins, friction signals, and team summaries for any team you're allowed
   to see. Use when the user says "set up Signal", "signal mcp", "signal
@@ -9,6 +10,21 @@ description: >-
   execs get team/org scope; everyone else gets self scope — your own
   Quick Notes history and goals (powers /role-coach), nobody else's.
 ---
+
+<!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
+> **Claude Code only.** This skill needs the person's own computer, so check
+> where you are first, going by what your own instructions say you are running in.
+> In **Claude Code** (a terminal, or the Code tab in the Claude app), skip this
+> note. In **an ordinary Claude chat or a Cowork task** (its files live in a
+> sandbox such as `/sessions/...`, not on their computer), stop and follow
+> nothing else in this skill. If the person asked for this skill, or what they
+> want can't be done here without it, reply with only this sentence:
+> "This skill only works in Claude Code on your computer, so switch to Claude Code (the Code tab in the Claude app) and run it there."
+> Otherwise don't mention this skill; help the way you would without it.
+> Unsure which? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell:
+> `$env:CLAUDE_CODE_ENTRYPOINT`): `local-agent` is Cowork, and any other
+> answer, blank included, is Claude Code. No way to run a command means chat.
+<!-- claude-code-only:end -->
 
 # /signal-setup — Connect Claude Code to Signal
 
