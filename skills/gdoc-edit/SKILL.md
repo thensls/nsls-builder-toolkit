@@ -198,6 +198,9 @@ is the route that reaches the margin.
    anchored words in brackets with a highlighter behind them, and the comment
    underneath. **Skip** is one click and greys the card (click again to undo).
    **Edit** rewrites the comment in place. One button at the bottom sends the go.
+   If the document has unaccepted suggested edits, the card says so at the top and marks
+   them in each passage the way Docs does: struck through for a suggested deletion,
+   underlined for a suggested insertion.
 4. **Post on the go.** The button sends a message such as
    `Go: post comments 2, 3, 4 on "<title>".`, followed by the new wording of any comment
    that was edited. Post exactly those numbers with `comment`, one call each, using the

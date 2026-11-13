@@ -592,25 +592,83 @@ def do_comment(doc, anchor, body, occurrence=None, recommend=None, why=None, pre
 CARD_CONTEXT = 230  # characters of the document shown either side of the anchor
 
 
-def _card_window(paras, p, k, anchor):
-    """The text around an anchor as it reads in the document: about CARD_CONTEXT
-    characters each side, cut at a word, runs of blank lines collapsed to one."""
-    stream, starts = "", []
-    for txt, _ in paras:
-        starts.append(len(stream))
-        stream += txt
+def _suggestion_kinds(docjson):
+    """Document index -> "del" or "ins" for every character inside a pending suggestion.
+
+    The card shows passages as they read in the editor with suggestions inline. Without
+    this, a pending deletion and its replacement printed as one settled sentence -- the
+    same trap `read` warns about -- and a person could approve a comment against text
+    that isn't current.
+    """
+    kinds = {}
+
+    def walk(content):
+        for el in content:
+            if "paragraph" in el:
+                for e in el["paragraph"].get("elements", []):
+                    tr, pos = e.get("textRun"), e.get("startIndex")
+                    if not tr or pos is None:
+                        continue
+                    kind = ("del" if tr.get("suggestedDeletionIds") else
+                            "ins" if tr.get("suggestedInsertionIds") else None)
+                    if kind:
+                        for q in range(pos, e.get("endIndex", pos)):
+                            kinds[q] = kind
+            elif "table" in el:
+                for row in el["table"].get("tableRows", []):
+                    for cell in row.get("tableCells", []):
+                        walk(cell.get("content", []))
+
+    walk(docjson.get("body", {}).get("content", []))
+    return kinds
+
+
+def _card_window(paras, p, k, anchor, kinds):
+    """The text before, of, and after an anchor as (character, suggestion kind) pairs:
+    about CARD_CONTEXT characters each side, cut at a word, runs of blank lines
+    collapsed. Kept as pairs so trimming can never misalign the suggestion marks."""
+    chars, starts = [], []
+    for txt, idx in paras:
+        starts.append(len(chars))
+        chars.extend((ch, kinds.get(i, "")) for ch, i in zip(txt, idx))
     pos = starts[p] + k
     lo = max(0, pos - CARD_CONTEXT)
-    hi = min(len(stream), pos + len(anchor) + CARD_CONTEXT)
-    before, after = stream[lo:pos], stream[pos + len(anchor):hi]
+    hi = min(len(chars), pos + len(anchor) + CARD_CONTEXT)
+    before, mid, after = chars[lo:pos], chars[pos:pos + len(anchor)], chars[pos + len(anchor):hi]
     if lo > 0:
-        cut = before.find(" ")
-        before = "…" + (before[cut + 1:] if cut >= 0 else before)
-    if hi < len(stream):
-        cut = after.rfind(" ")
-        after = (after[:cut] if cut > 0 else after) + "…"
-    tidy = lambda t: re.sub(r"\n{2,}", "\n", t)
-    return tidy(before).lstrip("\n"), tidy(after).rstrip("\n")
+        cut = next((j for j, (ch, _) in enumerate(before) if ch == " "), None)
+        before = [("…", "")] + (before[cut + 1:] if cut is not None else before)
+    if hi < len(chars):
+        cut = next((j for j in range(len(after) - 1, 0, -1) if after[j][0] == " "), None)
+        after = (after[:cut] if cut else after) + [("…", "")]
+
+    def tidy(seq):
+        out = []
+        for ch, kd in seq:
+            if ch == "\n" and out and out[-1][0] == "\n":
+                continue
+            out.append((ch, kd))
+        return out
+
+    before, after = tidy(before), tidy(after)
+    while before and before[0][0] == "\n":
+        before.pop(0)
+    while after and after[-1][0] == "\n":
+        after.pop()
+    return before, mid, after
+
+
+def _marked(pairs):
+    """Escaped HTML for (character, kind) pairs, suggestions wrapped as Docs shows them."""
+    out, i = [], 0
+    while i < len(pairs):
+        kind, j = pairs[i][1], i
+        while j < len(pairs) and pairs[j][1] == kind:
+            j += 1
+        seg = html.escape("".join(ch for ch, _ in pairs[i:j]))
+        out.append(f"<{kind}>{seg}</{kind}>" if kind else seg)
+        i = j
+    return "".join(out)
 
 
 _CARD_STYLE = """<style>
@@ -632,6 +690,9 @@ _CARD_STYLE = """<style>
 .off .gc-ctx,.off .gc-cm{color:var(--text-muted)}
 .off .gc-ctx mark{background:transparent;color:var(--text-muted)}
 .off .gc-txt{text-decoration:line-through}
+.gc-ctx del{color:var(--text-danger)}
+.gc-ctx ins{color:var(--text-success);text-decoration:underline}
+.gc-warn{font-size:14px;line-height:1.5;color:var(--text-warning);background:var(--bg-warning);border-radius:var(--radius);padding:8px 12px;margin:0 0 12px}
 </style>"""
 
 _CARD_JS = r"""const skip=new Set(),edits={},all=Object.keys(D.items).map(Number),go=document.getElementById('gc-go'),goErr=document.getElementById('gc-goerr');
@@ -654,18 +715,22 @@ k.forEach(n=>{if(edits[n])m+='\n\nComment '+n+', edited:\n'+edits[n]});
 sendPrompt(m)});"""
 
 
-def _card_html(doc, title, cards, total):
+def _card_html(doc, title, cards, total, has_suggestions=False):
     e = html.escape
     out = ['<h2 class="sr-only">Draft comments for ' + e(title) + ', each shown in its surrounding '
            'text with the anchored words highlighted, with skip and edit for each and one button to '
            'post the rest.</h2>', _CARD_STYLE, '<div style="padding:0.5rem 0 0">']
+    if has_suggestions:
+        out.append('<p class="gc-warn">This document has unaccepted suggested edits. The passages '
+                   'show them as Docs does: <del>struck through</del> is a pending deletion, '
+                   '<ins>underlined</ins> a pending insertion. Neither is settled text yet.</p>')
     for c in cards:
         where = f"{c['n']} of {total}"
         if c["total"] > 1:
             where += f" · match {c['occurrence']} of {c['total']} for this phrase"
         out.append(
             f'<div class="gc" id="gc{c["n"]}">'
-            f'<p class="gc-ctx">{e(c["before"])}<mark>[{e(c["anchor"])}]</mark>{e(c["after"])}</p>'
+            f'<p class="gc-ctx">{_marked(c["before"])}<mark>[{_marked(c["mid"])}]</mark>{_marked(c["after"])}</p>'
             f'<div class="gc-cm"><i class="ti ti-message" aria-hidden="true"></i>'
             f'<span class="gc-txt">{e(c["text"])}</span>'
             f'<textarea class="gc-ta" hidden aria-label="Edit comment {c["n"]}"></textarea></div>'
@@ -702,10 +767,16 @@ def do_comment_card(doc, items):
         sys.exit('comment-card needs --file: a JSON list of {"anchor": ..., "text": ...}')
     d = get_doc(doc)
     paras = _paragraph_map(d)
+    kinds = _suggestion_kinds(d)
     cards, problems = [], []
     for n, it in enumerate(items, 1):
-        anchor, text, occ = it.get("anchor") or "", it.get("text") or "", it.get("occurrence")
-        if not anchor.strip():
+        if not isinstance(it, dict):
+            problems.append(f'{n}: not an object -- each item needs "anchor" and "text"')
+            continue
+        anchor, text, occ = it.get("anchor"), it.get("text"), it.get("occurrence")
+        if not isinstance(anchor, str) or not isinstance(text, str):
+            problems.append(f'{n}: "anchor" and "text" must both be text')
+        elif not anchor.strip():
             problems.append(f"{n}: ANCHOR_EMPTY")
         elif "\n" in anchor:
             problems.append(f"{n}: ANCHOR_MULTILINE {anchor!r}")
@@ -720,20 +791,21 @@ def do_comment_card(doc, items):
             elif len(hits) > 1 and occ is None:
                 problems.append(f"{n}: AMBIGUOUS {anchor!r} appears {len(hits)} times -- settle it "
                                 f"with `comment --recommend`, then give the item an \"occurrence\"")
-            elif occ is not None and (not isinstance(occ, int) or not 1 <= occ <= len(hits)):
+            elif occ is not None and (isinstance(occ, bool) or not isinstance(occ, int)
+                                      or not 1 <= occ <= len(hits)):
                 problems.append(f"{n}: occurrence {occ!r} is out of range ({len(hits)} matches)")
             else:
                 occ = 1 if occ is None else occ
                 p, k, _, _ = hits[occ - 1]
-                before, after = _card_window(paras, p, k, anchor)
-                cards.append({"n": n, "before": before, "anchor": anchor, "after": after,
+                before, mid, after = _card_window(paras, p, k, anchor, kinds)
+                cards.append({"n": n, "before": before, "mid": mid, "after": after,
                               "text": text, "occurrence": occ, "total": len(hits)})
     if problems:
         print("Card not built. Fix these first:")
         for pr in problems:
             print("  " + pr)
         sys.exit(EXIT_ANCHOR)
-    print(_card_html(doc, d.get("title", "this document"), cards, len(items)))
+    print(_card_html(doc, d.get("title", "this document"), cards, len(items), bool(kinds)))
 
 
 def do_create(title, text):
@@ -1086,6 +1158,9 @@ def main():
         lines = full_text(warn_before_edit(a.doc)).split("\n")
         results = []
         for e in cfg.get("edits", []):
+            if not isinstance(e, dict):
+                results.append(("?", "not an object (skipped)"))
+                continue
             if "anchor" in e:
                 m = [ln for ln in lines if e["anchor"] in ln]
                 if len(m) != 1:
@@ -1112,7 +1187,7 @@ def main():
         for lbl, st in results:
             print("  %s: %s" % (lbl, st))
         miss = [e.get("label", "?") for e in cfg.get("edits", [])
-                if e.get("marker") and e["marker"] not in new]
+                if isinstance(e, dict) and e.get("marker") and e["marker"] not in new]
         gone = [a2 for a2 in cfg.get("remove", []) if a2 in new]
         print("== verify ==")
         print("  markers: " + ("all present ✓" if not miss else "MISSING: " + ", ".join(miss)))
