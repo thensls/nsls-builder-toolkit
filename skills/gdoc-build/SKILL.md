@@ -1,6 +1,7 @@
 ---
 name: gdoc-build
 description: >-
+  Claude Code only.
   Use when the user asks to "make a Google Doc", "build a doc", "draft an
   onboarding doc", "create a builder guide", "generate a report", "write a
   brief in Google Docs", or "update the canonical [doc]" — anytime the
@@ -9,6 +10,21 @@ description: >-
   iterating on an existing canonical doc by producing a draft for the
   user to copy-paste from. NSLS or Society branded.
 ---
+
+<!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
+> **Claude Code only.** This skill needs the person's own computer, so check
+> where you are first, going by what your own instructions say you are running in.
+> In **Claude Code** (a terminal, or the Code tab in the Claude app), skip this
+> note. In **an ordinary Claude chat or a Cowork task** (its files live in a
+> sandbox such as `/sessions/...`, not on their computer), stop and follow
+> nothing else in this skill. If the person asked for this skill, or what they
+> want can't be done here without it, reply with only this sentence:
+> "This skill only works in Claude Code on your computer, so switch to Claude Code (the Code tab in the Claude app) and run it there."
+> Otherwise don't mention this skill; help the way you would without it.
+> Unsure which? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell:
+> `$env:CLAUDE_CODE_ENTRYPOINT`): `local-agent` is Cowork, and any other
+> answer, blank included, is Claude Code. No way to run a command means chat.
+<!-- claude-code-only:end -->
 
 # /gdoc-build
 
