@@ -66,6 +66,7 @@ Then open Claude Code and say `/nsls-setmeup` to connect your tools and optional
 | **/browser-check** | Check a web change in a real browser before you call it done. Runs [Expect](https://www.expect.dev/): reads your git diff, writes a test plan from it and your acceptance criteria, and has Claude click through it headless. Pass/fail per step in 1–5 minutes. Runs through an NSLS wrapper that blocks the vendor's telemetry and never copies your browser cookies. Never point it at production for flows that write. |
 | **/receipts** | Find Ramp transactions missing receipts, fetch them from Anthropic billing or Gmail, upload to Ramp (dry run by default; `--send` executes) |
 | **/email-ab-test-analysis** | Read an email A/B test end to end — join the copy that shipped to the outcomes it got, gate on significance and on whether the arms were comparable at all, and refuse to name a cause the data cannot carry. Customer.io, HubSpot, or numbers read off any screen |
+| **/wins** | A pat on the back from real people. Finds what colleagues actually said to and about you on your Fathom calls and in Slack, checks every quote is really about you, and lists praise, moments you led, and work you shipped. Say "/wins" or "I need a pick-me-up". Pairs with meeting-analyzer (what to improve) and close-week (what you did). |
 
 ## Strategy & Knowledge Work
 
@@ -250,6 +251,7 @@ They form a cycle: `/data-model-discovery` explores a new system → maps it aga
 | **kw:brainstorm / kw:plan / kw:review / kw:compound** | Strategy & knowledge-work pipeline (non-software) |
 | **receipts** | Find Ramp transactions missing receipts, fetch them from Anthropic billing or Gmail, upload to Ramp (dry run by default; `--send` executes) |
 | **email-ab-test-analysis** | Read an email A/B test honestly — copy diff joined to outcomes, significance and cohort gates, no invented causes |
+| **wins** | Real praise from your Fathom calls and Slack, every quote checked in context: praise, moments you led, work you shipped |
 
 ## Updates
 
