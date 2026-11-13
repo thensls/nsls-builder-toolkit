@@ -53,8 +53,9 @@ def speaker(line):
 
 
 def is_user(name, variants):
+    """Match each variant as whole name words, so "Ann" never matches "Joanne"."""
     n = name.lower()
-    return any(v.lower() in n for v in variants)
+    return any(re.search(rf"(?<!\w){re.escape(v.lower().strip())}(?!\w)", n) for v in variants if v.strip())
 
 
 def main():
@@ -68,6 +69,11 @@ def main():
 
     mdir = os.path.join(a.out, "meetings")
     os.makedirs(mdir, exist_ok=True)
+    # Clear files from earlier runs so only this run's meetings can be read.
+    for fname in os.listdir(mdir):
+        fpath = os.path.join(mdir, fname)
+        if os.path.isfile(fpath) and fname.endswith(".txt"):
+            os.remove(fpath)
 
     seen_ids, kept = set(), []
     for m in load_items(a.dumps):
