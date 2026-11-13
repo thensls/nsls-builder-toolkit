@@ -690,36 +690,46 @@ _CARD_STYLE = """<style>
 .off .gc-ctx,.off .gc-cm{color:var(--text-muted)}
 .off .gc-ctx mark{background:transparent;color:var(--text-muted)}
 .off .gc-txt{text-decoration:line-through}
+.ok{box-shadow:inset 3px 0 0 var(--text-success)}
+.gc button[aria-pressed="true"]{font-weight:500}
 .gc-ctx del{color:var(--text-danger)}
 .gc-ctx ins{color:var(--text-success);text-decoration:underline}
 .gc-warn{font-size:14px;line-height:1.5;color:var(--text-warning);background:var(--bg-warning);border-radius:var(--radius);padding:8px 12px;margin:0 0 12px}
 </style>"""
 
-_CARD_JS = r"""const skip=new Set(),edits={},all=Object.keys(D.items).map(Number),go=document.getElementById('gc-go'),goErr=document.getElementById('gc-goerr');
-const card=n=>document.getElementById('gc'+n);
-function count(){const k=all.filter(n=>!skip.has(n));go.textContent=k.length?'Post '+k.length+' comment'+(k.length>1?'s':'')+' ↗':'Post nothing ↗'}
-document.querySelectorAll('[data-skip]').forEach(b=>b.addEventListener('click',()=>{const n=+b.dataset.skip,c=card(n);if(skip.has(n)){skip.delete(n);c.classList.remove('off');b.textContent='Skip'}else{skip.add(n);c.classList.add('off');b.textContent='Undo skip'}count()}));
+_CARD_JS = r"""const st={},edits={},all=Object.keys(D.items).map(Number),go=document.getElementById('gc-go'),goErr=document.getElementById('gc-goerr'),tally=document.getElementById('gc-tally');
+all.forEach(n=>st[n]='');
+const card=n=>document.getElementById('gc'+n),btn=(n,k)=>card(n).querySelector('[data-'+k+']'),open=n=>!card(n).querySelector('.gc-ta').hidden;
+function count(){const a=all.filter(n=>st[n]==='ok'),s=all.filter(n=>st[n]==='off'),u=all.filter(n=>!st[n]);
+tally.textContent=a.length+' accepted · '+s.length+' skipped'+(u.length?' · '+u.length+' to decide':'');
+go.textContent=a.length?'Post '+a.length+' comment'+(a.length>1?'s':'')+' ↗':u.length?'Post accepted comments ↗':'Post nothing ↗';goErr.textContent=''}
+function set(n,v){st[n]=v;const c=card(n),A=btn(n,'accept'),S=btn(n,'skip');c.classList.toggle('ok',v==='ok');c.classList.toggle('off',v==='off');
+A.textContent=v==='ok'?'Accepted ✓':'Accept';A.setAttribute('aria-pressed',v==='ok');S.textContent=v==='off'?'Undo skip':'Skip';S.setAttribute('aria-pressed',v==='off');count()}
+function lock(n,on){btn(n,'accept').disabled=on;btn(n,'skip').disabled=on}
+document.querySelectorAll('[data-accept]').forEach(b=>b.addEventListener('click',()=>{const n=+b.dataset.accept;if(!open(n))set(n,st[n]==='ok'?'':'ok')}));
+document.querySelectorAll('[data-skip]').forEach(b=>b.addEventListener('click',()=>{const n=+b.dataset.skip;if(!open(n))set(n,st[n]==='off'?'':'off')}));
 document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>{const n=+b.dataset.edit,c=card(n),sp=c.querySelector('.gc-txt'),ta=c.querySelector('.gc-ta'),er=c.querySelector('.gc-err');
-if(ta.hidden){ta.value=edits[n]??D.items[n];sp.hidden=true;ta.hidden=false;ta.style.height=Math.max(ta.scrollHeight,96)+'px';ta.focus();b.textContent='Done';return}
+if(ta.hidden){ta.value=edits[n]??D.items[n];sp.hidden=true;ta.hidden=false;ta.style.height=Math.max(ta.scrollHeight,96)+'px';ta.focus();b.textContent='Done';lock(n,true);return}
 const v=ta.value.trim();
 if(!v){er.textContent='A comment can’t be empty.';return}
 if(new TextEncoder().encode(v).length>2048){er.textContent='Too long for Google Docs: keep it under 2,048 bytes.';return}
 er.textContent='';if(v!==D.items[n].trim()){edits[n]=v;c.classList.add('edited')}else{delete edits[n];c.classList.remove('edited')}
-sp.textContent=v;ta.hidden=true;sp.hidden=false;b.textContent='Edit'}));
+sp.textContent=v;ta.hidden=true;sp.hidden=false;b.textContent='Edit';lock(n,false);set(n,'ok')}));
 document.querySelectorAll('.gc-ta').forEach(t=>t.addEventListener('input',()=>{t.closest('.gc').querySelector('.gc-err').textContent=''}));
-go.addEventListener('click',()=>{if([...document.querySelectorAll('.gc-ta')].some(t=>!t.hidden)){goErr.textContent='Finish editing first: press Done on the open comment.';return}
-goErr.textContent='';const k=all.filter(n=>!skip.has(n));
-if(!k.length){sendPrompt('Post none of the comments on “'+D.title+'”.');return}
-let m='Go: post comments '+k.join(', ')+' on “'+D.title+'”.';
-k.forEach(n=>{if(edits[n])m+='\n\nComment '+n+', edited:\n'+edits[n]});
-sendPrompt(m)});"""
+go.addEventListener('click',()=>{if(all.some(open)){goErr.textContent='Finish editing first: press Done on the open comment.';return}
+const u=all.filter(n=>!st[n]);if(u.length){goErr.textContent='Accept or skip every comment first. Still to decide: '+u.join(', ')+'.';return}
+const k=all.filter(n=>st[n]==='ok');let m;
+if(!k.length)m='Post none of the comments on “'+D.title+'”.';
+else{m='Go: post comments '+k.join(', ')+' on “'+D.title+'”.';k.forEach(n=>{if(edits[n])m+='\n\nComment '+n+', edited:\n'+edits[n]})}
+go.disabled=true;go.textContent='Sent ✓';document.querySelectorAll('.gc button').forEach(x=>x.disabled=true);sendPrompt(m)});
+count();"""
 
 
 def _card_html(doc, title, cards, total, has_suggestions=False):
     e = html.escape
     out = ['<h2 class="sr-only">Draft comments for ' + e(title) + ', each shown in its surrounding '
-           'text with the anchored words highlighted, with skip and edit for each and one button to '
-           'post the rest.</h2>', _CARD_STYLE, '<div style="padding:0.5rem 0 0">']
+           'text with the anchored words highlighted, with accept, edit and skip for each and one '
+           'button to post the accepted ones.</h2>', _CARD_STYLE, '<div style="padding:0.5rem 0 0">']
     if has_suggestions:
         out.append('<p class="gc-warn">This document has unaccepted suggested edits. The passages '
                    'show them as Docs does: <del>struck through</del> is a pending deletion, '
@@ -736,14 +746,15 @@ def _card_html(doc, title, cards, total, has_suggestions=False):
             f'<textarea class="gc-ta" hidden aria-label="Edit comment {c["n"]}"></textarea></div>'
             f'<p class="gc-err" role="alert"></p>'
             f'<div class="gc-row"><span class="gc-n">{e(where)}<span class="gc-tag">Edited</span></span>'
-            f'<span><button data-edit="{c["n"]}">Edit</button> '
-            f'<button data-skip="{c["n"]}">Skip</button></span></div></div>')
-    n = len(cards)
+            f'<span><button data-accept="{c["n"]}" aria-pressed="false">Accept</button> '
+            f'<button data-edit="{c["n"]}">Edit</button> '
+            f'<button data-skip="{c["n"]}" aria-pressed="false">Skip</button></span></div></div>')
     out.append(f'<p class="gc-err" id="gc-goerr" role="alert"></p>'
                f'<div class="gc-row" style="margin:16px 0 0.5rem">'
                f'<a href="https://docs.google.com/document/d/{e(doc)}/edit" style="font-size:14px">'
                f'Open the document <i class="ti ti-external-link" aria-hidden="true"></i></a>'
-               f'<button id="gc-go" style="font-weight:500">Post {n} comment{"s" if n != 1 else ""} ↗</button>'
+               f'<span><span class="gc-n" id="gc-tally"></span> '
+               f'<button id="gc-go" style="font-weight:500">Post accepted comments ↗</button></span>'
                f'</div></div>')
     # json.dumps leaves "</script>" intact inside a string, which would end the
     # script block early; escaping the slash keeps any comment text inert.
