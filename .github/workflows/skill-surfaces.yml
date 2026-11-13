@@ -1,0 +1,40 @@
+name: skill-surfaces
+
+# NSLS delivers this toolkit to every Claude seat, so its skills are listed in
+# an ordinary Claude chat and in Cowork as well as in Claude Code. Most of them
+# only work in Claude Code on the person's own computer. Each of those carries
+# a short note at the top: opened anywhere else, it says one plain sentence and
+# stops, instead of failing halfway.
+#
+# This check keeps that true for new skills. Every folder in skills/ must be
+# listed once in _shared/references/skill-surfaces.json, as working anywhere or
+# as needing Claude Code, and a skill that needs Claude Code must carry the
+# shared note. To put the note in place:
+#   python3 .github/scripts/check_skill_surfaces.py --fix
+#
+# No path filter, on purpose: the check reads text files and takes seconds, and
+# a filter would let a renamed folder or a moved list slip past it.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  skill-surfaces:
+    name: every skill says where it works
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Each skill is listed once, and a Claude Code skill carries the note
+        run: python .github/scripts/check_skill_surfaces.py
+      # Also runs when the check above failed, so one red run shows both.
+      - name: The check's own tests
+        if: ${{ !cancelled() }}
+        run: python test/test_check_skill_surfaces.py
