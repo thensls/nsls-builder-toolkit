@@ -127,7 +127,8 @@ python3 $S read   --doc $DOC --suggestions accepted   # preview with suggestions
 python3 $S comments --doc $DOC            # reviewer comments (address them; don't orphan)
 python3 $S comment  --doc $DOC --anchor "exact phrase" --preview --text "draft"  # where it would land
 python3 $S comment  --doc $DOC --anchor "exact phrase" --text-file /tmp/c1.txt   # post it, anchored
-python3 $S comment-card --doc $DOC --file drafts.json   # the approval card, for the visual widget
+python3 $S comment-serve --doc $DOC --file drafts.json  # the approval card in the browser panel; posts itself
+python3 $S comment-card --doc $DOC --file drafts.json   # the same card inside the chat (fallback)
 python3 $S replace --doc $DOC --find "old text" --replace "new text"   # literal by default
 python3 $S insert-top --doc $DOC --title "Changelog — v2.3" --text-file /tmp/changelog.txt
 python3 $S insert-after --doc $DOC --anchor "Top questions for Kevin" --text "• New bullet"
@@ -201,36 +202,51 @@ the anchor and shows the comment as an orphan reading "Original content deleted"
 Without an anchor it lands only in the All Comments panel, which nobody opens. `comment`
 is the route that reaches the margin.
 
-### The flow — draft, show the card, post what's approved
+### The flow — draft, show the card, the person posts
 
 1. **Draft** the comments into a JSON file, in document order:
    `[{"anchor": "exact phrase", "text": "the comment"}, ...]`. For a phrase that appears
    more than once, settle which match with `comment --recommend` first, then add
    `"occurrence": N` to that item.
-2. **Build the approval card:** `python3 $S comment-card --doc $DOC --file drafts.json`.
-   It resolves every anchor first and refuses (exit 3, nothing drawn) if any is missing,
-   blank, spans a paragraph break, or is ambiguous without an occurrence — a card never
-   asks someone to approve a guess.
-3. **Show it** by passing that output, unchanged, to the visual widget tool
-   (`show_widget`). Each comment appears as the passage reads in the document, the
-   anchored words in brackets with a highlighter behind them, and the comment
-   underneath. Each comment has **Accept**, **Edit** and **Skip**. Accept and Skip are
-   one click each (click again to undo); Edit rewrites the comment in place, and pressing
-   Done on an edit accepts it. The button at the bottom won't send until every comment
-   is accepted or skipped, then sends the go once and locks, so a second press can't
-   post twice.
-   If the document has unaccepted suggested edits, the card says so at the top and marks
-   them in each passage the way Docs does: struck through for a suggested deletion,
-   underlined for a suggested insertion.
-4. **Post on the go, quietly.** A card can't post by itself: its only line to you is a
-   chat message, such as `Go: post comments 2, 3, 4 on "<title>".`, followed by the new
-   wording of any comment that was edited. Post exactly those numbers with `comment`,
-   one call each, using the edited wording where the message gives it. Then answer in
-   one line (how many posted, on which document, with its link) and carry on with
-   whatever the conversation was doing. The person pressed a button mid-flow; don't
-   turn it into a new topic.
+2. **Serve the approval card** — run this as a background command (it keeps running
+   until the person decides):
+   `python3 $S comment-serve --doc $DOC --file drafts.json`
+   It resolves every anchor first and refuses (exit 3, nothing served) if any is
+   missing, blank, spans a paragraph break, or is ambiguous without an occurrence — a
+   card never asks someone to approve a guess. Otherwise its first line is
+   `CARD_URL: http://127.0.0.1:<port>/card?key=<key>`.
+3. **Open that address in the app's browser panel** (the built-in browser), or in the
+   person's own browser when the session has no panel. Tell them in one line that the
+   card is open beside the chat. Each comment appears as the passage reads in the
+   document, the anchored words in brackets with a highlighter behind them, and the
+   comment underneath, with **Accept**, **Edit** and **Skip**. Accept and Skip are one
+   click each (click again to undo); Edit rewrites the comment in place, and pressing
+   Done on an edit accepts it. The button won't post until every comment is accepted or
+   skipped. If the document has unaccepted suggested edits, the card says so at the top
+   and marks them in each passage the way Docs does.
+4. **The person's press posts the comments — you don't.** The helper posts each
+   accepted comment through `comment` (same checks, same read-back), shows "Posted ✓"
+   or the reason on each one, and stops. Nothing goes through the chat. When the
+   background command finishes, its output says what happened:
+   `RESULT: posted 2 of 2 accepted on '<title>'`, one line per comment, and the new
+   wording of any that were edited. Report it in one line, with the document's link,
+   and carry on with whatever the conversation was doing. Exit 1 means a comment didn't
+   post: say which and why (the doc may have changed). Exit 4 means the card expired
+   (15 minutes, `--timeout` to change) with nothing posted.
 
-**That message is the approval.** On a colleague's document, post nothing it doesn't
+**The press is the approval.** The helper posts only the drafts it was started with, in
+the wording the person left on the card, and only the ones they accepted. A change after
+that means a new card. The helper listens on this computer only, answers only requests
+carrying the key in the card's address, takes one decision, and stops.
+
+**No browser panel and no way to open one?** Use `comment-card` instead: the same card
+inside the chat, for the visual widget tool (`show_widget`). A card in the chat can't
+post by itself — its only line to you is a chat message such as
+`Go: post comments 2, 3, 4 on "<title>".`, followed by the new wording of any edited
+comment. Post exactly those numbers with `comment`, one call each, using the edited
+wording where the message gives it, then answer in one line and carry on.
+
+**On the chat card, that message is the approval.** On a colleague's document, post nothing it doesn't
 list, and nothing in words other than the ones it shows. A later change to a comment
 means a new card. On the person's own document (a private working copy, say) you can
 post without a card.

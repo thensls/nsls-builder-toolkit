@@ -721,11 +721,16 @@ const u=all.filter(n=>!st[n]);if(u.length){goErr.textContent='Accept or skip eve
 const k=all.filter(n=>st[n]==='ok');let m;
 if(!k.length)m='Post none of the comments on “'+D.title+'”.';
 else{m='Go: post comments '+k.join(', ')+' on “'+D.title+'”.';k.forEach(n=>{if(edits[n])m+='\n\nComment '+n+', edited:\n'+edits[n]})}
-go.disabled=true;go.textContent='Sent ✓';document.querySelectorAll('.gc button').forEach(x=>x.disabled=true);sendPrompt(m)});
+go.disabled=true;go.textContent='Sent ✓';document.querySelectorAll('.gc button').forEach(x=>x.disabled=true);SEND(k,edits,m)});
 count();"""
 
 
-def _card_html(doc, title, cards, total, has_suggestions=False):
+_SEND_CHAT = "const SEND=(k,e,m)=>sendPrompt(m);"
+
+
+def _card_html(doc, title, cards, total, has_suggestions=False, send_js=_SEND_CHAT, nonce=None):
+    """The card's HTML. In the chat (the default) the go button sends a chat message; served by
+    `comment-serve`, `send_js` posts the decision straight to the helper instead."""
     e = html.escape
     out = ['<h2 class="sr-only">Draft comments for ' + e(title) + ', each shown in its surrounding '
            'text with the anchored words highlighted, with accept, edit and skip for each and one '
@@ -755,24 +760,22 @@ def _card_html(doc, title, cards, total, has_suggestions=False):
                f'Open the document <i class="ti ti-external-link" aria-hidden="true"></i></a>'
                f'<span><span class="gc-n" id="gc-tally"></span> '
                f'<button id="gc-go" style="font-weight:500">Post accepted comments ↗</button></span>'
-               f'</div></div>')
+               f'</div>' + ('<p class="gc-done" id="gc-done" role="status"></p>' if nonce else '') + '</div>')
     # json.dumps leaves "</script>" intact inside a string, which would end the
     # script block early; escaping the slash keeps any comment text inert.
     data = json.dumps({"title": title, "items": {c["n"]: c["text"] for c in cards}},
                       ensure_ascii=False).replace("</", "<\\/")
-    out.append("<script>(()=>{const D=" + data + ";" + _CARD_JS + "})();</script>")
+    attr = f' nonce="{e(nonce)}"' if nonce else ""
+    out.append(f"<script{attr}>(()=>{{const D=" + data + ";" + send_js + _CARD_JS + "})();</script>")
     return "\n".join(out)
 
 
-def do_comment_card(doc, items):
-    """Print the approval card for a batch of draft comments.
+def _resolve_cards(doc, items):
+    """(title, cards, total, has_suggestions) for a batch of draft comments.
 
     Every anchor is resolved before anything is drawn. One that is empty,
     multi-line, missing, or ambiguous without an "occurrence" stops the whole
-    card (exit 3): a card must never ask a person to approve a guess. The Go
-    button sends a message listing the comments to post, plus the new wording of
-    any that were edited. That message is the approval; post each listed comment
-    with `comment`, one call each.
+    card (exit 3): a card must never ask a person to approve a guess.
     """
     if not isinstance(items, list) or not items:
         sys.exit('comment-card needs --file: a JSON list of {"anchor": ..., "text": ...}')
@@ -809,14 +812,259 @@ def do_comment_card(doc, items):
                 occ = 1 if occ is None else occ
                 p, k, _, _ = hits[occ - 1]
                 before, mid, after = _card_window(paras, p, k, anchor, kinds)
-                cards.append({"n": n, "before": before, "mid": mid, "after": after,
+                cards.append({"n": n, "before": before, "mid": mid, "after": after, "anchor": anchor,
                               "text": text, "occurrence": occ, "total": len(hits)})
     if problems:
         print("Card not built. Fix these first:")
         for pr in problems:
             print("  " + pr)
         sys.exit(EXIT_ANCHOR)
-    print(_card_html(doc, d.get("title", "this document"), cards, len(items), bool(kinds)))
+    return d.get("title", "this document"), cards, len(items), bool(kinds)
+
+
+def do_comment_card(doc, items):
+    """Print the approval card for the chat's visual widget. Its go button sends a
+    message listing the comments to post, plus the new wording of any that were
+    edited. That message is the approval; post each listed comment with `comment`,
+    one call each. `comment-serve` is the same card without the chat message."""
+    title, cards, total, has_suggestions = _resolve_cards(doc, items)
+    print(_card_html(doc, title, cards, total, has_suggestions))
+
+
+# ---------- comment-serve: the card posts by itself, no chat message ----------
+#
+# A card inside the chat can reach nothing but the chat: tested 2026-11-13, its
+# requests to a helper on the same machine never arrived. Davo asked for a post
+# button that works in the background, so `comment-serve` serves the same card as
+# a page from a short-lived helper on this machine. The person opens it in the
+# app's browser panel (or any browser), decides, and presses the button; the
+# helper posts each accepted comment through `do_comment` -- every check it makes,
+# including the read-back -- and shows the result on the page. Nothing goes
+# through the chat. Claude hears about it when the helper exits.
+#
+# The helper is deliberately small and short-lived. It listens on 127.0.0.1 only,
+# answers only requests carrying a random key from the page's address and the
+# right Host, sends no CORS headers, posts only the drafts it started with (edited
+# wording allowed), takes one decision, and stops after it or after the timeout.
+
+SERVE_TIMEOUT = 900  # seconds the card stays open before the helper gives up
+
+
+def _span(sec):
+    return f"{sec // 60} minutes" if sec >= 120 else "1 minute" if sec >= 60 else f"{sec} seconds"
+
+_SEND_PAGE = r"""const SEND=(k,e,m)=>{const ed={};k.forEach(n=>{if(e[n])ed[n]=e[n]});go.textContent='Posting…';
+const done=document.getElementById('gc-done');
+fetch('/post',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:KEY,post:k,edits:ed})})
+.then(r=>r.json().then(j=>({ok:r.ok,j})))
+.then(({ok,j})=>{if(!ok){goErr.textContent=j.error||'The helper refused the request.';go.textContent='Not posted';return}
+let good=0;(j.results||[]).forEach(x=>{const p=document.createElement('p');p.className='gc-res '+(x.ok?'ok':'bad');p.textContent=x.ok?'Posted ✓':'Not posted: '+x.note;if(x.ok)good++;const c=card(x.n);if(c)c.appendChild(p)});
+go.textContent=k.length?'Posted '+good+' of '+k.length+(good===k.length?' ✓':''):'Nothing posted';
+done.textContent=(k.length&&good<k.length?'Some comments didn’t post; Claude has the details. ':'Done. ')+'You can close this tab.'})
+.catch(()=>{goErr.textContent='Couldn’t reach the helper on this computer. It stops after one post or after its time limit; ask Claude for a fresh card.';go.textContent='Not posted'})};"""
+
+_PAGE_STYLE = """<style>
+:root{color-scheme:light dark;--surface-0:#f6f5f2;--surface-1:#fff;--surface-2:#f0eee9;--border:#d9d6cf;--radius:8px;--text-primary:#1f1e1c;--text-secondary:#4a4844;--text-muted:#76736b;--text-success:#1e7a3c;--text-danger:#b3261e;--text-warning:#7a5000;--bg-warning:#fff4d6;--bg-highlight:#ffe680;--bg-accent:#e6effc;--text-accent:#1f4f99}
+@media (prefers-color-scheme:dark){:root{--surface-0:#1b1a18;--surface-1:#26241f;--surface-2:#2e2c27;--border:#45423b;--text-primary:#ecebe7;--text-secondary:#c9c6bf;--text-muted:#9a968d;--text-success:#6fcf8e;--text-danger:#ff8a80;--text-warning:#f2c14e;--bg-warning:#3a2f12;--bg-highlight:#6b5a12;--bg-accent:#1e2b40;--text-accent:#9cc1ff}}
+body{margin:0;background:var(--surface-0);color:var(--text-primary);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:20px;line-height:1.3;margin:0 0 4px}
+.lede{color:var(--text-secondary);margin:0 0 16px;font-size:14px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.ti{display:none}
+.gc-row{flex-wrap:wrap}
+button{font:inherit;font-size:14px;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-1);color:var(--text-primary);cursor:pointer}
+button:disabled{opacity:.55;cursor:default}
+#gc-go{background:var(--text-primary);color:var(--surface-1);border-color:var(--text-primary)}
+a{color:var(--text-accent)}
+.gc-res{font-size:13px;margin:8px 0 0;font-weight:500}.gc-res.ok{color:var(--text-success)}.gc-res.bad{color:var(--text-danger)}
+.gc-done{font-size:14px;color:var(--text-secondary);text-align:right;margin:4px 0 0}.gc-done:empty{display:none}
+</style>"""
+
+
+def _card_page(doc, title, cards, total, has_suggestions, key, nonce):
+    """The card as a whole page, its go button posting to the helper that served it."""
+    send = "const KEY=" + json.dumps(key) + ";" + _SEND_PAGE
+    body = _card_html(doc, title, cards, total, has_suggestions, send_js=send, nonce=nonce)
+    t = html.escape(title)
+    return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>Comment approval</title>' + _PAGE_STYLE + '</head><body><main>'
+            f'<h1>Draft comments for {t}</h1>'
+            '<p class="lede">Accept, edit or skip each one. When you press the button, the accepted '
+            'comments go straight into the document from this computer; nothing goes through the chat.</p>'
+            + body + '</main></body></html>')
+
+
+def _check_decision(post, edits, by_n):
+    """(problem, edits): why a decision from the page can't be used, or the edits cleaned."""
+    if not isinstance(post, list) or any(isinstance(x, bool) or not isinstance(x, int) for x in post):
+        return "post must be a list of comment numbers", None
+    if len(set(post)) != len(post) or any(x not in by_n for x in post):
+        return "post names a comment that isn't on this card", None
+    if not isinstance(edits, dict):
+        return "edits must be an object", None
+    clean = {}
+    for k, v in edits.items():
+        if not (isinstance(k, str) and k.isdigit() and int(k) in post):
+            return f"an edit for comment {k!r}, which isn't being posted", None
+        if not isinstance(v, str) or not v.strip():
+            return f"comment {k}: an edited comment can't be empty", None
+        if len(v.strip().encode("utf-8")) > COMMENT_MAX:
+            return f"comment {k}: over Google's {COMMENT_MAX}-byte limit", None
+        clean[int(k)] = v.strip()
+    return None, clean
+
+
+def _post_quietly(doc, anchor, text, occurrence):
+    """Post one comment through do_comment -- every check it makes, none of its printing.
+    (ok, note): the posted line, or the reason nothing was posted."""
+    import contextlib, io
+    buf, code = io.StringIO(), 0
+    with contextlib.redirect_stdout(buf):
+        try:
+            do_comment(doc, anchor, text, occurrence=occurrence)
+        except SystemExit as ex:
+            code = ex.code
+        except Exception as ex:  # one failed comment must not stop the rest
+            code = f"{type(ex).__name__}: {ex}"
+    lines = [ln.strip() for ln in buf.getvalue().splitlines() if ln.strip()]
+    if code in (0, None) and lines and lines[-1].startswith("posted ✓"):
+        return True, lines[-1]
+    if isinstance(code, str):
+        return False, code[:300]
+    flagged = [ln for ln in lines if ln.split(":")[0].replace("_", " ").isupper()]
+    return False, (flagged[0] if flagged else (lines[-1] if lines else f"exit {code}"))[:300]
+
+
+def do_comment_serve(doc, items, timeout=SERVE_TIMEOUT, port=0):
+    """Serve the approval card from this machine and post what the person accepts.
+
+    Prints `CARD_URL: <address>` straight away, then waits. After the person's one
+    decision (or the timeout) it prints the outcome and exits: 0 when everything
+    accepted was posted or nothing was, 1 when a comment failed to post, 4 when the
+    card expired with no decision."""
+    import hmac, http.server, secrets, threading
+    from urllib.parse import parse_qs, urlsplit
+
+    title, cards, total, has_suggestions = _resolve_cards(doc, items)
+    by_n = {c["n"]: c for c in cards}
+    key, nonce = secrets.token_urlsafe(24), secrets.token_urlsafe(16)
+    page = _card_page(doc, title, cards, total, has_suggestions, key, nonce).encode("utf-8")
+    state = {"used": False, "expired": False, "outcome": None}
+    gate = threading.Lock()
+    csp = (f"default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-{nonce}'; "
+           "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+
+    class Card(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def _send(self, code, body, ctype="application/json; charset=utf-8"):
+            b = body if isinstance(body, bytes) else body.encode("utf-8")
+            self.send_response(code)
+            for h, v in (("Content-Type", ctype), ("Content-Length", str(len(b))),
+                         ("Cache-Control", "no-store"), ("Referrer-Policy", "no-referrer"),
+                         ("X-Content-Type-Options", "nosniff"), ("Content-Security-Policy", csp)):
+                self.send_header(h, v)
+            self.end_headers()
+            self.wfile.write(b)
+
+        def _refuse(self, code, msg):
+            self._send(code, json.dumps({"error": msg}))
+
+        def _host_ok(self):
+            # A web page can't make a browser send a foreign Host here (DNS rebinding).
+            return self.headers.get("Host") in hosts
+
+        def do_GET(self):
+            u = urlsplit(self.path)
+            if not self._host_ok():
+                return self._refuse(403, "wrong host")
+            if u.path != "/card":
+                return self._refuse(404, "not found")
+            if not hmac.compare_digest((parse_qs(u.query).get("key") or [""])[0], key):
+                return self._refuse(403, "wrong or missing key")
+            self._send(200, page, "text/html; charset=utf-8")
+
+        def do_POST(self):
+            if not self._host_ok():
+                return self._refuse(403, "wrong host")
+            if urlsplit(self.path).path != "/post":
+                return self._refuse(404, "not found")
+            if self.headers.get("Origin") not in (None, *origins):
+                return self._refuse(403, "wrong origin")
+            if (self.headers.get("Content-Type") or "").split(";")[0].strip() != "application/json":
+                return self._refuse(415, "JSON only")
+            try:
+                size = int(self.headers.get("Content-Length") or 0)
+                if size > 200_000:
+                    return self._refuse(413, "too large")
+                req = json.loads(self.rfile.read(size).decode("utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                return self._refuse(400, "unreadable request")
+            if not isinstance(req, dict) or not hmac.compare_digest(str(req.get("key", "")), key):
+                return self._refuse(403, "wrong or missing key")
+            post, edits = req.get("post"), req.get("edits") or {}
+            problem, edits = _check_decision(post, edits, by_n)
+            if problem:
+                return self._refuse(400, problem)
+            with gate:
+                if state["used"]:
+                    return self._refuse(409, "This card has already been used. Ask Claude for a fresh one.")
+                state["used"] = True
+            results = []
+            for num in post:
+                c = by_n[num]
+                ok, note = _post_quietly(doc, c["anchor"], edits.get(num, c["text"]),
+                                         c["occurrence"] if c["total"] > 1 else None)
+                results.append({"n": num, "ok": ok, "note": note, "text": edits.get(num)})
+            state["outcome"] = (post, results)
+            self._send(200, json.dumps({"results": [{"n": r["n"], "ok": r["ok"], "note": r["note"]}
+                                                    for r in results]}))
+            threading.Thread(target=srv.shutdown, daemon=True).start()
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), Card)
+    bound = srv.server_address[1]
+    hosts = (f"127.0.0.1:{bound}", f"localhost:{bound}")
+    origins = tuple("http://" + h for h in hosts)
+
+    def expire():
+        with gate:
+            if state["used"]:
+                return
+            state["used"] = state["expired"] = True
+        srv.shutdown()
+
+    timer = threading.Timer(timeout, expire)
+    timer.daemon = True
+    timer.start()
+    print(f"CARD_URL: http://127.0.0.1:{bound}/card?key={key}")
+    print(f"Open that in the browser panel. The card takes one decision and stops; "
+          f"it gives up after {_span(timeout)}.", flush=True)
+    try:
+        srv.serve_forever()
+    finally:
+        timer.cancel()
+        srv.server_close()
+
+    if state["expired"]:
+        print(f"EXPIRED: no decision on the card for {title!r} within {_span(timeout)}. Nothing was posted.")
+        sys.exit(4)
+    post, results = state["outcome"]
+    skipped = total - len(post)
+    if not post:
+        print(f"NOTHING POSTED: every comment on {title!r} was skipped.")
+        return
+    good = sum(r["ok"] for r in results)
+    print(f"RESULT: posted {good} of {len(post)} accepted on {title!r}"
+          + (f", {skipped} skipped" if skipped else "") + ".")
+    for r in results:
+        print(f"  {r['n']}: {'✓' if r['ok'] else '✗'} {r['note']}")
+        if r["text"]:
+            print("     edited to: " + r["text"].replace("\n", "\n     "))
+    if good < len(post):
+        sys.exit(1)
 
 
 def do_create(title, text):
@@ -1043,7 +1291,7 @@ def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="Read, edit, and create Google Docs via gws.")
-    ap.add_argument("action", choices=["read", "comments", "comment", "comment-card", "create", "replace",
+    ap.add_argument("action", choices=["read", "comments", "comment", "comment-card", "comment-serve", "create", "replace",
                                        "insert-top", "insert-after", "append", "append-rich",
                                        "remove", "batch"])
     ap.add_argument("--doc", help="Google Doc ID (required for all actions except create)")
@@ -1071,6 +1319,10 @@ def main():
     ap.add_argument("--recommend", type=int,
                     help="comment: the match the model judges right; shown first and flagged, never posted")
     ap.add_argument("--why", help="comment: one line explaining --recommend")
+    ap.add_argument("--timeout", type=int, default=SERVE_TIMEOUT,
+                    help="comment-serve: seconds the card stays open before the helper gives up")
+    ap.add_argument("--port", type=int, default=0,
+                    help="comment-serve: port on 127.0.0.1 (default: any free one)")
     ap.add_argument("--preview", action="store_true",
                     help="comment: show where it would anchor, with surrounding text; post nothing")
     a = ap.parse_args()
@@ -1104,6 +1356,11 @@ def main():
         if not a.file:
             sys.exit('comment-card needs --file: a JSON list of {"anchor": ..., "text": ...}')
         do_comment_card(a.doc, json.load(open(a.file, encoding="utf-8-sig")))  # -sig: tolerate a PS 5.1 BOM
+
+    elif a.action == "comment-serve":
+        if not a.file:
+            sys.exit('comment-serve needs --file: a JSON list of {"anchor": ..., "text": ...}')
+        do_comment_serve(a.doc, json.load(open(a.file, encoding="utf-8-sig")), timeout=a.timeout, port=a.port)
 
     elif a.action == "comment":
         if not a.anchor or len(a.anchor) != 1:
