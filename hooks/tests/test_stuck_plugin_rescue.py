@@ -15,6 +15,7 @@ update itself when the copy's finder comes back empty.
 A fake claude.exe (a script that logs its arguments) stands in for the CLI, in
 the Store layout, found through the APPDATA/LOCALAPPDATA variables on any OS.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import json
 import os
 import stat
@@ -63,10 +64,13 @@ def machine(tmp, installed="3.16.2", clone="3.17.3", cli=True, cli_fails=False):
 def load(cfg, script, roaming, local, finder):
     g = {"__name__": "nsls_migrate", "__file__": str(script),
          "_NSLS_MIGRATION_DEADLINE": time.monotonic() + 25, "_NSLS_FIND_CLAUDE": finder}
+    # HOME too: the finder also looks in the Mac desktop app's folder under it,
+    # and on a developer's Mac that is a real CLI this test must never run.
     saved = {k: os.environ.get(k) for k in ("CLAUDE_CONFIG_DIR", "NSLS_NO_PLUGIN_MIGRATION", "APPDATA",
-                                            "LOCALAPPDATA", "USERPROFILE", "PATH")}
+                                            "LOCALAPPDATA", "USERPROFILE", "PATH", "HOME")}
     os.environ.update(CLAUDE_CONFIG_DIR=str(cfg), NSLS_NO_PLUGIN_MIGRATION="1", APPDATA=str(roaming),
-                      LOCALAPPDATA=str(local), USERPROFILE=str(cfg.parent / "prof"), PATH="/usr/bin:/bin")
+                      LOCALAPPDATA=str(local), USERPROFILE=str(cfg.parent / "prof"), PATH="/usr/bin:/bin",
+                      HOME=str(cfg.parent / "home"))
     exec(compile(script.read_text(encoding="utf-8"), str(script), "exec"), g)
     return g, saved
 

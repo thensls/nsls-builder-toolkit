@@ -9,7 +9,7 @@ $hooks = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $hooks 'session-start.ps1'), [ref]$tokens, [ref]$errors)
 if ($errors.Count -gt 0) { throw "session-start.ps1 does not parse: $($errors[0].Message)" }
-$want = @('Parse-Frontmatter', 'Test-OwnPointer', 'Test-OrgPluginActive', 'Sync-Pointers')
+$want = @('Parse-Frontmatter', 'Test-OwnPointer', 'Get-SyncedAccountFolder', 'Test-SyncedToolkitCopy', 'Get-SyncedToolkitRoot', 'Test-SyncedToolkitActive', 'Test-OrgPluginActive', 'Sync-Pointers')
 $fns = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $want -contains $n.Name }, $true)
 if ($fns.Count -ne $want.Count) { throw "expected $($want.Count) functions, found $($fns.Count)" }
 foreach ($f in $fns) { Invoke-Expression $f.Extent.Text }

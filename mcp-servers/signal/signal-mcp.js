@@ -15585,6 +15585,12 @@ var tools = [
     handler: (args) => call(`/api/mcp/person/${encodeURIComponent(args.slug)}/goals`, {
       weeks: args.weeks ?? 12
     })
+  },
+  {
+    name: "signal_contractors",
+    description: "Current NSLS contractors (from Rippling): display name and department, nothing else. Used to keep a contractor's rates, renewals and negotiations out of shared notes. Executives only; anyone else gets a 403.",
+    inputSchema: { type: "object", properties: {} },
+    handler: () => call("/api/mcp/contractors")
   }
 ];
 var activeTools = TOKEN ? tools : [];

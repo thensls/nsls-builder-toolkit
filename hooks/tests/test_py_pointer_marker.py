@@ -12,6 +12,7 @@ this skill, in one of the two shapes the toolkit writes. Windows twin:
 test_ps1_pointer_marker.py.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import os
 import re

@@ -1,6 +1,7 @@
 ---
 name: gws
 description: >-
+  Claude Code only.
   Google Workspace CLI for Sheets, Docs, Slides, Drive, Gmail, and Calendar.
   Use when the user wants to read or edit Google Docs, work with spreadsheets,
   read or write Google Slides, manage Drive files, or any Google Workspace
@@ -10,6 +11,21 @@ description: >-
   "spreadsheet", "google slides", "gws", "read doc", "edit doc", "sheet data",
   "read sheet", "write to sheet", "google drive".
 ---
+
+<!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
+> **Claude Code only.** This skill needs the person's own computer, so check
+> where you are first, going by what your own instructions say you are running in.
+> In **Claude Code** (a terminal, or the Code tab in the Claude app), skip this
+> note. In **an ordinary Claude chat or a Cowork task** (its files live in a
+> sandbox such as `/sessions/...`, not on their computer), stop and follow
+> nothing else in this skill. If the person asked for this skill, or what they
+> want can't be done here without it, reply with only this sentence:
+> "This skill only works in Claude Code on your computer, so switch to Claude Code (the Code tab in the Claude app) and run it there."
+> Otherwise don't mention this skill; help the way you would without it.
+> Unsure which? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell:
+> `$env:CLAUDE_CODE_ENTRYPOINT`): `local-agent` is Cowork, and any other
+> answer, blank included, is Claude Code. No way to run a command means chat.
+<!-- claude-code-only:end -->
 
 # gws — Google Workspace CLI
 

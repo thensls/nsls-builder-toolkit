@@ -14,6 +14,7 @@ There is no PowerShell here; hooks/tests/windows/shim-python-step.ps1 runs the
 real hook under 5.1 in CI. This file checks the entry point itself, pins the
 script to it, and shows why the old form could never have worked.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import os
 import re
 import subprocess

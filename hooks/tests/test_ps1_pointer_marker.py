@@ -23,6 +23,7 @@ where these tests usually run, so the predicate is rebuilt here from the
 script's own pattern literal and exercised against real-shaped files; the
 static checks pin both scripts to it. The Windows CI job parses the scripts.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import contextlib
 import importlib.util
 import io

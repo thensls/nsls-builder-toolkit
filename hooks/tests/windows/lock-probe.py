@@ -21,6 +21,9 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # hooks/tests
+import collector_off  # noqa: E402,F401  (no test may install the real collector)
+
 hook_path, lock, mode = sys.argv[1], Path(sys.argv[2]), sys.argv[3]
 legacy = Path(sys.argv[4]) if len(sys.argv) > 4 else None
 spec = importlib.util.spec_from_file_location("session_start_hook", hook_path)

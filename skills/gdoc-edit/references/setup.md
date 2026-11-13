@@ -210,8 +210,11 @@ credentials are left untouched.)
 
 ### 4. Smoke test
 
+`S` is the full path of this skill's `scripts/gdoc.py` (the `scripts` folder beside this
+`references` folder):
+
 ```bash
-S=~/.claude/local-plugins/nsls-builder-toolkit/skills/gdoc-edit/scripts/gdoc.py
+S=<this skill's folder>/scripts/gdoc.py
 python3 $S read     --doc <ANY_DOC_ID_YOU_CAN_OPEN> | head
 python3 $S comments --doc <ANY_DOC_ID_YOU_CAN_OPEN>
 ```

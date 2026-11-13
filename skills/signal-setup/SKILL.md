@@ -1,6 +1,7 @@
 ---
 name: signal-setup
 description: >-
+  Claude Code only.
   Configure the Signal MCP server so Claude Code can query Quick Notes,
   wins, friction signals, and team summaries for any team you're allowed
   to see. Use when the user says "set up Signal", "signal mcp", "signal
@@ -10,19 +11,34 @@ description: >-
   Quick Notes history and goals (powers /role-coach), nobody else's.
 ---
 
+<!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
+> **Claude Code only.** This skill needs the person's own computer, so check
+> where you are first, going by what your own instructions say you are running in.
+> In **Claude Code** (a terminal, or the Code tab in the Claude app), skip this
+> note. In **an ordinary Claude chat or a Cowork task** (its files live in a
+> sandbox such as `/sessions/...`, not on their computer), stop and follow
+> nothing else in this skill. If the person asked for this skill, or what they
+> want can't be done here without it, reply with only this sentence:
+> "This skill only works in Claude Code on your computer, so switch to Claude Code (the Code tab in the Claude app) and run it there."
+> Otherwise don't mention this skill; help the way you would without it.
+> Unsure which? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell:
+> `$env:CLAUDE_CODE_ENTRYPOINT`): `local-agent` is Cowork, and any other
+> answer, blank included, is Claude Code. No way to run a command means chat.
+<!-- claude-code-only:end -->
+
 # /signal-setup — Connect Claude Code to Signal
 
 ## What this does
 
 Signal (the people-ops bot powering Quick Notes, wins, and friction signals) exposes a read-only HTTP API at `https://employee-profiles-production.up.railway.app/api/mcp/*`. This skill writes your personal bearer token to `~/.config/nsls/signal-token` so the bundled MCP server can authenticate. Scope follows the token — execs see org-wide on cross-team endpoints, managers see their reporting subtree.
 
-After setup you'll have six new tools in Claude Code: `signal_team_summary`, `signal_wins`, `signal_friction`, `signal_person`, `signal_person_history`, `signal_person_goals`.
+After setup you'll have seven new tools in Claude Code: `signal_team_summary`, `signal_wins`, `signal_friction`, `signal_person`, `signal_person_history`, `signal_person_goals`, `signal_contractors`.
 
 **Works on macOS, Linux, and Windows.** The MCP server is launched directly as `node signal-mcp.js` (no shell wrapper), so it runs identically on every OS. The only host requirement is **Node.js 20+ on the PATH** — the bundle is built for Node 20 (and CI tests on it), so older majors may hit unsupported syntax. Each step below gives a macOS/Linux (`sh`) form and a Windows (PowerShell) form; use whichever matches the builder's machine.
 
 ## Who can use this
 
-- **Executives** (people.app_role = 'executive'): org-wide on `wins`, `friction`, `person/*`. `team_summary` returns your own direct reports unless you pass `manager_slug`.
+- **Executives** (people.app_role = 'executive'): org-wide on `wins`, `friction`, `person/*`. `signal_contractors` (the current contractor list, which harvest uses) is executives only. `team_summary` returns your own direct reports unless you pass `manager_slug`.
 - **Managers** (anyone with direct reports): your reporting subtree.
 - **Everyone else (self scope)**: `signal_person`, `signal_person_history`, and `signal_person_goals` work for **your own slug only** — your Quick Notes history and goal updates, with sentiment excluded server-side. Every other slug and every team endpoint returns 403. This is what powers `/role-coach` for individual contributors.
 
@@ -50,7 +66,7 @@ This is the #1 reason `signal_*` tools never appear even when Node and the token
 
 **First, check whether the toolkit is installed and enabled as a plugin** (`claude plugin list` shows `nsls-builder-toolkit` and does not mark it disabled). If it is enabled, the plugin registers signal itself: do **not** add a user-scope entry, because a second `signal` beside the plugin's is exactly the duplicate the toolkit's migration removes, and it shows as two "Connection closed" errors. Skip to Step 2. If it is installed but disabled, it registers nothing: ask the builder whether to enable it (`claude plugin enable nsls-builder-toolkit@nsls-toolkit`) and skip to Step 2 if they do. Only a machine without an enabled plugin needs the registration below.
 
-Fix it by registering the server explicitly at user scope, pointing at the absolute path of this plugin (the directory this skill loaded from — `$CLAUDE_PLUGIN_ROOT`, e.g. `~/.claude/local-plugins/nsls-builder-toolkit`). Substitute the real path; don't rely on `$CLAUDE_PLUGIN_ROOT` being exported into a plain terminal (it usually isn't). `claude mcp add` is idempotent — if it's already registered it prints "already exists" and changes nothing, so it's always safe to run.
+Fix it by registering the server explicitly at user scope, pointing at the absolute path of this plugin (the toolkit's top folder, the one that holds `skills/` and `hooks/`: two folders up from the folder this SKILL.md is in — `${CLAUDE_PLUGIN_ROOT}`). Substitute the real path; don't rely on `$CLAUDE_PLUGIN_ROOT` being exported into a plain terminal (it usually isn't). `claude mcp add` is idempotent — if it's already registered it prints "already exists" and changes nothing, so it's always safe to run.
 
 First check whether it's already there:
 
@@ -94,7 +110,8 @@ If a token exists, ask whether to rotate or just verify the existing one.
 
 Tell the user to:
 
-1. Open `https://employee-profiles-production.up.railway.app/me/mcp-token` in a browser (works for everyone; managers/execs can also use the button on `/team`). Sign in with their NSLS Google account.
+1. Open `https://signal.nsls.org/me/mcp-token` in a browser (works for everyone; managers/execs can also use the button on `https://signal.nsls.org/team`). Sign in with their NSLS Google account.
+   Always give the `signal.nsls.org` address, never the `employee-profiles-production.up.railway.app` one: sign-in only sticks on `signal.nsls.org`, so the Railway address sends people round the sign-in again and drops them on "You don't have a quarterly yet" instead of the token page.
 2. Click **"Generate MCP token"**.
 3. Copy the token (starts with `signal_` followed by 64 hex chars). It's shown once; if they dismiss the popup they need to regenerate.
 
@@ -129,13 +146,13 @@ The most reliable cross-platform check is the server's own self-test — it conf
 macOS/Linux:
 ```sh
 node "$CLAUDE_PLUGIN_ROOT/mcp-servers/signal/signal-mcp.js" --selftest
-# expect: signal-mcp: selftest OK — 6 tools registered, <platform>, node <version>
+# expect: signal-mcp: selftest OK — 7 tools registered, <platform>, node <version>
 ```
 
 Windows (PowerShell — note `$env:` prefix and backslashes):
 ```powershell
 node "$env:CLAUDE_PLUGIN_ROOT\mcp-servers\signal\signal-mcp.js" --selftest
-# expect: signal-mcp: selftest OK — 6 tools registered, <platform>, node <version>
+# expect: signal-mcp: selftest OK — 7 tools registered, <platform>, node <version>
 ```
 
 `CLAUDE_PLUGIN_ROOT` is set inside the plugin's `.mcp.json`/hook context but is not guaranteed to be exported into a plain terminal. When running this by hand, substitute the real path — the `mcp-servers/signal/signal-mcp.js` inside the installed `nsls-builder-toolkit` plugin directory (the same folder this skill loaded from).
@@ -182,7 +199,7 @@ Claude Code only registers MCP servers at session start. Tell the user:
 
 If a token is compromised or the user just wants a fresh one:
 
-1. Click "Generate MCP token" again on `/me/mcp-token` (or `/team` for managers/execs). The old token stops working the instant the new one is minted (the `app_api_token` column is unique).
+1. Click "Generate MCP token" again on `https://signal.nsls.org/me/mcp-token` (or `https://signal.nsls.org/team` for managers/execs). The old token stops working the instant the new one is minted (the `app_api_token` column is unique).
 2. Re-run /signal-setup.
 
 ## Common failures

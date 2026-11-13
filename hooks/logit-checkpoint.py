@@ -12,6 +12,10 @@ answers it.
                     once with a reminder (additionalContext, a plain-facts
                     system reminder); if the reminder went unanswered too,
                     record it as ignored and stop asking this session.
+                    Otherwise, if log it asked nothing this turn, offer a
+                    lesson check when the builder has been correcting Claude
+                    (lesson_trigger.py). One end-of-turn question per turn,
+                    never two.
 
 Never blocks a tool call, never exits non-zero, prints nothing it does not
 mean Claude to read. A broken checkpoint is a missing question, not a broken
@@ -25,6 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import logit_core as core  # noqa: E402
+import lesson_trigger  # noqa: E402
 
 
 def retry_pending_detached():
@@ -51,6 +56,9 @@ def on_prompt(payload):
     with tx as data:
         sess = core.session(data, sid)
         sess["key"] = key
+        # Numbered turns let Stop tell whether log it asked THIS turn; timestamps
+        # are whole seconds and cannot.
+        sess["turn"] = int(sess.get("turn") or 0) + 1
         core.scan(sess, payload.get("transcript_path") or "")
         b = core.build(data, key)
         core.note_work(sess, b)
@@ -59,6 +67,7 @@ def on_prompt(payload):
             "<scheduled-task")
         if not automated and core.due(sess, b, key):
             sess["asked_at"] = core.now_iso()
+            sess["asked_turn"] = sess["turn"]
             sess["answer"] = ""
             sess["reminded"] = False
             out = core.checkpoint_text(sess, b, key, sid)
@@ -70,26 +79,53 @@ def on_prompt(payload):
         print(out)
 
 
+def logit_stop(data, sess, sid, payload):
+    """Log it's own end-of-turn step: the reminder, or recording an ignored
+    question. Returns the reminder text, or None."""
+    if not sess.get("asked_at") or sess.get("answer"):
+        return None
+    if not sess.get("reminded"):
+        sess["reminded"] = True
+        return core.reminder_text(sid, sess.get("key") or core.build_key(payload.get("cwd")))
+    sess["answer"] = "ignored"
+    sess["changes_at_answer"] = sess.get("changes", 0)
+    b = core.build(data, sess.get("key") or core.build_key(payload.get("cwd")))
+    b["ignored"] = b.get("ignored", 0) + 1
+    return None
+
+
+def asked_this_turn(sess):
+    turn = sess.get("turn")
+    return turn is not None and sess.get("asked_turn") == turn
+
+
 def on_stop(payload):
     sid = str(payload.get("session_id") or "")
     if not sid:
         return
     out = None
+    lesson = None
     tx = core.locked()
     with tx as data:
-        sess = data["sessions"].get(sid)
-        if not sess or not sess.get("asked_at") or sess.get("answer"):
+        known = sid in data["sessions"]
+        # Log it only ever creates its record at a prompt. Make one here only
+        # when the lesson check has something to keep in it.
+        if not known and not lesson_trigger.can_run(payload):
             return
-        if not sess.get("reminded"):
-            sess["reminded"] = True
-            out = core.reminder_text(sid, sess.get("key") or core.build_key(payload.get("cwd")))
-        else:
-            sess["answer"] = "ignored"
-            sess["changes_at_answer"] = sess.get("changes", 0)
-            b = core.build(data, sess.get("key") or core.build_key(payload.get("cwd")))
-            b["ignored"] = b.get("ignored", 0) + 1
-    if out and tx.saved:
+        sess = core.session(data, sid)
+        if known:
+            out = logit_stop(data, sess, sid, payload)
+        if out is None and not asked_this_turn(sess):
+            try:
+                lesson = lesson_trigger.on_stop(sess, payload)
+            except Exception:
+                lesson = None
+    if not tx.saved:
+        return
+    if out:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": out}}))
+    elif lesson:
+        print(json.dumps(lesson))
 
 
 def main():

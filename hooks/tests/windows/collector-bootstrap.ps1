@@ -1,10 +1,11 @@
-# windows-ci: ps51 | Collector bootstrap launches once, hidden, and stays out when installed or opted out
+# windows-ci: ps51 | Collector bootstrap launches once, hidden, and stays out when installed, opted out, or run from a scratch profile
 # Collector bootstrap on a real PC, with Start-Process stubbed so the real
 # installer never runs. Proves under Windows PowerShell 5.1 that
 # Invoke-CollectorBootstrap (hooks/collector_bootstrap.ps1): launches once
 # when the collector is missing, writing the marker first; stays out when it
 # is installed (config.json plus its scheduled task), when evidence is fresh,
-# or when the builder opted out; repairs a config.json with no task; holds
+# when the builder opted out, or when USERPROFILE or LOCALAPPDATA is a scratch
+# folder rather than the account's own (checked live); repairs a config.json with no task; holds
 # to one attempt per 24h and stops after 5; stands down while another session
 # holds the lock; and that session-start.ps1 wires it with its output
 # discarded. Run by .github/workflows/windows-hooks.yml. ASCII only.
@@ -33,10 +34,16 @@ $realTaskCheck = ${function:Test-CollectorTaskRegistered}
 $script:taskRegistered = $true
 function Test-CollectorTaskRegistered { return $script:taskRegistered }
 
+# Same for the own-profile check: every box's LOCALAPPDATA is a scratch folder,
+# which the real check refuses (that is the point). It is tested live below.
+$realOwnProfile = ${function:Test-CollectorOwnProfile}
+$script:ownProfile = $true
+function Test-CollectorOwnProfile { return $script:ownProfile }
+
 $inv = [System.Globalization.CultureInfo]::InvariantCulture
 $utf8 = New-Object System.Text.UTF8Encoding $false
 $t0 = [DateTime]::new(2026, 9, 26, 12, 0, 0, [DateTimeKind]::Utc)
-$saved = @{ cfg = $env:CLAUDE_CONFIG_DIR; lad = $env:LOCALAPPDATA; opt = $env:NSLS_COLLECTOR_OPTOUT; base = $env:NSLS_COLLECTOR_BASE_URL }
+$saved = @{ cfg = $env:CLAUDE_CONFIG_DIR; lad = $env:LOCALAPPDATA; prof = $env:USERPROFILE; opt = $env:NSLS_COLLECTOR_OPTOUT; base = $env:NSLS_COLLECTOR_BASE_URL }
 
 function New-Box {
     $root = Join-Path ([System.IO.Path]::GetTempPath()) ('nsls-cb-' + [guid]::NewGuid().ToString('N'))
@@ -50,6 +57,7 @@ function New-Box {
     $script:launches = @()
     $script:markerAtLaunch = $null
     $script:taskRegistered = $true
+    $script:ownProfile = $true
     return $root
 }
 
@@ -138,6 +146,34 @@ try {
     Check 'opt-out -> optout' ($r -eq 'optout') "$r"
     Check 'opt-out: no launch, no marker' (($script:launches.Count -eq 0) -and -not (Test-Path -LiteralPath $script:marker))
 
+    # A scratch profile never installs. A test or tool that runs session start
+    # with a fake USERPROFILE or LOCALAPPDATA would otherwise point the
+    # account's one "NSLS Collector" task at a folder that is about to vanish.
+    $roots += New-Box
+    $script:ownProfile = $false
+    $r = Invoke-CollectorBootstrap -Now $t0
+    Check 'scratch profile -> sandboxed' ($r -eq 'sandboxed') "$r"
+    Check 'sandboxed: no launch, nothing written' (($script:launches.Count -eq 0) -and (@(Get-ChildItem -LiteralPath $env:CLAUDE_CONFIG_DIR -Force).Count -eq 0))
+
+    # The real check, live: this account's own profile passes; a scratch
+    # LOCALAPPDATA or USERPROFILE does not, and the whole bootstrap stands down.
+    $env:LOCALAPPDATA = $saved.lad
+    $live = & $realOwnProfile
+    Check 'real profile check: own profile -> true' ($live -eq $true) "$live (USERPROFILE=$env:USERPROFILE LOCALAPPDATA=$env:LOCALAPPDATA)"
+    $scratch = New-Box
+    $roots += $scratch
+    $live = & $realOwnProfile
+    Check 'real profile check: scratch LOCALAPPDATA -> false' ($live -eq $false) "$live"
+    $stub = ${function:Test-CollectorOwnProfile}
+    ${function:Test-CollectorOwnProfile} = $realOwnProfile
+    try { $r = Invoke-CollectorBootstrap -Now $t0 } finally { ${function:Test-CollectorOwnProfile} = $stub }
+    Check 'real profile check in the bootstrap: scratch LOCALAPPDATA -> sandboxed, no launch' (($r -eq 'sandboxed') -and ($script:launches.Count -eq 0)) "$r"
+    $env:LOCALAPPDATA = $saved.lad
+    $env:USERPROFILE = Join-Path $scratch 'profile'
+    $live = & $realOwnProfile
+    Check 'real profile check: scratch USERPROFILE -> false' ($live -eq $false) "$live"
+    $env:USERPROFILE = $saved.prof
+
     # Another session holds the lock.
     $roots += New-Box
     New-Item -ItemType Directory -Path (Split-Path $script:marker -Parent) -Force | Out-Null
@@ -179,6 +215,7 @@ try {
 } finally {
     $env:CLAUDE_CONFIG_DIR = $saved.cfg
     $env:LOCALAPPDATA = $saved.lad
+    $env:USERPROFILE = $saved.prof
     $env:NSLS_COLLECTOR_OPTOUT = $saved.opt
     $env:NSLS_COLLECTOR_BASE_URL = $saved.base
     foreach ($r in $roots) { Remove-Item -LiteralPath $r -Recurse -Force -ErrorAction SilentlyContinue }

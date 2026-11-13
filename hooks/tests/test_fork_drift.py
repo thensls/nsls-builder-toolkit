@@ -15,6 +15,7 @@ lives inside the fork, so no fork can receive it; this hook self-updates
 from NSLS on every machine and is the only channel that reaches a fork.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import io
 import os

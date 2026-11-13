@@ -57,12 +57,13 @@ Then open Claude Code and say `/nsls-setmeup` to connect your tools and optional
 | **/pydoc-pipeline** | Generate documentation from Python code |
 | **/web-research** | Structured web research |
 | **/interrogate** | Deep-dive investigation skill |
-| **/ai-level-up** | A private weekly AI check-in: your Builder stage and next unlock, whether each session used the right level of AI for what was at stake, your habits vs typical, and up to three things to try. Say "how am I doing with AI?". Nothing is sent to anyone. |
+| **/ai-level-up** | A weekly AI check-in: your Builder stage and next unlock, whether each session used the right level of AI for what was at stake, your habits vs typical, and up to three things to try. From the second check-in, it estimates the time saved by what you put into practice. Say "how am I doing with AI?". |
 | **/second-opinion** | An independent, read-only check before work goes out, offered (or automatic, if you choose) for risky work like production data writes, logins, money, member data, unattended automations, and numbers for leadership or members. You pick the reviewer and when it runs; say "change my second-opinion settings" any time. One reviewer, one round, plain one-line report. |
 | **/signal-setup** | Wire Claude Code into Signal — query Quick Notes, wins, friction, team summaries. Managers + execs only. |
 | **/society-invite-llm-email-prompt** | Build the LLM-node prompt for personalized Society member-invitation emails — NSLS data fields and fill rates, life-stage resolution, voice rules, and the failure catalogue from real testing |
 | **/llm-email-workflow** | The pipeline around an LLM email — data profiling, audience segmentation, node wiring, safety nodes, sandbox-to-live rollout |
 | **/feature-branch-protocol-template** | Template for building your own work-discipline skill — setup, checkpoints, irreversible-step rules, final handoff. Copy to `~/.claude/skills/` and fill in your own preferences. Red's developer version included as a seed. |
+| **/browser-check** | Check a web change in a real browser before you call it done. Runs [Expect](https://www.expect.dev/): reads your git diff, writes a test plan from it and your acceptance criteria, and has Claude click through it headless. Pass/fail per step in 1–5 minutes. Runs through an NSLS wrapper that blocks the vendor's telemetry and never copies your browser cookies. Never point it at production for flows that write. |
 | **/receipts** | Find Ramp transactions missing receipts, fetch them from Anthropic billing or Gmail, upload to Ramp (dry run by default; `--send` executes) |
 | **/email-ab-test-analysis** | Read an email A/B test end to end — join the copy that shipped to the outcomes it got, gate on significance and on whether the arms were comparable at all, and refuse to name a cause the data cannot carry. Customer.io, HubSpot, or numbers read off any screen |
 
@@ -79,7 +80,7 @@ For non-software work — campaigns, strategy docs, briefs, research synthesis. 
 
 Type the `kw:` part: `/kw:plan`, not `/plan`. On their own, `/plan` and `/review` start Claude Code's built-in plan mode and code review. Or just ask in plain words: "help me plan the spring roadshow", "save what we learned".
 
-Use these for strategy/knowledge work. For software features use `/ce-brainstorm` → `/ce-plan` → `/ce-work` → `/ce-code-review` from the Compound Engineering plugin. For new automations start with `/interrogate`.
+Use these for strategy/knowledge work. For software features use `/ce-brainstorm` → `/ce-plan` → `/ce-work` → `/browser-check` → `/ce-code-review` (Compound Engineering, plus this toolkit's browser check for anything with a web UI). For new automations start with `/interrogate`.
 
 ## Strategy Studio
 
@@ -111,7 +112,7 @@ These are installed automatically by the install script:
 
 ## Personal Productivity Skills (Optional)
 
-During `/nsls-setmeup`, you can optionally install personal productivity skills — daily planning, weekly reviews, project logging, relationship tracking. These are Kevin's personal template — fork them, edit them, make them yours. They live in a [separate repo](https://github.com/thensls/nsls-personal-toolkit).
+During `/nsls-setmeup`, you can optionally install personal productivity skills — daily planning, weekly reviews, project logging, relationship tracking. These are Kevin's personal template, and they live in a [separate repo](https://github.com/thensls/nsls-personal-toolkit). When NSLS delivers them through Claude, `/personal-setup` sets them up with no GitHub sign-in.
 ## First-Time Setup
 
 After installing, run `/connect` in Claude Code to connect your data systems (PostHog, Airtable, Slack, Customer.io, n8n, and more). Each connection persists across sessions — you only do it once per system.
@@ -242,7 +243,7 @@ They form a cycle: `/data-model-discovery` explores a new system → maps it aga
 | **web-research** | Web research with AI overview extraction |
 | **macroscope** | Turn a Macroscope review bot's PR comments into one root-cause fix pass — fix the class, not each comment |
 | **interrogate** | Scope a new project through structured conversation |
-| **ai-level-up** | Private weekly AI check-in: Builder stage, right level per session, habits vs typical, things to try |
+| **ai-level-up** | Weekly AI check-in: Builder stage, right level per session, habits vs typical, things to try, estimated time saved |
 | **second-opinion** | An independent check before work goes out, on your terms. You choose when it runs and who reviews. |
 | **society-invite-llm-email-prompt** | LLM-node prompt for Society member-invitation emails — NSLS fields, life-stage buckets, tested failure catalogue |
 | **llm-email-workflow** | End-to-end pipeline for LLM-generated emails — data, audience, node wiring, guardrails, rollout |
@@ -293,9 +294,9 @@ session ping (`hooks/session-start.ps1`) so Windows builders are covered too.
 ## Claude Usage Reporter (collector)
 
 The NSLS Claude usage collector reports a summary of each session (for
-example the app, models, timing, token counts, skill and tool names, and
-branch name) from this machine to Signal. It never reports prompts,
-responses or files. You can
+example the app, models, timing, token counts, and skill and tool
+names) from this machine to Signal. It never reports your prompts or
+files. You can
 see what it has sent at [signal.nsls.org/me/machines](https://signal.nsls.org/me/machines).
 
 **Installed for you.** When a session starts on a Mac or a Windows PC and
@@ -326,6 +327,18 @@ credit and skill events there, so the toolkit's skill hook stops posting and
 the session ping sends `collector_backed: true`. If the collector stops
 reporting for 7 days, the hooks take over again on their own
 (`hooks/collector_evidence.py`).
+
+## Student-data activity log
+
+In Claude Code, the toolkit keeps a local note each time a session looks up
+student records: a call to a vendor's own server (HubSpot, PostHog,
+Customer.io, Hex), a record tool on the shared claude.ai connector, or a
+Drive or Gmail request that mentions a roster, GPA, a `.edu` address or a
+spreadsheet. It never blocks or asks anything. Each line holds the time, the
+tool and server names, the platform, how the call was recognised, the session
+id and the toolkit version, and never what was searched for or returned. The
+file is `~/.claude/.nsls-student-data-log.jsonl`, capped at 5 MB. The format
+is documented at the top of `hooks/student-data-log.py`.
 
 ## Request a Skill
 

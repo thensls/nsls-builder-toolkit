@@ -40,6 +40,17 @@
         ]
       },
       {
+        "matcher": "^mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh\" student-data-log",
+            "shell": "bash",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "^(Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit)$",
         "hooks": [
           {
@@ -59,6 +70,16 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh\" checkpoint",
             "timeout": 10,
+            "shell": "bash"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh\" harvest-nudge",
+            "timeout": 5,
             "shell": "bash"
           }
         ]

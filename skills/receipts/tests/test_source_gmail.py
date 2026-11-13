@@ -520,9 +520,13 @@ def test_fetch_skips_message_with_unparseable_amount():
     }
     responses = {"list": LIST_PAYLOAD, "get": get_no_amount, "attachments": _attachment_payload()}
     with patch("sources.gmail.os.path.exists", return_value=True), \
+         patch("sources.gmail._pdf_text", return_value="a PDF with no total at all"), \
          patch("sources.gmail.subprocess.run", side_effect=_dispatch(responses)):
         receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
     assert receipts == []
+    assert any("no USD total could be read" in n for n in SOURCE.notes), (
+        "a skipped, unpriceable receipt must be announced, not dropped silently"
+    )
 
 
 def test_fetch_follows_next_page_token_to_the_end():
@@ -637,3 +641,196 @@ if __name__ == "__main__":
         if n.startswith("test_"):
             f(); print(f"  ok {n}")
     print("\nAll gmail source tests passed.")
+
+
+# ---------------------------------------------------------------------------
+# PDF-amount fallback and trusted forwards
+# ---------------------------------------------------------------------------
+
+ATLASSIAN_PDF_TEXT = """
+ Invoice number:      IN-008-927-780
+                        Invoice Total:    USD 111.67
+                        Amount paid via credit card:      USD 111.67
+                        Payment due:           USD 0.00
+                                    Total list price             USD 3,398.28
+                                      Total credits              USD 3,292.08
+              Sub Total (Total list price - Total credits)               USD 106.20
+"""
+
+
+def test_parse_pdf_amount_reads_the_charged_total_not_list_price_or_credits():
+    assert SOURCE.parse_pdf_amount(ATLASSIAN_PDF_TEXT) == 11167
+
+
+def test_sub_total_is_never_read_as_the_total_even_when_it_comes_last():
+    assert SOURCE.parse_pdf_amount("Invoice Total: USD 111.67\nSub Total: USD 106.20") == 11167
+    assert SOURCE.parse_pdf_amount("Invoice Total: USD 111.67\nSub-Total: USD 106.20") == 11167
+    assert SOURCE.parse_amount("Total $111.67\nSub Total $106.20") == 11167
+
+
+def test_parse_pdf_amount_refuses_non_usd_and_unlabelled_figures():
+    assert SOURCE.parse_pdf_amount("Invoice Total: EUR 111.67") is None
+    assert SOURCE.parse_pdf_amount("Total: 111.67") is None
+    assert SOURCE.parse_pdf_amount("") is None
+
+
+def _no_amount_message(subject="Your payment has been processed", from_value="no_reply@am.atlassian.com"):
+    return {
+        "payload": {
+            "headers": [{"name": "Subject", "value": subject}, {"name": "From", "value": from_value}],
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {"mimeType": "text/plain", "body": {"data": _b64url_nopad(b"Thanks. The invoice is attached.")}},
+                {"mimeType": "application/pdf", "filename": "Atlassian_Invoice_IN-008-927-780.pdf",
+                 "body": {"attachmentId": "ATT", "size": 100}},
+            ],
+        },
+        "snippet": "Thanks. The invoice is attached.",
+        "internalDate": "1793575581000",
+    }
+
+
+def test_fetch_reads_the_amount_from_the_pdf_when_the_email_body_has_none():
+    responses = {"list": LIST_PAYLOAD, "get": _no_amount_message(), "attachments": _attachment_payload(PDF_BYTES)}
+    with patch("sources.gmail.os.path.exists", return_value=True), \
+         patch("sources.gmail._pdf_text", return_value=ATLASSIAN_PDF_TEXT), \
+         patch("sources.gmail.subprocess.run", side_effect=_dispatch(responses)):
+        receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
+    assert len(receipts) == 1
+    assert receipts[0].amount_cents == 11167
+    assert receipts[0].merchant == "atlassian"
+
+
+def test_fetch_announces_when_pdftotext_is_missing_instead_of_silently_skipping():
+    responses = {"list": LIST_PAYLOAD, "get": _no_amount_message(), "attachments": _attachment_payload(PDF_BYTES)}
+    with patch("sources.gmail.os.path.exists", return_value=True), \
+         patch("sources.gmail._pdf_text", return_value=None), \
+         patch("sources.gmail.subprocess.run", side_effect=_dispatch(responses)):
+        receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
+    assert receipts == []
+    assert any("pdftotext" in n and "poppler" in n and "failed" in n for n in SOURCE.notes)
+
+
+def _forward_message(outer_from: str) -> dict:
+    body = (
+        b"---------- Forwarded message ---------\n"
+        b"From: Supabase Pte. Ltd. <invoice+statements@supabase.com>\n"
+        b"Date: Mon, Oct 19, 2026 at 2:32 AM\n"
+        b"Subject: Payment received for Supabase Pte. Ltd. invoice (#ERELCM-00009)\n\n"
+        b"Your invoice has been paid. $53.82 has been charged to your payment method."
+    )
+    return {
+        "payload": {
+            "headers": [
+                {"name": "Subject", "value": "Fwd: Payment received for Supabase Pte. Ltd. invoice (#ERELCM-00009)"},
+                {"name": "From", "value": outer_from},
+            ],
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {"mimeType": "text/plain", "body": {"data": _b64url_nopad(body)}},
+                {"mimeType": "application/pdf", "filename": "Receipt-ERELCM-00009.pdf",
+                 "body": {"attachmentId": "ATT", "size": 100}},
+            ],
+        },
+        "snippet": "Forwarded message",
+        "internalDate": "1793804292000",  # Nov 4 2026 — when it was FORWARDED
+    }
+
+
+def test_trusted_forward_is_attributed_to_the_original_vendor_and_original_date(monkeypatch):
+    monkeypatch.setenv("RECEIPTS_TRUSTED_FORWARDERS", "kevin.prentiss@gmail.com")
+    responses = {"list": LIST_PAYLOAD, "get": _forward_message("Kevin Prentiss <kevinprentiss@gmail.com>"),
+                 "attachments": _attachment_payload(PDF_BYTES)}
+    with patch("sources.gmail.os.path.exists", return_value=True), \
+         patch("sources.gmail.subprocess.run", side_effect=_dispatch(responses)):
+        receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
+    assert len(receipts) == 1
+    assert receipts[0].merchant == "supabase"
+    assert receipts[0].amount_cents == 5382
+    assert receipts[0].date == "2026-10-19", "dated when sent by the vendor, not when forwarded"
+
+
+def test_forward_from_an_untrusted_sender_is_never_attributed_to_the_named_vendor(monkeypatch):
+    # Anyone can type "Forwarded message / From: Supabase" into an email. Only
+    # forwards from the builder's own listed accounts may be believed.
+    monkeypatch.setenv("RECEIPTS_TRUSTED_FORWARDERS", "kevin.prentiss@gmail.com")
+    responses = {"list": LIST_PAYLOAD, "get": _forward_message("Mallory <mallory@evil.example>"),
+                 "attachments": _attachment_payload(PDF_BYTES)}
+    with patch("sources.gmail.os.path.exists", return_value=True), \
+         patch("sources.gmail.subprocess.run", side_effect=_dispatch(responses)):
+        receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
+    assert all(r.merchant != "supabase" for r in receipts)
+
+
+def test_forward_is_not_trusted_when_no_forwarders_are_configured(monkeypatch):
+    monkeypatch.delenv("RECEIPTS_TRUSTED_FORWARDERS", raising=False)
+    responses = {"list": LIST_PAYLOAD, "get": _forward_message("Kevin Prentiss <kevinprentiss@gmail.com>"),
+                 "attachments": _attachment_payload(PDF_BYTES)}
+    with patch("sources.gmail.os.path.exists", return_value=True), \
+         patch("sources.gmail.subprocess.run", side_effect=_dispatch(responses)):
+        receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
+    assert all(r.merchant != "supabase" for r in receipts)
+
+
+def test_forward_with_several_forwarded_messages_is_skipped_and_announced(monkeypatch):
+    monkeypatch.setenv("RECEIPTS_TRUSTED_FORWARDERS", "kevin.prentiss@gmail.com")
+    msg = _forward_message("Kevin Prentiss <kevinprentiss@gmail.com>")
+    first = base64.urlsafe_b64decode(msg["payload"]["parts"][0]["body"]["data"] + "==")
+    second = first.replace(b"Supabase Pte. Ltd. <invoice+statements@supabase.com>",
+                           b"Other Vendor <billing@other.example>").replace(b"$53.82", b"$99.00")
+    msg["payload"]["parts"][0]["body"]["data"] = _b64url_nopad(first + b"\n\n" + second)
+    responses = {"list": LIST_PAYLOAD, "get": msg, "attachments": _attachment_payload(PDF_BYTES)}
+    with patch("sources.gmail.os.path.exists", return_value=True), \
+         patch("sources.gmail.subprocess.run", side_effect=_dispatch(responses)):
+        receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
+    assert receipts == []
+    assert any("more than one forwarded email" in n for n in SOURCE.notes)
+
+
+def test_pdf_amount_refuses_other_currencies_however_they_are_written():
+    assert SOURCE.parse_pdf_amount("Invoice Total: $111.67 CAD") is None
+    assert SOURCE.parse_pdf_amount("Invoice Total: CA$111.67") is None
+    assert SOURCE.parse_pdf_amount("Currency: CAD\nInvoice Total: $111.67") is None
+    # ...but plain USD, and ordinary words after the figure, are still fine
+    assert SOURCE.parse_pdf_amount("Invoice Total: $111.67 Due on receipt") == 11167
+    assert SOURCE.parse_pdf_amount("Invoice Total: USD 111.67") == 11167
+    assert SOURCE.parse_pdf_amount("Currency: USD\nInvoice Total: $111.67") == 11167
+
+
+def test_forward_with_unparseable_header_date_fails_closed_not_to_a_due_date(monkeypatch):
+    monkeypatch.setenv("RECEIPTS_TRUSTED_FORWARDERS", "kevin.prentiss@gmail.com")
+    msg = _forward_message("Kevin Prentiss <kevinprentiss@gmail.com>")
+    body = (
+        b"---------- Forwarded message ---------\n"
+        b"From: Supabase Pte. Ltd. <invoice+statements@supabase.com>\n"
+        b"Date: yesterday-ish\n"
+        b"Subject: Payment received\n\n"
+        b"Your invoice has been paid. $53.82 charged.\nDue Date: Oct 19, 2026\n"
+    )
+    msg["payload"]["parts"][0]["body"]["data"] = _b64url_nopad(body)
+    responses = {"list": LIST_PAYLOAD, "get": msg, "attachments": _attachment_payload(PDF_BYTES)}
+    with patch("sources.gmail.os.path.exists", return_value=True), \
+         patch("sources.gmail.subprocess.run", side_effect=_dispatch(responses)):
+        receipts = SOURCE.fetch("2026-01-01", "2026-12-31")
+    assert all(r.merchant != "supabase" or r.date != "2026-10-19" for r in receipts), (
+        "a Due Date in the invoice body must never be taken as the forward's sent date"
+    )
+
+
+def test_a_zero_balance_never_beats_the_amount_actually_paid():
+    paid = "Invoice Total: USD 111.67\nAmount paid: USD 111.67\nTotal due: USD 0.00"
+    assert SOURCE.parse_pdf_amount(paid) == 11167
+    assert SOURCE.parse_pdf_amount("Invoice Total: USD 111.67\nTotal due: USD 0.00") == 11167
+    # amount paid outranks a later, different total line
+    assert SOURCE.parse_pdf_amount("Amount paid: USD 50.00\nGrand Total: USD 90.00") == 5000
+    # only a balance is labelled -> still usable when non-zero
+    assert SOURCE.parse_pdf_amount("Total due: USD 53.82") == 5382
+    assert SOURCE.parse_pdf_amount("Total due: USD 0.00") is None
+
+
+def test_pdf_amount_survives_pdftotext_layout_padding():
+    # `pdftotext -layout` pads columns with runs of spaces, including between the
+    # currency marker and the figure.
+    assert SOURCE.parse_pdf_amount("Invoice Total:      USD       111.67") == 11167
+    assert SOURCE.parse_pdf_amount("Amount paid:    $      50.00\nGrand Total:   USD   90.00") == 5000
+    assert SOURCE.parse_pdf_amount("Invoice Total:\tUSD\t111.67") == 11167

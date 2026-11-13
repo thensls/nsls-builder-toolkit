@@ -15,6 +15,7 @@ plugin there, so no gate ever registered. Two causes:
    call, both callers swallow exceptions, and the Windows hook discards stderr.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import contextlib
 import importlib.util
 import io

@@ -4,11 +4,22 @@
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash
 #   curl -fsSL .../install.sh | bash -s -- --test      # isolated "new user" test install
+#   bash <toolkit>/install.sh --machine-only           # set up THIS COMPUTER only (see below)
 #
 # What this does:
 #   1. Installs the NSLS org skills (local plugin)
 #   2. Installs superpowers + compound-engineering plugins (marketplace)
 #   3. Tells you to run /nsls-setmeup to connect your tools
+#
+# --machine-only: the toolkit is already here (delivered as a Claude plugin),
+# and only the things it needs ON THIS COMPUTER are missing: the gws CLI, the
+# Python libraries and nsls-python launcher for the document skills, and a
+# Node.js check. It runs those three steps and nothing else: no git, no
+# download of the toolkit, nothing written to Claude's settings, no plugins, no
+# pointers. /nsls-setmeup and the document skills' repair step run it from the
+# plugin's own folder, so it works on a machine with no GitHub access at all.
+# The `curl` line above only works while the repository can be read without a
+# sign-in.
 
 set -euo pipefail
 
@@ -21,9 +32,11 @@ set -euo pipefail
 # ~/.claude. To reset back to "new user", delete that dir. Launch a test
 # install with:  CLAUDE_CONFIG_DIR="$HOME/.claude-kit-test" claude
 TEST_MODE=0
+MACHINE_ONLY=0
 for arg in "$@"; do
   case "$arg" in
     -t|--test) TEST_MODE=1 ;;
+    --machine-only) MACHINE_ONLY=1 ;;
     *) ;;
   esac
 done
@@ -39,11 +52,21 @@ REPO_URL="${NSLS_TOOLKIT_REPO:-https://github.com/thensls/nsls-builder-toolkit.g
 REPO_BRANCH="${NSLS_TOOLKIT_BRANCH:-main}"
 
 echo ""
-echo "=== NSLS Builder Toolkit ==="
-if [ "$TEST_MODE" = "1" ]; then
+if [ "$MACHINE_ONLY" = "1" ]; then
+  echo "=== NSLS Builder Toolkit: setting up this computer ==="
+else
+  echo "=== NSLS Builder Toolkit ==="
+fi
+if [ "$TEST_MODE" = "1" ] && [ "$MACHINE_ONLY" != "1" ]; then
   echo "  (TEST MODE — installing into $CONFIG_DIR; your real ~/.claude is untouched)"
 fi
 echo ""
+
+# Everything from here to the gws step installs the TOOLKIT ITSELF: the clone,
+# Claude's settings, the tracker event, the marketplace plugins, the MCP
+# servers. --machine-only skips all of it (see the header). The block is not
+# indented under this `if`, so the installer's own lines read as they always did.
+if [ "$MACHINE_ONLY" != "1" ]; then
 
 # --- Prerequisites ---
 
@@ -111,9 +134,14 @@ echo "  Installed commit: $(git -C "$PLUGIN_DIR" log -1 --format='%h %s' 2>/dev/
 
 SETTINGS="$CONFIG_DIR/settings.json"
 
-# A fresh test config dir has no settings.json yet (a real user already has one
-# from Claude Code). Seed an empty object so the merge below runs.
-if [ "$TEST_MODE" = "1" ] && [ ! -f "$SETTINGS" ]; then echo '{}' > "$SETTINGS"; fi
+# Claude Code does not create settings.json until something is written to it,
+# so a machine that has only ever used the Claude desktop app has none. This
+# step used to run only where the file already existed, and elsewhere said "the
+# plugin will be enabled on first use", which was never true: no hook was
+# registered. Where Step 3 then found no claude CLI either, the machine was left
+# with a folder copy that nothing updated and nothing reported (a builder's Mac,
+# 81 days, 2026-11). Start the file, as --test always has, so the merge runs.
+if [ ! -f "$SETTINGS" ]; then { echo '{}' > "$SETTINGS"; } 2>/dev/null || true; fi
 
 # In test mode, seed a +test builder email so skill events land on a separate,
 # obviously-test tracker row instead of polluting your real one (skill-event.sh
@@ -297,9 +325,9 @@ if skill_allow_rule not in allow:
     print('  Allowlisted the skill-event hook (no more run-script prompt)')
 
 with open(SETTINGS_PATH, 'w', encoding='utf-8') as f: json.dump(cfg, f, indent=2)
-" 2>/dev/null || echo "  Note: Could not update settings.json — add the hook manually"
+" 2>/dev/null || echo "  [!] Could not update settings.json, so the toolkit's session hook is NOT registered (see the end of this message)."
 else
-  echo "  Note: No settings.json found — the plugin will be enabled on first use"
+  echo "  [!] Could not create settings.json, so the toolkit's session hook is NOT registered (see the end of this message)."
 fi
 
 # --- Step 2.5: Fire an install event to the Automation Tracker ---
@@ -369,25 +397,48 @@ if [ -z "$CLAUDE_BIN" ]; then
   CLAUDE_BIN="$(command -v claude 2>/dev/null || true)"
 fi
 
-# Desktop-app bundled CLI (no separate CLI install). macOS ships it under
-# ~/Library/Application Support/Claude/claude-code[-vm]/<version>/claude.
-# NOTE: on Apple Silicon that binary is a Linux build that runs inside the app's
-# VM and is NOT executable from the host shell (verified: `exec format error`),
-# so accept it ONLY if it actually runs. Otherwise fall through to the honest
-# "no claude" path rather than selecting a binary that exec-fails on every call.
+# --- Desktop app CLI (begin) ---
+# Desktop-app bundled CLI (no separate CLI install). The Mac app keeps it under
+# ~/Library/Application Support/Claude/claude-code/<version>/, and has used
+# more than one shape there:
+#   <version>/claude
+#   <version>/claude.app/Contents/MacOS/claude
+#   <version>/<hash>/claude.app/Contents/MacOS/claude     (seen 2026-11-12)
+# This looked only for the first. Once the app moved on, a Mac with the app and
+# no separate CLI found nothing here, so the toolkit plugin was never installed
+# (found on a builder's Mac, 2026-11: a folder copy and nothing else, for 81
+# days). Windows had the same move and the same miss in October.
+# The claude-code-vm folder holds a Linux build that runs inside the app's VM
+# and is NOT executable from the host shell (verified: `exec format error`), so
+# a candidate counts ONLY if it actually runs. Newest version first; the first
+# one that runs wins. Otherwise fall through to the honest "no claude" path
+# rather than selecting a binary that exec-fails on every call.
 if [ -z "$CLAUDE_BIN" ]; then
   for base in \
     "$HOME/Library/Application Support/Claude/claude-code" \
     "$HOME/Library/Application Support/Claude/claude-code-vm"; do
     [ -d "$base" ] || continue
-    # sort -V => highest version last (falls back gracefully if -V is unsupported).
-    cand=$(ls -1d "$base"/*/claude 2>/dev/null | sort -V | tail -1) || true
-    if [ -n "$cand" ] && [ -x "$cand" ] && "$cand" --version >/dev/null 2>&1; then
-      CLAUDE_BIN="$cand"
-      break
-    fi
+    cands=$(ls -1d "$base"/*/claude \
+                   "$base"/*/claude.app/Contents/MacOS/claude \
+                   "$base"/*/*/claude.app/Contents/MacOS/claude 2>/dev/null || true)
+    [ -n "$cands" ] || continue
+    # sort -rV => highest version first. A sort without -V still gets a plain
+    # reverse sort, which is right whenever the versions have equal digits.
+    sorted=$(printf '%s\n' "$cands" | sort -rV 2>/dev/null) ||
+      sorted=$(printf '%s\n' "$cands" | sort -r)
+    while IFS= read -r cand; do
+      # </dev/null: the candidate must not read this loop's own list.
+      if [ -n "$cand" ] && [ -x "$cand" ] && "$cand" --version </dev/null >/dev/null 2>&1; then
+        CLAUDE_BIN="$cand"
+        break
+      fi
+    done <<CANDIDATES
+$sorted
+CANDIDATES
+    [ -z "$CLAUDE_BIN" ] || break
   done
 fi
+# --- Desktop app CLI (end) ---
 
 # Set when a plugin the toolkit cannot work without fails to install, and
 # reported again at the end. Nothing else reads it.
@@ -590,11 +641,12 @@ if [ -n "$CLAUDE_BIN" ]; then
     "https://github.com/EveryInc/compound-engineering-plugin.git"
 else
   echo ""
-  echo "  Could not find the 'claude' CLI in PATH."
-  echo "  After your next Claude Code session, run /nsls-setmeup — it will detect"
-  echo "  missing plugins and give you the install commands."
+  echo "  [!] Could not find the 'claude' CLI, so NO plugin was installed in this step:"
+  echo "      not the NSLS toolkit's own plugin, and not the two recommended ones."
+  echo "      The end of this message says what happens next."
   echo ""
-  echo "  Or run these manually:"
+  echo "  For the two recommended plugins, run /nsls-setmeup after your next Claude"
+  echo "  Code session (it detects what is missing), or run these manually:"
   echo "    claude plugin install superpowers"
   echo "    claude plugin marketplace add https://github.com/EveryInc/compound-engineering-plugin.git"
   echo "    claude plugin install compound-engineering@compound-engineering-plugin"
@@ -725,6 +777,8 @@ else
     echo "  No .mcp.json found — nothing to register"
   fi
 fi
+
+fi   # end of the toolkit-itself steps (skipped by --machine-only)
 
 # --- Step 3.7: Install the gws CLI (Google Workspace) ---
 #
@@ -1053,6 +1107,19 @@ else
   fi
 fi
 
+# --machine-only ends here: this computer has what the toolkit needs, and the
+# rest (pointers, the shell shortcut, the "installed" banner) belongs to a full
+# install. Same un-indented `if` as above.
+if [ "$MACHINE_ONLY" = "1" ]; then
+  echo ""
+  echo "==============================="
+  echo "  This computer is set up for the NSLS toolkit."
+  echo "  Any line above that starts with Note still needs attention."
+  echo "==============================="
+  echo ""
+  exit 0
+fi
+
 # --- Step 4: Create slash-command pointer skills ---
 
 echo ""
@@ -1205,12 +1272,39 @@ fi
 
 # --- Done ---
 
+# What keeps this copy current from here on. Two things can: the toolkit plugin
+# (Claude Code updates it), or the session hook Step 2 registers (it updates
+# the folder copy, and installs the plugin, at each session start). The banner
+# used to say "installed!" without looking for either. With neither, this
+# machine holds a snapshot that never changes, and nothing would ever say so.
+PLUGIN_INSTALLED=""
+if CLAUDE_CONFIG_DIR="$CONFIG_DIR" python3 "$PLUGIN_DIR/hooks/plugin_beacon.py" --installed 2>/dev/null | grep -qx 'installed'; then
+  PLUGIN_INSTALLED=1
+elif ! command -v python3 >/dev/null 2>&1 &&
+     grep -q '"nsls-builder-toolkit@nsls-toolkit"' "$CONFIG_DIR/plugins/installed_plugins.json" 2>/dev/null; then
+  # No Python to ask with: the registry entry Step 3 itself goes by will do,
+  # rather than calling a machine that has the plugin unfinished.
+  PLUGIN_INSTALLED=1
+fi
+SESSION_HOOK=""
+if grep -q 'nsls-builder-toolkit/hooks/session-start' "$CONFIG_DIR/settings.json" 2>/dev/null; then
+  SESSION_HOOK=1
+fi
+NO_UPDATER=""
+if [ -z "$PLUGIN_INSTALLED" ] && [ -z "$SESSION_HOOK" ]; then NO_UPDATER=1; fi
+
 echo ""
 echo "==============================="
 if [ -n "$INSTALL_FAILED" ]; then
   echo "  NSLS Builder Toolkit set up, but this did NOT install: $INSTALL_FAILED (see [!] above)."
+elif [ -n "$NO_UPDATER" ]; then
+  echo "  NSLS Builder Toolkit: NOT finished. This copy will not update itself"
+  echo "  (see the end of this message)."
 elif [ "$UPDATE_FAILED" = 1 ]; then
   echo "  NSLS Builder Toolkit set up, but NOT updated (see the WARNING above)."
+elif [ -z "$PLUGIN_INSTALLED" ] && [ -z "$CLAUDE_BIN" ]; then
+  echo "  NSLS Builder Toolkit set up. One step is left, and it happens by itself"
+  echo "  (see the end of this message)."
 else
   echo "  NSLS Builder Toolkit installed!"
 fi
@@ -1229,11 +1323,15 @@ if [ -n "$CLAUDE_BIN" ]; then
   echo ""
 else
   # Honest banner: without the CLI, plugins + MCP registration were skipped —
-  # don't imply they landed. Name what's missing and how to finish.
+  # don't imply they landed. Name what's missing and how to finish. The toolkit's
+  # own plugin heads the list: this note used to name only the other two.
   echo "  NOTE: the 'claude' CLI wasn't found, so these were SKIPPED:"
+  if [ -z "$PLUGIN_INSTALLED" ]; then
+    echo "    - the NSLS toolkit's own plugin (guardrails, agents, automatic updates) — NOT installed"
+  fi
   echo "    - plugins (superpowers, compound-engineering) — NOT installed"
   echo "    - bundled MCP servers (e.g. signal) — NOT registered"
-  echo "  Finish them after your first Claude Code session by running:  /nsls-setmeup"
+  echo "  Finish the last two after your first Claude Code session by running:  /nsls-setmeup"
   echo ""
 fi
 if [ "$TEST_MODE" != "1" ]; then
@@ -1286,6 +1384,29 @@ else
   echo ""
 fi
 
+# Last on the screen, where it cannot be missed. The note about a missing CLI
+# used to sit in the middle of the skill list, and a builder who had read to the
+# end saw only "installed!" and the next step.
+if [ -z "$INSTALL_FAILED" ] && [ -n "$NO_UPDATER" ]; then
+  echo "=== NOT FINISHED: THIS COPY WILL NOT UPDATE ITSELF ==="
+  echo ""
+  echo "  The toolkit's files are on this computer, but its plugin is not installed"
+  echo "  and its session hook is not registered, so nothing will keep it up to"
+  echo "  date. Run this installer again. If you see this message a second time,"
+  echo "  tell the NSLS AI team before carrying on: an old copy only gets older."
+  echo ""
+elif [ -z "$INSTALL_FAILED" ] && [ -z "$PLUGIN_INSTALLED" ] && [ -z "$CLAUDE_BIN" ]; then
+  echo "=== ONE STEP LEFT (it happens by itself) ==="
+  echo ""
+  echo "  The toolkit's plugin (its guardrails, agents and automatic updates) is not"
+  echo "  installed yet, because the 'claude' command was not found on this computer."
+  echo "  The toolkit installs it by itself the next time you start a Claude Code"
+  echo "  session. If Claude then tells you setup could not finish, tell the NSLS AI"
+  echo "  team."
+  echo ""
+fi
+
 # A known failure exits 1, so a wrapper or CI can tell (the banner above already
-# says what is missing).
+# says what is missing). A copy that nothing will update is one.
+[ -z "$NO_UPDATER" ] || exit 1
 [ -z "$INSTALL_FAILED" ] || exit 1

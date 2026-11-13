@@ -17,6 +17,7 @@ scenario below runs in its own process against its own config dir, because the
 beacon module reads CLAUDE_CONFIG_DIR once at import.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import json
 import subprocess
 import sys

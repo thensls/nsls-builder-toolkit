@@ -72,6 +72,10 @@ HABIT_HELP = [  # (what it means, a quick example), in BEHAVIOURS order
      "“Which source says 40% of members renewed? Link it.”"),
 ]
 NEAR = 10                 # points either side of typical that count as "about typical"
+PRACTICE = ("adopted", "partly", "not yet")
+MAX_GAIN_PCT = 25         # the most a week's changes can be estimated to add, in percent
+WEEK_HOURS = 168          # hours_with_claude can't exceed the hours in a week
+LOGGED_LINE = "Estimated time saved: about %s h a week · about %d%% more productive (logged)"  # usage collector parses this
 BIG_GAP = 15              # points below typical that get flagged as a big gap (top 3 at most)
 PLACEHOLDER = re.compile(r"<[^<>\n]{1,60}>|\{[^{}\n]{1,60}\}|\[(?!(?:email|ssn|phone|id|number|REDACTED)\b)[a-z][^\[\]\n]{1,60}\]")
 
@@ -686,6 +690,7 @@ def aggregate(sessions):
         for f in s["secret_flags"]:
             bump(agg["secret_flags"], f)
     agg["days_active"] = len(days)
+    agg["active_hours"] = 0.5 * len(set().union(*[s["slots"] for s in sessions if not s["automated"]] or [set()]))
     for k in ("top_skills", "top_connectors", "slash_commands"):
         agg[k] = dict(sorted(agg[k].items(), key=lambda kv: -kv[1])[:12])
     return agg
@@ -815,6 +820,11 @@ def clean_run(run):
     out["frequency"] = run.get("frequency") if run.get("frequency") in FREQUENCIES else None
     sc = run.get("scores") if isinstance(run.get("scores"), dict) else {}
     out["scores"] = {k: "%d/%d" % ratio(sc[k]) for k in ("right_level", "checks", "habits_ahead") if ratio(sc.get(k))}
+    saved = run.get("practice") if isinstance(run.get("practice"), dict) else {}
+    est = estimate(saved)
+    if not est and number(saved.get("pct"), 0, MAX_GAIN_PCT) is not None and number(saved.get("hours_saved"), 0, WEEK_HOURS) is not None:
+        est = (int(saved["pct"]), float(saved["hours_saved"]))  # a history line read back
+    out["practice"] = {"pct": est[0], "hours_saved": est[1]} if est else None
     return out
 
 
@@ -1195,10 +1205,62 @@ def is_template(v):
     return bool(PLACEHOLDER.search(str(v or "")))
 
 
+def number(v, lo, hi):
+    """A plain number inside [lo, hi], or None."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    return float(v) if lo <= v <= hi else None
+
+
+def estimate(block):
+    """(percent, hours saved a week) from a practice or potential block; None if unusable.
+    Low end by construction: whole percent, hours rounded down to one decimal."""
+    if not isinstance(block, dict):
+        return None
+    pct, hours = number(block.get("productivity_pct"), 0, MAX_GAIN_PCT), number(block.get("hours_with_claude"), 0, WEEK_HOURS)
+    if pct is None or hours is None or not pct.is_integer():
+        return None
+    saved = hours * pct / 100.0                      # e.g. 12.5 h at 3% = 0.375 h
+    return int(pct), int(saved * 10 + 1e-9) / 10.0  # rounded down to a tenth: 0.3
+
+
+def hours_text(h):
+    return ("%.1f" % h).rstrip("0").rstrip(".")
+
+
+def logged_line(r):
+    est = estimate(r.get("practice"))
+    return LOGGED_LINE % (hours_text(est[1]), est[0]) if est and (r.get("mode") or "local") == "local" else None
+
+
 def report_problems(r):
     """What the skill must fix before the page is drawn: every experiment names the real session it
-    replays, and a template prompt (one with blanks) comes with an example filled in from that session."""
+    replays, a template prompt (one with blanks) comes with an example filled in from that session,
+    and from the second check-in on, last time's suggestions are followed up with an estimate."""
     probs = []
+    prev = r.get("previous") if isinstance(r.get("previous"), dict) else {}
+    followed = [x for x in (prev.get("experiments") or []) if isinstance(x, dict) and x.get("title")]
+    local = (r.get("mode") or "local") == "local"
+    if followed:
+        block = r.get("practice")
+        tried = block.get("tried") if isinstance(block, dict) else None
+        key = lambda t: re.sub(r"[\s.…]+", " ", str(t or "")).strip().lower()
+        covered = {key(t.get("title")) for t in tried if isinstance(t, dict)} if isinstance(tried, list) else set()
+        missing = [x["title"] for x in followed[:3] if key(x["title"]) not in covered]
+        if isinstance(tried, list) and tried and missing:
+            probs.append('practice: add a "tried" item for each of last time\'s suggestions, using its exact title. '
+                         'Missing: %s' % "; ".join('"%s"' % safe(m, 100) for m in missing))
+        if not isinstance(tried, list) or not tried:
+            probs.append('add "practice": for each of last time\'s suggestions, what was put into practice ("tried"), '
+                         'then the estimate (see Step 2)')
+        elif any(not isinstance(t, dict) or t.get("status") not in PRACTICE for t in tried):
+            probs.append('practice: every "tried" item needs a status of %s' % " / ".join(PRACTICE))
+        if local and isinstance(block, dict) and not estimate(block):
+            probs.append('practice: add "productivity_pct" (a whole number, 0 to %d, the low end) and "hours_with_claude" '
+                         '(copy hours_per_week from the scan)' % MAX_GAIN_PCT)
+    elif local and [x for x in (r.get("experiments") or []) if isinstance(x, dict)] and not estimate(r.get("potential")):
+        probs.append('add "potential": the low-end estimate if this week\'s suggestions become habits '
+                     '("productivity_pct" and "hours_with_claude")')
     for n, x in enumerate([x for x in (r.get("experiments") or []) if isinstance(x, dict)][:3], 1):
         if not str(x.get("from") or "").strip():
             probs.append('experiment %d: add "from", the real session it replays (e.g. "7 Oct · meeting agenda")' % n)
@@ -1231,14 +1293,40 @@ def experiment_card(i, x):
         i, ICON["check"], text(sentence(x.get("check")), 300))
 
 
+PRACTICE_GLYPH = {"adopted": "✓", "partly": "½", "not yet": "·"}
+
+
+def practice_card(r):
+    block = r.get("practice") if isinstance(r.get("practice"), dict) else None
+    tried = [t for t in (block or {}).get("tried") or [] if isinstance(t, dict) and t.get("status") in PRACTICE][:3]
+    if not tried:
+        return ""
+    items = "".join('<li><span class="pr-mark %s" aria-hidden="true">%s</span><div><strong>%s</strong> '
+                    '<span class="soft">%s%s</span></div></li>' % (
+                        t["status"].replace(" ", "-"), PRACTICE_GLYPH[t["status"]], text(t.get("title"), 120),
+                        esc(sentence(t["status"])), (" · " + text(t.get("evidence"), 80)) if t.get("evidence") else "")
+                    for t in tried)
+    est = estimate(block)
+    strip = ""
+    if est:
+        strip = ('<div class="saved"><span class="done-label">Estimated time saved</span><p><strong>About %s h a week · '
+                 'about %d%% more productive.</strong> %s</p></div>') % (
+                     hours_text(est[1]), est[0], text(block.get("why") or "", 300))
+    return ('<section class="card practice"><span class="eyebrow">What you put into practice</span>'
+            '<p class="soft">Last time\'s suggestions, checked against this week\'s sessions.</p><ul>%s</ul>%s</section>'
+            % (items, strip))
+
+
 def about_section(r):
     items = [("Where to run it.", WHERE_TO_RUN)]
     if (r.get("mode") or "local") == "local":
         items.append(("Fresh or since last time.", "Ask any time for a fresh check-in on up to %d recent sessions. "
                       "Scheduled check-ins read only what's new since the last one." % SAMPLE_SIZE))
     items += [("Where “typical” comes from.", "Anthropic's study of claude.ai chats in January 2026. Your sessions are "
-               "different work, so treat the comparison as a guide, not a grade."),
-              ("Private.", "Made from your own sessions. Nobody else sees it unless you share it.")]
+               "different work, so treat the comparison as a guide, not a grade.")]
+    if r.get("practice") or r.get("potential"):
+        items.append(("How time saved is estimated.", "Claude judges how much more productive the changes make you, takes "
+                      "the low end, and applies it to the hours you spent working with Claude. It's an estimate, not a measurement."))
     return '<ul class="about">%s</ul>' % "".join("<li><strong>%s</strong> %s</li>" % (esc(a), esc(b)) for a, b in items)
 
 
@@ -1254,6 +1342,7 @@ def render_body(r):
     scores = compute_scores(r)
     parts.append(tiles(r))
 
+    parts.append(practice_card(r))
     since_items = [x for x in (r.get("since_last") or []) if x][:4]
     if since_items:
         parts.append('<section class="card since"><span class="eyebrow">Since last time</span><ul>%s</ul></section>'
@@ -1261,8 +1350,11 @@ def render_body(r):
 
     exps = [x for x in (r.get("experiments") or []) if isinstance(x, dict)][:3]
     if exps:
-        parts.append('<section><span class="eyebrow">Try this week</span><h2>%d thing%s to try</h2><ol class="trail">%s</ol></section>'
-                     % (len(exps), "" if len(exps) == 1 else "s", "".join(experiment_card(i, x) for i, x in enumerate(exps, 1))))
+        pot = estimate(r.get("potential"))
+        upside = ('<p class="potential">If these become habits: about %d%% more productive, about %s h a week. '
+                  '<span class="soft">An estimate.</span></p>' % (pot[0], hours_text(pot[1]))) if pot and pot[0] else ""
+        parts.append('<section><span class="eyebrow">Try this week</span><h2>%d thing%s to try</h2>%s<ol class="trail">%s</ol></section>'
+                     % (len(exps), "" if len(exps) == 1 else "s", upside, "".join(experiment_card(i, x) for i, x in enumerate(exps, 1))))
 
     folds = []
     if tasks:
@@ -1347,6 +1439,9 @@ def cmd_render(args):
     out = os.path.join(reports_dir(), "%s.html" % date)
     write_private(out, head + render_body(report) + tail)
     print("report: %s" % out)
+    line = logged_line(report)
+    if line:
+        print("end your reply with this exact line: %s" % line)
     if not args.no_record:
         write_private(history_path(), json.dumps(clean_run(report)) + "\n", append=True)
         print("history: recorded %s" % date)
@@ -1410,8 +1505,11 @@ def cmd_scan(args):
             continue
         active = [s for s in mine if s["turns"] or s["signals"]["tools"]]
         picked = sample(active, args.max_per_surface, prefer_new=basis == "since-last")
-        surfaces[name] = {"found": True, "aggregate": aggregate(active), "sampled": len(picked),
-                          "carried_over": sum(1 for s in picked if s["earlier"])}
+        agg = aggregate(active)
+        surfaces[name] = {"found": True, "aggregate": agg, "sampled": len(picked),
+                          "carried_over": sum(1 for s in picked if s["earlier"]),
+                          # half-hours the person typed in, scaled to a week: the base for time saved
+                          "hours_per_week": round(agg["active_hours"] * 7.0 / days, 1)}
         digests.extend(shape(s, i) for i, s in enumerate(picked, 1))
         rest = sorted((s for s in active if s not in picked and not s["automated"]),
                       key=lambda s: s["start"] or dt.datetime.min.replace(tzinfo=dt.timezone.utc))

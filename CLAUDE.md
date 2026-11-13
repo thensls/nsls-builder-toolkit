@@ -21,8 +21,9 @@ The install script sets up three things:
 - These are lightweight — find root cause, verify the fix, move on
 
 ### Feature work (multi-step, needs a plan)
-- Use **Compound Engineering** pipeline: `ce-brainstorm` → `ce-plan` → `ce-work`
+- Use **Compound Engineering** pipeline: `ce-brainstorm` → `ce-plan` → `ce-work` → `/browser-check` (anything with a web UI) → `ce-code-review` → PR
 - Produces durable requirements docs and implementation plans
+- **`/browser-check`** runs Expect (`expect-cli`) — reads the git diff, writes a test plan, drives a real headless browser. Tests and code review read the code; this opens the page. For UI work it is the evidence `verification-before-completion` asks for. Always through the skill's wrapper script, never `npx expect-cli` directly and never `expect init`. The wrapper blocks Expect's vendor telemetry (PostHog, Axiom, expect.dev), switches off Expect's browser-cookie import in its code, and fails the run if a session attached to a real browser. Put the one-line result in the PR description.
 - Use `ce-code-review` for code review (parallel reviewer personas, structured findings); `ce-doc-review` for plan/requirements docs
 
 ### Data intelligence (any question about users, systems, or operations)
@@ -80,6 +81,25 @@ never enters the comparison. The explicit limit matters for the same reason — 
 Sitting above the whole field means nothing landing ahead of you knocks your PR
 back to a failing gate. Whoever merges after you bumps again — one of the two
 always has to, and it may as well be the PR that is not ready yet.
+
+## Every skill says where it works
+
+NSLS delivers this toolkit to every Claude seat, so its skills are listed in an
+ordinary Claude chat and in Cowork as well as in Claude Code. Most only work in
+Claude Code on the person's own computer. Each skill folder is therefore listed
+once in `_shared/references/skill-surfaces.json`:
+
+- **`anywhere`**: it can do its main job in chat and Cowork too.
+- **`claude_code_only`**: it runs a script or a command, uses the toolkit's own
+  folder, reads or writes Claude Code's files, or needs a tool connection set up
+  on the computer. It carries a short note at the top of its SKILL.md and its
+  description starts with "Claude Code only." Opened in chat or Cowork, it tells
+  the person to switch to Claude Code and stops.
+
+Adding a skill: read it, add it to one group with a one-line reason, then run
+`python3 .github/scripts/check_skill_surfaces.py --fix`. Never hand-write the
+note or reword it in one skill: the words live in that JSON file, and `--fix`
+copies them. The `skill-surfaces` check fails a PR that skips this.
 
 ## Hooks are registered in `hooks/hooks.json`. Nowhere else.
 
@@ -172,6 +192,10 @@ phrase advice as "policy blocks" or "isn't allowed".
 **Every hard block has two ways out, and both must appear:** the compliance route
 (register it, assign a reviewer, move the repo) and Kevin's authorization. If
 Kevin isn't named, the message isn't finished. Offer to draft the note.
+The personal-repo block has a third: an empty `.personal-repo` file at the top
+of the repo skips it for good. Only for a really personal project or one Kevin
+OK'd staying put, and only on the builder's say-so; never add it yourself to
+get past a block. Each skip is reported.
 
 **When a builder says no, record it so you never ask again:**
 
@@ -250,7 +274,7 @@ missing. That's the same installer as the self-serve link, at most once a
 day and five times in all. It prints nothing. The builder hears about it
 through Signal's enrollment DM. If a builder asks what it is: it sends a
 summary of each session (for example the app, models, timing, token counts,
-skill and tool names, and branch name), never prompts, responses or files.
+and skill and tool names), never your prompts or files.
 The full list is at signal.nsls.org/me/machines. Questions go to Davo Wood.
 Details are in the README under "Claude Usage Reporter".
 
@@ -266,7 +290,7 @@ When building a new skill, use three tools in sequence. Each tests a different q
 
 **Optional Phase 4**: For broadly-released skills that need reliable auto-triggering across many sessions, run `skill-creator`'s eval/benchmark mode for quantitative trigger accuracy. Skip for personal / time-boxed / Kevin-only skills.
 
-See `/skill-creation` for the full cascade including a worked example (gary-meeting-prep build, 2026-04-18).
+See `/skill-creation` for the full cascade including a worked example (a personal meeting-prep skill, 2026-04-18).
 
 ## Presentations
 - Always ask "NSLS branded or Society branded?" before creating slides

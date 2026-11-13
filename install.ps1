@@ -25,9 +25,20 @@ It clones the repo itself (Step 1) before needing any file from it, so it never
 depends on $PSScriptRoot. Also runs from a local checkout.
 
 Idempotent: re-running updates the clone and no-ops anything already in place.
-  -Test   install into a throwaway $HOME\.claude-kit-test (or $env:CLAUDE_CONFIG_DIR)
+  -Test   install into a throwaway $HOME\.claude-kit-test (or $env:CLAUDE_KIT_TEST_DIR;
+          an $env:CLAUDE_CONFIG_DIR already set wins), the claude CLI's plugins included
+  -MachineOnly   set up THIS COMPUTER only. The toolkit is already here
+          (delivered as a Claude plugin) and only what it needs on this PC is
+          missing: Git for Windows, Python and the document libraries with the
+          nsls-python launcher, the gws CLI, Node.js. It runs the prerequisite
+          check and Step 0, prints the report, and stops: no download of the
+          toolkit, nothing written to Claude's settings, no plugins, no
+          pointers. /nsls-setmeup and the document skills' repair step run it
+          with -File from the plugin's own folder, so it works on a PC with no
+          GitHub access at all. The web-paste line above only works while the
+          repository can be read without a sign-in.
 #>
-param([switch]$Test)
+param([switch]$Test, [switch]$MachineOnly)
 $ErrorActionPreference = 'Stop'
 
 # TLS 1.2 for the web calls below (gws zip, VC_redist, tracker ping). Win11
@@ -52,6 +63,21 @@ if ($env:CLAUDE_CONFIG_DIR) {
 } else {
     $ConfigDir = Join-Path $env:USERPROFILE '.claude'
 }
+
+# A test install must reach the claude CLI too (install.sh exports the same).
+# Without this, Step 3 put the plugins into the real .claude while the rest
+# went to the test dir, and the installer's own reads of the plugin registry
+# looked in the test dir and found nothing. A pasted `iwr | iex` runs in the
+# builder's own window, so the variable must not outlive the script: the
+# `try` below runs to the end of the file, and its `finally` takes the variable
+# back off on every way out (the end, an early stop, an error, Ctrl+C). The body
+# is deliberately not indented under it.
+$SetConfigDirForTest = $false
+if ($Test -and -not $env:CLAUDE_CONFIG_DIR) {
+    $env:CLAUDE_CONFIG_DIR = $ConfigDir
+    $SetConfigDirForTest = $true
+}
+try {
 
 $LocalDir  = Join-Path $ConfigDir 'local-plugins'
 $PluginDir = Join-Path $LocalDir  'nsls-builder-toolkit'
@@ -493,6 +519,23 @@ if ($GwsResolved) {
     else { $PrereqReport += "  [warn] gws installed but not runnable - reopen PowerShell (PATH refresh) and retry: gws --version" }
 } else {
     $PrereqReport += "  [warn] gws not installed - /gdoc-build & /gdoc-edit need it (see skills/gws Windows install)."
+}
+
+# --- This computer only (-MachineOnly): report and stop ---
+# Everything above set up the PC; everything below installs the toolkit itself
+# (clone, settings, tracker event, plugins, MCP servers, pointers). With the
+# toolkit delivered as a Claude plugin none of that applies, so stop here.
+if ($MachineOnly) {
+    Write-Host ""
+    Write-Host "Prerequisite check:"
+    $PrereqReport | ForEach-Object { Write-Host $_ }
+    Write-Host ""
+    Write-Host "==============================="
+    Write-Host "  This computer is set up for the NSLS toolkit."
+    Write-Host "  Any line above marked [warn] or [ACTION NEEDED] still needs attention."
+    Write-Host "==============================="
+    Write-Host ""
+    if ($RunningFromFile) { exit 0 } else { return }
 }
 
 # --- Step 1: Clone / update the org toolkit ---
@@ -958,6 +1001,7 @@ if ($Test) {
     Write-Host "  Everything went into: $ConfigDir (your real .claude was NOT touched)."
     Write-Host "  NOTE: -Test is only usable from the terminal via CLAUDE_CONFIG_DIR; the"
     Write-Host "  desktop app always launches against your real .claude."
+    Write-Host "  Try it with: `$env:CLAUDE_CONFIG_DIR = `"$ConfigDir`"; claude"
     Write-Host "  Reset with:  Remove-Item -Recurse -Force `"$ConfigDir`""
 } else {
     Write-Host "=== NEXT STEP ==="
@@ -975,3 +1019,8 @@ Write-Host ""
 # would close the user's window, so just return.
 # A known failure exits 1, so a wrapper or CI can tell.
 if ($RunningFromFile) { if ($InstallFailed.Count) { exit 1 } else { exit 0 } } else { return }
+
+} finally {
+    # Opened right after the config dir is chosen; see the comment there.
+    if ($SetConfigDirForTest) { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue }
+}

@@ -4,6 +4,7 @@
 Plain stdlib. There is no PowerShell here; hooks/tests/windows/rerun-after-update.ps1
 runs the real thing under Windows PowerShell 5.1 in CI. This pins the guard.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import sys
 from pathlib import Path
 

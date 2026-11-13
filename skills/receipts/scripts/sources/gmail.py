@@ -89,10 +89,95 @@ AMOUNT = re.compile(r"\$\s?([0-9][0-9,]*\.[0-9]{2})")
 # e.g. "Total $99.91", "Amount paid: $99.91". \b before the label prevents
 # matching "Subtotal" (no word boundary exists between "Sub" and "Total").
 LABELED_AMOUNT = re.compile(
-    r"\b(?:Total(?:\s+(?:amount|due))?|Amount\s+(?:charged|paid)|Grand\s+Total)\b"
+    r"(?<!sub )(?<!sub-)\b(?:Total(?:\s+(?:amount|due))?|Amount\s+(?:charged|paid)|Grand\s+Total)\b"
     r"\s*:?\s*\$\s?([0-9][0-9,]*\.[0-9]{2})",
     re.IGNORECASE,
 )
+# Amount read from a PDF's own text, for receipts whose email body carries no
+# figure (e.g. Atlassian: "Invoice Total: USD 111.67" appears only in the PDF).
+# Stricter than the body regexes on purpose: it needs a total-style LABEL *and*
+# an explicit USD/$ marker, so a EUR/GBP invoice can never be read as dollars
+# (amounts are compared as bare cents downstream — see sources/neon.py).
+PDF_LABELED_AMOUNT = re.compile(
+    r"(?<!sub )(?<!sub-)\b(?P<label>Invoice\s+Total|Grand\s+Total|Total(?:\s+(?:amount|due))?"
+    r"|Amount\s+(?:charged|paid)(?:\s+via\s+[A-Za-z ]{1,30}?)?)\b"
+    r"\s*:?\s*(?:USD|US\$|(?<![A-Za-z])\$)\s*(?P<amt>[0-9][0-9,]*\.[0-9]{2})"
+    # ...and not followed by another currency code ("$111.67 CAD"). The scoped
+    # (?-i:) keeps this case-sensitive so ordinary words ("Due") don't trip it.
+    r"(?!\s*(?-i:(?!USD\b)[A-Z]{3}\b))",
+    re.IGNORECASE,
+)
+# A PDF that declares a currency other than USD anywhere is never read as dollars.
+PDF_NON_USD_DECLARED = re.compile(r"\bCurrency\s*:?\s*(?-i:(?!USD\b)[A-Z]{3}\b)", re.IGNORECASE)
+PDFTOTEXT = shutil.which("pdftotext")
+# Comma-separated addresses of YOUR OWN accounts whose forwarded receipts may be
+# attributed to the original vendor (e.g. a personal Gmail you forward from).
+# Anyone else's "Forwarded message" block is attacker-controlled text and is
+# never trusted: it could otherwise attach a fake invoice to a Ramp charge.
+TRUSTED_FORWARDERS_ENV = "RECEIPTS_TRUSTED_FORWARDERS"
+FORWARD_FROM = re.compile(r"-{5,}\s*Forwarded message\s*-{5,}\s*From:\s*([^\n]+)", re.IGNORECASE)
+FORWARD_DATE = re.compile(r"(?m)^[ \t]*Date:\s*(?:[A-Za-z]{3},\s*)?([A-Za-z]{3,9})\s+(\d{1,2}),\s*(\d{4})")
+
+
+def _canonical_address(addr: str) -> str:
+    """Lowercased bare address; Gmail ignores dots and +tags in the local part."""
+    _, bare = email.utils.parseaddr(addr or "")
+    bare = bare.lower()
+    local, _, domain = bare.partition("@")
+    if domain in ("gmail.com", "googlemail.com"):
+        local = local.split("+", 1)[0].replace(".", "")
+    return f"{local}@{domain}"
+
+
+def _trusted_forwarders() -> set[str]:
+    raw = os.environ.get(TRUSTED_FORWARDERS_ENV, "")
+    return {_canonical_address(a) for a in raw.split(",") if a.strip()}
+
+
+class AmbiguousForward(Exception):
+    """A trusted forward carrying more than one forwarded message: the vendor,
+    date, amount and PDF could each come from a different one."""
+
+
+def _forwarded_origin(from_header: str, body_text: str) -> tuple[str, dt.date] | None:
+    """(original From header, original sent date) of a forward from a trusted
+    forwarder, else None. Both halves are required: a forward dated by when it
+    was forwarded would bind to the wrong charge window."""
+    if _canonical_address(from_header) not in _trusted_forwarders():
+        return None
+    blocks = list(FORWARD_FROM.finditer(body_text))
+    if len(blocks) > 1:
+        raise AmbiguousForward
+    m = blocks[0] if blocks else None
+    if not m:
+        return None
+    # Only the header block (up to the first blank line) may supply the date: a
+    # missing/unparseable header date must fail closed, not fall through to a
+    # later "Due Date:" in the invoice body.
+    header_block = re.split(r"\r?\n[ \t]*\r?\n", body_text[m.end():], maxsplit=1)[0]
+    d = FORWARD_DATE.search("\n" + header_block)
+    if not d:
+        return None
+    try:
+        sent = dt.datetime.strptime(f"{d.group(1)[:3]} {d.group(2)} {d.group(3)}", "%b %d %Y").date()
+    except ValueError:
+        return None
+    return m.group(1).strip(), sent
+
+
+def _pdf_text(pdf: bytes) -> str | None:
+    """Text of a PDF via poppler's pdftotext, or None when it is not installed
+    or fails. The PDF goes in on stdin: the untrusted bytes never become a path."""
+    if not PDFTOTEXT:
+        return None
+    try:
+        proc = subprocess.run([PDFTOTEXT, "-layout", "-", "-"], input=pdf,
+                              capture_output=True, timeout=30)
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    return proc.stdout.decode("utf-8", "replace") if proc.returncode == 0 else None
+
+
 GWS = shutil.which("gws") or os.path.expanduser("~/bin/gws")
 PAGE_GUARD = 50  # pages (100 messages/page = 5,000 messages) — see fetch()
 
@@ -273,6 +358,27 @@ class GmailSource:
         m = labeled[-1] if labeled else AMOUNT.search(text)
         return round(float(m.group(1).replace(",", "")) * 100) if m else None
 
+    def parse_pdf_amount(self, text: str) -> int | None:
+        if PDF_NON_USD_DECLARED.search(text or ""):
+            return None
+        # Rank by what the label means, then take the LAST figure in the best tier:
+        #   1 paid/charged  — what actually left the card
+        #   2 invoice/grand/plain total
+        #   3 total due     — a remaining balance; 0.00 on a paid invoice
+        # Zero is never a charge, so it can never be the answer.
+        def tier(label: str) -> int:
+            l = label.lower()
+            if l.startswith("amount"):
+                return 1
+            return 3 if l.endswith("due") else 2
+
+        best: dict[int, int] = {}
+        for m in PDF_LABELED_AMOUNT.finditer(text or ""):
+            cents = round(float(m.group("amt").replace(",", "")) * 100)
+            if cents > 0:
+                best[tier(m.group("label"))] = cents
+        return best[min(best)] if best else None
+
     def build_query(self, since: str, until: str) -> str:
         # Gmail's `before:` is EXCLUSIVE while `after:` is inclusive. Passing
         # `until` through unchanged drops every receipt sent ON the end date —
@@ -321,6 +427,9 @@ class GmailSource:
         self.truncated = None
         self.notes = []
         unresolved_relay = 0
+        pdf_unreadable = 0
+        pdf_no_total = 0
+        forward_ambiguous = 0
         stubs: list[dict] = []
         page_token = None
         for _ in range(PAGE_GUARD):
@@ -365,9 +474,8 @@ class GmailSource:
             cents = self.parse_amount(haystack)
 
             parts = self._pdf_parts(msg["payload"])
-            if cents is None or not parts:
+            if not parts:
                 continue
-
             att = _gws(
                 ["gmail", "users", "messages", "attachments", "get"],
                 {"userId": "me", "messageId": stub["id"], "id": parts[0]["body"]["attachmentId"]},
@@ -376,12 +484,33 @@ class GmailSource:
             if not pdf.startswith(b"%PDF"):
                 continue
 
-            import datetime as _dt
-            date = _dt.datetime.fromtimestamp(
-                int(msg["internalDate"]) / 1000, _dt.UTC
-            ).date().isoformat()
+            if cents is None:
+                # No figure in the email: read the PDF itself. Announced, never
+                # silent — a receipt we cannot price must show up as a miss.
+                text = _pdf_text(pdf)
+                if text is None:
+                    pdf_unreadable += 1
+                    continue
+                cents = self.parse_pdf_amount(text)
+                if cents is None:
+                    pdf_no_total += 1
+                    continue
 
-            merchant = _merchant_from_header(hdrs.get("From", ""))
+            from_hdr = hdrs.get("From", "")
+            try:
+                fwd = _forwarded_origin(from_hdr, " ".join(self._plain_text(msg["payload"])))
+            except AmbiguousForward:
+                forward_ambiguous += 1
+                continue
+            if fwd:
+                from_hdr, date = fwd[0], fwd[1].isoformat()
+            else:
+                import datetime as _dt
+                date = _dt.datetime.fromtimestamp(
+                    int(msg["internalDate"]) / 1000, _dt.UTC
+                ).date().isoformat()
+
+            merchant = _merchant_from_header(from_hdr)
             # A real receipt PDF, with a real amount, that we cannot attribute
             # to any vendor. It is returned (it can only ever fail to bind,
             # never bind wrongly) but it is also COUNTED — dropping it on the
@@ -405,6 +534,25 @@ class GmailSource:
                 f"display name in the From header — the vendor is not named "
                 f"anywhere in the message, so no merchant could be resolved "
                 f"and these cannot bind to a transaction. Attach them by hand."
+            )
+        if pdf_unreadable:
+            self.notes.append(
+                f"{pdf_unreadable} receipt PDF(s) had no amount in the email body and "
+                f"their text could not be extracted — `pdftotext` is missing "
+                f"(macOS: `brew install poppler`) or it failed/timed out on that file. "
+                f"They were skipped and cannot bind; attach them by hand."
+            )
+        if pdf_no_total:
+            self.notes.append(
+                f"{pdf_no_total} receipt PDF(s) had no amount in the email body and no "
+                f"USD total could be read from the PDF (non-USD, scanned image, or an "
+                f"unusual layout) — they were skipped. Attach them by hand."
+            )
+        if forward_ambiguous:
+            self.notes.append(
+                f"{forward_ambiguous} forwarded message(s) from a trusted forwarder contained "
+                f"more than one forwarded email, so which vendor, date, amount and PDF belong "
+                f"together is ambiguous — they were skipped. Forward each receipt on its own."
             )
         return out
 

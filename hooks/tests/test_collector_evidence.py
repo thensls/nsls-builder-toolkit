@@ -11,6 +11,7 @@ Plain stdlib, no pytest import: runs on a stock install with
 `python3 hooks/tests/test_collector_evidence.py`, and pytest collects it too.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import json
 import os

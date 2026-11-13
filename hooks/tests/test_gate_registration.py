@@ -31,6 +31,7 @@ The failures this exists to prevent:
 No network: NSLS_GUARDRAIL_EVENT_LOG redirects the event emitter to a file.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import json
 import os
 import re

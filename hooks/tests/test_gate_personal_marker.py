@@ -12,6 +12,10 @@ file at the top of the repo now settles both. These checks pin down exactly
 where that file counts: at the top level, as a file, wherever the push is run
 from. Without it, the block stands and names the file as the way out.
 
+Anyone who can write a file can write that one, Claude included. So a push the
+file lets through is reported (one guardrail_proceeded row per repo per day),
+and only when the file changed the outcome.
+
 No network: NSLS_GUARDRAIL_EVENT_LOG redirects the event emitter to a file.
 """
 
@@ -71,6 +75,12 @@ def events(log):
     return log.read_text().count("\n") if log.exists() else 0
 
 
+def event_rows(log):
+    if not log.exists():
+        return []
+    return [json.loads(line) for line in log.read_text().splitlines() if line]
+
+
 with tempfile.TemporaryDirectory() as tmp:
     env = dict(os.environ)
     env["CLAUDE_CONFIG_DIR"] = str(Path(tmp) / "claude")
@@ -94,7 +104,16 @@ with tempfile.TemporaryDirectory() as tmp:
     r = gate(repo, PUSH, env)
     check("a push is allowed", decision(r)[0] == "allow", r.stdout[:200])
     check("the gate says nothing", r.stdout.strip() == "", r.stdout[:200])
-    check("no block event recorded", events(log) == 0)
+    rows = event_rows(log)
+    check("no block event recorded",
+          not any(e["type"] == "guardrail_blocked" for e in rows), rows)
+    # Claude can write the file as easily as the builder can, so the skip must
+    # leave a row Kevin can see. Deduped: one row per repo per day, not per push.
+    check("the skip is reported as one guardrail_proceeded event",
+          [e["type"] for e in rows] == ["guardrail_proceeded"], rows)
+    check("the event names the file and is deduped per day",
+          rows and MARKER in rows[0]["description"] and rows[0]["dedupe"] is True
+          and rows[0]["variant"] == "personal-repo-marker", rows)
 
     sub = repo / "skills"
     sub.mkdir()
@@ -107,6 +126,35 @@ with tempfile.TemporaryDirectory() as tmp:
     r = gate(elsewhere, f"git -C '{repo.as_posix()}' push origin main", env)
     check("`git -C <repo> push` from another folder is allowed",
           decision(r)[0] == "allow", r.stdout[:200])
+
+    print("\nthe skip is reported only when the file changed the outcome")
+    plain = Path(tmp) / "weekend"
+    plain.mkdir()
+    (plain / "README.md").write_text("# Recipe scraper\n")
+    subprocess.run(["git", "init", "-q"], cwd=plain, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin",
+                    "https://github.com/someones-personal-account/recipes.git"],
+                   cwd=plain, capture_output=True)
+    (plain / MARKER).write_text("")
+    log = Path(tmp) / "weekend.jsonl"
+    env["NSLS_GUARDRAIL_EVENT_LOG"] = str(log)
+    r = gate(plain, PUSH, env)
+    check("a non-NSLS personal repo with the file is allowed",
+          decision(r)[0] == "allow", r.stdout[:200])
+    check("...and reports nothing (gate 1 would have allowed it anyway)",
+          events(log) == 0, event_rows(log))
+
+    moved = make_repo(tmp, "moved")
+    subprocess.run(["git", "remote", "set-url", "origin",
+                    "https://github.com/thensls/review-kit.git"],
+                   cwd=moved, capture_output=True)
+    (moved / MARKER).write_text("")
+    log = Path(tmp) / "moved.jsonl"
+    env["NSLS_GUARDRAIL_EVENT_LOG"] = str(log)
+    r = gate(moved, PUSH, env)
+    check("a repo already on thensls with a leftover file is allowed",
+          decision(r)[0] == "allow", r.stdout[:200])
+    check("...and reports nothing", events(log) == 0, event_rows(log))
 
     print("\nthe file only counts at the top level, and only as a file")
     repo = make_repo(tmp, "nested")
