@@ -5,7 +5,8 @@
 # when the collector is missing, writing the marker first; stays out when it
 # is installed (config.json plus its scheduled task), when evidence is fresh,
 # when the builder opted out, or when USERPROFILE or LOCALAPPDATA is a scratch
-# folder rather than the account's own (checked live); repairs a config.json with no task; holds
+# folder rather than the account's own (checked live); repairs a config.json with no task, and
+# an install stranded in a Store app's private copy of AppData (Packages\<app>\LocalCache); holds
 # to one attempt per 24h and stops after 5; stands down while another session
 # holds the lock; and that session-start.ps1 wires it with its output
 # discarded. Run by .github/workflows/windows-hooks.yml. ASCII only.
@@ -113,6 +114,54 @@ try {
     $r = Invoke-CollectorBootstrap -Now $t0
     Check 'config.json without task -> launched' ($r -eq 'launched') "$r"
     Check 'half install: one launch' ($script:launches.Count -eq 1) "$($script:launches.Count)"
+
+    # Stranded in the Claude Store app's private AppData: inside the app,
+    # config.json shows at its usual path and the task is registered, but the
+    # files really live under Packages\<app>\LocalCache, where the task (which
+    # runs outside the app) never sees them. Not installed: repaired, under the
+    # same throttle.
+    $roots += New-Box
+    $h = Join-Path $env:LOCALAPPDATA 'nsls-collector'
+    New-Item -ItemType Directory -Path $h -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $h 'config.json'), '{}', $utf8)
+    $cache = [System.IO.Path]::Combine($env:LOCALAPPDATA, 'Packages', 'Claude_test', 'LocalCache', 'Local', 'nsls-collector')
+    New-Item -ItemType Directory -Path $cache -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $cache 'config.json'), '{}', $utf8)
+    Check 'stranded copy is seen' ((Test-CollectorStrandedCopy) -eq $true)
+    $r = Invoke-CollectorBootstrap -Now $t0
+    Check 'stranded copy + task -> launched' ($r -eq 'launched') "$r"
+    Check 'stranded: one launch, marker first' (($script:launches.Count -eq 1) -and ($script:markerAtLaunch -eq '{"attempted_at":"2026-09-26T12:00:00Z","attempts":1}')) "$($script:launches.Count) $script:markerAtLaunch"
+    $r = Invoke-CollectorBootstrap -Now $t0.AddHours(23)
+    Check 'stranded: within 24h -> throttled' ($r -eq 'throttled') "$r"
+    # Once the real install reports, the leftover private copy is moot.
+    $ev = Join-Path $env:CLAUDE_CONFIG_DIR '.nsls-collector'
+    $at = [DateTime]::UtcNow.AddHours(-1).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", $inv)
+    [System.IO.File]::WriteAllText((Join-Path $ev 'reported.json'), ('{"machine_id":"m","at":"' + $at + '","version":"1"}'), $utf8)
+    $r = Invoke-CollectorBootstrap -Now $t0.AddDays(2)
+    Check 'stranded + fresh evidence -> installed' ($r -eq 'installed') "$r"
+    Check 'stranded + fresh evidence: no second launch' ($script:launches.Count -eq 1) "$($script:launches.Count)"
+
+    # Other Store apps' private folders are not a stranded collector.
+    $roots += New-Box
+    $h = Join-Path $env:LOCALAPPDATA 'nsls-collector'
+    New-Item -ItemType Directory -Path $h -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $h 'config.json'), '{}', $utf8)
+    New-Item -ItemType Directory -Path ([System.IO.Path]::Combine($env:LOCALAPPDATA, 'Packages', 'Some.App_1', 'LocalCache', 'Local', 'other')) -Force | Out-Null
+    New-Item -ItemType Directory -Path ([System.IO.Path]::Combine($env:LOCALAPPDATA, 'Packages', 'Claude_test', 'LocalCache', 'Local')) -Force | Out-Null
+    Check 'no stranded copy among other packages' ((Test-CollectorStrandedCopy) -eq $false)
+    $r = Invoke-CollectorBootstrap -Now $t0
+    Check 'other packages + config.json + task -> installed' ($r -eq 'installed') "$r"
+    Check 'other packages: no launch' ($script:launches.Count -eq 0)
+
+    # A check that can't tell (Packages is a file, not a folder) behaves as before.
+    $roots += New-Box
+    $h = Join-Path $env:LOCALAPPDATA 'nsls-collector'
+    New-Item -ItemType Directory -Path $h -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $h 'config.json'), '{}', $utf8)
+    [System.IO.File]::WriteAllText((Join-Path $env:LOCALAPPDATA 'Packages'), '', $utf8)
+    Check 'Packages not a folder -> no stranded copy' ((Test-CollectorStrandedCopy) -eq $false)
+    $r = Invoke-CollectorBootstrap -Now $t0
+    Check 'Packages not a folder + config.json + task -> installed' ($r -eq 'installed') "$r"
 
     # The real check runs schtasks (bounded, never throwing) under PS 5.1: a
     # task name that can't exist reads false. (A missed deadline isn't tested
