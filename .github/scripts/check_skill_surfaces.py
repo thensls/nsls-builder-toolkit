@@ -30,6 +30,11 @@ This check fails when:
 them off where they don't. It changes nothing else in a SKILL.md. Sorting a
 skill into a group stays a person's decision: read the skill first.
 
+A damaged note (an opening or closing marker line with no partner, as a bad
+merge can leave) is reported and left alone. `--fix` cannot tell where such a
+note ends, so removing it could take the skill's own text with it, and adding
+a second note beside it would never pass. A person deletes what is left.
+
 Tests: test/test_check_skill_surfaces.py
 """
 
@@ -188,8 +193,26 @@ def remove_tag(front, tag):
     return front
 
 
+MARKER_RE = re.compile(re.escape(START) + "|" + re.escape(END))
+
+
+def damaged(body):
+    """True when the note's marker lines don't pair up: start, end, start, end.
+
+    Every other function here assumes whole notes. One marker without its
+    partner is not a note `--fix` can move or remove, so callers check this
+    first and leave such a file to a person.
+    """
+    expect = START
+    for found in MARKER_RE.findall(body):
+        if found != expect:
+            return True
+        expect = END if expect == START else START
+    return expect == END
+
+
 def without_note(body):
-    """The body as it was before any note went in."""
+    """The body as it was before any note went in. Whole notes only: see damaged()."""
     if START not in body:
         return body
     at_top = body.lstrip("\n").startswith(START)
@@ -241,6 +264,14 @@ def problems(root):
             out.append(f"{where}: no frontmatter (the block between two --- lines at the top).")
             continue
         front, body = parts
+        if damaged(body):
+            out.append(
+                f"{where}: the Claude Code note is damaged: a line starting {START} or the line {END} "
+                f"has no partner. --fix leaves it alone. Delete what is left of the note by hand, both "
+                f"marker lines included"
+                + (f", then run: {HOW_TO_FIX}" if name in code_only else ".")
+            )
+            continue
         if name in code_only:
             count = body.count(START)
             if count == 0:
@@ -286,6 +317,8 @@ def fix(root):
         if parts is None:
             continue
         front, body = parts
+        if damaged(body):
+            continue  # problems() says how to repair it by hand
         if name in code_only:
             after = join(add_tag(front, tag), with_note(body, text))
         else:

@@ -216,6 +216,37 @@ with tempfile.TemporaryDirectory() as tmp:
     p.write_bytes(p.read_bytes().replace(b"\n", b"\r\n"))
     check("a Windows checkout (CRLF line endings) still passes", run(root)[0] == 0)
 
+print("\na damaged note is reported and left alone, never doubled")
+TAGGED = FOLDED.replace(">-\n  ", f">-\n  {TAG}\n  ")
+NO_END = NOTE.replace("\n" + m.END, "")
+NO_START = "\n".join(NOTE.split("\n")[1:])
+for label, group, body in (
+    ("a note that lost its closing line", "code_only", f"\n{NO_END}\n{BODY}"),
+    ("a note that lost its opening line", "code_only", f"\n{NO_START}\n{BODY}"),
+    ("a closing line left behind in a works-anywhere skill", "anywhere", f"{BODY}\n{m.END}\n"),
+    ("a closing line left behind under a whole note", "code_only", f"\n{NOTE}\n{BODY}\n{m.END}\n"),
+    ("marker lines in the wrong order", "code_only", f"\n{m.END}\n{BODY}\n{NO_END}\n"),
+    ("two opening lines and one closing line", "code_only", f"\n{NO_END}\n\n{NOTE}\n{BODY}"),
+):
+    with tempfile.TemporaryDirectory() as tmp:
+        root = tree(tmp, [("s", TAGGED if group == "code_only" else FOLDED, body)], **{group: ["s"]})
+        before = skill_text(root, "s")
+        code, out = run(root)
+        check(f"{label}: the check fails and says to repair it by hand", code == 1 and "is damaged" in out and "by hand" in out)
+        runs = [run(root, "--fix") for _ in range(3)]
+        check(f"{label}: --fix leaves the file exactly as it was, run after run", skill_text(root, "s") == before)
+        check(f"{label}: --fix still fails, and reports nothing as updated", all(c == 1 and "updated" not in o for c, o in runs))
+
+with tempfile.TemporaryDirectory() as tmp:
+    root = tree(tmp, [("s", TAGGED, f"\n{NO_END}\n{BODY}")], code_only=["s"])
+    p = root / "skills" / "s" / "SKILL.md"
+    p.write_text(f"---\n{TAGGED.format(n='s')}\n---\n{BODY}", encoding="utf-8", newline="\n")
+    code, _ = run(root, "--fix")
+    check("once the leftovers are deleted by hand, --fix puts one whole note back", code == 0 and skill_text(root, "s").count(NOTE) == 1 and skill_text(root, "s").count(m.START) == 1)
+
+check("whole notes are not called damaged", not m.damaged(f"\n{NOTE}\n{BODY}") and not m.damaged(BODY) and not m.damaged(f"\n{NOTE}\n{BODY}\n{NOTE}\n"))
+check("none of the toolkit's own skills has a damaged note", not any(m.damaged(m.split(skill_text(ROOT, n))[1]) for n in m.skill_dirs(ROOT)))
+
 if failures:
     print(f"\n{len(failures)} FAILED")
     for f in failures:
