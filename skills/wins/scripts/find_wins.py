@@ -10,11 +10,14 @@ include_transcript=true and include_summary=true (one file per page).
 
 Writes:
   DIR/meetings/<start>_<recording_id>.txt   summary + full transcript, one per meeting the user SPOKE in
-  DIR/candidates.txt                        lines by OTHER speakers that look like praise, with context
+  DIR/candidates.txt                        lines that look like praise, with context (see markers below)
   stdout                                    which meetings were kept, skipped, or deduped
 
 Candidates are leads, not findings. Every one must be checked in context
 before it is reported (praise is often aimed at someone else).
+Markers: ">>" another speaker said it; "?>" Fathom labels it as the user,
+so check who really said it (often a colleague's line, mislabeled).
+Keyword candidates miss praise without a praise word; read full transcripts too.
 """
 import argparse
 import json
@@ -31,9 +34,11 @@ PRAISE = re.compile(
     r"great idea|good idea|smart move|great point|great question|"
     r"love (this|that|it|how|what|the)|feel (so )?(good|great) (about|in)|leading the charge|"
     r"run with it|you decide|your call|trust you|"
-    r"doing a great|doing great|great start)\b",
+    r"doing a great|doing great|great start|important work|good handle|right direction)\b",
     re.I,
 )
+# Thanks or credit that names the user ("Thanks, Ann", "this came out of Ann's work").
+NAMED = re.compile(r"\b(thanks?|thank you|appreciate|great|good|love|work|credit)\b", re.I)
 # Bare filler that matches praise words but almost never is praise.
 FILLER = re.compile(r"^(okay,? )?(that|it|this) makes( perfect)? sense\.?$|^(perfect|awesome|amazing|great)[.!]?$", re.I)
 
@@ -50,6 +55,11 @@ def load_items(paths):
 
 def speaker(line):
     return ((line.get("speaker") or {}).get("display_name") or "").strip()
+
+
+def mentions(text, variants):
+    """True when the text names the user (first-name variants as whole words)."""
+    return is_user(text, [v.split()[0] for v in variants if v.strip()])
 
 
 def is_user(name, variants):
@@ -118,12 +128,16 @@ def main():
                     o.write(f"[{x.get('timestamp')}] {speaker(x)}: {x.get('text')}\n")
             print(f"keep: {r['start'][:16]}  {r['title']}  ({len(t)} lines)")
 
-            hits = []
+            hits = {}
             for i, x in enumerate(t):
                 who, text = speaker(x), (x.get("text") or "").strip()
-                if is_user(who, a.name) or FILLER.match(text) or not PRAISE.search(text):
+                named = mentions(text, a.name) and NAMED.search(text)
+                if FILLER.match(text) or not (PRAISE.search(text) or named):
                     continue
-                hits.append(i)
+                # Fathom often puts other people's lines under the user's name
+                # (a colleague's "Good job" or "Thanks, <user>"), so keep user-labeled
+                # praise too, flagged for a speaker check instead of dropped.
+                hits[i] = "?>" if is_user(who, a.name) else ">>"
             if not hits:
                 continue
             cand.write(f"\n===== {r['title']} | {r['start'][:16]} | {share}\n")
@@ -131,7 +145,7 @@ def main():
                 lo = max(0, i - a.context)
                 cand.write("  ---\n")
                 for j in range(lo, min(len(t), i + 3)):
-                    mark = ">>" if j == i else "  "
+                    mark = hits[i] if j == i else "  "
                     cand.write(f"  {mark} [{t[j].get('timestamp')}] {speaker(t[j])}: {(t[j].get('text') or '')[:400]}\n")
     print(f"\n{len(kept)} meetings kept. Candidates: {os.path.join(a.out, 'candidates.txt')}")
 

@@ -35,11 +35,12 @@ When someone is running on empty, generic encouragement bounces off. What lands 
 1. Window: default **this week (Monday 00:00 local → now)**. Accept "today", "last two weeks", "this month", or dates.
 2. Identity: Fathom `get_identity` (or ask). Collect every name variant the user appears under (see Gotchas).
 3. Pull: Fathom `list_meetings` with `created_after`, `include_transcript: true`, `include_summary: true`. Follow `next_cursor` until it is empty. Each page will overflow and save to a file; that's expected.
-4. Extract: `python3 -I <skill>/scripts/find_wins.py --out <scratchpad>/wins --name "<First>" [--name "<Variant>"] <page1> <page2> ...`
-5. Verify: read `candidates.txt`. For every `>>` line, read the context and decide **to whom** and **about what**. Drop anything not aimed at the user.
-6. Shipped work: grep each meeting's summary (top of each file in `meetings/`) for the user's name: approvals, completed requirements, things they demoed or delivered.
-7. Slack: run the searches in "Slack sweep" below, in parallel. Read every hit in full before using it.
-8. Write the output (template below). Every quote is verbatim, attributed, dated, and tagged 🎙️ (call) or 💬 (Slack).
+4. Extract: `python3 -I <skill>/scripts/find_wins.py --out <scratchpad>/wins --name "<First>" [--name "<Variant>"] <page1> <page2> ...` Add nicknames people use (e.g., a short form of the first name) as extra `--name` values.
+5. Read every transcript in full. `candidates.txt` is only an index: on the first real run, a keyword pass found about half of what a full read did. Praise like "it sounds like you've got a really good handle on this" or "a lot of these come out of the work she did" has no stock praise word. Split `meetings/` into batches of about 2,000 lines and launch one read-only subagent per batch, all in a single message. Give each the user's name variants, the four buckets, and the verification rules below. Ask for verbatim quotes with timestamps, plus an UNSURE list.
+6. Verify: check every `>>` and `?>` candidate and every quote the readers return in context. Decide **who really said it**, **to whom**, and **about what**. Drop anything not aimed at the user.
+7. Shipped work: grep each meeting's summary (top of each file in `meetings/`) for the user's name: approvals, completed requirements, things they demoed or delivered.
+8. Slack: run the searches in "Slack sweep" below, in parallel. Read every hit in full before using it.
+9. Write the output (template below). Every quote is verbatim, attributed, dated, and tagged 🎙️ (call) or 💬 (Slack).
 
 ## Slack Sweep
 
@@ -69,7 +70,7 @@ Then for each promising hit:
 ## Gotchas (learned the hard way)
 
 - **Praise aimed at someone else is the #1 error.** On the first real run: "Great job… you're crushing it" was addressed to three *other* people (the next line names them), and "great idea… love it" was about a colleague's process change. Always read the lines before and after. If the target is unclear, leave it out.
-- **Fathom misattributes speakers.** In one call, a leader's praise appeared partly under another attendee's name, and lines jump between speakers mid-sentence. When attribution matters ("the CEO said…"), check the surrounding lines. If still unsure, write "said on the call" instead of naming someone.
+- **Fathom misattributes speakers, often to the user.** In one week, a leader's "Good job," a CEO's "run with it," and a team's "Thanks, <user>" were all labeled as the user, so a filter that drops the user's own lines drops exactly that praise. The script keeps these as `?>` candidates. It runs the other way too: a colleague's line ("everyone here is working hard") was labeled as the user and nearly credited to them. Check the turn order before quoting anyone, the user included. If still unsure, write "said on the call" or leave it out.
 - **The user appears under several names.** One person appeared under two different surnames in the same week (a legal name and a preferred name). Pass every variant with `--name`, or use first name only. Never infer a surname from an email address.
 - **Filter by "spoke in it," not "was invited."** Calendar invitees miss calls the user joined from someone else's invite, and include calls they skipped. The script keeps only meetings where the user has transcript lines.
 - **Duplicate recordings.** Two people recording the same meeting creates two items (same title, a couple of minutes apart). The script keeps the longer one. Different titles at different times (e.g., two back-to-back calls with the same title 20 min apart) are separate meetings.
@@ -92,13 +93,14 @@ Then for each promising hit:
 | "I'll paraphrase, it reads better" | The power is that real people said it. Quote verbatim; trim with an ellipsis, never reword. |
 | "Summaries are enough, skip the transcript" | Summaries record what happened, not the warmth of what was said. Quotes come from transcripts only. |
 | "I'll add a little 'areas to grow' for balance" | Not this skill. The user asked for the good. Coaching lives in meeting-analyzer. |
-| "I'll include the user's own self-praise" | Their own words count only in "How they show up" (gratitude, credit-sharing), never as praise. |
+| "I'll include the user's own self-praise" | Their own words count only in "How they show up" (gratitude, credit-sharing), never as praise, and only after confirming they actually said it. |
+| "The keyword candidates look complete enough" | They found about half of what a full read found. Read the transcripts. |
 
 ## Red Flags (STOP and re-check)
 
 - A quote you haven't read in its context window
 - A Slack quote taken from a truncated ("…") search result instead of the full message
-- A speaker name you haven't sanity-checked against surrounding lines
+- A speaker name you haven't sanity-checked against surrounding lines (including lines labeled as the user)
 - Any sentence that starts "people felt…" or "the team loved…" without a quote behind it
 - A "win" sourced from a meeting the user didn't speak in
 - Output longer than about one screen per bucket
