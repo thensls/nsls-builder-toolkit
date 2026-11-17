@@ -13,7 +13,10 @@
 #      or %LOCALAPPDATA%\nsls-collector\config.json exists AND the "NSLS
 #      Collector" task is registered. The installer writes config.json before
 #      it registers the task, so config.json alone can be a half-finished
-#      install that never runs; this repairs it.
+#      install that never runs; this repairs it. Not installed either while a
+#      stranded copy exists (see Test-CollectorStrandedCopy): from inside the
+#      Claude Store app that pair can be the app's private copy, which the
+#      task never sees.
 #   4. Throttle via <CLAUDE_CONFIG_DIR or %USERPROFILE%\.claude>\.nsls-collector\
 #      bootstrap.json = {attempted_at, attempts}: one attempt per 24 hours, none
 #      after 5 (logged once). Written BEFORE the launch under a short
@@ -75,6 +78,29 @@ function Test-CollectorTaskRegistered {
     }
 }
 
+# Whether a collector install is stranded in a Store app's private copy of
+# AppData. Claude for Windows from the Microsoft Store is an MSIX package: a
+# folder created under AppData by anything it launches (session start, and the
+# installer this file starts) lands in
+# %LOCALAPPDATA%\Packages\<package>\LocalCache\Local\... and shows up at its
+# usual path only inside the app. So inside Claude, config.json "exists" while
+# the "NSLS Collector" task, which runs outside it, fails on every run. Reached
+# only when the evidence is stale; one listing of Packages. Can't tell -> no,
+# which is the behaviour before this check existed.
+function Test-CollectorStrandedCopy {
+    try {
+        $pkgs = Join-Path $env:LOCALAPPDATA 'Packages'
+        if (-not [System.IO.Directory]::Exists($pkgs)) { return $false }
+        foreach ($pkg in [System.IO.Directory]::EnumerateDirectories($pkgs)) {
+            $cfg = [System.IO.Path]::Combine($pkg, 'LocalCache', 'Local', 'nsls-collector', 'config.json')
+            if ([System.IO.File]::Exists($cfg)) { return $true }
+        }
+        return $false
+    } catch {
+        return $false
+    }
+}
+
 function Invoke-CollectorBootstrap {
     param([object]$Now = $null)
     $ErrorActionPreference = 'Stop'
@@ -89,7 +115,9 @@ function Invoke-CollectorBootstrap {
             . $evidence
             if (Test-CollectorEvidenceFresh) { return 'installed' }
         }
-        if ((Test-Path -LiteralPath (Join-Path $home_ 'config.json') -PathType Leaf) -and (Test-CollectorTaskRegistered)) { return 'installed' }
+        # A stranded copy is never 'installed': fall through to the throttled
+        # launch, which the installer turns into a real install.
+        if ((-not (Test-CollectorStrandedCopy)) -and (Test-Path -LiteralPath (Join-Path $home_ 'config.json') -PathType Leaf) -and (Test-CollectorTaskRegistered)) { return 'installed' }
 
         $base = "$env:NSLS_COLLECTOR_BASE_URL".Trim()
         if (-not $base) { $base = 'https://signal.nsls.org' }
