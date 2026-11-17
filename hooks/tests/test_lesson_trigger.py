@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parents[1]
@@ -209,9 +210,12 @@ code, out = run_stop(payload(write(TMP / "a.jsonl", work), sid="hook-a"))
 check("the same stretch is not offered twice", code == 0 and out is None, str(out))
 
 state = json.loads(STATE.read_text(encoding="utf-8"))
-state["sessions"]["hook-b"] = {"offset": 0, "changes": 9, "prompts": 4, "asked_at": "2026-11-01T10:00:05Z",
+# Stamped now, not on a fixed date: log it drops a session untouched for
+# SESSION_TTL_DAYS (14), so a fixed "2026-11-01" turned this red on 15 Nov 2026.
+NOW = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+state["sessions"]["hook-b"] = {"offset": 0, "changes": 9, "prompts": 4, "asked_at": NOW,
                                "answer": "", "reminded": False, "counted": False, "changes_at_answer": 0,
-                               "turn": 4, "asked_turn": 4, "key": "folder:x", "updated": "2026-11-01T10:00:05Z"}
+                               "turn": 4, "asked_turn": 4, "key": "folder:x", "updated": NOW}
 state["sessions"]["hook-c"] = dict(state["sessions"]["hook-b"], answer="not-yet")
 STATE.write_text(json.dumps(state), encoding="utf-8")
 code, out = run_stop(payload(write(TMP / "b.jsonl", work), sid="hook-b"))
