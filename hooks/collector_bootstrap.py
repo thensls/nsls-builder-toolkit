@@ -24,7 +24,9 @@ Checks, cheapest first; any failure means "skip silently":
      registered (on a Mac the LaunchAgent plist exists and launchd has the job
      loaded; on Windows the "NSLS Collector" task exists). The installers write config.json before they register the
      schedule, so config.json alone can be a half-finished install that never
-     runs; this repairs it.
+     runs; this repairs it. On Windows, not installed either while a stranded
+     copy exists (stranded_copy()): from inside the Claude Store app that pair
+     can be the app's private copy, which the task never sees.
   5. Throttle, via <CLAUDE_CONFIG_DIR or ~/.claude>/.nsls-collector/bootstrap.json
      = {attempted_at, attempts}: at most one attempt per 24 hours, and none
      after 5 (logged once). The marker is written BEFORE the launch, under a
@@ -201,6 +203,40 @@ def schedule_registered(platform, env):
     return False
 
 
+def stranded_copy(platform, env):
+    """Whether a collector install is stranded in a Store app's private copy
+    of AppData (Windows only).
+
+    Claude for Windows from the Microsoft Store is an MSIX package: a folder
+    created under AppData by anything it launches (session start, and the
+    installer this file starts) lands in
+    %LOCALAPPDATA%\\Packages\\<package>\\LocalCache\\Local\\... and shows up at
+    its usual path only inside the app. So inside Claude, config.json "exists"
+    while the "NSLS Collector" task, which runs outside it, fails on every
+    run. Reached only when the evidence is stale; one listing of Packages.
+    Can't tell -> no, which is the behaviour before this check existed."""
+    if platform != "win32":
+        return False
+    try:
+        local = env.get("LOCALAPPDATA")
+        if not local:
+            return False
+        packages = Path(local) / "Packages"
+        if not packages.is_dir():
+            return False
+        with os.scandir(packages) as entries:
+            for pkg in entries:
+                # os.path.isfile never raises (like .NET's File.Exists in the
+                # .ps1): one unreadable package can't hide the Claude one.
+                cfg = os.path.join(pkg.path, "LocalCache", "Local", "nsls-collector",
+                                   "config.json")
+                if os.path.isfile(cfg):
+                    return True
+        return False
+    except Exception:
+        return False
+
+
 def installed(platform, env, config_dir):
     try:
         here = str(Path(__file__).resolve().parent)
@@ -212,6 +248,8 @@ def installed(platform, env, config_dir):
             return True
     except Exception:
         pass
+    if stranded_copy(platform, env):
+        return False  # fall through to the throttled launch, which repairs it
     home = collector_home(platform, env)
     return bool(home is not None and (home / "config.json").is_file()
                 and schedule_registered(platform, env))

@@ -241,6 +241,137 @@ def test_windows_schedule_check_asks_schtasks_and_trusts_it_only_when_it_answers
         cb.subprocess.run = real
 
 
+# ── stranded in the Claude Store app's private AppData (Windows) ──────────
+#
+# The bug these pin: session start inside Claude for Windows from the
+# Microsoft Store launched the installer inside the app's MSIX container, so
+# the collector's folder went to the app's private copy,
+# %LOCALAPPDATA%\Packages\Claude_<id>\LocalCache\Local\nsls-collector. Inside
+# Claude it shows at its usual path, so config.json plus the registered task
+# read as installed and nothing ever repaired it, while the task (outside the
+# app) failed every 15 minutes.
+
+
+def _stranded_box(private=True, task=True):
+    """A win32 box that looks installed from inside the app: config.json at
+    the usual path and the task registered. With `private`, the same file is
+    also in a package's private copy, which is what it is on a stranded PC."""
+    box = Box(platform="win32")
+    home = box.collector_home()
+    home.mkdir(parents=True)
+    (home / "config.json").write_text("{}")
+    if private:
+        cache = (Path(box.env["LOCALAPPDATA"]) / "Packages" / "Claude_test"
+                 / "LocalCache" / "Local" / "nsls-collector")
+        cache.mkdir(parents=True)
+        (cache / "config.json").write_text("{}")
+    box.real_schedule = cb.schedule_registered
+    cb.schedule_registered = lambda platform, env: task
+    return box
+
+
+def _done(box):
+    cb.schedule_registered = box.real_schedule
+    box.cleanup()
+
+
+def test_stranded_copy_is_not_installed_and_is_repaired_once_a_day():
+    box = _stranded_box()
+    try:
+        assert box.run(now=NOW) == "launched"
+        assert len(box.popen.calls) == 1
+        assert box.popen.calls[0][0][0] == "powershell"
+        assert box.state() == {"attempted_at": iso(NOW), "attempts": 1}
+        # Same throttle and cap as any other repair.
+        assert box.run(now=NOW + timedelta(hours=23)) == "throttled"
+        assert len(box.popen.calls) == 1
+    finally:
+        _done(box)
+
+
+def test_stranded_copy_respects_the_cap():
+    box = _stranded_box()
+    try:
+        box.seed_marker(attempted_at=iso(NOW - timedelta(days=2)), attempts=5)
+        assert box.run(now=NOW) == "capped"
+        assert box.popen.calls == []
+    finally:
+        _done(box)
+
+
+def test_stranded_copy_with_fresh_evidence_is_installed():
+    """Once the real install reports, the leftover private copy is moot."""
+    box = _stranded_box()
+    try:
+        d = box.cfg / ".nsls-collector"
+        d.mkdir(parents=True)
+        (d / "reported.json").write_text(json.dumps(
+            {"machine_id": "m", "at": iso(datetime.now(timezone.utc) - timedelta(hours=1)),
+             "version": "1"}))
+        assert box.run() == "installed"
+        assert box.popen.calls == []
+    finally:
+        _done(box)
+
+
+def test_other_store_apps_are_not_a_stranded_copy():
+    box = _stranded_box(private=False)
+    try:
+        packages = Path(box.env["LOCALAPPDATA"]) / "Packages"
+        (packages / "Some.App_1" / "LocalCache" / "Local" / "other").mkdir(parents=True)
+        (packages / "Claude_test" / "LocalCache" / "Local").mkdir(parents=True)
+        assert cb.stranded_copy("win32", box.env) is False
+        assert box.run() == "installed"
+        assert box.popen.calls == []
+    finally:
+        _done(box)
+
+
+def test_stranded_check_that_cannot_tell_behaves_as_before():
+    box = _stranded_box(private=False)
+    try:
+        # Packages is a file, not a folder: no listing, so no opinion.
+        (Path(box.env["LOCALAPPDATA"]) / "Packages").write_text("")
+        assert cb.stranded_copy("win32", box.env) is False
+        assert box.run() == "installed"
+        assert cb.stranded_copy("win32", {}) is False
+    finally:
+        _done(box)
+
+
+def test_an_unreadable_package_does_not_hide_the_stranded_copy():
+    box = _stranded_box()
+    locked = Path(box.env["LOCALAPPDATA"]) / "Packages" / "Locked.App_1"
+    (locked / "LocalCache").mkdir(parents=True)
+    try:
+        locked.chmod(0)
+        assert cb.stranded_copy("win32", box.env) is True
+    finally:
+        locked.chmod(0o755)
+        _done(box)
+
+
+def test_stranded_check_is_windows_only():
+    box = _stranded_box()
+    try:
+        assert cb.stranded_copy("win32", box.env) is True
+        assert cb.stranded_copy("darwin", box.env) is False
+        # A Mac that is installed stays installed, whatever LOCALAPPDATA says.
+        box.platform = "darwin"
+        home = box.collector_home()
+        home.mkdir(parents=True)
+        (home / "config.json").write_text("{}")
+        _plist(box)
+        real = _launchd_says(True)
+        try:
+            assert box.run() == "installed"
+        finally:
+            cb._launch_agent_loaded = real
+        assert box.popen.calls == []
+    finally:
+        _done(box)
+
+
 @boxed
 def test_fresh_evidence_counts_as_installed(box):
     d = box.cfg / ".nsls-collector"

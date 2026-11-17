@@ -98,7 +98,70 @@ mkdir -p "$CONFIG_DIR/local-plugins"
 # -e, not -d: in a linked worktree .git is a file. (Not `git rev-parse`: that also
 # says yes for an empty folder that merely sits inside some other repo.)
 UPDATE_FAILED=0   # read by the closing banner, so it does not claim success
+
+# --- A copy that follows another repository (begin) ---
+# The update below fetches from the copy's own `origin`. A copy cloned from
+# somewhere else, most often a builder's own fork made to contribute a skill,
+# then "updates" from that fork: never NSLS's releases, and a hard reset onto
+# a main hundreds of commits old, reported as installed. One builder's Mac held
+# exactly that for three months (2026-11), with no hook and nothing to say so.
+# So a copy whose origin is not $REPO_URL is moved aside, untouched (its
+# branches, commits and uncommitted edits all kept), and a fresh copy cloned.
+# Same repository written another way (https or ssh, with or without .git,
+# a sign-in in the URL, other capitals) counts as the same.
+repo_key() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E \
+    -e 's#^[a-z][a-z0-9+.-]*://##' \
+    -e 's#^[^@/]+@##' \
+    -e 's#^([^/:]+):#\1/#' \
+    -e 's#/+$##' -e 's#\.git$##' -e 's#/+$##'
+}
+KEPT_COPY=""
+KEPT_FROM=""
 if [ -e "$PLUGIN_DIR/.git" ]; then
+  KEPT_FROM=$(git -C "$PLUGIN_DIR" remote get-url origin 2>/dev/null || true)
+  # Shown on screen, and in Claude's transcript when Claude runs this: never a
+  # sign-in. An origin like https://user:token@host/... keeps only host/path.
+  KEPT_FROM=$(printf '%s' "$KEPT_FROM" | sed -E 's#^([A-Za-z][A-Za-z0-9+.-]*://)[^@/]*@#\1#')
+  if [ "$(repo_key "$KEPT_FROM")" != "$(repo_key "$REPO_URL")" ]; then
+    echo "  The toolkit folder here updates from ${KEPT_FROM:-nowhere} instead of NSLS, so it never got NSLS's releases."
+    echo "  Downloading a fresh copy to put in its place..."
+    # Download first, swap second: a failed download must leave the old
+    # folder exactly where it was, never a toolkit that is simply gone.
+    STAGING="$PLUGIN_DIR.new-$$"
+    if ! git clone --branch "$REPO_BRANCH" "$REPO_URL" "$STAGING" --quiet; then
+      rm -rf "$STAGING" 2>/dev/null || true
+      echo "  ERROR: couldn't download a fresh copy of the toolkit. Nothing was changed:"
+      echo "  your folder is exactly as it was. Check your internet connection, then re-run this installer."
+      exit 1
+    fi
+    KEPT_COPY="$PLUGIN_DIR.kept-$(date +%Y%m%d-%H%M%S)"
+    if ! mv "$PLUGIN_DIR" "$KEPT_COPY" 2>/dev/null; then
+      rm -rf "$STAGING" 2>/dev/null || true
+      echo "  ERROR: the toolkit folder could not be moved aside to make room for the fresh copy."
+      echo "  Nothing was changed. Close Claude and any editor using that folder, then re-run this installer."
+      exit 1
+    fi
+    if ! mv "$STAGING" "$PLUGIN_DIR"; then
+      mv "$KEPT_COPY" "$PLUGIN_DIR" 2>/dev/null || true
+      rm -rf "$STAGING" 2>/dev/null || true
+      echo "  ERROR: the fresh copy could not be put in place, so your old folder was put back."
+      echo "  Re-run this installer; if it happens again, tell the NSLS AI team."
+      exit 1
+    fi
+    # A builder may have made extra working folders from that copy (`git
+    # worktree add`); the move broke their links to it, and this mends them.
+    git -C "$KEPT_COPY" worktree repair >/dev/null 2>&1 || true
+    echo "  Done. Your old folder is kept, untouched, at: $KEPT_COPY"
+  else
+    KEPT_FROM=""
+  fi
+fi
+# --- A copy that follows another repository (end) ---
+
+if [ -n "$KEPT_COPY" ]; then
+  :   # just cloned fresh above: nothing to update
+elif [ -e "$PLUGIN_DIR/.git" ]; then
   echo "  Updating existing installation..."
   if ! UPD_ERR=$(git -C "$PLUGIN_DIR" fetch origin "$REPO_BRANCH" --quiet 2>&1); then
     echo "  WARNING: couldn't download the update, so your toolkit is UNCHANGED (still the version you had)."
@@ -1368,6 +1431,14 @@ else
     echo ""
     echo "  Missing: $INSTALL_FAILED"
     echo "  Fix that first — the steps below assume the toolkit is present."
+    echo ""
+  fi
+  if [ -n "${KEPT_COPY:-}" ]; then
+    echo "=== YOUR OLD COPY IS KEPT ==="
+    echo ""
+    echo "  The toolkit folder that was here updated from ${KEPT_FROM:-nowhere}, not NSLS,"
+    echo "  so a fresh copy replaced it. Nothing in the old one was changed or deleted:"
+    echo "    $KEPT_COPY"
     echo ""
   fi
   echo "=== NEXT STEP ==="
