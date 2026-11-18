@@ -71,6 +71,7 @@
     "google-drive": "Uses Google sign-in files kept on the computer.",
     "google-slides-api": "Uses Google sign-in files kept on the computer.",
     "gws": "It is the Google Workspace command-line tool.",
+    "help-center-article": "Runs its own checker and preview scripts and opens the preview in a browser on the computer.",
     "help-center": "Works in the Help Center project folder: runs its checker and opens a pull request.",
     "interrogate": "Reads the project folder and the toolkit's files, and runs a toolkit command.",
     "jd-builder": "Runs its own script and uploads with the Google Workspace command-line tool.",
