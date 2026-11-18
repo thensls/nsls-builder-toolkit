@@ -40,6 +40,7 @@
     "instructional-design": "Written for a remote session too: there it asks for screenshots.",
     "investigation": "A method. Uses whichever sources the session can reach.",
     "llm-email-workflow": "Process guidance. Nothing to run.",
+    "mock-up": "Builds the artifact in chat; the screenshot check needs Claude Code but is optional there.",
     "nsls-auth": "An integration guide with templates. Nothing to run.",
     "nsls-focus-group": "A simulated panel. Nothing to run.",
     "plan": "A planning framework. The NSLS-knowledge lookup is skipped where its helper isn't available.",

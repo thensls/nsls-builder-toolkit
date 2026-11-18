@@ -1,0 +1,359 @@
+<title>Society for Career Services</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=DM+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: the school-facing side of Society. Nav left, a working overview center (who's ready, what students ask, push a moment), a student drawer on the right. Society palette, light only by choice: it mirrors the member app. */
+:root{
+  --paper:#f8f6f1; --panel:#ffffff; --card:#efebe3; --ink:#1d1a17; --muted:#6c665e; --line:#e4dfd5;
+  --yellow:#f3d94e; --yellow-soft:#fbf3c4; --pink:#e8b6e4; --green:#8fd18b; --green-ink:#2f6b2c;
+  --lav:#969bde; --espresso:#231a1c; --red:#c8102e; --warn:#b26a00;
+  --serif:"Newsreader","Iowan Old Style",Georgia,serif;
+  --sans:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--paper)}
+body{color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45}
+button{font-family:inherit}
+:focus-visible{outline:2px solid var(--espresso);outline-offset:2px}
+.concept{background:var(--red);color:#fff;font:700 11px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;text-align:center;padding:7px 16px}
+.shell{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:calc(100vh - 25px)}
+nav.side{border-right:1px solid var(--line);padding:22px 18px;display:flex;flex-direction:column;gap:4px;background:var(--paper)}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:22px}
+.brand img{width:40px;height:40px;border-radius:6px}
+.brand b{font:600 17px/1.1 var(--serif);display:block}
+.brand small{font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+nav.side a{display:flex;align-items:center;gap:12px;font:500 16px var(--serif);color:var(--ink);text-decoration:none;padding:8px 8px;border-radius:8px}
+nav.side a.on{background:var(--card)}
+nav.side svg{width:20px;height:20px;flex:none}
+nav.side .spacer{flex:1}
+.plan{border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12px;color:var(--muted);display:grid;gap:4px;background:var(--panel)}
+.plan b{color:var(--ink);font-size:13px}
+main{padding:22px clamp(16px,3vw,40px) 48px;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:22px;align-content:start}
+.top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+.top h1{font:600 30px/1.1 var(--serif);margin:0}
+.top p{margin:4px 0 0;color:var(--muted)}
+.who{display:flex;align-items:center;gap:10px;font-size:13px}
+.who .av{width:36px;height:36px;border-radius:8px;background:var(--lav);color:#fff;display:grid;place-items:center;font-weight:700}
+.seg{display:inline-flex;background:var(--card);border-radius:999px;padding:3px}
+.seg button{border:0;background:transparent;border-radius:999px;padding:6px 12px;font:600 12px var(--sans);cursor:pointer;color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--panel);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;gap:2px}
+.kpi .lbl{font-size:12px;color:var(--muted)}
+.kpi .num{font:600 30px/1.1 var(--serif);font-variant-numeric:tabular-nums}
+.kpi .sub{font-size:12px;color:var(--muted)}
+.kpi .sub b{color:var(--green-ink)}
+.kpi.hi{background:var(--yellow-soft);border-color:#eadb8a}
+.grid2{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:18px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:12px;min-width:0}
+.panel h2{font:600 20px/1.2 var(--serif);margin:0}
+.panel .lead{margin:-6px 0 0;color:var(--muted);font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:6px 12px;font:600 12px var(--sans);cursor:pointer;color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--espresso);border-color:var(--espresso);color:#fff}
+.chip .n{opacity:.65;font-weight:500;margin-left:4px}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font:600 11px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr.row{cursor:pointer}
+tr.row:hover td{background:#fbf9f4}
+tr.row:focus-visible{outline:2px solid var(--espresso);outline-offset:-2px}
+.stu{display:flex;align-items:center;gap:10px;min-width:180px}
+.stu .ini{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:#fff;font:700 11px var(--sans);flex:none}
+.stu b{display:block}
+.stu small{color:var(--muted)}
+.tag{display:inline-block;border-radius:999px;padding:3px 9px;font:700 11px var(--sans);white-space:nowrap}
+.tag.ready{background:var(--yellow);color:var(--ink)}
+.tag.explore{background:#e9e6fb;color:#3d3f8a}
+.tag.search{background:#dff2dd;color:var(--green-ink)}
+.tag.alum{background:var(--espresso);color:var(--yellow)}
+.signal{color:var(--muted);max-width:280px}
+.status{font-size:12px;min-width:110px}
+.status.booked{color:var(--green-ink);font-weight:600}
+.bars{display:grid;gap:9px}
+.bar{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:4px 10px;align-items:center;font-size:13px}
+.bar .track{grid-column:1/-1;height:10px;background:var(--card);border-radius:999px;overflow:hidden}
+.bar .fill{height:100%;background:var(--yellow);border-radius:999px}
+.bar .pct{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.bar.top .fill{background:var(--espresso)}
+.privacy{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:flex-start}
+.privacy svg{flex:none;margin-top:1px}
+.compose{display:grid;gap:10px}
+.compose label{font-size:12px;color:var(--muted);display:grid;gap:4px}
+.compose input,.compose select{font:400 14px var(--sans);border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:var(--paper);color:var(--ink);width:100%}
+.reach{background:var(--yellow-soft);border-radius:10px;padding:10px 12px;font-size:13px}
+.reach b{font:600 20px var(--serif)}
+.btn{border:1px solid var(--espresso);border-radius:999px;padding:9px 16px;font:600 13px var(--sans);cursor:pointer}
+.btn.solid{background:var(--espresso);color:#fff}
+.btn.line{background:transparent;color:var(--espresso)}
+.btn[disabled]{opacity:.5;cursor:default}
+.row2{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.funnel{display:grid;gap:8px}
+.fstep{display:grid;grid-template-columns:120px minmax(0,1fr) 56px;gap:10px;align-items:center;font-size:13px}
+.fstep .f{height:26px;background:var(--lav);border-radius:6px;opacity:.85}
+.fstep .v{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+.fstep.last .f{background:var(--green)}
+.pv-scrim{position:fixed;inset:0;background:rgba(29,26,23,.45);display:grid;place-items:center;padding:16px;z-index:25}
+.pv{width:min(420px,100%);background:var(--panel);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden}
+.pv .bar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);font:700 11px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pv .bar button{border:0;background:var(--card);border-radius:999px;padding:6px 12px;font:600 12px var(--sans);cursor:pointer;text-transform:none;letter-spacing:0;color:var(--ink)}
+.pv .phone{background:var(--paper);padding:16px;display:grid;gap:12px}
+.pv .head{display:flex;align-items:center;gap:8px;font:600 15px var(--sans)}
+.pv .me{justify-self:end;max-width:85%;background:var(--espresso);color:#fff;border-radius:14px;padding:10px 14px;font-size:14px}
+.pv .co{max-width:92%;background:var(--card);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.5}
+.pv .ev{margin-top:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.pv .ev .hero{background:var(--espresso);color:#fff;padding:12px 14px;display:grid;gap:2px}
+.pv .ev .hero small{font:700 10px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--yellow)}
+.pv .ev .hero b{font:600 18px/1.2 var(--serif)}
+.pv .ev .meta{padding:10px 14px;font-size:13px;color:var(--muted);display:grid;gap:2px}
+.pv .ev .acts{display:flex;gap:8px;padding:0 14px 12px}
+.pv .ev .acts span{border:1px solid var(--espresso);border-radius:999px;padding:6px 12px;font:600 12px var(--sans)}
+.pv .ev .acts span.s{background:var(--espresso);color:#fff}
+.pv .foot{padding:10px 16px 14px;font-size:12px;color:var(--muted)}
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(29,26,23,.35);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);background:var(--panel);z-index:21;box-shadow:-12px 0 40px rgba(0,0,0,.18);display:flex;flex-direction:column}
+.drawer header{display:flex;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid var(--line)}
+.drawer header .ini{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;color:#fff;font:700 15px var(--sans)}
+.drawer header h3{margin:0;font:600 22px/1.1 var(--serif)}
+.drawer header p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.drawer header button{margin-left:auto;border:0;background:var(--card);border-radius:999px;padding:6px 12px;font:600 12px var(--sans);cursor:pointer}
+.drawer .body{padding:18px 20px;overflow-y:auto;display:grid;gap:16px;align-content:start}
+.drawer h4{margin:0 0 6px;font:700 11px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.drawer dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px}
+.drawer dt{color:var(--muted)}
+.drawer dd{margin:0}
+.drawer .summary{background:var(--paper);border-left:3px solid var(--yellow);border-radius:0 8px 8px 0;padding:10px 12px;font-size:13px}
+.drawer .shared{font-size:12px;color:var(--muted)}
+.drawer .acts{display:flex;flex-wrap:wrap;gap:8px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--espresso);color:#fff;font:600 13px var(--sans);padding:10px 16px;border-radius:999px;z-index:30;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:1100px){.fields{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.shell{grid-template-columns:1fr}.kpis{grid-template-columns:1fr 1fr}.kpi .num{font-size:24px}nav.side{display:none}.fstep{grid-template-columns:96px minmax(0,1fr) 48px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="concept">Concept mock-up · internal only · students and numbers are illustrative</div>
+<div class="shell">
+  <nav class="side" aria-label="Career Services">
+    <div class="brand"><img src="data:image/jpeg;base64,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" alt="Society"><div><b>Society</b><small>for Career Services</small></div></div>
+    <a href="#" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l9-7 9 7v9h-6v-6H9v6H3z"/></svg>Overview</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3"/><path d="M3 19c.8-3 3-4.5 6-4.5s5.2 1.5 6 4.5"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.6c2.3.2 4 1.6 4.5 4.4"/></svg>Students</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Appointments</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5h16v11H9l-5 4z"/></svg>Messages</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Reports</a>
+    <div class="spacer"></div>
+    <div class="plan"><b>Campus license</b>Lakeview University<span>Renews July 2027</span></div>
+  </nav>
+
+  <main>
+    <div class="top">
+      <div><h1>Good morning, Jordan</h1><p>Here's who's ready to talk and what your students are asking their Society coach.</p></div>
+      <div class="row2">
+        <div class="seg" role="group" aria-label="Time range"><button type="button" data-range="month" aria-pressed="true">This month</button><button type="button" data-range="term" aria-pressed="false">This term</button></div>
+        <div class="who"><span class="av">JE</span><div><b>Jordan Ellis</b><br><span style="color:var(--muted)">Career Services · Lakeview</span></div></div>
+      </div>
+    </div>
+
+    <section class="kpis" aria-label="Summary">
+      <div class="kpi"><span class="lbl">Students on Society</span><span class="num" id="k1">1,248</span><span class="sub">of 3,410 undergraduates invited</span></div>
+      <div class="kpi"><span class="lbl">Active with their coach</span><span class="num" id="k2">612</span><span class="sub" id="k2s">monthly active · <b>+9%</b> vs last month</span></div>
+      <div class="kpi hi"><span class="lbl">Ready to talk to you</span><span class="num" id="k3">37</span><span class="sub">opted in to Career Services outreach</span></div>
+      <div class="kpi"><span class="lbl">Referred by the coach</span><span class="num" id="k4">14</span><span class="sub" id="k4s">11 booked · 8 attended</span></div>
+    </section>
+
+    <div class="grid2">
+      <section class="panel" aria-labelledby="h-students">
+        <h2 id="h-students">Students who want to connect</h2>
+        <p class="lead">These students chose to share their Society results with Career Services. Select one to see what they shared.</p>
+        <div class="chips" role="group" aria-label="Filter students">
+          <button type="button" class="chip" data-f="all" aria-pressed="true">All<span class="n">7</span></button>
+          <button type="button" class="chip" data-f="ready" aria-pressed="false">Ready to talk<span class="n">3</span></button>
+          <button type="button" class="chip" data-f="explore" aria-pressed="false">Exploring<span class="n">2</span></button>
+          <button type="button" class="chip" data-f="search" aria-pressed="false">Job searching<span class="n">1</span></button>
+          <button type="button" class="chip" data-f="alum" aria-pressed="false">Alumni<span class="n">1</span></button>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Student</th><th>Stage</th><th>What the coach is seeing</th><th>With you</th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div class="privacy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="1"/><path d="M8 11V8a4 4 0 018 0v3"/></svg><span>Students decide what they share and can turn it off any time. Coach conversations are never shown word for word; you see the summary the student approved.</span></div>
+      </section>
+
+      <div style="display:grid;gap:18px;min-width:0">
+        <section class="panel" aria-labelledby="h-asks">
+          <h2 id="h-asks">What students ask their coach</h2>
+          <p class="lead">Top career topics across all Lakeview students on Society. Groups under 10 students are never shown.</p>
+          <div class="bars" id="asks"></div>
+        </section>
+
+        <section class="panel" aria-labelledby="h-funnel">
+          <h2 id="h-funnel">From coach to your office</h2>
+          <p class="lead" id="funnel-lead">This month, the coach suggested Career Services to 52 students.</p>
+          <div class="funnel" id="funnel"></div>
+        </section>
+      </div>
+    </div>
+
+    <section class="panel" aria-labelledby="h-push">
+      <h2 id="h-push">Put an event in front of the right students</h2>
+      <p class="lead">Add an event or deadline. The coach recommends it to students whose goals match, inside the conversations they're already having.</p>
+      <form class="compose" id="pushForm">
+        <div class="fields">
+          <label for="pf-name">Event<input id="pf-name" type="text" value="Fall Career and Internship Fair"></label>
+          <label for="pf-date">Date<input id="pf-date" type="text" value="Wednesday, October 28 · 11 AM to 3 PM"></label>
+          <label for="pf-aud">Recommend to students interested in<select id="pf-aud">
+            <option value="420">Any career area</option>
+            <option value="186" selected>Technology and engineering</option>
+            <option value="133">Health and pre-med</option>
+            <option value="97">Business and finance</option>
+          </select></label>
+        </div>
+        <div class="reach" id="reach">An estimated <b id="reachN">186</b> students will hear about it from their coach in the next week.</div>
+        <div class="row2"><button class="btn line" type="button" id="pf-prev">Preview</button><button class="btn solid" type="submit" id="pf-go">Send to the coach</button><span style="font-size:12px;color:var(--muted)">Students see it as a suggestion, not an ad. You'll see RSVPs here.</span></div>
+      </form>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+  var STUDENTS=[
+    {id:'kt',name:'Kayla Thomas',meta:'Sophomore · Undeclared, leaning computer science',stage:'ready',color:'#c9a27a',ini:'KT',
+     signal:'Wants a direction in tech with two years left',status:'Booked Oct 14, 2:30 PM',booked:true,
+     strengths:'People connector, Problem solver, Curious learner',goal:'A people-facing role in tech: product, UX research or customer success',
+     summary:'Kayla asked how to choose a path in tech with two years left. She is open to internships next summer and wants help planning courses.',
+     shared:'Society results, coach summary'},
+    {id:'ab',name:'Aaliyah Brooks',meta:'Junior · Marketing',stage:'ready',color:'#7a5c9e',ini:'AB',
+     signal:'Asked the coach to review her résumé 3 times this month',status:'Not yet booked',
+     strengths:'Communicator, Creative, Organizer',goal:'Brand marketing at a consumer company',
+     summary:'Aaliyah is applying to summer marketing internships and has rewritten her résumé three times. She asked whether a portfolio would help.',
+     shared:'Society results, résumé, coach summary'},
+    {id:'dc',name:'DeShawn Carter',meta:'Senior · Accounting',stage:'search',color:'#2f7d6b',ini:'DC',
+     signal:'Comparing two job offers with different deadlines',status:'Not yet booked',
+     strengths:'Analytical, Dependable, Steady under pressure',goal:'Public accounting, then a CPA',
+     summary:'DeShawn has offers from a regional firm and a Big Four office. He asked the coach how to negotiate a later decision date.',
+     shared:'Society results, coach summary'},
+    {id:'tn',name:'Tyler Nguyen',meta:'Junior · Chemistry',stage:'ready',color:'#3a6ea5',ini:'TN',
+     signal:'Wants a co-op in pharmaceutical research',status:'Emailed you Oct 6',
+     strengths:'Learner, Focused, Problem solver',goal:'Pharmaceutical research and development',
+     summary:'Tyler asked about co-ops versus summer research. He emailed Career Services through Society on October 6.',
+     shared:'Society results, coach summary'},
+    {id:'iw',name:'Imani Wright',meta:'First-year · Undeclared',stage:'explore',color:'#c06a3b',ini:'IW',
+     signal:'Finished Personal Insights; exploring majors',status:'Not yet booked',
+     strengths:'Curious learner, Empathizer, Includer',goal:'Still exploring: health, education or social work',
+     summary:'Imani finished Personal Insights last week and asked which majors fit someone who wants to help people.',
+     shared:'Society results'},
+    {id:'je',name:'Jordan Ellis',meta:'Senior · Biology',stage:'explore',color:'#8a5a83',ini:'JE',
+     signal:'Deciding between medical school and a gap year',status:'Not yet booked',
+     strengths:'Achiever, Responsible, Learner',goal:'Medicine, possibly public health',
+     summary:'Jordan asked the coach about gap-year jobs that strengthen a medical school application.',
+     shared:'Society results, coach summary'},
+    {id:'rm',name:'Renee Moore',meta:'Class of 2021 · Psychology',stage:'alum',color:'#5b6b2f',ini:'RM',
+     signal:'Moving from teaching into HR',status:'Not yet booked',
+     strengths:'Developer, Communicator, Includer',goal:'People operations or learning and development',
+     summary:'Renee has taught for four years and wants to move into HR. She asked which certifications employers actually look for.',
+     shared:'Society results, résumé, coach summary'}
+  ];
+  var STAGE={ready:['ready','Ready to talk'],explore:['explore','Exploring'],search:['search','Job searching'],alum:['alum','Alumni']};
+  var DATA={
+    month:{k2:'612',k2s:'monthly active · <b>+9%</b> vs last month',k4:'14',k4s:'11 booked · 8 attended',
+      asks:[['Choosing a career path',31],['Internships and co-ops',24],['Résumés and cover letters',18],['Graduate and professional school',12],['Networking and interviews',9],['Job offers and salary',6]],
+      funnel:[['Coach suggested you',52],['Student shared results',37],['Booked or emailed',14],['Met with you',8]]},
+    term:{k2:'1,031',k2s:'active at least once this term',k4:'41',k4s:'33 booked · 26 attended',
+      asks:[['Choosing a career path',28],['Internships and co-ops',27],['Résumés and cover letters',17],['Graduate and professional school',14],['Networking and interviews',8],['Job offers and salary',6]],
+      funnel:[['Coach suggested you',158],['Student shared results',104],['Booked or emailed',41],['Met with you',26]]}
+  };
+  var rowsEl=document.getElementById('rows'), filter='all', lastFocus=null;
+  function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function toast(t){var x=document.createElement('div');x.className='toast';x.textContent=t;document.body.appendChild(x);setTimeout(function(){x.remove();},2400);}
+  function renderRows(){
+    rowsEl.innerHTML='';
+    STUDENTS.filter(function(s){return filter==='all'||s.stage===filter;}).forEach(function(s){
+      var tr=document.createElement('tr'); tr.className='row'; tr.tabIndex=0;
+      tr.innerHTML='<td><div class="stu"><span class="ini" style="background:'+s.color+'">'+s.ini+'</span><div><b>'+esc(s.name)+'</b><small>'+esc(s.meta)+'</small></div></div></td>'+
+        '<td><span class="tag '+STAGE[s.stage][0]+'">'+STAGE[s.stage][1]+'</span></td>'+
+        '<td class="signal">'+esc(s.signal)+'</td><td class="status'+(s.booked?' booked':'')+'">'+esc(s.status)+'</td>';
+      tr.addEventListener('click',function(){open(s);});
+      tr.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();open(s);}});
+      rowsEl.appendChild(tr);
+    });
+  }
+  document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){
+    filter=c.dataset.f; document.querySelectorAll('.chip').forEach(function(x){x.setAttribute('aria-pressed',x===c);}); renderRows();
+  });});
+  function renderRange(r){
+    var d=DATA[r];
+    document.getElementById('k2').textContent=d.k2; document.getElementById('k2s').innerHTML=d.k2s;
+    document.getElementById('k4').textContent=d.k4; document.getElementById('k4s').textContent=d.k4s;
+    var asks=document.getElementById('asks'); asks.innerHTML='';
+    d.asks.forEach(function(a,i){var el=document.createElement('div');el.className='bar'+(i===0?' top':'');
+      el.innerHTML='<span>'+a[0]+'</span><span class="pct">'+a[1]+'%</span><div class="track"><div class="fill" style="width:'+(a[1]/d.asks[0][1]*100)+'%"></div></div>';asks.appendChild(el);});
+    var f=document.getElementById('funnel'); f.innerHTML='';
+    d.funnel.forEach(function(s,i){var el=document.createElement('div');el.className='fstep'+(i===d.funnel.length-1?' last':'');
+      el.innerHTML='<span>'+s[0]+'</span><div><div class="f" style="width:'+(s[1]/d.funnel[0][1]*100)+'%"></div></div><span class="v">'+s[1]+'</span>';f.appendChild(el);});
+    document.getElementById('funnel-lead').textContent=(r==='month'?'This month':'This term')+', the coach suggested Career Services to '+d.funnel[0][1]+' students.';
+  }
+  document.querySelectorAll('.seg button').forEach(function(b){b.addEventListener('click',function(){
+    document.querySelectorAll('.seg button').forEach(function(x){x.setAttribute('aria-pressed',x===b);}); renderRange(b.dataset.range);
+  });});
+
+  var scrim=null, drawer=null;
+  function close(){ if(drawer){drawer.remove();scrim.remove();drawer=scrim=null; if(lastFocus) lastFocus.focus();} }
+  function open(s){
+    close(); lastFocus=document.activeElement;
+    scrim=document.createElement('div'); scrim.className='scrim'; scrim.addEventListener('click',close);
+    drawer=document.createElement('aside'); drawer.className='drawer'; drawer.setAttribute('role','dialog'); drawer.setAttribute('aria-modal','true'); drawer.setAttribute('aria-label',s.name);
+    drawer.innerHTML='<header><span class="ini" style="background:'+s.color+'">'+s.ini+'</span><div><h3>'+esc(s.name)+'</h3><p>'+esc(s.meta)+'</p></div><button type="button" id="dClose">Close</button></header>'+
+      '<div class="body">'+
+      '<div><h4>Where they are</h4><span class="tag '+STAGE[s.stage][0]+'">'+STAGE[s.stage][1]+'</span> <span style="margin-left:6px" class="status'+(s.booked?' booked':'')+'">'+esc(s.status)+'</span></div>'+
+      '<div><h4>From the coach, approved by '+esc(s.name.split(' ')[0])+'</h4><div class="summary">'+esc(s.summary)+'</div></div>'+
+      '<div><h4>Society results</h4><dl><dt>Top strengths</dt><dd>'+esc(s.strengths)+'</dd><dt>Career Clarity goal</dt><dd>'+esc(s.goal)+'</dd></dl></div>'+
+      '<p class="shared">Shared with Career Services: '+esc(s.shared)+'.</p>'+
+      '<div class="acts">'+(s.booked?'<button class="btn solid" type="button" id="dPrep">Open prep notes</button>':'<button class="btn solid" type="button" id="dInvite">Invite to an appointment</button>')+'<button class="btn line" type="button" id="dMsg">Send a message</button></div>'+
+      '</div>';
+    document.body.appendChild(scrim); document.body.appendChild(drawer);
+    drawer.querySelector('#dClose').focus();
+    drawer.querySelector('#dClose').addEventListener('click',close);
+    var inv=drawer.querySelector('#dInvite'); if(inv) inv.addEventListener('click',function(){inv.disabled=true;inv.textContent='Invitation sent';s.status='Invited '+'today';renderRows();toast(s.name.split(' ')[0]+' will see your invitation in Society (simulated)');});
+    var prep=drawer.querySelector('#dPrep'); if(prep) prep.addEventListener('click',function(){toast('Prep notes open in Appointments (simulated)');});
+    drawer.querySelector('#dMsg').addEventListener('click',function(){toast('Message composer opens here (simulated)');});
+  }
+  document.addEventListener('keydown',function(e){if(e.key==='Escape') close();});
+
+  var aud=document.getElementById('pf-aud'), reachN=document.getElementById('reachN');
+  aud.addEventListener('change',function(){reachN.textContent=aud.value;});
+  document.getElementById('pushForm').addEventListener('submit',function(e){
+    e.preventDefault(); var b=document.getElementById('pf-go'); b.disabled=true; b.textContent='Sent to the coach';
+    toast('An estimated '+reachN.textContent+' students will hear about it from their coach (simulated)');
+  });
+
+  var STUDENT_ASK={'420':['I\'m not sure what to do this semester to get closer to a job.','any career area'],
+    '186':['Where can I meet people who work in tech?','technology and engineering'],
+    '133':['How do I get clinical experience before applying to med school?','health and pre-med'],
+    '97':['How do I find a finance internship as a sophomore?','business and finance']};
+  var pvScrim=null, pvLast=null;
+  function closePv(){ if(pvScrim){ pvScrim.remove(); pvScrim=null; if(pvLast) pvLast.focus(); } }
+  document.getElementById('pf-prev').addEventListener('click',function(){
+    closePv(); pvLast=document.activeElement;
+    var name=document.getElementById('pf-name').value.trim()||'Your event', date=document.getElementById('pf-date').value.trim()||'Date to come';
+    var a=STUDENT_ASK[aud.value]||STUDENT_ASK['420'];
+    pvScrim=document.createElement('div'); pvScrim.className='pv-scrim';
+    pvScrim.innerHTML='<div class="pv" role="dialog" aria-modal="true" aria-label="Student preview"><div class="bar">What a matching student sees<button type="button" id="pvClose">Close</button></div>'+
+      '<div class="phone"><div class="head"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#e7c94a" d="M12 2l2 6.5L20.5 10 14 12l-2 6.5L10 12 3.5 10 10 8.5z"/></svg>Your coach</div>'+
+      '<div class="me">'+esc(a[0])+'</div>'+
+      '<div class="co">Good question. One easy step: Career Services is hosting an event that fits what you told me you\'re interested in. Want me to save you a spot?'+
+      '<div class="ev"><div class="hero"><small>From Lakeview Career Services</small><b>'+esc(name)+'</b></div><div class="meta"><span>'+esc(date)+'</span><span>Recommended because you\'re interested in '+esc(a[1])+'</span></div>'+
+      '<div class="acts"><span class="s">Save my spot</span><span>Not for me</span></div></div></div></div>'+
+      '<p class="foot">The coach brings it up when it fits the conversation, so wording will vary. It reaches an estimated '+reachN.textContent+' students over the next week.</p></div>';
+    pvScrim.addEventListener('click',function(e){ if(e.target===pvScrim) closePv(); });
+    document.body.appendChild(pvScrim);
+    var c=pvScrim.querySelector('#pvClose'); c.focus(); c.addEventListener('click',closePv);
+  });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') closePv(); });
+  renderRows(); renderRange('month');
+})();
+</script>

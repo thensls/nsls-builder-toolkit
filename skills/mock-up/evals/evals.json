@@ -1,0 +1,7 @@
+{
+  "skill_name": "mock-up",
+  "evals": [
+    {"id": 1, "prompt": "Can you mock up what a chapter advisor would see in Society when one of their e-board members stops showing up? I want the product team to see how the coach could flag it and what the advisor can do about it.", "expected_output": "Clickable Society-branded mock-up: advisor-side view with a flag, working actions, the e-board member's side, product notes, concept banner.", "files": []},
+    {"id": 2, "prompt": "make a mock up of a member getting matched to a Habitat for Humanity build day through their coach in society. i want to see them sign up and what habitat sees on their end", "expected_output": "Clickable Society coach flow ending in sign-up, plus a 'what Habitat receives' view, product notes, concept banner, consent default stated in a product note.", "files": []}
+  ]
+}
