@@ -2312,6 +2312,24 @@ def _is_current(record, published):
             and record["version"] == _marketplace_version())
 
 
+def _same_version_drift(record):
+    """True only for the gap the reinstall exists to close: the install carries
+    the very version the marketplace clone carries, at a different commit.
+
+    `plugin update` compares version strings, so it cannot close a same-version
+    gap and the reinstall can. A VERSION gap that survives `plugin update` is a
+    different thing: the update itself did not move this install, and the
+    reinstall starts by uninstalling, with no reason to expect its install to
+    fare better. On a builder's Mac in October 2026 that uninstall ran and the
+    install failed. The settings hook had already been retired, so nothing ran
+    toolkit code there again: three weeks with no toolkit updates and no
+    report. A stale toolkit beats no toolkit, so without proof of the same
+    version (the clone's version unreadable included) the plugin stays put.
+    """
+    market = _marketplace_version()
+    return bool(market) and record["version"] != "?" and record["version"] == market
+
+
 def _skill_names(install_path):
     """The skill names an install carries (frontmatter `name:`, else the folder
     name), keeping only names that look like skill names. None if unreadable."""
@@ -2519,6 +2537,12 @@ def _update_and_heal(claude, published, reserve):
             # update every ten minutes.
             _set_fresh_stamp(time.time() + FRESH_RETRY_AFTER_TROUBLE_S)
         return  # level, or not enough evidence to act on
+    if not _same_version_drift(record):
+        # The update ran and left a different VERSION from the clone's: the
+        # update did not move this install, and a reinstall would start by
+        # uninstalling it. Keep the stale toolkit; retry later.
+        _set_fresh_stamp(time.time() + FRESH_RETRY_AFTER_TROUBLE_S)
+        return
     # The heal starts by uninstalling, so it starts only with its whole budget
     # left: cut off halfway, it would leave the machine with no toolkit.
     if HOOK_BUDGET_S - _hook_elapsed() - reserve < HEAL_TIMEOUT_S:
@@ -3102,8 +3126,18 @@ def update_now():
         after = _installed_plugin_record()
         head = _marketplace_head()
         if after and after["sha"] and head and after["sha"] != head:
-            # Same version, different commit: the reinstall says what happened.
-            _heal_and_announce(claude, after, head, time.monotonic() + 60)
+            if _same_version_drift(after):
+                # Same version, different commit: the reinstall says what happened.
+                _heal_and_announce(claude, after, head, time.monotonic() + 60)
+                return
+            # A version gap the update did not close. Never reinstall over it
+            # (see _same_version_drift): the toolkit stays as it is.
+            _set_fresh_stamp(time.time() + FRESH_RETRY_AFTER_TROUBLE_S)
+            have = f" (version {after['version']})" if after["version"] != "?" else ""
+            print(f"The update ran, but this computer's NSLS toolkit{have} did not move "
+                  f"to the newest release. Nothing was removed, and the toolkit keeps "
+                  f"working as it is. Suggest the builder tell the NSLS AI team, so "
+                  f"they can see why.")
             return
         _set_fresh_stamp(time.time() + FRESH_CHECK_INTERVAL_S)
         if after is None:
