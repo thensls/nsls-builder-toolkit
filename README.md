@@ -44,6 +44,7 @@ Then open Claude Code and say `/nsls-setmeup` to connect your tools and optional
 | **/nsls-focus-group** | Test ideas with simulated employee panels |
 | **/nsls-slides** | Branded NSLS/Society presentations |
 | **/frontend-slides** | Build HTML presentations |
+| **/mock-up** | Clickable concept mock-ups as private artifacts — member flows, coach chats, school dashboards, and "what the other side receives" views |
 | **/gdoc-build** | Build nicely-formatted NSLS/Society Google Docs — real Word tables, branded headers, headings, code blocks. Survives copy-paste into canonical docs. |
 | **/google-drive** | Google Drive file management |
 | **/google-slides-api** | Edit existing Google Slides via API |
@@ -229,6 +230,7 @@ They form a cycle: `/data-model-discovery` explores a new system → maps it aga
 | **nsls-focus-group** | Test ideas with simulated employee panels |
 | **nsls-slides** | Create branded NSLS/Society presentations |
 | **frontend-slides** | Build HTML presentations |
+| **mock-up** | Clickable concept mock-ups (Society flows, dashboards, partner views) as private artifacts |
 | **gdoc-build** | Build nicely-formatted NSLS/Society Google Docs (real tables, branded headers) |
 | **google-drive** | Google Drive file management |
 | **google-slides-api** | Edit existing Google Slides via API |
