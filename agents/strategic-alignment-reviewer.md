@@ -32,7 +32,7 @@ You are **read-only**. Return findings as text — never write files.
 ## Context You Load (in this order)
 
 1. **The artifact itself** — read it completely before forming any judgments.
-2. **Tier 1 LOPs** — read `_shared/context/lops.md` (try fallback paths: `~/.claude/local-plugins/nsls-builder-toolkit/_shared/context/`, `~/nsls-skills/nsls-builder-toolkit/_shared/context/`).
+2. **Tier 1 LOPs** — read `${CLAUDE_PLUGIN_ROOT}/_shared/context/lops.md` (the toolkit this agent came with; fallback paths: `~/.claude/local-plugins/nsls-builder-toolkit/_shared/context/`, `~/nsls-skills/nsls-builder-toolkit/_shared/context/`).
 3. **Strategy memo** — read `_shared/context/strategy.md` for broader business context.
 4. **Tier 2 SLT graph** — if `$OBSIDIAN_VAULT_PATH/60-nsls-knowledge/` exists, spot-check topic files named in the plan's LOP Alignment section for Open Questions or Key Decisions that conflict with the plan.
 5. **Tier 3 operating memo** — if `$OBSIDIAN_VAULT_PATH/10-strategy/operating-memo.md` exists AND the plan is written by the vault owner, read the "I Do / I Don't / My Traps" sections.

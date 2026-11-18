@@ -2,12 +2,16 @@
 """Session start installs the Claude usage collector once, quietly, in the
 background, and never costs the session anything.
 
-Popen is always stubbed: nothing here ever runs the real installer.
+Popen is always stubbed: nothing here ever runs the real installer. Each box
+stands a scratch folder in for the account's home (`account=`); without that
+the bootstrap refuses a scratch home, which test_scratch_home_* pin.
 Plain stdlib; runs under pytest or `python3 hooks/tests/test_collector_bootstrap.py`.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -52,7 +56,9 @@ class FakePopen:
 
 
 class Box:
-    """A scratch HOME + config dir and the kwargs maybe_bootstrap takes."""
+    """A scratch HOME + config dir and the kwargs maybe_bootstrap takes. The
+    scratch HOME stands in for the account's own (`account`), so the
+    own-home check passes unless a test changes one or the other."""
 
     def __init__(self, platform="darwin", env=None):
         self.root = Path(tempfile.mkdtemp(prefix="cb-test-"))
@@ -62,7 +68,9 @@ class Box:
         self.cfg.mkdir()
         self.platform = platform
         self.env = {"HOME": str(self.home),
-                    "LOCALAPPDATA": str(self.root / "LocalAppData")}
+                    "USERPROFILE": str(self.home),
+                    "LOCALAPPDATA": str(self.home / "AppData" / "Local")}
+        self.account = self.home
         self.env.update(env or {})
         self.marker = self.cfg / ".nsls-collector" / "bootstrap.json"
         self.popen = FakePopen(marker=self.marker)
@@ -73,7 +81,7 @@ class Box:
     def run(self, now=NOW, popen=None):
         return cb.maybe_bootstrap(config_dir=self.cfg, platform=self.platform,
                                   env=self.env, now=now,
-                                  popen=popen or self.popen)
+                                  popen=popen or self.popen, account=self.account)
 
     def seed_marker(self, **data):
         self.marker.parent.mkdir(parents=True, exist_ok=True)
@@ -233,6 +241,137 @@ def test_windows_schedule_check_asks_schtasks_and_trusts_it_only_when_it_answers
         cb.subprocess.run = real
 
 
+# ── stranded in the Claude Store app's private AppData (Windows) ──────────
+#
+# The bug these pin: session start inside Claude for Windows from the
+# Microsoft Store launched the installer inside the app's MSIX container, so
+# the collector's folder went to the app's private copy,
+# %LOCALAPPDATA%\Packages\Claude_<id>\LocalCache\Local\nsls-collector. Inside
+# Claude it shows at its usual path, so config.json plus the registered task
+# read as installed and nothing ever repaired it, while the task (outside the
+# app) failed every 15 minutes.
+
+
+def _stranded_box(private=True, task=True):
+    """A win32 box that looks installed from inside the app: config.json at
+    the usual path and the task registered. With `private`, the same file is
+    also in a package's private copy, which is what it is on a stranded PC."""
+    box = Box(platform="win32")
+    home = box.collector_home()
+    home.mkdir(parents=True)
+    (home / "config.json").write_text("{}")
+    if private:
+        cache = (Path(box.env["LOCALAPPDATA"]) / "Packages" / "Claude_test"
+                 / "LocalCache" / "Local" / "nsls-collector")
+        cache.mkdir(parents=True)
+        (cache / "config.json").write_text("{}")
+    box.real_schedule = cb.schedule_registered
+    cb.schedule_registered = lambda platform, env: task
+    return box
+
+
+def _done(box):
+    cb.schedule_registered = box.real_schedule
+    box.cleanup()
+
+
+def test_stranded_copy_is_not_installed_and_is_repaired_once_a_day():
+    box = _stranded_box()
+    try:
+        assert box.run(now=NOW) == "launched"
+        assert len(box.popen.calls) == 1
+        assert box.popen.calls[0][0][0] == "powershell"
+        assert box.state() == {"attempted_at": iso(NOW), "attempts": 1}
+        # Same throttle and cap as any other repair.
+        assert box.run(now=NOW + timedelta(hours=23)) == "throttled"
+        assert len(box.popen.calls) == 1
+    finally:
+        _done(box)
+
+
+def test_stranded_copy_respects_the_cap():
+    box = _stranded_box()
+    try:
+        box.seed_marker(attempted_at=iso(NOW - timedelta(days=2)), attempts=5)
+        assert box.run(now=NOW) == "capped"
+        assert box.popen.calls == []
+    finally:
+        _done(box)
+
+
+def test_stranded_copy_with_fresh_evidence_is_installed():
+    """Once the real install reports, the leftover private copy is moot."""
+    box = _stranded_box()
+    try:
+        d = box.cfg / ".nsls-collector"
+        d.mkdir(parents=True)
+        (d / "reported.json").write_text(json.dumps(
+            {"machine_id": "m", "at": iso(datetime.now(timezone.utc) - timedelta(hours=1)),
+             "version": "1"}))
+        assert box.run() == "installed"
+        assert box.popen.calls == []
+    finally:
+        _done(box)
+
+
+def test_other_store_apps_are_not_a_stranded_copy():
+    box = _stranded_box(private=False)
+    try:
+        packages = Path(box.env["LOCALAPPDATA"]) / "Packages"
+        (packages / "Some.App_1" / "LocalCache" / "Local" / "other").mkdir(parents=True)
+        (packages / "Claude_test" / "LocalCache" / "Local").mkdir(parents=True)
+        assert cb.stranded_copy("win32", box.env) is False
+        assert box.run() == "installed"
+        assert box.popen.calls == []
+    finally:
+        _done(box)
+
+
+def test_stranded_check_that_cannot_tell_behaves_as_before():
+    box = _stranded_box(private=False)
+    try:
+        # Packages is a file, not a folder: no listing, so no opinion.
+        (Path(box.env["LOCALAPPDATA"]) / "Packages").write_text("")
+        assert cb.stranded_copy("win32", box.env) is False
+        assert box.run() == "installed"
+        assert cb.stranded_copy("win32", {}) is False
+    finally:
+        _done(box)
+
+
+def test_an_unreadable_package_does_not_hide_the_stranded_copy():
+    box = _stranded_box()
+    locked = Path(box.env["LOCALAPPDATA"]) / "Packages" / "Locked.App_1"
+    (locked / "LocalCache").mkdir(parents=True)
+    try:
+        locked.chmod(0)
+        assert cb.stranded_copy("win32", box.env) is True
+    finally:
+        locked.chmod(0o755)
+        _done(box)
+
+
+def test_stranded_check_is_windows_only():
+    box = _stranded_box()
+    try:
+        assert cb.stranded_copy("win32", box.env) is True
+        assert cb.stranded_copy("darwin", box.env) is False
+        # A Mac that is installed stays installed, whatever LOCALAPPDATA says.
+        box.platform = "darwin"
+        home = box.collector_home()
+        home.mkdir(parents=True)
+        (home / "config.json").write_text("{}")
+        _plist(box)
+        real = _launchd_says(True)
+        try:
+            assert box.run() == "installed"
+        finally:
+            cb._launch_agent_loaded = real
+        assert box.popen.calls == []
+    finally:
+        _done(box)
+
+
 @boxed
 def test_fresh_evidence_counts_as_installed(box):
     d = box.cfg / ".nsls-collector"
@@ -300,6 +439,101 @@ def test_base_url_override_and_rejection():
             assert box.popen.calls == [], bad
         finally:
             box.cleanup()
+
+
+# ── only from the account's own home ──────────────────────────────────────
+#
+# The bug these pin: a test ran session start with HOME in a temp folder. The
+# bootstrap downloaded the real installer, which re-registered the account's
+# one launchd job (org.nsls.collector) against the temp folder; once that was
+# deleted every run failed ("run.sh: No such file or directory"), silently.
+
+
+def _nothing_happened(box):
+    return (box.popen.calls == [] and list(box.cfg.iterdir()) == []
+            and not box.collector_home().exists())
+
+
+def test_scratch_home_never_installs_on_a_mac():
+    box = Box()
+    try:
+        box.account = box.root / "the-account-home"
+        assert box.run() == "sandboxed"
+        assert _nothing_happened(box), "no launch, no marker, no lock, no log"
+    finally:
+        box.cleanup()
+
+
+def test_scratch_home_never_installs_even_when_it_looks_installed():
+    box = Box()
+    try:
+        box.account = box.root / "the-account-home"
+        home = box.collector_home()
+        home.mkdir(parents=True)
+        (home / "config.json").write_text("{}")
+        assert box.run() == "sandboxed"
+        assert box.popen.calls == [] and list(box.cfg.iterdir()) == []
+    finally:
+        box.cleanup()
+
+
+def test_scratch_profile_never_installs_on_windows():
+    for key, value in (("USERPROFILE", "elsewhere"),
+                       ("LOCALAPPDATA", "elsewhere/AppData/Local")):
+        box = Box(platform="win32")
+        try:
+            box.env[key] = str(box.root / value)
+            assert box.run() == "sandboxed", key
+            assert _nothing_happened(box), key
+        finally:
+            box.cleanup()
+    box = Box(platform="win32")
+    try:
+        del box.env["USERPROFILE"]
+        assert box.run() == "sandboxed"
+        assert box.popen.calls == []
+    finally:
+        box.cleanup()
+
+
+@boxed
+def test_own_home_reached_through_a_symlink_still_installs(box):
+    link = box.root / "home-link"
+    link.symlink_to(box.home, target_is_directory=True)
+    box.env["HOME"] = str(link)
+    assert box.run() == "launched"
+
+
+def test_unknown_account_home_never_installs():
+    assert cb.own_home("darwin", {"HOME": "/Users/x"}, None) is False
+    assert cb.own_home("darwin", {}, Path("/Users/x")) is False
+    assert cb.own_home("win32", {"LOCALAPPDATA": r"C:\Users\x\AppData\Local"}, Path(r"C:\Users\x")) is False
+    box = Box()
+    real = cb.account_home
+    try:
+        cb.account_home = lambda platform: None
+        box.account = None  # look it up, as session start does, and fail to
+        assert box.run() == "sandboxed"
+        assert box.popen.calls == []
+    finally:
+        cb.account_home = real
+        box.cleanup()
+
+
+def test_session_start_with_a_scratch_home_stands_down():
+    """Exactly what session start does: run() with no account looks the
+    account up from the OS, and a temp HOME is not it. (Mac and Linux.)"""
+    try:
+        import pwd  # noqa: F401
+    except ImportError:
+        return
+    box = Box()
+    try:
+        assert cb.run(config_dir=box.cfg, platform="darwin", env=box.env,
+                      popen=box.popen) == "sandboxed"
+        assert _nothing_happened(box)
+    finally:
+        box.cleanup()
 
 
 # ── throttle and cap ──────────────────────────────────────────────────────
@@ -372,7 +606,7 @@ def _in_subprocess(box, timeout=15):
         "m=importlib.util.module_from_spec(s);s.loader.exec_module(m);"
         "from datetime import datetime,timezone;"
         f"print(m.run(config_dir={str(box.cfg)!r},platform='darwin',"
-        f"env={box.env!r},popen=lambda *a,**k: None))"
+        f"env={box.env!r},account={str(box.account)!r},popen=lambda *a,**k: None))"
     )
     proc = subprocess.run([sys.executable, "-c", code], capture_output=True,
                           text=True, timeout=timeout)
@@ -471,9 +705,9 @@ def test_run_never_raises_and_prints_nothing():
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
             cb.run(config_dir=box.cfg, platform=box.platform, env=box.env,
-                   popen=box.popen)
+                   popen=box.popen, account=box.account)
             cb.run(config_dir=box.cfg, platform=box.platform, env=box.env,
-                   popen=FakePopen(raise_exc=RuntimeError("boom")))
+                   popen=FakePopen(raise_exc=RuntimeError("boom")), account=box.account)
             shutil.rmtree(box.cfg)
             box.cfg.write_text("not a directory")
             cb.run(config_dir=box.cfg, platform=box.platform, env=box.env,

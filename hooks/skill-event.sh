@@ -26,8 +26,14 @@ set -uo pipefail
 # Windows Python reads as C:\c\Users\... and fired() can never find.
 _nsls_src="${BASH_SOURCE[0]:-$0}"
 _nsls_src="${_nsls_src//\\//}"
+# The plugin runtime's copy has two homes: plugins/cache/ for a marketplace
+# install, plugins/synced/ for the copy NSLS's Claude organization delivers. A
+# marketplace install's folder is named for its version. A synced copy's folder
+# is named for the plugin, so its version is read from its own plugin.json:
+# plugin_beacon.fired() compares the two, and a beacon carrying the folder name
+# would never match.
 case "$_nsls_src" in
-  */plugins/cache/*)
+  */plugins/cache/*|*/plugins/synced/*)
     _nsls_root=$(cd "$(dirname "$_nsls_src")/.." 2>/dev/null && { pwd -W 2>/dev/null || pwd; }) || _nsls_root=""
     if [ -n "$_nsls_root" ]; then
       _nsls_beacons="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.nsls-plugin-beacons"
@@ -37,7 +43,18 @@ case "$_nsls_src" in
       # never present the evidence that retires its own shim, on exactly the
       # platform whose paths are full of backslashes.
       _nsls_esc=$(printf '%s' "$_nsls_root" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g')
-      _nsls_ver=$(printf '%s' "${_nsls_root##*/}" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g')
+      _nsls_ver="${_nsls_root##*/}"
+      case "$_nsls_src" in
+        */plugins/synced/*)
+          # The version from plugin.json, digits and dots only. If it cannot
+          # be read the beacon is written without one, and plugin_beacon.fired()
+          # then believes it for nothing: no version, no way to tell this copy
+          # from the one that replaces it in the same folder.
+          _nsls_ver=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' \
+            "$(dirname "$_nsls_src")/../.claude-plugin/plugin.json" 2>/dev/null | head -n 1)
+          ;;
+      esac
+      _nsls_ver=$(printf '%s' "$_nsls_ver" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g')
       mkdir -p "$_nsls_beacons" 2>/dev/null &&
         printf '{"hook":"skill-event","root":"%s","version":"%s","last":%s}\n' \
           "$_nsls_esc" "$_nsls_ver" "$(date +%s)" \

@@ -369,12 +369,13 @@ class Render(Home):
                                        "ref": "3 Oct"}]}],
              "experiments": [{"title": "Try <b>this</b>", "why": "w", "prompt": "Use key sk-ant-abcdefghijklmnopqrstuvwxyz", "check": "c",
                               "from": "3 Oct · sheet clean-up"}],
-             "behaviours": {"1": "3 of 3"}, "seen_counts": {"code": 3}, "frequency": "weekly"}
+             "behaviours": {"1": "3 of 3"}, "seen_counts": {"code": 3}, "frequency": "weekly",
+             "potential": {"productivity_pct": 4, "hours_with_claude": 10}}
         r.update(kw)
         path = os.path.join(self.home, "r.json")
         with open(path, "w") as fh:
             json.dump(r, fh)
-        quiet(digest.main, ["render", path] + (["--no-record"] if os.path.exists(digest.history_path()) else []))
+        self.stdout = quiet(digest.main, ["render", path] + (["--no-record"] if os.path.exists(digest.history_path()) else []))
         with open(os.path.join(digest.reports_dir(), "2026-10-03.html")) as fh:
             return fh.read()
 
@@ -509,6 +510,46 @@ class Render(Home):
         self.assertIn("Not in the bars: 74 scheduled runs that worked without you", out)
         self.assertNotIn("Not in the bars", self.report(tasks=[{"level": "Agent", "fit": "right"}], scheduled_runs="74"))
 
+    def test_second_check_in_follows_up_and_logs_the_line(self):
+        last = {"experiments": [{"title": "Paste one you liked", "direction": "habit"}]}
+        practice = {"tried": [{"title": "Paste one you liked", "status": "adopted", "evidence": "20 Oct · agenda"}],
+                    "productivity_pct": 3, "hours_with_claude": 12.5, "why": "Two drafts landed first time."}
+        main = self.report(previous=last, practice=practice).split("<main", 1)[1]
+        self.assertIn("What you put into practice", main)
+        self.assertIn("About 0.3 h a week · about 3% more productive.", main)   # 12.5 h x 3% = 0.375, low end 0.3
+        line = "Estimated time saved: about 0.3 h a week · about 3% more productive (logged)"
+        self.assertIn("end your reply with this exact line: " + line + "\n", self.stdout)
+        with open(digest.history_path()) as fh:
+            self.assertEqual(json.loads(fh.readline())["practice"], {"pct": 3, "hours_saved": 0.3})
+        self.assertEqual(digest.clean_run({"practice": {"pct": 3, "hours_saved": 0.3}})["practice"], {"pct": 3, "hours_saved": 0.3})
+
+    def test_second_check_in_must_follow_up(self):
+        last = {"experiments": [{"title": "Paste one you liked", "direction": "habit"}]}
+        with self.assertRaises(SystemExit) as stop:
+            self.report(previous=last)
+        self.assertIn('add "practice"', str(stop.exception))
+        with self.assertRaises(SystemExit) as stop:
+            self.report(previous=last, practice={"tried": [{"title": "x", "status": "adopted"}],
+                                                 "productivity_pct": 40, "hours_with_claude": 10})
+        self.assertIn("0 to 25", str(stop.exception))                          # past the cap is refused
+        two = {"experiments": [{"title": "Paste one you liked", "direction": "habit"}, {"title": "Owner list", "direction": "up"}]}
+        with self.assertRaises(SystemExit) as stop:
+            self.report(previous=two, practice={"tried": [{"title": "Paste one you liked.", "status": "adopted"}],
+                                                "productivity_pct": 3, "hours_with_claude": 10})
+        self.assertIn('Missing: "Owner list"', str(stop.exception))            # every suggestion gets followed up
+        with self.assertRaises(SystemExit):
+            self.report(previous=last, practice={"tried": [{"title": "Paste one you liked", "status": "adopted"}],
+                                                 "productivity_pct": 2.5, "hours_with_claude": 10})  # whole percent only
+        self.assertEqual(digest.estimate({"productivity_pct": 7, "hours_with_claude": 10}), (7, 0.7))
+        self.assertEqual(digest.estimate({"productivity_pct": 5, "hours_with_claude": 84}), (5, 4.2))  # a heavy week still counts
+
+    def test_first_check_in_shows_the_upside_and_logs_nothing(self):
+        main = self.report(potential={"productivity_pct": 5, "hours_with_claude": 20}).split("<main", 1)[1]
+        self.assertIn("If these become habits: about 5% more productive, about 1 h a week.", main)
+        self.assertNotIn("(logged)", self.stdout)
+        self.assertNotIn("Nobody else sees it", main)                         # no promises about what is sent
+        self.assertIn("How time saved is estimated.", main)
+
     def test_since_last_scope_line(self):
         out = self.report(basis="since-last", since_date="2026-10-09", tasks=[{"level": "Agent", "fit": "right"}] * 2)
         self.assertIn("everything new since your last check-in on 9 Oct", out)
@@ -552,6 +593,15 @@ class ScanModes(Home):
         old = [s for s in d["sessions"] if s["continued"]][0]
         self.assertEqual([t["text"] for t in old["turns"]], ["after"])    # only the new part of an old session
         self.assertEqual(d["surfaces"]["code"]["carried_over"], 1)
+
+    def test_hours_with_claude_come_from_half_hours_typed_in(self):
+        slot = (int(NOW.timestamp()) // 1800 - 48) * 1800
+        at = lambda m: dt.datetime.fromtimestamp(slot + m * 60, tz=dt.timezone.utc).isoformat()
+        self.code_session("a", [user("a1", ts=at(1)), user("a2", ts=at(5)), user("a3", ts=at(40))])
+        self.code_session("b", [user("b1", ts=at(10)), user("b2", ts=at(200))])
+        d = self.run_scan("--days", "7")
+        self.assertEqual(d["surfaces"]["code"]["aggregate"]["active_hours"], 1.5)   # three distinct half-hours
+        self.assertEqual(d["surfaces"]["code"]["hours_per_week"], 1.5)
 
     def test_fresh_sample_reads_the_most_substantial_sessions(self):
         self.code_session("long-old", [user("old %d" % i, ts=iso(9)) for i in range(2)] + [user("w%d" % i, ts=iso(2)) for i in range(6)])

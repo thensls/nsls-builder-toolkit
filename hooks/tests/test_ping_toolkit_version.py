@@ -15,6 +15,7 @@ under every PowerShell found: `powershell` and `pwsh` on the Windows runner,
 and on a Mac the shell named by NSLS_TEST_PWSH (or `pwsh` on PATH); with none,
 it says so and skips.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import json
 import os

@@ -38,6 +38,35 @@ NSLS runs company accounts for Railway, Val Town, Airtable, Google Workspace, an
 
 If you don't have access, message Kevin in Slack: "I need access to [service] to deploy [what you're building]."
 
+## Windows gotchas
+
+For Python scripts and scheduled jobs that run on a Windows PC. Field notes from Anish Patel, checked against the Python and Microsoft docs.
+
+- **Printing an arrow or an emoji can crash the script.** On Python 3.14 and earlier, output that is piped or redirected (a hook, a captured subprocess, `> log.txt`) is encoded in the Windows code page (CP1252 on a US-English PC), and a character outside it raises `UnicodeEncodeError`. The same script prints fine in a terminal window, so it passes a hand test and fails once automated. Fix it at the top of the script:
+
+  ```python
+  import sys
+  sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+  ```
+
+  For a child Python process, set `PYTHONIOENCODING=utf-8` in its environment and read its output as UTF-8 (example below).
+
+- **Pass `encoding="utf-8"` on every file read and write.** Those Python versions use the code page for files too, so non-ASCII text comes back garbled or raises `UnicodeDecodeError`. Write `path.read_text(encoding="utf-8")`. Use `"utf-8-sig"` for a file that may start with a byte-order mark, which Windows PowerShell 5.1 adds when it saves UTF-8.
+
+- **`env=` replaces the child's environment; it doesn't add to it.** `subprocess.run(cmd, env={"KEY": "val"})` starts the child without `PATH`, `APPDATA` or `SystemRoot`, which a Windows program can need just to start. Merge with `os.environ`:
+
+  ```python
+  subprocess.run(cmd, env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                 capture_output=True, encoding="utf-8")
+  ```
+
+- **Task Scheduler, when registering a task from PowerShell:**
+  - Name the account in full, as `domain\user`: `-UserId "$env:USERDOMAIN\$env:USERNAME"`. A bare username didn't work in the field; Microsoft's docs don't specify the format.
+  - Use `-LogonType Interactive` for a script that needs the network (IMAP, an OAuth refresh). It runs only while that person is signed in. The `S4U` type runs signed out, but Microsoft documents it as having no access to the network or to encrypted files.
+  - Add `-StartWhenAvailable` to the task settings, so a run missed while the laptop was asleep starts afterwards instead of being skipped.
+
+Python 3.15 and later default to UTF-8, so the first two items apply to 3.14 and earlier.
+
 ## After Deploying
 
 Register your automation so the team knows it exists and who owns it. Say "register this automation" to track it in the automation registry.

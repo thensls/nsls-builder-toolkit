@@ -25,6 +25,7 @@ asked and edits the registry the way the real one does. No network, no real
 install touched.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import io
 import json
@@ -122,7 +123,7 @@ class Machine:
 
     def __init__(self, tmp, installed_sha=OLD, version="3.6.0", install_fails=0,
                  with_registry=True, with_marketplace=True, install_path=None,
-                 marker_fresh=False):
+                 marker_fresh=False, market_version="3.6.0"):
         self.root = Path(tmp)
         self.config = self.root / "claude-config"
         self.config.mkdir()
@@ -154,6 +155,12 @@ class Machine:
             git(market, "config", "user.email", "t@example.test")
             git(market, "config", "user.name", "t")
             (market / "f").write_text("1")
+            if market_version:
+                # The release the clone carries, as a real clone does: the
+                # heal acts only when it equals the installed version.
+                (market / ".claude-plugin").mkdir()
+                (market / ".claude-plugin" / "plugin.json").write_text(
+                    json.dumps({"version": market_version}))
             git(market, "add", "-A")
             git(market, "commit", "-q", "-m", "c")
             # Its own origin: `ls-remote origin` then answers with this HEAD.
@@ -283,6 +290,38 @@ with tempfile.TemporaryDirectory() as tmp:
     check("failed: stamp cleared so the next session retries", stamp_left(m) <= 0)
     check("failed: gave up after a bounded number of attempts",
           sum(c == f"plugin install {PLUGIN_KEY}" for c in m.calls()) <= 3)
+    # The session hook ships inside the plugin, so with the plugin gone nothing
+    # runs it again: promising a retry left builders with no toolkit, waiting.
+    check("failed: never promises a retry that cannot happen",
+          "will retry on the next session" not in out)
+    check("failed: gives the one sentence that repairs it later",
+          f'"Reinstall the {PLUGIN_KEY} plugin for Claude Code."' in out)
+
+# --- heal failed but the plugin is still installed: the retry is real ----------
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp)
+    saved = {k: os.environ.get(k) for k in m.env}
+    os.environ.update(m.env)
+    try:
+        spec = importlib.util.spec_from_file_location("session_start_hook_drift3", HOOK)
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+        hook._heal_plugin_drift = lambda *a, **k: False  # failed before uninstalling
+        record = {"version": "3.6.0", "installPath": str(m.install_path), "sha": OLD}
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            hook._heal_and_announce([str(m.root / "bin" / "claude")], record, m.head,
+                                    time.monotonic() + 30)
+        out = buf.getvalue()
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    check("still installed: is a WARNING", "WARNING" in out)
+    check("still installed: says the next session retries", "will retry on the next session" in out)
+    check("still installed: no repair sentence needed", "paste" not in out)
 
 # --- update itself failed (offline, CLI lock): never trade stale for gone ----
 with tempfile.TemporaryDirectory() as tmp:
@@ -362,8 +401,32 @@ with tempfile.TemporaryDirectory() as tmp:
     m.env["FAKE_VERSION"] = "3.6.0"
     out = run_hook(m)
     check("junk version never reaches stdout", "IGNORE" not in out and "evil" not in out)
-    check("junk version is shown as ?", "version ?" in out)
-    check("junk version still heals", m.registry_sha() == m.head)
+    # Junk cannot prove the same version, so no uninstall: stale beats gone.
+    check("junk version: never uninstalled", not any("uninstall" in c for c in m.calls()))
+    check("junk version: still installed at the old commit", m.registry_sha() == OLD)
+
+# --- a VERSION gap the update did not close: never uninstall (a builder's Mac,
+# Oct 2026: installed 3.33.0, published 3.38.0, `plugin update` returned 0
+# without moving it; the heal uninstalled, the install failed, and with the
+# settings hook already retired nothing brought the toolkit back) -------------
+with tempfile.TemporaryDirectory() as tmp:
+    m = Machine(tmp, version="3.33.0", market_version="3.38.0", install_fails=5)
+    out = run_hook(m)
+    calls = m.calls()
+    check("version gap: the update was tried", calls and calls[0].startswith("plugin update"))
+    check("version gap: never uninstalled", not any("uninstall" in c for c in calls))
+    check("version gap: no reinstall", not any(c.startswith("plugin install") for c in calls))
+    check("version gap: plugin still installed at its old commit", m.registry_sha() == OLD)
+    check("version gap: its files untouched", (m.install_path / "stale").exists())
+    check("version gap: no warning (nothing was lost)", "WARNING" not in out)
+    check("version gap: retried in 2 hours, not every session", 7000 < stamp_left(m) <= 7200)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # The clone's version is unreadable: no proof of the same version, no heal.
+    m = Machine(tmp, market_version=None)
+    out = run_hook(m)
+    check("clone version unknown: never uninstalled", not any("uninstall" in c for c in m.calls()))
+    check("clone version unknown: plugin kept", m.registry_sha() == OLD)
 
 # --- Windows entry point: the .ps1 delegates to run_name "__guardrails__" -----
 # On Windows the plugin's own hooks.json hook invokes `python3`, a Store alias
@@ -590,7 +653,7 @@ def clone_version(m, version):
     (market / ".claude-plugin").mkdir(exist_ok=True)
     (market / ".claude-plugin" / "plugin.json").write_text(json.dumps({"version": version}))
     git(market, "add", "-A")
-    git(market, "commit", "-q", "-m", "release")
+    git(market, "commit", "-q", "--allow-empty", "-m", "release")  # a release is a new commit
     m.head = subprocess.run(["git", "-C", str(market), "rev-parse", "HEAD"],
                             capture_output=True, text=True, check=True).stdout.strip()
     m.env["FAKE_HEAD"] = m.head

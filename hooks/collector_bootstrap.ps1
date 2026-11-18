@@ -7,22 +7,49 @@
 # via Signal, and that DM is the notice.
 #
 #   1. NSLS_COLLECTOR_OPTOUT=1 (or true/yes) -> never install, write nothing.
-#   2. Installed = the collector evidence file is fresh (collector_evidence.ps1),
+#   2. USERPROFILE and LOCALAPPDATA are this account's own (see
+#      Test-CollectorOwnProfile) -> otherwise 'sandboxed': write nothing.
+#   3. Installed = the collector evidence file is fresh (collector_evidence.ps1),
 #      or %LOCALAPPDATA%\nsls-collector\config.json exists AND the "NSLS
 #      Collector" task is registered. The installer writes config.json before
 #      it registers the task, so config.json alone can be a half-finished
-#      install that never runs; this repairs it.
-#   3. Throttle via <CLAUDE_CONFIG_DIR or %USERPROFILE%\.claude>\.nsls-collector\
+#      install that never runs; this repairs it. Not installed either while a
+#      stranded copy exists (see Test-CollectorStrandedCopy): from inside the
+#      Claude Store app that pair can be the app's private copy, which the
+#      task never sees.
+#   4. Throttle via <CLAUDE_CONFIG_DIR or %USERPROFILE%\.claude>\.nsls-collector\
 #      bootstrap.json = {attempted_at, attempts}: one attempt per 24 hours, none
 #      after 5 (logged once). Written BEFORE the launch under a short
 #      CreateNew lock, so two sessions starting together launch once.
-#   4. Installer output -> %LOCALAPPDATA%\nsls-collector\bootstrap.log when that
+#   5. Installer output -> %LOCALAPPDATA%\nsls-collector\bootstrap.log when that
 #      folder exists, else the marker folder. NSLS_COLLECTOR_BASE_URL overrides
 #      https://signal.nsls.org (tests); it must be a bare http(s) origin.
 #
-# Returns a status word (launched, installed, optout, throttled, capped, busy,
-# unsupported, error). Callers must discard it: session-start stdout is
-# session context. ASCII only, PowerShell 5.1 compatible, no BOM.
+# Returns a status word (launched, installed, optout, sandboxed, throttled,
+# capped, busy, unsupported, error). Callers must discard it: session-start
+# stdout is session context. ASCII only, PowerShell 5.1 compatible, no BOM.
+
+# Whether USERPROFILE and LOCALAPPDATA are this account's own, as Windows
+# records them (ProfileList, keyed by the signed-in account's SID), not as this
+# process was told. The "NSLS Collector" task is one per account: an install
+# run from a scratch profile (a test, or a tool that fakes USERPROFILE or
+# LOCALAPPDATA) re-registers it against the scratch folder, and the builder's
+# real collector stops running once that folder is deleted. Can't tell -> no.
+function Test-CollectorOwnProfile {
+    try {
+        if ([string]::IsNullOrWhiteSpace($env:USERPROFILE) -or [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { return $false }
+        $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $key = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\' + $sid
+        $own = (Get-ItemProperty -LiteralPath $key -Name ProfileImagePath -ErrorAction Stop).ProfileImagePath
+        if ([string]::IsNullOrWhiteSpace($own)) { return $false }
+        $own = [System.IO.Path]::GetFullPath($own).TrimEnd('\')
+        $given = [System.IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd('\')
+        $local = [System.IO.Path]::GetFullPath($env:LOCALAPPDATA).TrimEnd('\')
+        return (($given -ieq $own) -and ($local -ieq ($own + '\AppData\Local')))
+    } catch {
+        return $false
+    }
+}
 
 # Whether the collector's scheduled task exists. Can't tell -> yes: a reinstall
 # on a guess is worse than none. Runs only when the evidence is stale; schtasks
@@ -51,6 +78,29 @@ function Test-CollectorTaskRegistered {
     }
 }
 
+# Whether a collector install is stranded in a Store app's private copy of
+# AppData. Claude for Windows from the Microsoft Store is an MSIX package: a
+# folder created under AppData by anything it launches (session start, and the
+# installer this file starts) lands in
+# %LOCALAPPDATA%\Packages\<package>\LocalCache\Local\... and shows up at its
+# usual path only inside the app. So inside Claude, config.json "exists" while
+# the "NSLS Collector" task, which runs outside it, fails on every run. Reached
+# only when the evidence is stale; one listing of Packages. Can't tell -> no,
+# which is the behaviour before this check existed.
+function Test-CollectorStrandedCopy {
+    try {
+        $pkgs = Join-Path $env:LOCALAPPDATA 'Packages'
+        if (-not [System.IO.Directory]::Exists($pkgs)) { return $false }
+        foreach ($pkg in [System.IO.Directory]::EnumerateDirectories($pkgs)) {
+            $cfg = [System.IO.Path]::Combine($pkg, 'LocalCache', 'Local', 'nsls-collector', 'config.json')
+            if ([System.IO.File]::Exists($cfg)) { return $true }
+        }
+        return $false
+    } catch {
+        return $false
+    }
+}
+
 function Invoke-CollectorBootstrap {
     param([object]$Now = $null)
     $ErrorActionPreference = 'Stop'
@@ -58,13 +108,16 @@ function Invoke-CollectorBootstrap {
         $optout = "$env:NSLS_COLLECTOR_OPTOUT".Trim().ToLowerInvariant()
         if (@('1', 'true', 'yes') -contains $optout) { return 'optout' }
         if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { return 'unsupported' }
+        if (-not (Test-CollectorOwnProfile)) { return 'sandboxed' }
         $home_ = Join-Path $env:LOCALAPPDATA 'nsls-collector'
         $evidence = Join-Path $PSScriptRoot 'collector_evidence.ps1'
         if (Test-Path -LiteralPath $evidence) {
             . $evidence
             if (Test-CollectorEvidenceFresh) { return 'installed' }
         }
-        if ((Test-Path -LiteralPath (Join-Path $home_ 'config.json') -PathType Leaf) -and (Test-CollectorTaskRegistered)) { return 'installed' }
+        # A stranded copy is never 'installed': fall through to the throttled
+        # launch, which the installer turns into a real install.
+        if ((-not (Test-CollectorStrandedCopy)) -and (Test-Path -LiteralPath (Join-Path $home_ 'config.json') -PathType Leaf) -and (Test-CollectorTaskRegistered)) { return 'installed' }
 
         $base = "$env:NSLS_COLLECTOR_BASE_URL".Trim()
         if (-not $base) { $base = 'https://signal.nsls.org' }

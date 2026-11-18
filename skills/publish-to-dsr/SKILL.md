@@ -1,6 +1,7 @@
 ---
 name: publish-to-dsr
 description: >-
+  Claude Code only.
   Use when an authorized NSLS person wants to publish content to the Digital
   Sales Room from a file or link, using a personal publishing token (no AWS, no
   repo clone): a public page at docs.nsls.org/<slug>, a Library master PDF or
@@ -9,6 +10,21 @@ description: >-
   in the library", "publish a public page", "publish a deck", "push this
   microsite live", "put this in <school>'s room".
 ---
+
+<!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
+> **Claude Code only.** This skill needs the person's own computer, so check
+> where you are first, going by what your own instructions say you are running in.
+> In **Claude Code** (a terminal, or the Code tab in the Claude app), skip this
+> note. In **an ordinary Claude chat or a Cowork task** (its files live in a
+> sandbox such as `/sessions/...`, not on their computer), stop and follow
+> nothing else in this skill. If the person asked for this skill, or what they
+> want can't be done here without it, reply with only this sentence:
+> "This skill only works in Claude Code on your computer, so switch to Claude Code (the Code tab in the Claude app) and run it there."
+> Otherwise don't mention this skill; help the way you would without it.
+> Unsure which? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell:
+> `$env:CLAUDE_CODE_ENTRYPOINT`): `local-agent` is Cowork, and any other
+> answer, blank included, is Claude Code. No way to run a command means chat.
+<!-- claude-code-only:end -->
 
 # publish-to-dsr
 
@@ -81,10 +97,11 @@ add `--allow-production` on your own initiative.
 ## Rules (checked locally before any network call)
 
 - **`--target` is required** (`public|library|room`); it is never defaulted, so nothing goes world-readable by accident.
-- **Slug** (public only): `^[a-z0-9]+(?:-[a-z0-9]+)*$`, max 80, `ph` reserved.
+- **Slug** (public only): `^[a-z0-9]+(?:-[a-z0-9]+)*$`, max 80, `ph` and `d` reserved (`d` is docs.nsls.org's share-link and library prefix).
 - **Title** required, max 200. **Description** optional, max 2000.
 - **Size:** the practical limit is ~6 MB per REQUEST (the dashboard sits behind CloudFront/Lambda), not the server's 25 MB document cap. Binary content goes base64 (+33%), so a **PDF over ~4 MB is too big**; the CLI refuses locally above ~5.5 MB encoded. Shrink it or host it elsewhere and publish a `--kind link`. PDF and built-PDF artifacts are sent base64; HTML as text. HTML must start with `<!doctype html>` or `<html>`; a PDF must have a `%PDF-` header.
 - **Links** must be `http(s)`.
+- **Public pages: outside sources must be on the allowed list.** Scripts, frames and connections (`fetch`, beacons, sockets) may only use sites an admin has allowed; the publish is refused otherwise (see Errors). Page scripts can never call docs.nsls.org itself except PostHog at `/ph/`.
 - **Room** needs `--institution` or `--group-id` (uuid), plus `--visibility`.
 - **Built** needs `--manifest-id` and `--config <json object>`; `--artifact` needs `--artifact-content-type`; `--also-library`, `--target-doc-id`, `--deck-pair-id`, `--deck-role` need `--artifact`. `--deck-role` sets `config.artifact`. The rule is enforced on the EFFECTIVE value (flag, else `config.artifact` in the config file): `presenter` requires `--visibility staff` (rep-only notes); `prospect` cannot be staff. `--notes` overrides `config.notes`. `--institution` must be non-empty.
 
@@ -98,6 +115,8 @@ add `--allow-production` on your own initiative.
 | 413 | Too large | Shrink it (~6 MB request limit; PDF over ~4 MB won't fit); host heavy media elsewhere. |
 | 200 "UNVERIFIED" | Success with no details | Check the destination before assuming it published or retrying. |
 | 409 `title_exists` | A built deck with that title is already in the room | Re-run with `--target-doc-id <existing doc id>` to publish a new version, or pick another title. |
+| 400 "isn't on the allowed list" | A public page loads a script, frame or connection from a site not on docs.nsls.org's allowed list | Tell the user which site and use. An admin adds it at invitations.nsls.org/admin/public-page-sources; then publish again. **Don't work around it** (inlining or renaming the source): the page's browser security rules block unlisted sites anyway. Fonts, images and styles need no entry. |
+| 400 "can't be allowed … use https" | The source is `http:` or a non-standard port, which can never be allowed | Switch it to `https://` on the default port. |
 | 409 (slug) | Slug taken | Open `docs.nsls.org/<slug>`: it may be your own earlier publish. Otherwise pick a new slug. |
 | 502 / network error | Upstream or ambiguous | **Do not retry yet.** It may already be live: check docs.nsls.org / the library / the institution's room first. |
 

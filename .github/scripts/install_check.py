@@ -8,7 +8,9 @@ PR's head commit. Before 2026-10-10 the second install left the plugin on
 main, and nothing said so.
 
 Reads HEAD_REPO, HEAD_REF and HEAD_SHA from the workflow, and installs into
-CLAUDE_CONFIG_DIR, which the workflow points at a throwaway folder.
+CLAUDE_KIT_TEST_DIR, a throwaway folder, the way a builder's test install does:
+with no CLAUDE_CONFIG_DIR set, so the installer has to point the claude CLI
+there itself. Fails if the plugin turns up in the real ~/.claude instead.
 """
 import json
 import os
@@ -19,13 +21,15 @@ from pathlib import Path
 HEAD_REPO = os.environ["HEAD_REPO"]
 HEAD_REF = os.environ["HEAD_REF"]
 HEAD_SHA = os.environ["HEAD_SHA"]
-CONFIG = Path(os.environ["CLAUDE_CONFIG_DIR"])
+CONFIG = Path(os.environ["CLAUDE_KIT_TEST_DIR"])
+REAL = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
 WINDOWS = os.name == "nt"
 
 
 def install(branch):
     env = dict(os.environ, NSLS_TOOLKIT_REPO=HEAD_REPO, NSLS_TOOLKIT_BRANCH=branch,
                PYTHONIOENCODING="utf-8")
+    env.pop("CLAUDE_CONFIG_DIR", None)
     if WINDOWS:
         cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
                "-File", "install.ps1", "-Test"]
@@ -52,13 +56,26 @@ def installed():
     return clone, plugin
 
 
+def in_real_config():
+    """Whether the real ~/.claude has the toolkit plugin registered."""
+    try:
+        return "nsls-builder-toolkit@nsls-toolkit" in json.loads(
+            REAL.read_text(encoding="utf-8")).get("plugins", {})
+    except (OSError, ValueError):
+        return False
+
+
 CONFIG.mkdir(parents=True, exist_ok=True)
+real_before = in_real_config()
 
 if install("main") != 0:
     print("FAIL: the plain install of main reported a failure (see its banner).")
     sys.exit(1)
 clone, plugin = installed()
 print(f"after main:   clone {clone[:7] or '-'}   plugin {(plugin or '-')[:7]}")
+if in_real_config() and not real_before:
+    print(f"FAIL: the test install put the toolkit plugin into the real config ({REAL}).")
+    sys.exit(1)
 if not plugin:
     print("FAIL: the plain install left no toolkit plugin, so the branch step proves nothing.")
     sys.exit(1)

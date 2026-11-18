@@ -4,13 +4,12 @@ Tier 3 (company-wide), Standard depth. Builder: Davo Wood. Reviewer: Kevin.
 
 ## What this is (for the user)
 
-Say "how am I doing with AI?" and Claude reads your recent sessions on your own computer and gives you a one-page private report:
+Say "how am I doing with AI?" and Claude reads your recent sessions on your own computer and gives you a one-page report:
 - your Builder stage and its next unlock;
 - whether each session used the right level of AI for what was at stake;
 - how your habits compare with typical;
-- up to three things to try next week, each tied to one of your real tasks.
-
-Nobody else sees it.
+- up to three things to try next week, each tied to one of your real tasks;
+- from the second check-in on, which of last time's suggestions you put into practice, and an estimate of the time that saves you.
 
 ## Customers
 
@@ -26,7 +25,7 @@ Nobody else sees it.
 
 ## UX principles
 
-1. **Private by default.** Nothing leaves the person's computer except a read of their own Builder stage. The skill never shares the report or offers to.
+1. **The report stays with the person.** It lives on their computer, and the skill never shares it or offers to. Only the two numbers of the time-saved estimate are logged.
 2. **A coach, not a grader.** No ranking. It never assigns a stage. Higher levels are not better.
 3. **Plain words.** No plumbing or framework jargon, so someone who has never heard of the levels can read every line.
 4. **Every suggestion is tied to one of their real sessions.** A template always comes with a filled-in example from that session.
@@ -36,7 +35,8 @@ Nobody else sees it.
 
 ## What this should NOT become
 
-- A manager dashboard, or any report that leaves the person's machine.
+- A manager dashboard. The report's details never leave the person's computer.
+- A measurement. Time saved is a low-end estimate and is always called one.
 - A score used in performance reviews, or a ranking of people.
 - A push to use more AI, or higher levels, for their own sake.
 - A list of changes since last time. Every check-in is a full report.
@@ -61,12 +61,14 @@ Nobody else sees it.
 2. One GET to the tracker proxy (`builder-stats/<email>`) reads the person's own stage. It is cached for when the tracker is offline.
 3. The agent judges each session from the digest only, and writes `report-draft.json`.
 4. `render` escapes every value into the template and saves the page there too. `history.jsonl` keeps an allowlisted summary with no text from sessions.
+5. From the second check-in, `render` prints the time-saved line and the agent ends its reply with it. The usage collector reads only its two numbers.
 
 ### Systems touched
 | System | Access |
 |---|---|
 | The person's own Claude Code and Cowork files | Read |
 | Automation Tracker proxy | Read the person's own stage only |
+| Usage collector | From the second check-in, reads the reply's last line: estimated hours saved a week and percent more productive. Nothing else from the report |
 | `~/.ai-level-up/` | Write: owner-only files on Mac; on Windows, the user folder's own permissions |
 | Desktop scheduled task | Created only if they choose weekly or monthly |
 | Tracker, Slack, email, Drive | Never written |
@@ -100,7 +102,8 @@ Nobody else sees it.
 ## Measuring success
 
 - **Baseline (3 Oct, before the build):** no such skill existed, so 0 runs. Stage mix: Explorer 15 · Maker 32 · Builder 9 · Architect 0 · Steward 7.
-- **Adoption:** distinct people who run it, and runs per week. The toolkit logs only the skill's name, never what it found.
+- **Adoption:** distinct people who run it, and runs per week.
+- **Time saved (estimate):** from the second check-in, the reply ends with "Estimated time saved: about N h a week · about P% more productive (logged)". The usage collector reads those two numbers. P is Claude's low-end judgement of what the person put into practice from last time's suggestions; N applies P to the hours they spent working with Claude that week.
 - **Proposed goal, to agree at review:** 20 of 64 builders run it at least once within 90 days of release, and 10 opt in to a weekly or monthly check-in.
 - **Satisfaction:** tester feedback; suggestions people actually try (the next report credits them); how many stop their check-ins.
 - **Red flags:** people stop after one run; complaints that a judgment was unfair; any privacy worry.
@@ -111,3 +114,4 @@ Nobody else sees it.
 | Date | Change | Reviewed |
 |---|---|---|
 | 2026-10-11 | Initial design intent, written after 3.23.0 shipped | Davo; review requested from Kevin |
+| 2026-10-24 | Time-saved estimate from the second check-in; dropped the "nothing is sent" promise (the collector's install notice covers what is sent) | Davo |

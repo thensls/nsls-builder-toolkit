@@ -18,6 +18,24 @@ description: >-
 2. **Configuration** (creating segments, modifying campaign settings) — ask permission, explain what changes.
 3. **Write operations** (Track API — sending events, modifying person attributes) — never proactively offered. The Track API is a separate key and a separate concern. If explicitly requested: explain what will be written to Customer.io, confirm the target person/segment, then proceed.
 
+## Where record lookups run
+
+Customer.io record lookups are moving to Claude Code, where every lookup is logged. What this skill queries stays the same; only the route changes.
+
+**Record work:** everything in Customer.io: people, attributes, message history, activity, campaigns, metrics and segments, by any route, including the API calls below.
+
+**The logged route:** tools whose names start `mcp__customerio-records__`. Only that prefix counts; any other Customer.io tools, the shared connector included, are not the logged route.
+
+**Where you are.** Settle it once per conversation, before the first record lookup:
+1. The logged route's tools are present: you're in Claude Code. Cowork and claude.ai can't reach them.
+2. Otherwise go by what your own instructions say you are running in, as `/ai-level-up` does: Claude Code (a terminal, or the Code tab in the Claude app), or Cowork or claude.ai.
+3. Still unsure? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell: `$env:CLAUDE_CODE_ENTRYPOINT`), the marker the toolkit's hooks read. `local-agent` is Cowork; any other answer, blank included, is Claude Code. No way to run a command means claude.ai.
+
+**Then:**
+- **Claude Code with the logged route:** use it for all record work, in place of the API calls below; the lookups themselves stay the same.
+- **Claude Code without it:** carry on exactly as this skill describes, through the connection you have today. Say nothing about setting up the logged route yet.
+- **Cowork or claude.ai, record work:** don't run it, and don't offer a workaround. Say only this, with nothing about tools, servers or settings: "This kind of Customer.io lookup happens in Claude Code (the Code tab in the Claude app), where every lookup is logged. Open it and type: /customerio <their request, in one line>".
+
 ## Purpose
 
 This skill turns Customer.io from a campaign dashboard into a queryable intelligence layer — cross-referencing email engagement with product behavior (via `/posthog`), tracking campaign attribution through the identity chain, and surfacing which messages actually drive action vs. which inflate metrics with prefetch noise. If Customer.io tools aren't available, run `/connect` first. For cross-system intelligence that combines Customer.io with PostHog, Slack, and more, use `/data-intel`.

@@ -1,6 +1,7 @@
 ---
 name: gdoc-build
 description: >-
+  Claude Code only.
   Use when the user asks to "make a Google Doc", "build a doc", "draft an
   onboarding doc", "create a builder guide", "generate a report", "write a
   brief in Google Docs", or "update the canonical [doc]" — anytime the
@@ -9,6 +10,21 @@ description: >-
   iterating on an existing canonical doc by producing a draft for the
   user to copy-paste from. NSLS or Society branded.
 ---
+
+<!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
+> **Claude Code only.** This skill needs the person's own computer, so check
+> where you are first, going by what your own instructions say you are running in.
+> In **Claude Code** (a terminal, or the Code tab in the Claude app), skip this
+> note. In **an ordinary Claude chat or a Cowork task** (its files live in a
+> sandbox such as `/sessions/...`, not on their computer), stop and follow
+> nothing else in this skill. If the person asked for this skill, or what they
+> want can't be done here without it, reply with only this sentence:
+> "This skill only works in Claude Code on your computer, so switch to Claude Code (the Code tab in the Claude app) and run it there."
+> Otherwise don't mention this skill; help the way you would without it.
+> Unsure which? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell:
+> `$env:CLAUDE_CODE_ENTRYPOINT`): `local-agent` is Cowork, and any other
+> answer, blank included, is Claude Code. No way to run a command means chat.
+<!-- claude-code-only:end -->
 
 # /gdoc-build
 
@@ -41,11 +57,15 @@ The fastest path for a builder asking for a Google Doc:
    ~/.local/bin/nsls-python -c 'import docx' && echo PREFLIGHT_OK
    ```
    **If you don't see `PREFLIGHT_OK`, do not continue to step 3.** Tell the builder in one plain
-   sentence that the document tooling needs repairing and re-run the toolkit installer for them.
-   **Repair, by platform** (a launcher the installer just wrote isn't on this session's PATH yet):
-   - *Mac/Linux:* `curl -fsSL https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.sh | bash`,
+   sentence that the document tooling needs repairing and run the repair below for them.
+   `${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears
+   here as written, use the toolkit's top folder, the one that holds `skills/` and
+   `hooks/` (two folders up from the folder this SKILL.md is in).
+   **Repair, by platform** (a launcher the setup just wrote isn't on this session's PATH yet). This
+   runs the toolkit's own setup for this computer from the toolkit's folder; it needs no GitHub access:
+   - *Mac/Linux:* `bash "${CLAUDE_PLUGIN_ROOT}/install.sh" --machine-only`,
      then preflight again.
-   - *Windows:* `powershell -NoProfile -Command "iwr -useb https://raw.githubusercontent.com/thensls/nsls-builder-toolkit/main/install.ps1 | iex"`,
+   - *Windows:* `powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/install.ps1" -MachineOnly`,
      then have the builder fully restart Claude Code (Task Manager → End task on every Claude entry,
      reopen, say "back") and preflight again. Never run `install.sh` on Windows. Never let the builder see a raw `ModuleNotFoundError`, an import traceback,
    or a `command not found` — those are ours to catch here, and this preflight is the only thing

@@ -1,6 +1,7 @@
 ---
 name: track-design
 description: >-
+  Claude Code only.
   Use when a builder wants to turn a raw idea into a complete, importable
   Society app (ignite-next) learning track. Triggers: "design a track",
   "build a track", "new Society track", "author a track", "turn this idea
@@ -8,6 +9,21 @@ description: >-
   "ignite-next track". For the Society (ignite-next) app ONLY — not for NSLS
   marketing pages, slides, Slack bots, or automations.
 ---
+
+<!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
+> **Claude Code only.** This skill needs the person's own computer, so check
+> where you are first, going by what your own instructions say you are running in.
+> In **Claude Code** (a terminal, or the Code tab in the Claude app), skip this
+> note. In **an ordinary Claude chat or a Cowork task** (its files live in a
+> sandbox such as `/sessions/...`, not on their computer), stop and follow
+> nothing else in this skill. If the person asked for this skill, or what they
+> want can't be done here without it, reply with only this sentence:
+> "This skill only works in Claude Code on your computer, so switch to Claude Code (the Code tab in the Claude app) and run it there."
+> Otherwise don't mention this skill; help the way you would without it.
+> Unsure which? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell:
+> `$env:CLAUDE_CODE_ENTRYPOINT`): `local-agent` is Cowork, and any other
+> answer, blank included, is Claude Code. No way to run a command means chat.
+<!-- claude-code-only:end -->
 
 # Track Design
 

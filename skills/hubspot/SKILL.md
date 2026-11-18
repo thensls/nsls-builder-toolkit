@@ -20,6 +20,24 @@ description: >-
 
 If HubSpot tools aren't available, run `/connect` first. For cross-system intelligence that combines HubSpot with PostHog, Airtable, Slack, and more, use `/data-intel`.
 
+## Where record lookups run
+
+HubSpot record lookups are moving to Claude Code, where every lookup is logged. What this skill queries stays the same; only the route changes.
+
+**Record work:** every HubSpot tool except the reviewed marketing, content and schema tools: `manage_campaign_objects`, `manage_blog_post`, `manage_landing_page`, `render_asset`, `get_organization_details`, `get_user_details`, `search_owners`, `get_properties`, `search_properties`, `discover_hubspot_schema`, `tool_guidance`, `show_feedback_form`. Those keep working on the shared connector everywhere, Cowork and claude.ai included. Everything else is record work: contact, deal, ticket and company searches and queries, segments, analytics with contact-level rows, and any tool not on that list, new ones included.
+
+**The logged route:** tools whose names start `mcp__hubspot-records__`. Only that prefix counts; any other HubSpot tools, the shared connector included, are not the logged route.
+
+**Where you are.** Settle it once per conversation, before the first record lookup:
+1. The logged route's tools are present: you're in Claude Code. Cowork and claude.ai can't reach them.
+2. Otherwise go by what your own instructions say you are running in, as `/ai-level-up` does: Claude Code (a terminal, or the Code tab in the Claude app), or Cowork or claude.ai.
+3. Still unsure? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell: `$env:CLAUDE_CODE_ENTRYPOINT`), the marker the toolkit's hooks read. `local-agent` is Cowork; any other answer, blank included, is Claude Code. No way to run a command means claude.ai.
+
+**Then:**
+- **Claude Code with the logged route:** use it for all record work. Call the same-named tool under that prefix (`search_crm_objects` becomes `mcp__hubspot-records__search_crm_objects`); if there isn't one, use that server's closest equivalent.
+- **Claude Code without it:** carry on exactly as this skill describes, through the connection you have today. Say nothing about setting up the logged route yet.
+- **Cowork or claude.ai, record work:** don't run it, and don't offer a workaround. Say only this, with nothing about tools, servers or settings: "This kind of HubSpot lookup happens in Claude Code (the Code tab in the Claude app), where every lookup is logged. Open it and type: /hubspot <their request, in one line>". Marketing, content and schema work carries on in Cowork and claude.ai as usual.
+
 ## Purpose
 
 This skill makes NSLS's 6.9M-contact CRM accessible through conversation — not just running searches, but knowing which properties to query, what the NSLS-specific fields mean, and how to navigate a CRM that was built over years with Feather sync, Salesforce migration artifacts, and 50+ per-state school dropdowns. If you need to look up a member, understand a chapter, trace an enrollment, or investigate a support ticket — this is where you start.

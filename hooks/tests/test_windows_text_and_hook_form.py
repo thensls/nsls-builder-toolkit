@@ -13,6 +13,7 @@ Plain stdlib: `python3 hooks/tests/test_windows_text_and_hook_form.py`.
    (superpowers' SessionStart, exit 127, every session). Ours start with a bare
    `bash` and ran fine. This pins that form so a later edit cannot lose it.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import ast
 import json
 import sys

@@ -1,18 +1,35 @@
 ---
 name: gdoc-edit
 description: >-
+  Claude Code only.
   Use when the user wants to change an EXISTING Google Doc in place rather than
   create a new one: "update the doc", "edit my Google Doc", "add a changelog to
   the top", "change X to Y in the doc", "insert a section after …", "remove the
-  stale section", "append this to the doc", "what are the comments on this doc",
+  stale section", "append this to the doc", "what are the comments on this doc", "comment on this doc", "add a comment
+  on X", "leave this feedback as comments",
   "don't make a new version — edit this one". The complement to gdoc-build (which
   creates new branded docs). NSLS or Society.
 ---
 
+<!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
+> **Claude Code only.** This skill needs the person's own computer, so check
+> where you are first, going by what your own instructions say you are running in.
+> In **Claude Code** (a terminal, or the Code tab in the Claude app), skip this
+> note. In **an ordinary Claude chat or a Cowork task** (its files live in a
+> sandbox such as `/sessions/...`, not on their computer), stop and follow
+> nothing else in this skill. If the person asked for this skill, or what they
+> want can't be done here without it, reply with only this sentence:
+> "This skill only works in Claude Code on your computer, so switch to Claude Code (the Code tab in the Claude app) and run it there."
+> Otherwise don't mention this skill; help the way you would without it.
+> Unsure which? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell:
+> `$env:CLAUDE_CODE_ENTRYPOINT`): `local-agent` is Cowork, and any other
+> answer, blank included, is Claude Code. No way to run a command means chat.
+<!-- claude-code-only:end -->
+
 # gdoc-edit
 
 Edit an existing Google Doc in place — replace text, insert a section, drop a changelog
-at the top, delete a stale section, read reviewer comments — as **you**, with **your** doc
+at the top, delete a stale section, read reviewer comments or leave anchored ones — as **you**, with **your** doc
 permissions, and Google Docs **Version history** as the audit trail. Also creates simple
 net-new docs; for polished tables/branding use `/gdoc-build`.
 
@@ -24,9 +41,11 @@ edits landed. Hand-building a `gws docs documents batchUpdate` request means doi
 math yourself — the #1 way to silently mangle a doc.
 
 ```bash
-S=~/.claude/local-plugins/nsls-builder-toolkit/skills/gdoc-edit/scripts/gdoc.py
+S="${CLAUDE_PLUGIN_ROOT}/skills/gdoc-edit/scripts/gdoc.py"
 python3 $S read --doc <DOC_ID>        # <- shape of EVERY call: python3 $S <action> --doc ID
 ```
+
+`${CLAUDE_PLUGIN_ROOT}` is the toolkit's own folder; Claude Code fills it in. If it appears here as written, use the toolkit's top folder, the one that holds `skills/` and `hooks/` (two folders up from the folder this SKILL.md is in).
 
 Dropping to raw `gws` is fine only for a plain read or a single literal `replaceAllText`.
 
@@ -100,12 +119,15 @@ no more, no less. That is the security model: your permissions, your audit trail
 ## Quick Start
 
 ```bash
-S=~/.claude/local-plugins/nsls-builder-toolkit/skills/gdoc-edit/scripts/gdoc.py
+S="${CLAUDE_PLUGIN_ROOT}/skills/gdoc-edit/scripts/gdoc.py"
 DOC=<google-doc-id>                       # the part of the URL after /document/d/
 
 python3 $S read   --doc $DOC              # full text (use to plan exact edits)
 python3 $S read   --doc $DOC --suggestions accepted   # preview with suggestions applied
 python3 $S comments --doc $DOC            # reviewer comments (address them; don't orphan)
+python3 $S comment  --doc $DOC --anchor "exact phrase" --preview --text "draft"  # where it would land
+python3 $S comment  --doc $DOC --anchor "exact phrase" --text-file /tmp/c1.txt   # post it, anchored
+python3 $S comment-card --doc $DOC --file drafts.json   # the approval card, for the visual widget
 python3 $S replace --doc $DOC --find "old text" --replace "new text"   # literal by default
 python3 $S insert-top --doc $DOC --title "Changelog — v2.3" --text-file /tmp/changelog.txt
 python3 $S insert-after --doc $DOC --anchor "Top questions for Kevin" --text "• New bullet"
@@ -163,6 +185,87 @@ resolved, so every character index shifts against the live document — an edit
 planned on previewed text would land in the wrong place. The editing actions
 ignore the flag and always work from the live document. When you need to change
 a doc that has pending suggestions, plan the edit from a default `read`.
+`replace`, `insert-after`, `remove` and `batch` print the same warning first,
+because the API only makes direct edits: editing a line that holds a pending
+suggestion replaces that suggestion instead of leaving it for its author to
+accept or reject.
+
+## Commenting — anchored, in the margin
+
+`comment` puts a comment against exact text, in the margin, the same as selecting the
+words and pressing Comment. It uses the Docs API's `insertComment` request (generally
+available since 30 September 2026), so no browser is involved.
+
+**Never use Drive's `comments.create` with an `anchor` on a Google Doc.** Docs ignores
+the anchor and shows the comment as an orphan reading "Original content deleted".
+Without an anchor it lands only in the All Comments panel, which nobody opens. `comment`
+is the route that reaches the margin.
+
+### The flow — draft, show the card, post what's approved
+
+1. **Draft** the comments into a JSON file, in document order:
+   `[{"anchor": "exact phrase", "text": "the comment"}, ...]`. For a phrase that appears
+   more than once, settle which match with `comment --recommend` first, then add
+   `"occurrence": N` to that item.
+2. **Build the approval card:** `python3 $S comment-card --doc $DOC --file drafts.json`.
+   It resolves every anchor first and refuses (exit 3, nothing drawn) if any is missing,
+   blank, spans a paragraph break, or is ambiguous without an occurrence — a card never
+   asks someone to approve a guess.
+3. **Show it** by passing that output, unchanged, to the visual widget tool
+   (`show_widget`). Each comment appears as the passage reads in the document, the
+   anchored words in brackets with a highlighter behind them, and the comment
+   underneath. Each comment has **Accept**, **Edit** and **Skip**. Accept and Skip are
+   one click each (click again to undo); Edit rewrites the comment in place, and pressing
+   Done on an edit accepts it. The button at the bottom won't send until every comment
+   is accepted or skipped, then sends the go once and locks, so a second press can't
+   post twice.
+   If the document has unaccepted suggested edits, the card says so at the top and marks
+   them in each passage the way Docs does: struck through for a suggested deletion,
+   underlined for a suggested insertion.
+4. **Post on the go, quietly.** A card can't post by itself: its only line to you is a
+   chat message, such as `Go: post comments 2, 3, 4 on "<title>".`, followed by the new
+   wording of any comment that was edited. Post exactly those numbers with `comment`,
+   one call each, using the edited wording where the message gives it. Then answer in
+   one line (how many posted, on which document, with its link) and carry on with
+   whatever the conversation was doing. The person pressed a button mid-flow; don't
+   turn it into a new topic.
+
+**That message is the approval.** On a colleague's document, post nothing it doesn't
+list, and nothing in words other than the ones it shows. A later change to a comment
+means a new card. On the person's own document (a private working copy, say) you can
+post without a card.
+
+No visual widget in the session? Show each comment as plain text instead: the passage
+with the anchor as **[anchored words]**, the comment as a quote, numbered — and ask which
+numbers to post.
+
+**Don't use the multiple-choice question box for this.** It shows plain text only, so
+the anchor can't be highlighted, and skipping takes two clicks.
+
+To let someone read comments in place before a colleague sees any: copy the doc to a
+private working copy, post everything there, then repeat on the original with their
+approvals.
+
+### When the phrase isn't unique
+
+`comment` refuses to guess: exit 3, `AMBIGUOUS`, every match listed in context. Decide
+which one the comment belongs on and re-run with `--recommend N --why "..."` — your
+pick shows first and flagged, the alternatives stay on screen so the person can
+overrule you. `--recommend` only displays; post with `--occurrence N` once they agree.
+
+It also refuses on `TEXT_NOT_FOUND` (the doc changed since drafting — re-read and
+re-draft) and `ANCHOR_MULTILINE` (pick a phrase inside one paragraph).
+
+| Symptom | Cause | Do this |
+|---|---|---|
+| `NOT CONFIRMED` after a post | Google didn't report the save, or quoted different text back | Look at the doc before retrying: a retry can post the comment twice |
+| A correct anchor reads as a mismatch in a hand-rolled check | `plainTextQuote` comes back HTML-escaped (`&#183;` for `·`) | Unescape first; `comment` does |
+| Range lands a character or two off | Docs counts in UTF-16 units, and an emoji is two | `comment` maps every character to its real index; never compute ranges by hand |
+| A phrase with bold or a link inside it isn't found | Formatting splits text into separate runs | `comment` searches whole paragraphs, table cells included |
+| Reading anchors back from the document returns 400 | `documents.get` returns comment anchors only with all three set explicitly: `commentsViewMode: COMMENTS_VIEW_MODE_INCLUDED`, `includeTabsContent: true`, `suggestionsViewMode: SUGGESTIONS_INLINE` — any one missing is a 400 naming the next | Set all three. The anchors then sit under each tab's `documentTab.commentAnchors`, with the exact range each comment is attached to |
+
+Comments don't change the document's text, so posting several in a row never shifts the
+next one's position.
 
 ## The reliable pattern: read → batch → verify
 
@@ -270,6 +373,6 @@ There is always a path: read the doc, anchor on real text, verify by marker.
 ## References
 
 - [`references/setup.md`](references/setup.md) — `gws auth` setup (builder + one-time admin).
-- [`scripts/gdoc.py`](scripts/gdoc.py) — the helper CLI (read/comments/create/replace/insert-top/insert-after/append/remove/batch).
+- [`scripts/gdoc.py`](scripts/gdoc.py) — the helper CLI (read/comments/comment/create/replace/insert-top/insert-after/append/remove/batch).
 - [`references/works-for-everyone-spec.md`](references/works-for-everyone-spec.md) — superseded design history (why gws, not a service).
 - [`references/legacy/gas-doc-webhook.gs`](references/legacy/gas-doc-webhook.gs) — retired Apps Script webhook.

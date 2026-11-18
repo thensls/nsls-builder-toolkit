@@ -5,6 +5,7 @@ Guards the single most dangerous bug in this skill: trusting `missing_items`
 from `transactions list`, which is ALWAYS null and means "not computed".
 """
 
+import json
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -31,7 +32,7 @@ def test_does_not_trust_missing_items_field():
     def fake_run(args, rationale):
         if args[1] == "list":
             return [PAGE]
-        return [{"missing_receipt": args[2] == "t1", "missing_memo": False,
+        return [{"missing_receipt": json.loads(args[3])["id"] == "t1", "missing_memo": False,
                  "missing_accounting_items": []}]
 
     with patch("txn_queue.run", side_effect=fake_run):

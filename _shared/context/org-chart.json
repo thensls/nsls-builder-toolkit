@@ -67,15 +67,6 @@
     "manages": []
   },
   {
-    "name": "Chris Higbee",
-    "title": "Contractor",
-    "manager": "Ashleigh Smith",
-    "email": "chigbee@nsls.org",
-    "slack": "U0A955W2BS4",
-    "department": "Client Services",
-    "manages": []
-  },
-  {
     "name": "Linda Condon",
     "title": "Senior Strategic Chapter Manager",
     "manager": "Marissa Curry",
@@ -191,7 +182,6 @@
     "slack": "UEWBC2R08",
     "department": "Client Services",
     "manages": [
-      "Chris Higbee",
       "Devin Lasker",
       "Melvin Rosal"
     ]
@@ -275,7 +265,9 @@
     "email": "dblaty@nsls.org",
     "slack": "U0ANJR7P66S",
     "department": "Marketing",
-    "manages": []
+    "manages": [
+      "Brandee Busch"
+    ]
   },
   {
     "name": "Olivia Rigor",
@@ -458,11 +450,11 @@
     "manages": []
   },
   {
-    "name": "Janine Walsh",
+    "name": "Brandee Busch",
     "title": "Contractor",
-    "manager": "Jordan Perry",
-    "email": "jwalsh@nsls.org",
-    "slack": "U0ADTNZUB8D",
+    "manager": "Dylan Blaty",
+    "email": "bbusch@nsls.org",
+    "slack": "U0CDHUXBFE3",
     "department": "Unknown",
     "manages": []
   },
@@ -715,7 +707,6 @@
       "Patricia Pi\u00f1a",
       "Rauly Villar",
       "Samantha Montas",
-      "Saray Rosado",
       "Sofia Fader",
       "Steffanie Punde"
     ]
@@ -815,21 +806,12 @@
     "manages": []
   },
   {
-    "name": "Saray Rosado",
-    "title": "Membership Experience Specialist",
-    "manager": "Alejandro Gabriel",
-    "email": "srosado@nsls.org",
-    "slack": "U0B1NBK7C21",
-    "department": "Member Experience",
-    "manages": []
-  },
-  {
     "name": "Kevin Prentiss",
-    "title": "Ignite",
+    "title": "Chief Executive Officer",
     "manager": "Gary Tuerack",
     "email": "kprentiss@nsls.org",
     "slack": "U07TS8X7T7X",
-    "department": "Engineering",
+    "department": "Executive",
     "manages": [
       "Adam Carpenter",
       "Angelica Evans",
@@ -846,67 +828,29 @@
     ]
   },
   {
-    "name": "Evgeny Pokrovskiy",
-    "title": "Software QA Automation Eng",
-    "manager": "Juan Maggi",
-    "email": "epokrovskiy@nsls.org",
-    "slack": "U01AEB1JQ8Y",
-    "department": "Engineering",
-    "manages": []
-  },
-  {
-    "name": "Brandon Evans",
-    "title": "AWS Engineer",
-    "manager": "Kevin Prentiss",
-    "email": "bevans@nsls.org",
-    "slack": "U08CSE1A9CK",
-    "department": "Engineering",
-    "manages": []
-  },
-  {
-    "name": "David Adams",
-    "title": "Vice President of Technology",
-    "manager": "Kevin Prentiss",
-    "email": "dadams@nsls.org",
-    "slack": "U0A9KTSG4J2",
-    "department": "Engineering",
+    "name": "Cory Capoccia",
+    "title": "Board Member",
+    "manager": "",
+    "email": "ccapoccia@nsls.org",
+    "slack": "U097DDH3371",
+    "department": "Executive",
     "manages": [
-      "Tattiana Alfaro"
+      "Heather Darnell"
     ]
   },
   {
-    "name": "Juan Maggi",
-    "title": "Lead AI/ML Developer & Architect",
-    "manager": "Kevin Prentiss",
-    "email": "jmaggi@nsls.org",
-    "slack": "U02G96B39GQ",
-    "department": "Engineering",
+    "name": "Gary Tuerack",
+    "title": "Founder and Chief Visionary",
+    "manager": "",
+    "email": "gtuerack@nsls.org",
+    "slack": "U040YTX56DP",
+    "department": "Executive",
     "manages": [
-      "Bogdan Tarbujaru",
-      "Evgeny Pokrovskiy",
-      "Ionut Mutascu",
-      "Kibaek Kim",
-      "Robert Stoica",
-      "Vadim Geroim"
+      "Adam Stone",
+      "Anish Patel",
+      "Ashleigh Smith",
+      "Kevin Prentiss"
     ]
-  },
-  {
-    "name": "Kibaek Kim",
-    "title": "Software Developer",
-    "manager": "Juan Maggi",
-    "email": "kkim@nsls.org",
-    "slack": "UJAC5NDKK",
-    "department": "Engineering",
-    "manages": []
-  },
-  {
-    "name": "Vadim Geroim",
-    "title": "PHP Developer",
-    "manager": "Juan Maggi",
-    "email": "vgeroim@nsls.org",
-    "slack": "U0895SB7DGF",
-    "department": "Engineering",
-    "manages": []
   },
   {
     "name": "Rumzy Khalil",
@@ -999,6 +943,15 @@
     ]
   },
   {
+    "name": "Janine Walsh",
+    "title": "National Events Virtual Coordinator",
+    "manager": "Jordan Perry",
+    "email": "jwalsh@nsls.org",
+    "slack": "U0ADTNZUB8D",
+    "department": "Operations",
+    "manages": []
+  },
+  {
     "name": "Dasha Cherkasov",
     "title": "Chapter Event Manager",
     "manager": "Jordan Perry",
@@ -1067,29 +1020,67 @@
     "manages": []
   },
   {
-    "name": "Cory Capoccia",
-    "title": "Board Member",
-    "manager": "",
-    "email": "ccapoccia@nsls.org",
-    "slack": "U097DDH3371",
-    "department": "Executive",
+    "name": "Evgeny Pokrovskiy",
+    "title": "Software QA Automation Eng",
+    "manager": "Juan Maggi",
+    "email": "epokrovskiy@nsls.org",
+    "slack": "U01AEB1JQ8Y",
+    "department": "Engineering",
+    "manages": []
+  },
+  {
+    "name": "Brandon Evans",
+    "title": "AWS Engineer",
+    "manager": "Kevin Prentiss",
+    "email": "bevans@nsls.org",
+    "slack": "U08CSE1A9CK",
+    "department": "Engineering",
+    "manages": []
+  },
+  {
+    "name": "David Adams",
+    "title": "Vice President of Technology",
+    "manager": "Kevin Prentiss",
+    "email": "dadams@nsls.org",
+    "slack": "U0A9KTSG4J2",
+    "department": "Engineering",
     "manages": [
-      "Heather Darnell"
+      "Tattiana Alfaro"
     ]
   },
   {
-    "name": "Gary Tuerack",
-    "title": "Founder and Chief Visionary",
-    "manager": "",
-    "email": "gtuerack@nsls.org",
-    "slack": "U040YTX56DP",
-    "department": "Executive",
+    "name": "Juan Maggi",
+    "title": "Lead AI/ML Developer & Architect",
+    "manager": "Kevin Prentiss",
+    "email": "jmaggi@nsls.org",
+    "slack": "U02G96B39GQ",
+    "department": "Engineering",
     "manages": [
-      "Adam Stone",
-      "Anish Patel",
-      "Ashleigh Smith",
-      "Kevin Prentiss"
+      "Bogdan Tarbujaru",
+      "Evgeny Pokrovskiy",
+      "Ionut Mutascu",
+      "Kibaek Kim",
+      "Robert Stoica",
+      "Vadim Geroim"
     ]
+  },
+  {
+    "name": "Kibaek Kim",
+    "title": "Software Developer",
+    "manager": "Juan Maggi",
+    "email": "kkim@nsls.org",
+    "slack": "UJAC5NDKK",
+    "department": "Engineering",
+    "manages": []
+  },
+  {
+    "name": "Vadim Geroim",
+    "title": "PHP Developer",
+    "manager": "Juan Maggi",
+    "email": "vgeroim@nsls.org",
+    "slack": "U0895SB7DGF",
+    "department": "Engineering",
+    "manages": []
   },
   {
     "name": "Juan Cardenas",

@@ -312,7 +312,7 @@ Use AskUserQuestion:
 
 ## Writing Style
 
-Match Kevin's voice (from `~/.claude/skills/kevin-voice/` if present):
+Match Kevin's voice (follow a voice skill if one is installed):
 - Plain language, not corporate-speak
 - Numbers > adjectives
 - Declarative headlines ("We missed revenue by $5M", not "Revenue Review")

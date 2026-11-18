@@ -6,6 +6,7 @@ runs the real thing under Windows PowerShell 5.1 in CI. This pins where it runs,
 which file and path it is pointed at, and that the command it writes is the one
 the personal toolkit's install.ps1 writes (thensls/nsls-personal-toolkit#86).
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import re
 import sys
 from pathlib import Path

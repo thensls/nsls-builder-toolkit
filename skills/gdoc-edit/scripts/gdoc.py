@@ -44,7 +44,7 @@ Anchor/insert/remove target TOP-LEVEL paragraphs (not text inside tables).
 append-rich can ADD a new section with tables, hyperlinks, real bullets and shaded
 callouts at the end of a doc; editing an EXISTING table still needs /gdoc-build.
 """
-import argparse, json, os, re, subprocess, sys
+import argparse, html, json, os, re, subprocess, sys, unicodedata
 
 # The gdoc family ALWAYS runs gws from the toolkit's own profile — forced per
 # spawned process, so neither the default config dir nor an ambient
@@ -187,6 +187,40 @@ def count_suggestions(docjson):
     return ins, dele
 
 
+def pending_warning(docjson, editing=False):
+    """The one-line PENDING SUGGESTIONS warning, or None when nothing is pending.
+
+    `read` and the editing actions share the count; only the advice differs.
+    An edit is worse than a misread: the API only makes direct edits, so a
+    replace, remove or anchor edit on a line holding a colleague's suggestion
+    replaces their suggestion instead of leaving it for them to accept.
+    """
+    ins, dele = count_suggestions(docjson)
+    if not (ins or dele):
+        return None
+    if editing:
+        return (f"\u26a0\ufe0f  PENDING SUGGESTIONS: this document has {ins} inserted and "
+                f"{dele} deleted text run(s) nobody has accepted yet. This is a direct edit, "
+                f"not a suggestion: where it touches a line holding one, it replaces that "
+                f"suggestion. Run read to check what changed.")
+    return (f"\u26a0\ufe0f  PENDING SUGGESTIONS: {ins} inserted and {dele} deleted "
+            f"text run(s) below are UNACCEPTED edits, shown inline. What follows "
+            f"is a redline, not the live document. Re-run with "
+            f"--suggestions accepted (or rejected) to see one resolved version.")
+
+
+def warn_before_edit(doc):
+    """Fetch the live doc, print the warning first if anything is pending, return it.
+
+    Printed before the edit runs, so a gws failure mid-edit can't swallow it.
+    """
+    d = get_doc(doc)
+    w = pending_warning(d, editing=True)
+    if w:
+        print(w)
+    return d
+
+
 def _para_text(paragraph):
     return "".join(e.get("textRun", {}).get("content", "")
                    for e in paragraph.get("elements", []))
@@ -242,10 +276,11 @@ def do_replace_literal(doc, find, replace):
     }])
 
 
-def do_replace_regex(doc, pattern, replace):
+def do_replace_regex(doc, pattern, replace, d=None):
     """Client-side regex replace: the Docs API has no regex, so we resolve ranges
-    from the live text and delete+insert from end->start so indices stay valid."""
-    d = get_doc(doc)
+    from the live text and delete+insert from end->start so indices stay valid.
+    `d` is the doc as just fetched; leave it out once an earlier edit has moved it."""
+    d = d or get_doc(doc)
     # Build an absolute-index map of the concatenated top-level paragraph text.
     segs, text = [], []
     pos = 0
@@ -322,8 +357,8 @@ def do_insert_top(doc, title, text, level=2):
     return batch_update(doc, _insert_block(1, title, text, "HEADING_%d" % level))
 
 
-def do_insert_after(doc, anchor, title, text, level=3):
-    d = get_doc(doc)
+def do_insert_after(doc, anchor, title, text, level=3, d=None):
+    d = d or get_doc(doc)
     hit = [p for p in paragraphs(d) if anchor in p["text"]]
     if not hit:
         return {"ok": False, "error": "anchor not found: " + anchor}
@@ -338,8 +373,8 @@ def do_append(doc, text):
     return batch_update(doc, [{"insertText": {"location": {"index": idx}, "text": "\n" + text}}])
 
 
-def do_remove(doc, anchors):
-    d = get_doc(doc)
+def do_remove(doc, anchors, d=None):
+    d = d or get_doc(doc)
     hits = [p for p in paragraphs(d)
             if any(a and a in p["text"] for a in anchors) and p["start"] is not None]
     # delete high -> low so earlier deletions don't shift later indices
@@ -356,6 +391,432 @@ def do_comments(doc):
     r = gws(["drive", "comments", "list"],
             params={"fileId": doc, "fields": fields, "pageSize": 100})
     return r.get("comments", r)
+
+
+# ---------- anchored comments (Docs API insertComment) ----------
+#
+# Until 2026-09-30 an anchored comment could only be made by driving the Docs
+# editor: Drive's comments.create accepts an `anchor` but the editors ignore it,
+# and a Drive comment sent with one renders as an orphan reading "Original
+# content deleted". Never use that route. The Docs API's insertComment request
+# (generally available 2026-09-30) takes a text range and has Google's own
+# server mint the kix anchor the editor uses, so the comment sits in the margin
+# against its words like any comment a person made.
+
+EXIT_ANCHOR = 3
+OBJECT_MARK = "\ufffc"  # stands in for a non-text element in the character map
+COMMENT_MAX = 2048  # insertComment's limit, in UTF-8 BYTES: an em dash costs three
+
+
+def _paragraph_map(docjson):
+    """Every paragraph, table cells included, as (text, [document index of each char])."""
+    out = []
+
+    def walk(content):
+        for el in content:
+            if "paragraph" in el:
+                txt, idx = [], []
+                for e in el["paragraph"].get("elements", []):
+                    pos = e.get("startIndex")
+                    if pos is None:
+                        continue
+                    if "textRun" not in e:
+                        # A footnote marker, inline image, smart chip or similar: it
+                        # occupies document positions but carries no text. Leaving it
+                        # out let "about rubrics" match across a footnote between the
+                        # words, with a range that silently took the footnote along.
+                        # A visible placeholder per position keeps the map honest: the
+                        # preview shows the object, and a plain phrase can't jump it.
+                        for q in range(pos, e.get("endIndex", pos + 1)):
+                            txt.append(OBJECT_MARK)
+                            idx.append(q)
+                        continue
+                    for ch in e["textRun"].get("content", ""):
+                        txt.append(ch)
+                        idx.append(pos)
+                        pos += _u16len(ch)
+                out.append(("".join(txt), idx))
+            elif "table" in el:
+                for row in el["table"].get("tableRows", []):
+                    for cell in row.get("tableCells", []):
+                        walk(cell.get("content", []))
+
+    walk(docjson.get("body", {}).get("content", []))
+    return out
+
+
+def find_anchor(paras, anchor):
+    """Every occurrence of `anchor` as (paragraph, char offset, start index, end index).
+
+    Searches whole paragraphs rather than single text runs: a phrase with a bold
+    word or a link inside it is split across runs and a run-by-run search misses
+    it. Indices come from the per-character map, so an emoji earlier in the
+    paragraph (two UTF-16 units, one Python char) does not shift the range.
+    """
+    hits = []
+    for p, (txt, idx) in enumerate(paras):
+        k = txt.find(anchor)
+        while k >= 0:
+            last = k + len(anchor) - 1
+            # Backstop: a match is only real if its characters are adjacent in the
+            # document. Any gap means something the map didn't see sits inside it.
+            if all(idx[j + 1] == idx[j] + _u16len(txt[j]) for j in range(k, last)):
+                hits.append((p, k, idx[k], idx[last] + _u16len(txt[last])))
+            k = txt.find(anchor, k + 1)
+    return hits
+
+
+def _anchor_context(paras, p, k, anchor):
+    """The anchor's paragraph with the phrase underlined, between its nearest non-blank neighbours."""
+    def neighbour(step):
+        q = p + step
+        while 0 <= q < len(paras) and not paras[q][0].strip():
+            q += step
+        return paras[q][0].rstrip("\n") if 0 <= q < len(paras) else None
+
+    lines = []
+    before, after = neighbour(-1), neighbour(1)
+    if before is not None:
+        lines.append("     " + before)
+    lines.append("  >  " + paras[p][0].rstrip("\n"))
+    def cols(t):  # terminal width: wide glyphs such as ✅ take two columns
+        return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in t)
+    lines.append("     " + " " * cols(paras[p][0][:k]) + "^" * cols(anchor))
+    if after is not None:
+        lines.append("     " + after)
+    return "\n".join(lines)
+
+
+def do_comment(doc, anchor, body, occurrence=None, recommend=None, why=None, preview=False):
+    """Preview, or post, one comment anchored to `anchor`. Exits EXIT_ANCHOR rather than guess.
+
+    One comment per call on purpose: on a colleague's document every comment
+    needs its own yes, and a batch would make one approval cover several.
+    """
+    if not anchor.strip():
+        print("ANCHOR_EMPTY: an empty phrase matches everywhere. Give the exact words to attach the comment to.")
+        sys.exit(EXIT_ANCHOR)
+    if "\n" in anchor:
+        print("ANCHOR_MULTILINE: the anchor spans a paragraph break. Pick a phrase inside one paragraph.")
+        sys.exit(EXIT_ANCHOR)
+    if not preview and not body.strip():
+        sys.exit("comment needs --text or --text-file")
+    size = len(body.encode("utf-8"))
+    if size > COMMENT_MAX:
+        sys.exit(f"comment text is {size} bytes; Google's limit is {COMMENT_MAX} UTF-8 bytes")
+
+    d = warn_before_edit(doc)
+    paras = _paragraph_map(d)
+    hits = find_anchor(paras, anchor)
+    n = len(hits)
+
+    if n == 0:
+        print(f"TEXT_NOT_FOUND: {anchor!r} is not in the document. Nothing was posted.")
+        print("Re-read it -- the text may have changed since the comment was drafted.")
+        sys.exit(EXIT_ANCHOR)
+
+    # --recommend only ever displays. Without this, a unique phrase skipped the
+    # branch and `--recommend 1` posted straight away.
+    if occurrence is None and (n > 1 or recommend is not None):
+        # Ambiguous. Without --recommend: list every candidate and refuse, so nothing
+        # ever lands on a coin-flip. With --recommend: the model has judged, so show
+        # its pick first with its reason and keep the rest on screen as alternatives
+        # -- a recommendation nobody can check is a guess. Either way nothing posts:
+        # posting needs --occurrence, after the person has seen the choice.
+        if recommend is not None and not 1 <= recommend <= n:
+            sys.exit(f"--recommend {recommend} is out of range: {n} matches")
+        order = list(range(1, n + 1))
+        if recommend:
+            order.remove(recommend)
+            order.insert(0, recommend)
+            print(f"{anchor!r} appears {n} time{'s' if n != 1 else ''} -- recommended one first.\n")
+        else:
+            print(f"AMBIGUOUS: {anchor!r} appears {n} times. Nothing was posted.")
+            print("Decide which one the comment belongs on, then re-run with --recommend N --why \"...\".\n")
+        for i in order:
+            p, k, _, _ = hits[i - 1]
+            if i == recommend:
+                print(f"★ RECOMMENDED -- occurrence {i} of {n}")
+                if why:
+                    print(f"  why: {why}")
+            else:
+                print(f"--- {'alternative' if recommend else 'occurrence'} {i} of {n} ---")
+            print(_anchor_context(paras, p, k, anchor) + "\n")
+        if recommend and preview and body.strip():
+            print("Comment:\n" + "\n".join("    " + ln for ln in body.splitlines()))
+        if recommend:
+            print(f"\n[to post, confirm the choice: --occurrence {recommend}]")
+            sys.exit(0 if preview else EXIT_ANCHOR)
+        sys.exit(EXIT_ANCHOR)
+
+    if occurrence is None:
+        occurrence = 1
+    if not 1 <= occurrence <= n:
+        sys.exit(f"--occurrence {occurrence} is out of range: {n} match(es)")
+    p, k, start, end = hits[occurrence - 1]
+
+    if preview:
+        print(_anchor_context(paras, p, k, anchor))
+        print(f"\n[anchor: occurrence {occurrence} of {n}]")
+        if body.strip():
+            print("\nComment:\n" + "\n".join("    " + ln for ln in body.splitlines()))
+        return
+
+    r = batch_update(doc, [{"insertComment": {
+        "range": {"startIndex": start, "endIndex": end}, "content": body}}])
+    thread = (r.get("replies") or [{}])[0].get("insertComment", {}).get("commentThread", {})
+    state = r.get("commentUpdateState")
+    # plainTextQuote comes back HTML-escaped ("Builder &#183; heavy builder"), so
+    # compare after unescaping or a correct anchor reads as a mismatch.
+    quote = html.unescape(thread.get("plainTextQuote") or "")
+    if state != "ALL_SAVED" or quote != anchor or not thread.get("anchorId"):
+        print(f"NOT CONFIRMED: save state {state!r}, anchored on {quote!r}, "
+              f"anchor id {thread.get('anchorId')!r}. Check the document before trying again "
+              f"-- a retry can post the same comment twice.")
+        sys.exit(1)
+    print(f"posted ✓  anchored on {quote!r}  (anchor {thread['anchorId']}, "
+          f"comment {thread.get('commentId')})")
+
+
+# ---------- the approval card (draft comments shown for a person's go) ----------
+#
+# `comment` posts one comment. `comment-card` is what a person approves before any
+# are posted: every draft shown as the passage reads in the document, the anchored
+# words in brackets with a highlighter behind them, the comment underneath, a
+# one-click Skip and an Edit per comment, and one button that sends the go. The
+# output is an HTML fragment for the chat's visual widget, printed verbatim.
+#
+# Built after Davo tried the multiple-choice question box on 2026-11-08: it shows
+# plain text only, so nothing could be highlighted, and skipping took two clicks.
+
+CARD_CONTEXT = 230  # characters of the document shown either side of the anchor
+
+
+def _suggestion_kinds(docjson):
+    """Document index -> "del" or "ins" for every character inside a pending suggestion.
+
+    The card shows passages as they read in the editor with suggestions inline. Without
+    this, a pending deletion and its replacement printed as one settled sentence -- the
+    same trap `read` warns about -- and a person could approve a comment against text
+    that isn't current.
+    """
+    kinds = {}
+
+    def walk(content):
+        for el in content:
+            if "paragraph" in el:
+                for e in el["paragraph"].get("elements", []):
+                    tr, pos = e.get("textRun"), e.get("startIndex")
+                    if not tr or pos is None:
+                        continue
+                    kind = ("del" if tr.get("suggestedDeletionIds") else
+                            "ins" if tr.get("suggestedInsertionIds") else None)
+                    if kind:
+                        for q in range(pos, e.get("endIndex", pos)):
+                            kinds[q] = kind
+            elif "table" in el:
+                for row in el["table"].get("tableRows", []):
+                    for cell in row.get("tableCells", []):
+                        walk(cell.get("content", []))
+
+    walk(docjson.get("body", {}).get("content", []))
+    return kinds
+
+
+def _card_window(paras, p, k, anchor, kinds):
+    """The text before, of, and after an anchor as (character, suggestion kind) pairs:
+    about CARD_CONTEXT characters each side, cut at a word, runs of blank lines
+    collapsed. Kept as pairs so trimming can never misalign the suggestion marks."""
+    chars, starts = [], []
+    for txt, idx in paras:
+        starts.append(len(chars))
+        chars.extend((ch, kinds.get(i, "")) for ch, i in zip(txt, idx))
+    pos = starts[p] + k
+    lo = max(0, pos - CARD_CONTEXT)
+    hi = min(len(chars), pos + len(anchor) + CARD_CONTEXT)
+    before, mid, after = chars[lo:pos], chars[pos:pos + len(anchor)], chars[pos + len(anchor):hi]
+    if lo > 0:
+        cut = next((j for j, (ch, _) in enumerate(before) if ch == " "), None)
+        before = [("…", "")] + (before[cut + 1:] if cut is not None else before)
+    if hi < len(chars):
+        cut = next((j for j in range(len(after) - 1, 0, -1) if after[j][0] == " "), None)
+        after = (after[:cut] if cut else after) + [("…", "")]
+
+    def tidy(seq):
+        out = []
+        for ch, kd in seq:
+            if ch == "\n" and out and out[-1][0] == "\n":
+                continue
+            out.append((ch, kd))
+        return out
+
+    before, after = tidy(before), tidy(after)
+    while before and before[0][0] == "\n":
+        before.pop(0)
+    while after and after[-1][0] == "\n":
+        after.pop()
+    return before, mid, after
+
+
+def _marked(pairs):
+    """Escaped HTML for (character, kind) pairs, suggestions wrapped as Docs shows them."""
+    out, i = [], 0
+    while i < len(pairs):
+        kind, j = pairs[i][1], i
+        while j < len(pairs) and pairs[j][1] == kind:
+            j += 1
+        seg = html.escape("".join(ch for ch, _ in pairs[i:j]))
+        out.append(f"<{kind}>{seg}</{kind}>" if kind else seg)
+        i = j
+    return "".join(out)
+
+
+_CARD_STYLE = """<style>
+.gc{background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:1rem 1.25rem;margin:0 0 12px}
+.gc [hidden]{display:none}
+.gc-ctx{font-size:15px;line-height:1.7;color:var(--text-secondary);white-space:pre-wrap;margin:0}
+.gc-ctx mark{background:var(--bg-highlight,var(--bg-warning));color:var(--text-primary);font-weight:500;padding:1px 3px;border-radius:3px}
+.gc-cm{display:flex;gap:10px;margin:12px 0 0;padding:10px 12px;background:var(--surface-1);border-radius:var(--radius);font-size:15px;line-height:1.6;color:var(--text-primary)}
+.gc-cm i{font-size:18px;color:var(--text-secondary);margin-top:2px}
+.gc-txt{white-space:pre-wrap}
+.gc-ta{flex:1;min-height:6em;font:inherit;line-height:1.6;resize:vertical}
+.gc-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px}
+.gc-n{font-size:13px;color:var(--text-muted)}
+.gc-tag{display:none;margin-left:8px;font-size:12px;padding:2px 8px;border-radius:var(--radius);background:var(--bg-accent);color:var(--text-accent)}
+.edited .gc-tag{display:inline}
+.gc-err{font-size:13px;color:var(--text-danger);margin:6px 0 0}
+.gc-err:empty{display:none}
+.off{background:var(--surface-1)}
+.off .gc-ctx,.off .gc-cm{color:var(--text-muted)}
+.off .gc-ctx mark{background:transparent;color:var(--text-muted)}
+.off .gc-txt{text-decoration:line-through}
+.ok{box-shadow:inset 3px 0 0 var(--text-success)}
+.gc button[aria-pressed="true"]{font-weight:500}
+.gc-ctx del{color:var(--text-danger)}
+.gc-ctx ins{color:var(--text-success);text-decoration:underline}
+.gc-warn{font-size:14px;line-height:1.5;color:var(--text-warning);background:var(--bg-warning);border-radius:var(--radius);padding:8px 12px;margin:0 0 12px}
+</style>"""
+
+_CARD_JS = r"""const st={},edits={},all=Object.keys(D.items).map(Number),go=document.getElementById('gc-go'),goErr=document.getElementById('gc-goerr'),tally=document.getElementById('gc-tally');
+all.forEach(n=>st[n]='');
+const card=n=>document.getElementById('gc'+n),btn=(n,k)=>card(n).querySelector('[data-'+k+']'),open=n=>!card(n).querySelector('.gc-ta').hidden;
+function count(){const a=all.filter(n=>st[n]==='ok'),s=all.filter(n=>st[n]==='off'),u=all.filter(n=>!st[n]);
+tally.textContent=a.length+' accepted · '+s.length+' skipped'+(u.length?' · '+u.length+' to decide':'');
+go.textContent=a.length?'Post '+a.length+' comment'+(a.length>1?'s':'')+' ↗':u.length?'Post accepted comments ↗':'Post nothing ↗';goErr.textContent=''}
+function set(n,v){st[n]=v;const c=card(n),A=btn(n,'accept'),S=btn(n,'skip');c.classList.toggle('ok',v==='ok');c.classList.toggle('off',v==='off');
+A.textContent=v==='ok'?'Accepted ✓':'Accept';A.setAttribute('aria-pressed',v==='ok');S.textContent=v==='off'?'Undo skip':'Skip';S.setAttribute('aria-pressed',v==='off');count()}
+function lock(n,on){btn(n,'accept').disabled=on;btn(n,'skip').disabled=on}
+document.querySelectorAll('[data-accept]').forEach(b=>b.addEventListener('click',()=>{const n=+b.dataset.accept;if(!open(n))set(n,st[n]==='ok'?'':'ok')}));
+document.querySelectorAll('[data-skip]').forEach(b=>b.addEventListener('click',()=>{const n=+b.dataset.skip;if(!open(n))set(n,st[n]==='off'?'':'off')}));
+document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>{const n=+b.dataset.edit,c=card(n),sp=c.querySelector('.gc-txt'),ta=c.querySelector('.gc-ta'),er=c.querySelector('.gc-err');
+if(ta.hidden){ta.value=edits[n]??D.items[n];sp.hidden=true;ta.hidden=false;ta.style.height=Math.max(ta.scrollHeight,96)+'px';ta.focus();b.textContent='Done';lock(n,true);return}
+const v=ta.value.trim();
+if(!v){er.textContent='A comment can’t be empty.';return}
+if(new TextEncoder().encode(v).length>2048){er.textContent='Too long for Google Docs: keep it under 2,048 bytes.';return}
+er.textContent='';if(v!==D.items[n].trim()){edits[n]=v;c.classList.add('edited')}else{delete edits[n];c.classList.remove('edited')}
+sp.textContent=v;ta.hidden=true;sp.hidden=false;b.textContent='Edit';lock(n,false);set(n,'ok')}));
+document.querySelectorAll('.gc-ta').forEach(t=>t.addEventListener('input',()=>{t.closest('.gc').querySelector('.gc-err').textContent=''}));
+go.addEventListener('click',()=>{if(all.some(open)){goErr.textContent='Finish editing first: press Done on the open comment.';return}
+const u=all.filter(n=>!st[n]);if(u.length){goErr.textContent='Accept or skip every comment first. Still to decide: '+u.join(', ')+'.';return}
+const k=all.filter(n=>st[n]==='ok');let m;
+if(!k.length)m='Post none of the comments on “'+D.title+'”.';
+else{m='Go: post comments '+k.join(', ')+' on “'+D.title+'”.';k.forEach(n=>{if(edits[n])m+='\n\nComment '+n+', edited:\n'+edits[n]})}
+go.disabled=true;go.textContent='Sent ✓';document.querySelectorAll('.gc button').forEach(x=>x.disabled=true);sendPrompt(m)});
+count();"""
+
+
+def _card_html(doc, title, cards, total, has_suggestions=False):
+    e = html.escape
+    out = ['<h2 class="sr-only">Draft comments for ' + e(title) + ', each shown in its surrounding '
+           'text with the anchored words highlighted, with accept, edit and skip for each and one '
+           'button to post the accepted ones.</h2>', _CARD_STYLE, '<div style="padding:0.5rem 0 0">']
+    if has_suggestions:
+        out.append('<p class="gc-warn">This document has unaccepted suggested edits. The passages '
+                   'show them as Docs does: <del>struck through</del> is a pending deletion, '
+                   '<ins>underlined</ins> a pending insertion. Neither is settled text yet.</p>')
+    for c in cards:
+        where = f"{c['n']} of {total}"
+        if c["total"] > 1:
+            where += f" · match {c['occurrence']} of {c['total']} for this phrase"
+        out.append(
+            f'<div class="gc" id="gc{c["n"]}">'
+            f'<p class="gc-ctx">{_marked(c["before"])}<mark>[{_marked(c["mid"])}]</mark>{_marked(c["after"])}</p>'
+            f'<div class="gc-cm"><i class="ti ti-message" aria-hidden="true"></i>'
+            f'<span class="gc-txt">{e(c["text"])}</span>'
+            f'<textarea class="gc-ta" hidden aria-label="Edit comment {c["n"]}"></textarea></div>'
+            f'<p class="gc-err" role="alert"></p>'
+            f'<div class="gc-row"><span class="gc-n">{e(where)}<span class="gc-tag">Edited</span></span>'
+            f'<span><button data-accept="{c["n"]}" aria-pressed="false">Accept</button> '
+            f'<button data-edit="{c["n"]}">Edit</button> '
+            f'<button data-skip="{c["n"]}" aria-pressed="false">Skip</button></span></div></div>')
+    out.append(f'<p class="gc-err" id="gc-goerr" role="alert"></p>'
+               f'<div class="gc-row" style="margin:16px 0 0.5rem">'
+               f'<a href="https://docs.google.com/document/d/{e(doc)}/edit" style="font-size:14px">'
+               f'Open the document <i class="ti ti-external-link" aria-hidden="true"></i></a>'
+               f'<span><span class="gc-n" id="gc-tally"></span> '
+               f'<button id="gc-go" style="font-weight:500">Post accepted comments ↗</button></span>'
+               f'</div></div>')
+    # json.dumps leaves "</script>" intact inside a string, which would end the
+    # script block early; escaping the slash keeps any comment text inert.
+    data = json.dumps({"title": title, "items": {c["n"]: c["text"] for c in cards}},
+                      ensure_ascii=False).replace("</", "<\\/")
+    out.append("<script>(()=>{const D=" + data + ";" + _CARD_JS + "})();</script>")
+    return "\n".join(out)
+
+
+def do_comment_card(doc, items):
+    """Print the approval card for a batch of draft comments.
+
+    Every anchor is resolved before anything is drawn. One that is empty,
+    multi-line, missing, or ambiguous without an "occurrence" stops the whole
+    card (exit 3): a card must never ask a person to approve a guess. The Go
+    button sends a message listing the comments to post, plus the new wording of
+    any that were edited. That message is the approval; post each listed comment
+    with `comment`, one call each.
+    """
+    if not isinstance(items, list) or not items:
+        sys.exit('comment-card needs --file: a JSON list of {"anchor": ..., "text": ...}')
+    d = get_doc(doc)
+    paras = _paragraph_map(d)
+    kinds = _suggestion_kinds(d)
+    cards, problems = [], []
+    for n, it in enumerate(items, 1):
+        if not isinstance(it, dict):
+            problems.append(f'{n}: not an object -- each item needs "anchor" and "text"')
+            continue
+        anchor, text, occ = it.get("anchor"), it.get("text"), it.get("occurrence")
+        if not isinstance(anchor, str) or not isinstance(text, str):
+            problems.append(f'{n}: "anchor" and "text" must both be text')
+        elif not anchor.strip():
+            problems.append(f"{n}: ANCHOR_EMPTY")
+        elif "\n" in anchor:
+            problems.append(f"{n}: ANCHOR_MULTILINE {anchor!r}")
+        elif not text.strip():
+            problems.append(f"{n}: no comment text")
+        elif len(text.encode("utf-8")) > COMMENT_MAX:
+            problems.append(f"{n}: comment is over Google's {COMMENT_MAX}-byte limit")
+        else:
+            hits = find_anchor(paras, anchor)
+            if not hits:
+                problems.append(f"{n}: TEXT_NOT_FOUND {anchor!r}")
+            elif len(hits) > 1 and occ is None:
+                problems.append(f"{n}: AMBIGUOUS {anchor!r} appears {len(hits)} times -- settle it "
+                                f"with `comment --recommend`, then give the item an \"occurrence\"")
+            elif occ is not None and (isinstance(occ, bool) or not isinstance(occ, int)
+                                      or not 1 <= occ <= len(hits)):
+                problems.append(f"{n}: occurrence {occ!r} is out of range ({len(hits)} matches)")
+            else:
+                occ = 1 if occ is None else occ
+                p, k, _, _ = hits[occ - 1]
+                before, mid, after = _card_window(paras, p, k, anchor, kinds)
+                cards.append({"n": n, "before": before, "mid": mid, "after": after,
+                              "text": text, "occurrence": occ, "total": len(hits)})
+    if problems:
+        print("Card not built. Fix these first:")
+        for pr in problems:
+            print("  " + pr)
+        sys.exit(EXIT_ANCHOR)
+    print(_card_html(doc, d.get("title", "this document"), cards, len(items), bool(kinds)))
 
 
 def do_create(title, text):
@@ -582,8 +1043,9 @@ def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="Read, edit, and create Google Docs via gws.")
-    ap.add_argument("action", choices=["read", "comments", "create", "replace", "insert-top",
-                                       "insert-after", "append", "append-rich", "remove", "batch"])
+    ap.add_argument("action", choices=["read", "comments", "comment", "comment-card", "create", "replace",
+                                       "insert-top", "insert-after", "append", "append-rich",
+                                       "remove", "batch"])
     ap.add_argument("--doc", help="Google Doc ID (required for all actions except create)")
     ap.add_argument("--find")
     ap.add_argument("--replace")
@@ -597,32 +1059,39 @@ def main():
     ap.add_argument("--anchor", action="append", help="repeatable; line/section anchor substring")
     ap.add_argument("--text")
     ap.add_argument("--text-file", dest="text_file")
-    ap.add_argument("--file", help="batch edits JSON")
+    ap.add_argument("--file", help="batch edits JSON, or comment-card draft comments JSON")
     ap.add_argument("--md", help="append-rich: markdown-subset file to append at the end")
     ap.add_argument("--verify", action="append", default=[],
                     help="append-rich: phrase that must be present after the append (repeatable)")
     ap.add_argument("--level", type=int, choices=[1, 2, 3, 4],
                     help="heading level for the inserted --title "
                          "(default: 2 for insert-top, 3 for insert-after)")
+    ap.add_argument("--occurrence", type=int,
+                    help="comment: which match of --anchor to attach to (1-based), when it repeats")
+    ap.add_argument("--recommend", type=int,
+                    help="comment: the match the model judges right; shown first and flagged, never posted")
+    ap.add_argument("--why", help="comment: one line explaining --recommend")
+    ap.add_argument("--preview", action="store_true",
+                    help="comment: show where it would anchor, with surrounding text; post nothing")
     a = ap.parse_args()
 
+    if a.anchor and any(not x.strip() for x in a.anchor):
+        sys.exit("--anchor can't be empty or blank: it would match every line of the document")
     if a.action != "create" and not a.doc:
         sys.exit(a.action + " needs --doc")
 
     if a.action == "read":
         d = get_doc(a.doc, a.suggestions)
         if a.suggestions == "inline":
-            ins, dele = count_suggestions(d)
-            if ins or dele:
+            w = pending_warning(d)
+            if w:
                 # First line of stdout, deliberately -- not stderr. The failure
                 # this prevents is a reader (human or agent) treating a redline
                 # as settled text, and a warning that a pipe or a log can drop
                 # does not prevent it. A doc with no suggestions prints exactly
-                # what it printed before, byte for byte.
-                print(f"\u26a0\ufe0f  PENDING SUGGESTIONS: {ins} inserted and {dele} deleted "
-                      f"text run(s) below are UNACCEPTED edits, shown inline. What follows "
-                      f"is a redline, not the live document. Re-run with "
-                      f"--suggestions accepted (or rejected) to see one resolved version.")
+                # what it printed before, byte for byte. The editing actions
+                # print their own version first for the same reason.
+                print(w)
         else:
             print(f"\u2139\ufe0f  Showing this document with suggestions {a.suggestions.upper()} "
                   f"-- a preview, not what the document says right now.")
@@ -630,6 +1099,17 @@ def main():
 
     elif a.action == "comments":
         print(json.dumps(do_comments(a.doc), indent=2, ensure_ascii=False))
+
+    elif a.action == "comment-card":
+        if not a.file:
+            sys.exit('comment-card needs --file: a JSON list of {"anchor": ..., "text": ...}')
+        do_comment_card(a.doc, json.load(open(a.file, encoding="utf-8-sig")))  # -sig: tolerate a PS 5.1 BOM
+
+    elif a.action == "comment":
+        if not a.anchor or len(a.anchor) != 1:
+            sys.exit("comment needs exactly one --anchor: the exact text to attach it to")
+        do_comment(a.doc, a.anchor[0], read_text(a), occurrence=a.occurrence,
+                   recommend=a.recommend, why=a.why, preview=a.preview)
 
     elif a.action == "create":
         if not a.title:
@@ -640,8 +1120,9 @@ def main():
     elif a.action == "replace":
         if a.find is None or a.replace is None:
             sys.exit("replace needs --find and --replace")
+        d = warn_before_edit(a.doc)
         if a.regex:
-            n = do_replace_regex(a.doc, a.find, a.replace)
+            n = do_replace_regex(a.doc, a.find, a.replace, d=d)
             print("ok, matches=%d" % n)
         else:
             r = do_replace_literal(a.doc, a.find, a.replace)
@@ -656,8 +1137,9 @@ def main():
     elif a.action == "insert-after":
         if not a.anchor:
             sys.exit("insert-after needs --anchor")
-        r = do_insert_after(a.doc, a.anchor[0], a.title or "", read_text(a),
-                            level=a.level or 3)
+        text = read_text(a)
+        r = do_insert_after(a.doc, a.anchor[0], a.title or "", text,
+                            level=a.level or 3, d=warn_before_edit(a.doc))
         print("ok" if r.get("ok") else "FAILED: " + str(r.get("error", r)))
 
     elif a.action == "append":
@@ -677,16 +1159,19 @@ def main():
     elif a.action == "remove":
         if not a.anchor:
             sys.exit("remove needs at least one --anchor")
-        print("ok, removed=%d" % do_remove(a.doc, a.anchor))
+        print("ok, removed=%d" % do_remove(a.doc, a.anchor, d=warn_before_edit(a.doc)))
 
     elif a.action == "batch":
         if not a.file:
             sys.exit("batch needs --file")
         cfg = json.load(open(a.file, encoding="utf-8-sig"))  # -sig: tolerate a PS 5.1 BOM
         use_regex = cfg.get("regex", False)
-        lines = full_text(get_doc(a.doc)).split("\n")
+        lines = full_text(warn_before_edit(a.doc)).split("\n")
         results = []
         for e in cfg.get("edits", []):
+            if not isinstance(e, dict):
+                results.append(("?", "not an object (skipped)"))
+                continue
             if "anchor" in e:
                 m = [ln for ln in lines if e["anchor"] in ln]
                 if len(m) != 1:
@@ -713,7 +1198,7 @@ def main():
         for lbl, st in results:
             print("  %s: %s" % (lbl, st))
         miss = [e.get("label", "?") for e in cfg.get("edits", [])
-                if e.get("marker") and e["marker"] not in new]
+                if isinstance(e, dict) and e.get("marker") and e["marker"] not in new]
         gone = [a2 for a2 in cfg.get("remove", []) if a2 in new]
         print("== verify ==")
         print("  markers: " + ("all present ✓" if not miss else "MISSING: " + ", ".join(miss)))

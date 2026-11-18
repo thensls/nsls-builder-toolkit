@@ -1,12 +1,28 @@
 ---
 name: write-like-me
 description: >-
+  Claude Code only.
   Use when someone wants Claude to write more like them, keeps changing Claude's
   drafts the same way, or wants to build or update a personal style guide for
   Slack messages, emails or Google Docs. Triggers: "write like me", "learn my
   style", "learn my writing style", "make me a style guide", "writing level up",
   "I keep editing your drafts", "update my <name> style".
 ---
+
+<!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
+> **Claude Code only.** This skill needs the person's own computer, so check
+> where you are first, going by what your own instructions say you are running in.
+> In **Claude Code** (a terminal, or the Code tab in the Claude app), skip this
+> note. In **an ordinary Claude chat or a Cowork task** (its files live in a
+> sandbox such as `/sessions/...`, not on their computer), stop and follow
+> nothing else in this skill. If the person asked for this skill, or what they
+> want can't be done here without it, reply with only this sentence:
+> "This skill only works in Claude Code on your computer, so switch to Claude Code (the Code tab in the Claude app) and run it there."
+> Otherwise don't mention this skill; help the way you would without it.
+> Unsure which? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell:
+> `$env:CLAUDE_CODE_ENTRYPOINT`): `local-agent` is Cowork, and any other
+> answer, blank included, is Claude Code. No way to run a command means chat.
+<!-- claude-code-only:end -->
 
 # Write like me
 
@@ -31,7 +47,9 @@ on Windows), use `python` for all of them. Run them from this skill's folder.
 - **Purpose.** If they named one ("student responses", "reports"), use it. Otherwise
   propose one in Step 7 from what was found.
 - **Existing guides.** Look for `my-*-style` folders in `~/.claude/skills/`. "Update
-  my <name> style" means update mode: go to Step 9.
+  my <name> style" means update mode: go to Step 9. If they already have a hand-made
+  style skill for the same writing (a `slack-message` skill, say), offer in Step 7 to
+  merge into it instead of adding a second guide that Claude would also load.
 - **Window.** The last 30 days, ending today. If Step 4 finds fewer than 5 usable
   items, widen to 90 days once.
 
@@ -141,9 +159,33 @@ break.
   the style. If an example can't be made safe, drop it.
 - **Name it** from the purpose and the destination: "Slack asks" becomes the folder
   `my-slack-asks-style`.
-- **Show the exact text that will be saved,** in the Step 8 format, and ask: *"Keep,
-  change or drop any rule? And is the name right?"* Apply their edits. Nothing is saved
-  until they say yes.
+- **Let them tick the rules to keep.** Use the AskUserQuestion tool, with
+  `multiSelect: true` and up to 4 questions in one call:
+  - One question per group of up to 4 rules (Sound, then Shape), worded *"Tick the
+    rules to keep. You can reword any of them in the next step."*, plus one question
+    for the Maybe list, worded *"Tick any you'd like added as rules."*
+  - Each option's `label` is the rule in 5 words or fewer ("No exclamation marks").
+    Its `description` is the full rule, then on a new line, in brackets, its
+    evidence and short before → after: `Drop exclamation marks.\n(4 of 7 items ·
+    "Hi [name]!" → "Hi [name].")`
+  - A `header` of 12 characters at most: "Sound", "Shape 1/2", "Maybe".
+  - More than 12 options in total: ask in a second call.
+  - Unticked rules are dropped. Don't rely on the tool's own "Other" box for
+    rewording, because it can't say which rule an edit belongs to.
+  - Without the tool, list the rules with numbers and ask them to reply with what to
+    drop or reword.
+- **Show the exact text that will be saved,** in the Step 8 format, built from their
+  ticks, with the rules numbered. Then ask one more AskUserQuestion, *"Save this as
+  `my-<slug>-style`?"*, with three options:
+  - "Save it".
+  - "Reword a rule first". When they pick this, ask them to type in the chat the
+    number and the new wording ("3: open with the ask"), apply it, show the text
+    again, and ask again.
+  - "Not yet".
+
+  If Step 1 found a hand-made guide for the same writing, put "Merge into <that
+  skill>" first: add only the rules it doesn't already have, plus the Measurements
+  table. Nothing is saved until they pick "Save it" or "Merge".
 
 ## Step 8: Save the guide
 
@@ -163,10 +205,12 @@ Check every <destination> draft against these rules before showing it. Facts com
 from the request, never from this guide.
 
 ## Sound
-- <rule> (<n> of <N> items). <before> → <after>
+1. <rule>
+   (<n> of <N> items · <before> → <after>)
 
 ## Shape
-- <rule> (<n> of <N> items). <before> → <after>
+2. <rule>
+   (<n> of <N> items · <before> → <after>)
 
 ## Examples
 <2 or 3 redacted before → after pairs>
@@ -181,11 +225,12 @@ from the request, never from this guide.
 ```
 
 If a folder with that name exists and isn't this guide, choose another name. If it is
-this guide, show the changes before saving. Never touch any other skill.
+this guide, show the changes before saving. Never touch any other skill, except a
+hand-made guide they chose to merge into.
 
 Then run `python3 scripts/pairs.py clean` to delete the working files. Tell them where
 the guide lives, that Claude uses it automatically from their next new session, and
-that "update my <name> style" keeps it learning.
+that "update my <name> style" keeps it learning. End with the time-saved line.
 
 ## Step 9: Update mode
 
@@ -194,7 +239,31 @@ Read the guide, and set the window to start at its last Measurements date. Run S
 contradict), and maybes to promote. Redact, show the changes, apply them on a yes, add a
 Measurements row, and run `clean`. Say the new median against the first row in one line:
 that is the evidence the guide is working. When new evidence contradicts an approved
-rule, the newer evidence wins, but only after the person says so.
+rule, the newer evidence wins, but only after the person says so. End with the
+time-saved line.
+
+## The time-saved line
+
+The usage collector reads one line from a finished run. Put it last in the reply,
+outside any code block, worded exactly as shown. Print it only after a guide was saved,
+merged or updated: there's no line after "Not yet" or a run that stopped early.
+
+- **A new guide** (saved, or merged into a hand-made one):
+
+  `Estimated time saved: about <N> min (logged)`
+
+  N is your low-end estimate of building it by hand: 2 minutes for each item compared,
+  plus 2 minutes for each rule saved, and at least 10. Seven items and eight rules come
+  to about 30.
+- **An update:**
+
+  `Estimated time saved: about <N> min a week (logged)`
+
+  N is the editing time the guide now saves each week. Take the Claude-drafted items per
+  week in the update window, times 1.5 minutes, times how far the style change fell:
+  (first median − new median) ÷ first median. If it didn't fall, N is 0.
+- It's an estimate, never a measurement. The collector keeps only the number, so keep
+  the wording exact.
 
 ## Guardrails
 

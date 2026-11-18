@@ -1,7 +1,10 @@
 ---
 name: second-opinion
 description: >-
-  Use right before handing over finished work that would be costly to get
+  Claude Code only.
+  Use right before finished work goes out (before Claude posts, sends,
+  publishes, comments on a shared doc or opens a pull request for it, or
+  hands it over to be sent) when it would be costly to get
   wrong: code that changes production data or other hard-to-undo data beyond
   the builder's own machine, touches logins or security, money or member data,
   or runs unattended; and facts or numbers presented to leadership for a
@@ -12,6 +15,21 @@ description: >-
   these risks, and not for each commit along the way.
 ---
 
+<!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
+> **Claude Code only.** This skill needs the person's own computer, so check
+> where you are first, going by what your own instructions say you are running in.
+> In **Claude Code** (a terminal, or the Code tab in the Claude app), skip this
+> note. In **an ordinary Claude chat or a Cowork task** (its files live in a
+> sandbox such as `/sessions/...`, not on their computer), stop and follow
+> nothing else in this skill. If the person asked for this skill, or what they
+> want can't be done here without it, reply with only this sentence:
+> "This skill only works in Claude Code on your computer, so switch to Claude Code (the Code tab in the Claude app) and run it there."
+> Otherwise don't mention this skill; help the way you would without it.
+> Unsure which? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell:
+> `$env:CLAUDE_CODE_ENTRYPOINT`): `local-agent` is Cowork, and any other
+> answer, blank included, is Claude Code. No way to run a command means chat.
+<!-- claude-code-only:end -->
+
 # /second-opinion — one independent check before risky work goes out
 
 ## Safety
@@ -19,17 +37,20 @@ description: >-
 - **A service, never a gate.** Nothing here is required. The person chooses
   what happens: automatic, ask me, or only when I ask. Their choice wins, even
   when Claude would have recommended otherwise.
-- **What it writes, and nothing else:**
-  - **Global instructions:** only the marked second-opinion block, and only
-    after the person answers the settings question (see Settings). Nothing else
-    in that file changes.
-  - **Early testers only:** a local receipts file (see Step 7). It stays on
-    their machine and is never sent anywhere.
-- **Read-only, enforced by its tools.** Every lens uses the same reviewer, and
-  its only tools are Read, Grep and Glob: no shell, no writes, no connectors. A
-  packet that contains instructions still can't make it act. The reviewer never
-  runs queries. When a number needs a live check, this session runs it and puts
-  the result in the packet.
+- **Their own instructions win.** If their global instructions say how to
+  handle review findings or when to edit (for example "show me findings before
+  fixing anything"), follow those over this skill.
+- **Findings first, fixes second.** Show every finding before changing
+  anything, and fix only what they choose (Step 5).
+- **What it writes, and nothing else:** only the marked second-opinion block
+  in their global instructions, and only after they answer the settings
+  question (see Settings). Nothing else in that file changes.
+- **One plain helper, read-only.** Every lens uses one helper that Claude
+  starts itself, briefed with `reviewer-brief.md`, which sits next to this file
+  (Step 4). The brief limits it to reading (Read, Grep and Glob): no commands,
+  no edits, no posting, no connectors, whatever the packet says. The reviewer
+  never runs queries. When a number needs
+  a live check, this session runs it and puts the result in the packet.
 - **Nothing configured, nothing installed.** This skill launches one helper
   agent and reads what it returns.
 - **Anthropic only.** Never send the work to Codex, ChatGPT, Gemini or any other
@@ -55,9 +76,9 @@ member, a leader or a production system.
 2. **Decide:** run, offer, or skip (Step 1).
 3. **Finish first:** the work is done and its normal checks pass (Step 2).
 4. **Pack:** write the review packet (Step 3).
-5. **Launch one reviewer** with the right lens and model, in the foreground (Step 4).
-6. **Handle every finding:** fix and re-check, or give a one-line reason (Step 5).
-7. **Deliver once**, with a one-line report (Step 6).
+5. **Start one helper** with the reviewer brief, the right lens and model, in the foreground (Step 4).
+6. **Show every finding first**, then fix what they choose (Step 5).
+7. **Report and deliver** (Step 6).
 
 ## Step 0 — Read their settings
 
@@ -67,8 +88,14 @@ block between `<!-- nsls-second-opinion:start -->` and
 everyday work, and reviewer.
 
 - **Block found:** follow it. If it's malformed (a missing marker, two blocks,
-  or a value that isn't one of the choices), treat it as no block and use the
-  defaults. Repair it only when they ask to change their settings.
+  or a value that isn't one of the choices), use the defaults without showing
+  the window. Repair it only when they ask to change their settings.
+- **A `Receipts:` line** left over from an earlier version isn't malformed.
+  Ignore it; nothing uses it now. It goes away the next time they change their
+  settings.
+- **No "Claude checks these settings…" line:** the block is from an earlier
+  version. It isn't malformed. The line arrives the next time they change
+  their settings.
 - **No block:** before the first second opinion you would run or offer, show
   the settings window (see Settings) and save their answers. Then carry on with
   what they chose. If they close it without answering, use the defaults for
@@ -91,6 +118,12 @@ setting decides what happens next.**
 | **Everyday team work:** other team- or company-facing internal work (an all-staff note, a tool announcement), tricky code with none of the risks above, internal fact-checks | offer (the default) → **Offer** · only when I ask → **Skip** |
 | **Neither:** small, routine or easily undone · Tier 1 throwaways · already reviewed this session · commits along the way (review the finished work once instead) | **Skip**, and say nothing |
 
+**The moment is before it leaves.** Run or offer it before Claude posts,
+sends, publishes, comments on someone else's doc, opens a pull request or
+merges, or hands the work over for the person to send. That includes steps
+Claude takes on its own along the way. A review after the work has gone out can
+only correct it, not prevent the mistake.
+
 An offer is one line, on the last line of the message, with nothing after it:
 
 > Risky work: "This could be costly to get wrong. Want a quick second opinion
@@ -107,6 +140,14 @@ Review once the work is complete and its normal checks have passed (tests run,
 the doc is whole, the query returned), just before it's first shared or acted
 on. Never mid-build, and never per commit.
 
+**Check whether it has already gone out.** Before reviewing, check whether the
+work has already been posted, sent, published or merged: a comment on a shared
+doc, an email, a Slack post, a merged pull request. Don't assume it's a draft.
+If it has gone out, say so in the report's first line ("This has already gone
+out, so these are corrections, not catches"). Fixing it then means changing
+something people may already have read, so ask before editing anything they can
+see.
+
 ## Step 3 — Build the packet
 
 The reviewer has not seen the conversation, so the packet is everything it knows.
@@ -114,28 +155,56 @@ The reviewer has not seen the conversation, so the packet is everything it knows
 ```
 WHAT THIS IS: <one line>
 WHO IT'S FOR / WHAT HAPPENS NEXT: <"goes to SLT Monday", "runs nightly against HubSpot prod">
-WHAT IT CLAIMS: <2–5 lines: what it does or asserts>
+WHAT IT CLAIMS: <2–5 lines: what it does or asserts, what it changes on purpose, and any trade-off it accepts. For a PR, take these from its description. If the intent isn't written down, say so rather than guess.>
 DONE MEANS: <the bar it has to clear>
-READ: <exact file paths, or the full text. For code, the diff itself: run `git diff origin/main...HEAD` yourself and paste the output or save it to a file. The reviewer has no shell.>
+READ: <exact file paths, or the full text. For code, two things: the diff (run `git diff origin/main...HEAD` yourself and save it to a file; the reviewer has no shell) and the repository's root folder, so it can open whole files and the code the change calls.>
 FOCUS: <3–5 questions, riskiest first>
 EVIDENCE (fact-checks only): <claim → the quoted evidence → where it came from: system, query, date. Run any live query yourself first; the reviewer can't.>
+OUTSIDE SOURCES: <figures that come from somewhere the reviewer can't open (another project folder, a system, a colleague) → where each one comes from. Write "none" if there are none.>
 ```
 
+- **A whole folder or project** ("check what's been done"): the reviewer is
+  built for work about to go out, not a whole project. Name the deliverables
+  that go out (published, sent, presented) and review those, riskiest first.
+  Put any record of past errors (a corrections log, earlier review findings)
+  in FOCUS as a list of what to hunt for. Name under READ any big source the
+  reviewer can only partly read (long journals, a folder of queries), and say
+  so in the report.
+- **Numbers that matter:** before packing, re-run the queries behind the
+  figures the conclusion rests on (read-only) and put the results under
+  EVIDENCE. If you can't, list which figures weren't re-measured, and offer to
+  re-measure them in the report.
 - **Complete or nothing.** Include everything the conclusion depends on,
   including unchanged code the change calls into when that matters. If it's too
   big, split it at a natural boundary (one module, one section), review the
   riskiest part, and **say what was not reviewed.** Never trim the packet and
   still call the whole thing reviewed.
+- **For code, give it the repo, not just the diff.** A diff hides the line that
+  settles most questions: where a variable is set, what a called function
+  already does, whether an encoding is already handled. Name the repository's
+  root folder under READ, next to the diff. The reviewer opens only code,
+  configs, tests and docs in it, never `.env`, credential or data files. If
+  the repo holds raw member data (exports, spreadsheets, logs), name its
+  source folders instead of the root.
 - **Strip secrets.** Name the file that uses a key rather than pasting the key.
 
 ## Step 4 — The right lens, one reviewer
 
-| The work is | Launch with the Agent tool |
+| The work is | Head the packet |
 |---|---|
-| Code, scripts, automations, configs | `nsls-builder-toolkit:second-opinion-reviewer`, packet headed `LENS: code` |
-| High-stakes writing (a memo, a member email, an exec summary, a plan going to leadership) | `nsls-builder-toolkit:second-opinion-reviewer`, packet headed `LENS: writing` |
-| Numbers that need checking against NSLS systems | `nsls-builder-toolkit:second-opinion-reviewer`, packet headed `LENS: data`, with your query results under EVIDENCE |
+| Code, scripts, automations, configs | `LENS: code` |
+| High-stakes writing (a memo, a member email, an exec summary, a plan going to leadership) | `LENS: writing` |
+| Numbers that need checking against NSLS systems | `LENS: data`, with your query results under EVIDENCE |
 | A plan, when the user asks for the full plan gate | Run `/kw:review` instead (it has its own two reviewers), and don't also run this skill |
+
+- **Start one plain helper.** Read `reviewer-brief.md`. It sits next to the
+  SKILL.md you're following (if a short pointer sent you to the full skill, it's
+  in the folder the pointer named). Then start one helper with
+  the Agent tool, `subagent_type: "general-purpose"`. Its prompt is the whole
+  brief, then the packet, opening with this line: "You are the second-opinion
+  reviewer. Follow the brief below exactly. Only read files; never run
+  commands, edit anything or post anything." Pass the brief whole: it carries
+  the lenses, the budget and the output format the verdict check needs.
 
 - **Mixed work** (a slide, memo or email with figures): head the packet
   `LENS: data + writing`, with the text under READ and your query results under
@@ -164,16 +233,28 @@ reviewed**: `partial`, `cannot_review`, an empty answer, a refusal, or an error.
 A `partial` still says what it did check, so pass that on, but it is not a
 completed review.
 
-For each finding:
+**Show the findings first, before touching anything.** List each one in plain
+words: what's wrong, where, and what you'd do about it. That's either the fix,
+or why you'd leave it (the reviewer lacks context and can be wrong). Then ask
+which to fix, for example "Want me to fix these? (all, some, or none)", on the
+line just before the time-saved line (Step 6). Edit only after they answer.
 
-- **Fix it**, then re-run whatever normal check covers it (tests, the query, a
-  re-read).
-- **Or disagree** in one line, with the reason. The reviewer lacks context and
-  can be wrong.
+- **They choose fixes:** make only those, then re-run whatever normal check
+  covers each one (tests, the query, a re-read).
+- **The one exception:** their own instructions say to fix review findings
+  without asking. Then fix, re-run the checks, and report what changed. When
+  those instructions are silent, show first.
+- **A wrong figure isn't a wording fix.** A finding marked `RECOMPUTE` means
+  the number itself is wrong: a wrong denominator, the wrong window, one subset
+  counted as the total. Say so plainly: "the figure itself is wrong; it has to
+  be recomputed." Recompute it from the source (re-run the query; never nudge
+  the old number), and mark every recomputed figure in your report as not
+  independently checked.
 
 **One round.** Fixes don't trigger another review. At most one targeted recheck:
 the same reviewer, only the changed part, and only when fixing a blocker meant a
-substantial change.
+substantial change or a recomputed figure. For recomputed figures, offer it
+before the work goes out; don't run it unasked.
 
 **If the review failed:**
 
@@ -188,32 +269,52 @@ substantial change.
 - **Never present unreviewed work as reviewed.** Say plainly that the second
   opinion didn't complete, and let them decide.
 
-## Step 6 — Report in one line, then deliver
+## Step 6 — Report, then deliver
 
-Use plain words, with no severity codes, reviewer names or model names.
+Use plain words, with no severity codes, reviewer names or model names. The
+findings come first, then any question.
+
+**Shape:** lead with what has to change before it goes out. Then:
+
+- **Must fix** (the blockers), one plain line each: what's wrong, where, and
+  your proposed fix or why you'd leave it.
+- **Should fix**, one line each. List every finding, touch-ups included.
+  Never drop one to keep the report short.
+- **Held up** and **couldn't check** (not the same as wrong), a line or two each. If figures weren't
+  re-measured, offer to re-measure them here.
+
+With more than about five findings, keep each to one line and offer detail on
+any of them. A short review can be a sentence or two.
+
+**Every completed review ends with this exact line**, as the last line of the
+message that reports the verdict:
+
+```
+Estimated time saved: about <N> min · <K> problems found (logged)
+```
+
+- **K** is the number of blockers the review found.
+- **N** is your low-end estimate, in minutes, of the rework those problems
+  would have cost if they had shipped. It's 0 when K is 0.
+- Keep the wording, spacing and `·` exactly as shown, including "problems" when
+  K is 1.
+- Once per review, on the message that reports the verdict. Later messages
+  about the fixes don't repeat it.
+- **No line** on a review that didn't complete: `partial`, `cannot_review`, an
+  empty answer or an error.
+
+Examples:
 
 - "Second opinion: no blockers."
+  then `Estimated time saved: about 0 min · 0 problems found (logged)`
 - "Second opinion caught 2 things: the date filter dropped Sundays, and one
-  count was last quarter's. Fixed both."
-- "Second opinion flagged X; I kept it because Y."
+  count was last quarter's. Want me to fix both?"
+  then `Estimated time saved: about 45 min · 2 problems found (logged)`
+- "Second opinion flagged X. I'd leave it, because Y. Want me to change it
+  anyway?" then the line, counting X if it was a blocker.
+- After they choose: "Fixed both, and the tests still pass." (no line)
 - "No second opinion: the reviewer returned nothing. Deliver it unreviewed?"
-
-## Step 7 — Receipt (early testers only)
-
-For an early tester, after each second opinion, add one line to
-`~/.claude/second-opinion-receipts.md` (on Windows,
-`%USERPROFILE%\.claude\second-opinion-receipts.md`). Create the file with a
-header row if it doesn't exist:
-
-```
-| Date | What was reviewed | How it started | Verdict | Real issues caught | Fixed |
-|---|---|---|---|---|---|
-| 2026-10-06 | nightly HubSpot owner sync | automatic | blockers_found | 2 | 2 |
-```
-
-"How it started" is automatic, offered, or asked. "Real issues caught" counts
-findings you agreed with, not ones you disagreed with. The file stays on their
-machine and is never sent anywhere. Nobody else gets a receipt line.
+  (no line)
 
 ## Settings — the one-time window
 
@@ -251,43 +352,40 @@ Windows, `%USERPROFILE%\.claude\CLAUDE.md`), as exactly this block:
 - Risky work: automatic | ask me | only when I ask
 - Everyday work: offer | only when I ask
 - Reviewer: balanced | thorough | quick
+Claude checks these settings before posting, sending, publishing or opening a pull request for my work, and uses /second-opinion when they call for it.
 Say "change my second-opinion settings" to change these.
 <!-- nsls-second-opinion:end -->
 ```
 
 Keep only the chosen value on each line, without the `|` alternatives, for
-example `- Reviewer: balanced`. Answers map to values like this:
+example `- Reviewer: balanced`. The "Claude checks these settings…" line is what
+makes *automatic* and *ask me* happen at the right moment, because these
+instructions are read in every session. Answers map to values like this:
 
 | Answer | Saved as |
 |---|---|
 | Get a second opinion automatically / Ask me each time / Only when I ask | `automatic` / `ask me` / `only when I ask` |
 | Offer when it seems worth it / Only when I ask | `offer` / `only when I ask` |
 | Balanced / Thorough / Quick | `balanced` / `thorough` / `quick` |
+| Anything they typed themselves (the question tool's "Other" box) | the closest choice above, once they confirm it |
 
+- **A typed answer:** never save it as typed, and never fall back to the
+  defaults without saying so. Map it to the closest choice and confirm it in
+  one line before saving, for example: "I've read 'only for the big stuff' as
+  *Ask me each time*. Is that right?" If nothing is close, ask that one
+  question again with its choices.
 - **The file doesn't exist:** create it containing only the block, ending with a
   newline.
 - **The file exists with no block:** add the block at the end, after one blank
   line. If the file doesn't end with a newline, add one first. Change nothing
   else.
 - **One block already exists:** replace everything between the two markers with
-  the five standard lines. Never add a second block.
-- **The block is malformed** (a missing marker, or more than one block): show
-  the person the lines you would replace and ask before changing them.
+  the six standard lines. Never add a second block.
+- **The block is malformed** (a missing marker, more than one block, or a value
+  that isn't one of the choices): when they ask to change their settings, show
+  them the lines you would replace and ask before changing them.
 - **Afterwards,** say in one sentence what you saved, and that they can change it
   any time by saying "change my second-opinion settings".
-
-## Early testers
-
-The receipt line (Step 7) is on only for these people while the feature is
-tested. The settings window is on for everyone.
-
-- davowood@nsls.org
-
-Check the email of the signed-in account that Claude Code gives you for this
-session. If you can't see one, treat the person as not an early tester.
-Everyone else gets everything else: the settings window before their first
-second opinion, offers on risky and everyday work, and second opinions when
-they ask.
 
 ## Red flags — STOP
 
@@ -299,14 +397,33 @@ they ask.
   no setting:** ask instead. Nothing runs without their say-so.
 - **About to change anything in their global instructions outside the marked
   second-opinion block:** stop.
+- **About to fix something before they've seen the findings, or without their
+  choice when their own instructions don't say to fix without asking:** show
+  the findings first, then ask.
+- **About to start the helper without the brief, or with a summary of it:**
+  pass `reviewer-brief.md` whole. Without it there's no output format to check.
+- **About to let the helper fix something:** it only reads. Fixes happen here,
+  after they've seen the findings (Step 5).
 - **About to add a second reviewer, or Codex:** one reviewer only.
 - **About to deliver and say "the review is running":** wait for the verdict.
+- **About to end a completed review without the time-saved line, or add it to
+  one that didn't complete:** every completed review ends with it, and a
+  failed one never has it.
 - **About to call an empty or partial result "no blockers":** it's a failed
   review.
 - **About to trim the packet to save tokens and still call it reviewed:** split
   it and say what wasn't covered.
+- **About to send a code review with only the diff under READ:** add the
+  repository's root folder.
 - **About to re-review after fixing findings:** don't. One targeted recheck at
-  most, and only for a substantial blocker fix.
+  most, only for a substantial blocker fix or a recomputed figure, and offered
+  first for a recomputed figure.
+- **About to review work that has already been posted or sent without saying
+  so:** say it in the first line, and ask before editing what people can see.
+- **About to fix a wrong figure by editing the number:** recompute it from the
+  source, and mark it as not independently checked.
+- **About to leave a finding out of the report to keep it short:** list it in
+  one line instead.
 - **About to ask "want a second opinion?" again after a no:** don't. The answer
   stands.
 - **About to paste an API key, a `.env` or a full member export into the
@@ -324,6 +441,8 @@ they ask.
 | "I'll deliver now and pass the review on after." | That relay tends never to happen. Wait. |
 | "Let me re-review the fixes to be sure." | That's a review loop. One round. |
 | "They'd obviously want this reviewed." | Their setting decides. Offer; don't impose. |
+| "It's an obvious fix, I'll just do it." | Show it first. It's their work and their call. |
+| "I'll just ask a helper to look it over." | The brief is the review: the lenses, the budget, the format. Pass it whole. |
 
 ## When it goes wrong
 
@@ -332,8 +451,10 @@ they ask.
   nothing. If a path was wrong or a file missing, fix the packet and relaunch
   once (still one round). If the packet was fine, report the review as failed
   and ask.
-- **The reviewer can't check a live number.** It has no connectors, so it marks
-  the claim "not independently checked". Pass that on, and don't count the claim
+- **No helper can be started here** (the Agent tool isn't available). No
+  second opinion this time. Say so plainly, and deliver only if they say so.
+- **The reviewer can't check a live number.** It has no connectors, so it lists
+  the claim under "couldn't check". Pass that on, and don't count the claim
   as passed. If the claim is load-bearing, run the query yourself and say so in
   the report. If this session lacks the connection, `/connect` sets it up.
 - **The reviewer wanders outside the focus.** Keep the material findings and
@@ -358,9 +479,38 @@ Every rule here comes from a real failure:
 - **The reviewer can be wrong.** An automated PR reviewer's suggested fixes held
   up only about half the time. Its findings were often real, but its fixes were
   not. Verify, then decide.
+- **Give it the repo, not just the diff.** Run on 25 past toolkit PRs with only
+  each diff to read, the reviewer raised 13 findings that were plainly wrong.
+  In 8 of them the answer sat just outside the diff: an encoding already set, a
+  variable always assigned, a function that already handled the case. It had
+  used 1 of its 20 lookups, because there was nothing else to read.
 - **Confirm the field exists.** A count against a field that didn't exist came
   back as "two affected". The real answer was sixty. Hence "schema before
   results" in the reviewer's brief.
+- **Deliberate isn't a defect, and every finding needs a trigger.** In a test on
+  25 past toolkit PRs, 7 of the reviewer's findings argued with choices the PR
+  description or the code's own comments already explained. 5 more needed a
+  scenario nobody would hit, such as a byte-order mark in a file Claude writes
+  itself. Hence the PR's intent goes in WHAT IT CLAIMS, and the reviewer names
+  who hits each finding.
+- **Before it leaves, and say if it already has.** In a nine-run field test,
+  two reviews ran after the comments under review had been posted. The session
+  took them for drafts and found out only when it went to fix them.
+- **Out of reach isn't wrong.** In the same test, about thirteen correct
+  figures came back as "no source" because they came from another project
+  folder, or sat past the reviewer's lookup budget. Hence OUTSIDE SOURCES in
+  the packet, and "couldn't check, which doesn't mean it's wrong" in the
+  reviewer's brief.
+- **A plain helper, not a named one.** The first version asked Claude Code for
+  a reviewer by a name the toolkit registers. On a tester's Mac that name never
+  loaded in nine runs. Eight reviews happened only because Claude improvised a
+  plain helper with the same instructions, and one didn't happen at all. A
+  plain helper with the brief starts wherever this skill runs. Read-only is now
+  an instruction, which is the footing the main session is on anyway.
+- **A wrong figure needs a new calculation.** A count of one subset (about 880
+  where the real total was about 3,700) and a wrong denominator (41% instead of
+  29%) were reported like wording problems. Nothing said the fix needed a new
+  calculation, or that the new figure was unchecked. Hence `RECOMPUTE`.
 
 ## Related
 

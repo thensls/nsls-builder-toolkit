@@ -33,6 +33,24 @@ Confirm the person and the number out loud before the operator commits.
 - Granting a paid seat to anyone who has not completed the Hex training.
 - Granting a seat on a non-`@nsls.org` address.
 
+## Where record lookups run
+
+Hex record lookups are moving to Claude Code, where every lookup is logged. What this skill queries stays the same; only the route changes.
+
+**Record work:** anything that reads Hex itself: the credits page, the usage log and the users list. Working out a cost or drafting a reply from numbers already in the conversation is not.
+
+**The logged route:** tools whose names start `mcp__hex-records__`. Only that prefix counts; any other Hex tools, the shared connector included, are not the logged route.
+
+**Where you are.** Settle it once per conversation, before the first record lookup:
+1. The logged route's tools are present: you're in Claude Code. Cowork and claude.ai can't reach them.
+2. Otherwise go by what your own instructions say you are running in, as `/ai-level-up` does: Claude Code (a terminal, or the Code tab in the Claude app), or Cowork or claude.ai.
+3. Still unsure? Run `echo "$CLAUDE_CODE_ENTRYPOINT"` (PowerShell: `$env:CLAUDE_CODE_ENTRYPOINT`), the marker the toolkit's hooks read. `local-agent` is Cowork; any other answer, blank included, is Claude Code. No way to run a command means claude.ai.
+
+**Then:**
+- **Claude Code with the logged route:** use it for any Hex read it can answer. Credits have no API (see Guardrails), so the credits page read stays as Step 2 describes.
+- **Claude Code without it:** carry on exactly as this skill describes, through the connection you have today. Say nothing about setting up the logged route yet.
+- **Cowork or claude.ai, record work:** don't run it, and don't offer a workaround. Say only this, with nothing about tools, servers or settings: "This kind of Hex lookup happens in Claude Code (the Code tab in the Claude app), where every lookup is logged. Open it and type: /hex-access <their request, in one line>".
+
 ## Purpose
 
 Turns a one-line Slack ask ("I'm out of Hex credits") into a correct, costed,

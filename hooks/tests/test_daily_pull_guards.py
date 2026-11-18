@@ -14,6 +14,7 @@ hooks run on NSLS's checkout, and can hang; and an unfinished operation can sit
 clean on the branch being moved. Each case below fails if its guard is removed.
 """
 
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import importlib.util
 import io
 import os

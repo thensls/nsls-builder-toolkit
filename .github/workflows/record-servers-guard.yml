@@ -1,0 +1,35 @@
+name: record-servers-guard
+
+# Student-record servers (HubSpot, PostHog, Customer.io, Hex) are added per
+# person in Claude Code only (skills/connect/SKILL.md § Student-record servers),
+# so Cowork never sees them. If one landed in a server list this plugin ships,
+# installing the plugin in Cowork would carry it there, the one place record
+# lookups must not reach.
+#
+# No path filter, on purpose: plugin.json can name a server list at any path,
+# and a later edit to that file would slip past any fixed list of paths. The
+# check reads a few JSON files and takes seconds, so it runs on every PR.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  record-servers-guard:
+    name: no student-record server in a plugin server list
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: The plugin's server lists hold no student-record host
+        run: python .github/scripts/check_record_servers.py
+      # Also runs when the check above failed, so one red run shows both.
+      - name: The guard's own tests
+        if: ${{ !cancelled() }}
+        run: python test/test_check_record_servers.py

@@ -15,6 +15,7 @@ Every subprocess runs sandboxed: its own config dir, no git identity, and a dead
 tracker URL, because `offer` and `accept` talk to the tracker and a test that
 forgets that writes real rows under the developer's name.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import json
 import os
 import re
@@ -605,9 +606,10 @@ for label in ("guardrail_logit_offered", "guardrail_logit_accepted", "guardrail_
     check(f"{label} is a known label", label in guardrail_emit.LABELS)
 hooks = json.loads((HOOKS / "hooks.json").read_text(encoding="utf-8"))["hooks"]
 for event in ("UserPromptSubmit", "Stop"):
-    cmds = [h for g in hooks.get(event, []) for h in g["hooks"]]
+    cmds = [h for g in hooks.get(event, []) for h in g["hooks"]
+            if h["command"].endswith('run-hook.sh" checkpoint')]
     check(f"{event} runs the checkpoint once, through bash",
-          len(cmds) == 1 and cmds[0]["command"].endswith('run-hook.sh" checkpoint') and cmds[0].get("shell") == "bash",
+          len(cmds) == 1 and cmds[0].get("shell") == "bash",
           repr(cmds))
 
 print("\nthrough the launcher, the way Claude Code and Claude run it")

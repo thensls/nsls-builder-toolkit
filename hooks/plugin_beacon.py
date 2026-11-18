@@ -21,6 +21,15 @@ A beacon is only written by a copy running from the plugin cache. Without that
 check the shim could write it and authorise its own retirement: session-start.ps1
 invokes the plugin's session-start.py directly, so "this code ran" and "the
 plugin hook fired" are genuinely different claims.
+
+"The plugin cache" has two homes. A marketplace install lives under
+plugins/cache/nsls-toolkit/nsls-builder-toolkit/<version>/. A copy delivered by
+NSLS's Claude organization lives under plugins/synced/<org>_<account>/
+nsls-builder-toolkit/, with no version folder and no record in
+installed_plugins.json (hooks/synced_copy.py). Both are the plugin runtime's
+own copy, and neither is the clone a shim runs from. A beacon that only
+recognised the first would never be written on an organization-delivered
+machine, so its shims would never retire and every hook would run twice.
 """
 
 import json
@@ -58,13 +67,35 @@ def _cache_prefix() -> Path:
     return _CONFIG_DIR / "plugins" / "cache" / _MARKETPLACE / _PLUGIN
 
 
-def _installed_root() -> str:
-    """The plugin copy the CLI says is installed, or "" if that is unreadable.
+def _synced():
+    """hooks/synced_copy.py from beside this file, or None."""
+    try:
+        import sys
 
-    This is the strongest available statement of which copy is live. Without
-    it, a beacon left by a version that has since been replaced would keep
-    vouching for a hook shape that no longer exists.
-    """
+        here = str(Path(__file__).resolve().parent)
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import synced_copy
+
+        return synced_copy
+    except Exception:
+        return None
+
+
+def _synced_root() -> str:
+    """The copy NSLS's Claude organization holds here for the signed-in
+    account, or "". On disk is all this says: whether it loads is active()'s
+    question."""
+    sc = _synced()
+    try:
+        root = sc.live_root(_CONFIG_DIR) if sc else None
+        return str(Path(root).resolve()) if root else ""
+    except Exception:
+        return ""
+
+
+def _registry_root() -> str:
+    """The marketplace install the CLI's registry names, or ""."""
     try:
         reg = json.loads(
             (_CONFIG_DIR / "plugins" / "installed_plugins.json")
@@ -84,12 +115,55 @@ def _installed_root() -> str:
     return ""
 
 
+def _marketplace_switched_off() -> bool:
+    """True when the builder's settings disable a marketplace install of this
+    plugin. The synced copy's own switch is not one of those. Settings that
+    cannot be read switch nothing off here; active() judges that case."""
+    try:
+        settings = json.loads((_CONFIG_DIR / "settings.json").read_text(encoding="utf-8-sig"))
+        for key, enabled in (settings.get("enabledPlugins") or {}).items():
+            if (str(key).startswith(_PLUGIN + "@") and str(key) != _PLUGIN + "@synced"
+                    and enabled is False):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _installed_root() -> str:
+    """The plugin copy that is live on this machine, or "" if that is unreadable.
+
+    A marketplace install first: Claude Code loads it ahead of a synced copy of
+    the same plugin, so where the registry names one that is switched on AND
+    still on disk, that is the live copy. Otherwise the copy NSLS's Claude
+    organization delivers, and failing that whatever the registry names.
+
+    "Still on disk" matters: the registry can outlive the folder it names, and
+    a folder that is gone runs nothing. Naming it the live copy hid a working
+    synced copy behind it: active() said no plugin, and the synced copy's own
+    beacons were refused.
+
+    This is the strongest available statement of which copy is live. Without
+    it, a beacon left by a version that has since been replaced would keep
+    vouching for a hook shape that no longer exists.
+    """
+    registered = _registry_root()
+    try:
+        on_disk = bool(registered) and Path(registered).is_dir()
+    except Exception:
+        on_disk = False
+    if on_disk and not _marketplace_switched_off():
+        return registered
+    return _synced_root() or registered
+
+
 def plugin_root(running_file) -> str:
     """The installed plugin root this file is running from, or "" if it is not.
 
-    Anchored on this plugin's own cache directory, not on any path that happens
-    to contain "plugins/cache". A shim living anywhere else — including the
-    local clone the PowerShell hook runs session-start.py from — gets "".
+    Anchored on this plugin's own cache directory, or on the folder Claude Code
+    syncs the organization's copy into, not on any path that happens to contain
+    "plugins/cache". A shim living anywhere else — including the local clone
+    the PowerShell hook runs session-start.py from — gets "".
     """
     try:
         prefix = _cache_prefix().resolve()
@@ -100,7 +174,26 @@ def plugin_root(running_file) -> str:
                 return str(root)
     except Exception:
         pass
-    return ""
+    sc = _synced()
+    try:
+        return sc.running_root(running_file, _CONFIG_DIR) if sc else ""
+    except Exception:
+        return ""
+
+
+def _copy_version(root) -> str:
+    """What to call the copy at `root`: a marketplace install's folder is named
+    for its version; a synced copy's folder is named for the plugin, so its
+    version comes from its own plugin.json. "" when a synced copy's version
+    cannot be read: there is then nothing to tell this copy from the one that
+    replaces it, and fired() believes no beacon that carries no version."""
+    try:
+        if Path(root).resolve().parent == _cache_prefix().resolve():
+            return Path(root).name
+        sc = _synced()
+        return (sc.version(root) if sc else None) or ""
+    except Exception:
+        return ""
 
 
 def record(hook: str, running_file) -> bool:
@@ -129,7 +222,7 @@ def record(hook: str, running_file) -> bool:
         data.update({
             "hook": hook,
             "root": root,
-            "version": Path(root).name,
+            "version": _copy_version(root),
             "first": data.get("first") or now,
             "last": now,
             "runs": (runs + 1) if isinstance(runs, int) else 1,
@@ -165,10 +258,15 @@ def fired(hook: str) -> bool:
       says nothing about another's;
     * the root it names must still exist — a beacon from a cache directory that
       has since been removed proves nothing about today;
-    * that root must sit directly under this plugin's own cache prefix — a
+    * that root must sit directly under this plugin's own cache prefix, or be
+      the copy NSLS's Claude organization holds for the signed-in account — a
       forged file naming any cache-shaped path is not evidence;
-    * and it must be the copy the CLI currently reports as installed, when that
-      can be read, so an upgrade re-earns its evidence rather than inheriting it.
+    * and it must be the copy that is live now, when that can be read, so an
+      upgrade re-earns its evidence rather than inheriting it. A marketplace
+      upgrade moves to a new folder; a synced copy is replaced in place, so
+      there the version the beacon recorded must still be the copy's version;
+    * and a synced copy must still be switched on. Its folder stays on disk
+      after the builder, or NSLS, turns syncing off.
     """
     try:
         data = json.loads((BEACON_DIR / f"{hook}.json").read_text(encoding="utf-8"))
@@ -180,11 +278,32 @@ def fired(hook: str) -> bool:
         root = Path(recorded).resolve()
         if not root.is_dir():
             return False
-        if root.parent != _cache_prefix().resolve():
+        cached = root.parent == _cache_prefix().resolve()
+        synced = not cached and str(root) == _synced_root()
+        if not (cached or synced):
             return False
         installed = _installed_root()
         if installed and str(root) != installed:
             return False
+        if synced:
+            # A synced copy that is switched off runs no hooks, whatever it
+            # proved while it was on. Its folder can outlive the switch, and
+            # the migration asks fired() directly, so the question is settled
+            # here: evidence from a copy that is not delivering the toolkit
+            # retires nothing.
+            sc = _synced()
+            try:
+                if not (sc and sc.active(_CONFIG_DIR)):
+                    return False
+            except Exception:
+                return False
+            # The version is the only thing that tells a synced copy from the
+            # one that replaced it in the same folder. A beacon with none, or a
+            # copy whose version cannot be read, is not evidence about THIS
+            # copy: the shim stays one more session, which is the cheap mistake.
+            current = _copy_version(root)
+            if not current or str(data.get("version") or "") != current:
+                return False
         return True
     except Exception:
         return False
@@ -207,6 +326,15 @@ def active() -> bool:
     # still says.
     if not root or not Path(root).is_dir():
         return False
+    if root == _synced_root() and root != _registry_root():
+        # The organization's copy has its own switches, and one rule the others
+        # lack: NSLS can make it required, which the builder's switch cannot
+        # override. synced_copy knows them.
+        sc = _synced()
+        try:
+            return bool(sc and sc.active(_CONFIG_DIR))
+        except Exception:
+            return False
     try:
         settings = json.loads((_CONFIG_DIR / "settings.json").read_text(encoding="utf-8-sig"))
     except FileNotFoundError:
@@ -215,7 +343,9 @@ def active() -> bool:
         return False
     try:
         for key, enabled in (settings.get("enabledPlugins") or {}).items():
-            if str(key).startswith(_PLUGIN + "@") and enabled is False:
+            # The synced copy's switch is not a marketplace install's.
+            if (str(key).startswith(_PLUGIN + "@") and str(key) != _PLUGIN + "@synced"
+                    and enabled is False):
                 return False
     except Exception:
         return False

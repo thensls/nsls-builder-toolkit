@@ -36,6 +36,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -72,15 +73,39 @@ NSLS_ORGS = ("thensls",)
 PERSONAL_MARKER = ".personal-repo"
 
 # The hook's total budget is 10s (hooks.json). Every subprocess and socket here
-# has to fit inside it *cumulatively*, because a gate can chain several: repo
-# lookup, then a tracker lookup, then the event POST on the way out. Blowing the
-# budget means the harness kills the hook mid-decision and the block is lost —
-# the gate silently fails to fire. These numbers are picked so the worst path
-# (gate 2: repo_root + tracker_get + emit) lands near 6s, leaving headroom on a
-# slow network. Raise them and redo that arithmetic.
+# has to fit inside it *cumulatively*, because a gate can chain several: git
+# lookups, then a tracker lookup. (The event POST on the way out is detached
+# and costs nothing.) Blowing the budget means the harness kills the hook
+# mid-decision and the block is lost — the gate silently fails to fire.
+#
+# git gets a shared budget, not just a per-call cap. A timed-out git call reads
+# as "no repo", and the gate allows, so a slow FIRST call is a missed block. On
+# a Mac without Homebrew, `git` is Apple's /usr/bin/git shim, which has to find
+# the developer tools first: 0.93s on a macOS CI runner (2026-10-18) against
+# 0.01s for Homebrew git, and past 2s often enough that a launcher test flaked
+# ten times in a week. So the first call may take GIT_FIRST_TIMEOUT, later ones
+# GIT_TIMEOUT, and all of them together GIT_BUDGET. That keeps git from ever
+# eating the tracker lookup's window: it still has LOOKUP_DEADLINE - GIT_BUDGET.
 GIT_TIMEOUT = 2
-NET_TIMEOUT = 3
-EMIT_TIMEOUT = 1.5
+GIT_FIRST_TIMEOUT = 3.5
+GIT_BUDGET = 4
+
+# The tracker lookup must be over LOOKUP_DEADLINE seconds after this module
+# loads, and gets whatever is left of that: slow git lookups shorten its
+# allowance instead of running the hook out of time, and 2s of the hook's 10
+# stay free for interpreter start (before _STARTED) and the block on the way
+# out. A lookup that misses it is "unknown", gates 2 and 4 allow, and the check
+# is skipped without a word.
+#
+# It was a 3s urllib timeout, which bounds each socket operation, not the call:
+# the check was skipped whenever the tracker itself took over 3s to answer, and
+# a reply that kept trickling bytes was read past the hook's 10s. Timed live on
+# 2026-10-24 (GET /automations, 181 rows read from two Airtable pages), the
+# tracker took 1.4s p50 and 3.2s at worst to answer; the whole call took 1.8s
+# p50, 4.9s p95 and 5.9s at worst, most of the tail in connection setup. Each
+# further 100 registrations adds an Airtable page, about 0.5s.
+LOOKUP_DEADLINE = 8
+_STARTED = time.monotonic()
 
 
 # Appended to every block. Some gates will misfire in situations we could not
@@ -142,13 +167,16 @@ except Exception:  # pragma: no cover - reporting is optional, deciding is not
         return ""
 
 
-def emit(event_type: str, description: str, automation: str = ""):
+def emit(event_type: str, description: str, automation: str = "",
+         dedupe: bool = False, variant: str = "", cwd: str = ""):
     """Fire-and-forget guardrail event. Never raises, never affects the decision.
 
-    Deduplication is off here. Every hard block is a distinct event worth a row
-    even when the same gate stops the same build twice in a day -- a builder
-    hitting a wall repeatedly is the signal, and collapsing it would hide the
-    gate most in need of a second look.
+    Deduplication is off by default. Every hard block is a distinct event worth
+    a row even when the same gate stops the same build twice in a day -- a
+    builder hitting a wall repeatedly is the signal, and collapsing it would
+    hide the gate most in need of a second look. A skip is different: the same
+    marker letting the same repo through twenty times is one fact, so callers
+    reporting a skip pass dedupe=True (one row per build per day).
 
     Detached, because the endpoint takes ~1.5s and this hook has 10s for the
     whole decision. The previous version waited inline on a 1.5s timeout, which
@@ -165,12 +193,15 @@ def emit(event_type: str, description: str, automation: str = ""):
             with open(log, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps({"type": event_type,
                                      "description": description,
-                                     "automation": automation}) + "\n")
+                                     "automation": automation,
+                                     "dedupe": dedupe,
+                                     "variant": variant}) + "\n")
         except Exception:
             pass
         return
     try:
-        _emit(event_type, description, automation=automation, dedupe=False)
+        _emit(event_type, description, automation=automation, dedupe=dedupe,
+              variant=variant, cwd=cwd)
     except Exception:
         pass  # reporting is never worth failing or delaying a decision over
 
@@ -206,6 +237,17 @@ def block(reason: str, gate: str = "", automation: str = ""):
 
 
 _GIT_CACHE = {}
+_GIT_DEADLINE = None  # set by the first git call: GIT_BUDGET from then
+
+
+def _git_timeout():
+    """Seconds this git call may take, or 0 when the shared budget is spent."""
+    global _GIT_DEADLINE
+    now = time.monotonic()
+    if _GIT_DEADLINE is None:
+        _GIT_DEADLINE = now + GIT_BUDGET
+        return min(GIT_FIRST_TIMEOUT, GIT_BUDGET)
+    return max(0.0, min(GIT_TIMEOUT, _GIT_DEADLINE - now))
 
 
 def git(*args, cwd=None):
@@ -214,12 +256,15 @@ def git(*args, cwd=None):
     key = (args, cwd)
     if key in _GIT_CACHE:
         return _GIT_CACHE[key]
+    timeout = _git_timeout()
+    if timeout <= 0:
+        return ""  # budget spent: as a timeout always was, and not cached
     try:
         out = subprocess.run(
             ["git", *args],
             capture_output=True,
             text=True, encoding="utf-8", errors="replace",
-            timeout=GIT_TIMEOUT,
+            timeout=timeout,
             cwd=cwd,
         )
         val = out.stdout.strip() if out.returncode == 0 else ""
@@ -483,15 +528,37 @@ def _tracker_store(path: str, page, fetched_at: float = 0.0):
 
 def _http_get(url: str):
     """Raw bytes from the tracker, or None. A seam so the evidence rules below
-    can be tested without a network."""
+    can be tested without a network.
+
+    The limit is enforced on the clock, not by urllib. urlopen's timeout bounds
+    each socket operation separately, so a reply that kept trickling bytes was
+    read for as long as it trickled, past the hook's own 10s. The fetch runs on
+    a daemon thread instead, abandoned when the limit passes.
+    """
+    limit = LOOKUP_DEADLINE - (time.monotonic() - _STARTED)
+    if limit <= 0:
+        return None
+    body = []
+
+    def fetch():
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url),
+                                        timeout=limit) as r:
+                body.append(r.read(MAX_BODY))
+        except Exception:
+            pass
+
     try:
+        # Imported here, not in the thread: an import inside a thread can wait
+        # on the import lock, and that wait would count against the limit.
         import urllib.request
 
-        with urllib.request.urlopen(urllib.request.Request(url),
-                                    timeout=NET_TIMEOUT) as r:
-            return r.read(MAX_BODY)
+        t = threading.Thread(target=fetch, daemon=True)
+        t.start()
+        t.join(limit)
     except Exception:
         return None
+    return body[0] if body else None
 
 
 def tracker_page(path: str):
@@ -1033,8 +1100,6 @@ def gate_personal_repo(tool: str, ti: dict):
     root = repo_root(cwd)
     if not root:
         return
-    if (Path(root) / PERSONAL_MARKER).is_file():
-        return  # the repo says it is personal; see PERSONAL_MARKER
     url = origin_url(root)
     if push_remote and push_remote != "origin" and not push_remote.startswith(
             ("http://", "https://", "git@")):
@@ -1046,6 +1111,18 @@ def gate_personal_repo(tool: str, ti: dict):
     if is_nsls_remote(url):
         return
     if not looks_like_nsls_work(root):
+        return
+    if (Path(root) / PERSONAL_MARKER).is_file():
+        # The repo says it is personal; see PERSONAL_MARKER. Checked only once
+        # the push would otherwise be blocked, so the skip is reported exactly
+        # when it changed the outcome. Anyone who can write a file can write
+        # this one, Claude included, so the skip must never be silent: it is
+        # the only way past gate 1 that leaves no block for Kevin to see.
+        emit("guardrail_proceeded",
+             f"personal_repo: push allowed by the {PERSONAL_MARKER} file "
+             f"(NSLS-looking repo, personal remote)",
+             automation=Path(root).name, dedupe=True,
+             variant="personal-repo-marker", cwd=root)
         return
 
     owner = "your personal account"

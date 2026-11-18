@@ -7,12 +7,13 @@ how many times you spoke, a few of your asks, and Claude's last reply. Nothing i
 sent anywhere. Works on Mac, Windows and Linux, in the desktop app or terminal.
 
 Usage:
-    python3 sweep_sessions.py --start 2026-09-21 --end 2026-09-25
+    nsls-python sweep_sessions.py --start 2026-09-21 --end 2026-09-25
 """
 import argparse
 import glob
 import json
 import os
+import sys
 from datetime import date, datetime
 from pathlib import Path
 
@@ -103,6 +104,11 @@ def read_session(path, start, end):
 
 
 def main():
+    # Windows consoles default to a legacy code page (cp1252), which can't
+    # print the arrows, dashes and accents in people's own words. Without this
+    # the json.dumps(ensure_ascii=False) below crashes with UnicodeEncodeError.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--start", required=True, help="YYYY-MM-DD, inclusive")
     ap.add_argument("--end", required=True, help="YYYY-MM-DD, inclusive")

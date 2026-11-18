@@ -179,7 +179,7 @@ If "Save" or "Run /kw:plan" is selected: ALWAYS write the brainstorm to `plans/b
 
 ## Writing Style
 
-Match Kevin's voice (from `~/.claude/skills/kevin-voice/` if present, otherwise default):
+Match Kevin's voice (follow a voice skill if one is installed, otherwise this default):
 - Plain language, not corporate-speak
 - Numbers > adjectives
 - Short sentences

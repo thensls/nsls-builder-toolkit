@@ -11,6 +11,9 @@ Stage A — plugin not installed yet:
     Nothing else changes: the running session keeps using the shims, and the
     plugin loads at the NEXT session start. Anyone with git access to the repo
     can install; the marketplace is not public.
+    Never runs where NSLS's Claude organization already delivers the toolkit
+    (hooks/synced_copy.py): that copy IS the plugin, and a marketplace install
+    beside it would outrank it and cut the machine off from its updates.
 
 Stage B — plugin installed, shims still present (mac/linux only):
     Remove exactly the shims the installer created, now that the plugin
@@ -283,7 +286,50 @@ def _find_claude():
         if candidate.exists():
             return [str(candidate)]
     found = _windows_cli()
-    return _cli_argv(found) if found else None
+    if found:
+        return _cli_argv(found)
+    found = _mac_app_cli()
+    return [str(found)] if found else None
+
+
+_IS_MAC = sys.platform == "darwin"
+
+
+def _mac_app_cli(folder=None):
+    """The Mac desktop app's bundled claude CLI, or None.
+
+    This file's own fallback, for the same reason as _windows_cli below: the
+    session-start.py already running may predate the finder that knows this
+    place, and this file is read fresh from the clone. A Mac with the app and no
+    separate CLI has no other `claude`, so without this stage A found nothing
+    and the plugin never installed. Same search as session-start.py's
+    _mac_app_cli: every shape the app has used under claude-code/<version>/,
+    newest version first, never the Linux build it keeps for its VM.
+    """
+    if folder is None:
+        if not _IS_MAC:
+            return None
+        folder = Path.home() / "Library" / "Application Support" / "Claude" / "claude-code"
+    best = None
+    for pattern in ("*/*/claude.app/Contents/MacOS/claude",
+                    "*/claude.app/Contents/MacOS/claude", "*/claude"):
+        try:
+            hits = list(folder.glob(pattern))
+        except OSError:
+            continue
+        for exe in hits:
+            try:
+                if not (exe.is_file() and os.access(exe, os.X_OK)):
+                    continue
+                with open(exe, "rb") as f:
+                    if f.read(4) == b"\x7fELF":
+                        continue
+                key = (_version_tuple(exe.relative_to(folder).parts[0]), exe.stat().st_mtime)
+            except (OSError, ValueError):
+                continue
+            if best is None or key > best[0]:
+                best = (key, exe)
+    return best[1] if best else None
 
 
 def _cli_argv(path):
@@ -386,6 +432,21 @@ def _budget_left():
     return _DEADLINE - time.monotonic()
 
 
+def _no_prompt_env():
+    """This process's environment, with every way git can ask for a sign-in
+    switched off. `plugin marketplace add`, `plugin install` and `plugin update`
+    make the CLI run git against the toolkit's repository; from a hook, a remote
+    that wants credentials must fail, never open a sign-in window (Git
+    Credential Manager does exactly that on Windows). Same three settings as
+    _git_env() in session-start.py.
+    """
+    env = dict(os.environ)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GCM_INTERACTIVE"] = "never"
+    env["GIT_ASKPASS"] = ""
+    return env
+
+
 def _claude(args, timeout):
     """Run a claude CLI subcommand. Returns (ok, stdout+stderr).
 
@@ -403,6 +464,7 @@ def _claude(args, timeout):
     try:
         result = subprocess.run(
             [*claude, *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=effective,
+            env=_no_prompt_env(),
         )
         return result.returncode == 0, (result.stdout or "") + (result.stderr or "")
     except subprocess.TimeoutExpired:
@@ -416,7 +478,42 @@ def _claude(args, timeout):
         return False, str(e)
 
 
-def _plugin_installed():
+def _synced_copy():
+    """hooks/synced_copy.py from beside this file, or None.
+
+    It recognises the copy NSLS's Claude organization delivers, which has no
+    record in installed_plugins.json. None on a checkout older than that file:
+    then only the registry counts, as it always did.
+    """
+    try:
+        here = str(Path(globals()["__file__"]).resolve().parent)
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import synced_copy
+
+        return synced_copy
+    except Exception:
+        return None
+
+
+def _synced_present():
+    sc = _synced_copy()
+    try:
+        return bool(sc and sc.present(_CONFIG_DIR, globals().get("__file__")))
+    except Exception:
+        return False
+
+
+def _synced_active():
+    sc = _synced_copy()
+    try:
+        return bool(sc and sc.active(_CONFIG_DIR, globals().get("__file__")))
+    except Exception:
+        return False
+
+
+def _marketplace_installed():
+    """True when the CLI's registry holds a marketplace install of the toolkit."""
     try:
         registry = _read_json(_CONFIG_DIR / "plugins" / "installed_plugins.json")
         return any(
@@ -427,12 +524,48 @@ def _plugin_installed():
         return False
 
 
+def _plugin_installed():
+    """True when the toolkit is here as a plugin: a marketplace install, or the
+    copy NSLS's Claude organization delivers.
+
+    Reading only the registry called an organization-delivered machine "not
+    installed", so stage A registered the marketplace and installed a second
+    copy beside it. A marketplace install outranks a synced one, so that second
+    copy then took over and the organization's updates stopped arriving.
+
+    This decides stage A only. "On disk" is not "delivering": whether stage B
+    may retire anything is _plugin_disabled_by_user()'s question.
+    """
+    return _synced_present() or _marketplace_installed()
+
+
 def _plugin_disabled_by_user():
-    """True if the user explicitly disabled the plugin — respect that."""
+    """True when no plugin is delivering the toolkit here, because whatever is
+    installed has been switched off. Respect that: stage B retires the shims
+    and the user-scope signal server on the strength of a plugin doing their
+    job, and a switched-off plugin does no job.
+
+    The organization's copy has two switches (its own, and
+    `syncClaudeAiPlugins: false` for every synced plugin), and neither is an
+    `enabledPlugins` key a marketplace install would carry. Reading only those
+    keys called a machine with syncing switched off and nothing else installed
+    "not disabled", and stage B then removed the only signal server and any
+    shim an old beacon still vouched for.
+    """
+    if _synced_active():
+        # The organization's copy is delivering the toolkit, whatever else on
+        # this machine is switched off.
+        return False
+    if not _marketplace_installed():
+        # Only the organization's copy is here, and it is not active.
+        return True
     try:
         settings = _read_json(_SETTINGS)
         for key, enabled in settings.get("enabledPlugins", {}).items():
-            if key.startswith("nsls-builder-toolkit@") and enabled is False:
+            # The synced copy's own switch says nothing about a marketplace
+            # install beside it.
+            if (key.startswith("nsls-builder-toolkit@")
+                    and key != "nsls-builder-toolkit@synced" and enabled is False):
                 return True
     except Exception:
         pass
@@ -900,8 +1033,12 @@ def _stage_b():
             + ". Org skills now load as nsls-builder-toolkit:<name> — if a "
             "bare skill name fails this session, use the prefixed form. "
             "Rollback, if ever needed: restore "
-            "~/.claude/settings.json.pre-plugin-migration and run "
-            "`claude plugin uninstall nsls-builder-toolkit@nsls-toolkit`."
+            "~/.claude/settings.json.pre-plugin-migration"
+            # A copy NSLS's Claude organization delivers has no marketplace
+            # install to uninstall; naming one would send a builder to a
+            # command that fails.
+            + ("." if _synced_active() else
+               " and run `claude plugin uninstall nsls-builder-toolkit@nsls-toolkit`.")
         )
 
 

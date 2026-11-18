@@ -7,9 +7,15 @@ items. The only ground truth is `ramp transactions missing <uuid>`, one call per
 transaction. Slow, but correct.
 """
 
+import json
 from dataclasses import dataclass
+from datetime import date, timedelta
 
 from ramp import RampError, parse_amount, run
+
+
+def _day_after(iso_day: str) -> str:
+    return (date.fromisoformat(iso_day) + timedelta(days=1)).isoformat()
 
 LIST_WHY = "Audit which of my transactions still need a receipt, to attach them automatically"
 CHECK_WHY = "Verify whether this specific transaction still needs a receipt before attaching one"
@@ -44,7 +50,12 @@ def list_transactions(since: str, until: str) -> list[Transaction]:
         args = [
             "transactions", "list",
             "--transactions_to_retrieve", "my_transactions",
-            "--from_date", since, "--to_date", until,
+            # CLI >= 0.2.x dropped --from_date/--to_date for --start_at/--end_at.
+            # end_at is EXCLUSIVE, while our --until is inclusive: add a day.
+            "--start_at", since, "--end_at", _day_after(until),
+            # Pre-filter: 755 per-transaction `missing` calls otherwise. The
+            # per-txn check in needs_receipt() stays the ground truth.
+            "--only_missing_items",
             "--page_size", "100",
         ]
         if cursor:
@@ -66,7 +77,7 @@ def list_transactions(since: str, until: str) -> list[Transaction]:
 
 
 def needs_receipt(txn_id: str) -> bool:
-    row = _one(["transactions", "missing", txn_id], CHECK_WHY)
+    row = _one(["transactions", "missing", "--json", json.dumps({"id": txn_id})], CHECK_WHY)
     return bool(row.get("missing_receipt"))
 
 

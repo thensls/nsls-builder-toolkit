@@ -25,9 +25,20 @@ It clones the repo itself (Step 1) before needing any file from it, so it never
 depends on $PSScriptRoot. Also runs from a local checkout.
 
 Idempotent: re-running updates the clone and no-ops anything already in place.
-  -Test   install into a throwaway $HOME\.claude-kit-test (or $env:CLAUDE_CONFIG_DIR)
+  -Test   install into a throwaway $HOME\.claude-kit-test (or $env:CLAUDE_KIT_TEST_DIR;
+          an $env:CLAUDE_CONFIG_DIR already set wins), the claude CLI's plugins included
+  -MachineOnly   set up THIS COMPUTER only. The toolkit is already here
+          (delivered as a Claude plugin) and only what it needs on this PC is
+          missing: Git for Windows, Python and the document libraries with the
+          nsls-python launcher, the gws CLI, Node.js. It runs the prerequisite
+          check and Step 0, prints the report, and stops: no download of the
+          toolkit, nothing written to Claude's settings, no plugins, no
+          pointers. /nsls-setmeup and the document skills' repair step run it
+          with -File from the plugin's own folder, so it works on a PC with no
+          GitHub access at all. The web-paste line above only works while the
+          repository can be read without a sign-in.
 #>
-param([switch]$Test)
+param([switch]$Test, [switch]$MachineOnly)
 $ErrorActionPreference = 'Stop'
 
 # TLS 1.2 for the web calls below (gws zip, VC_redist, tracker ping). Win11
@@ -52,6 +63,21 @@ if ($env:CLAUDE_CONFIG_DIR) {
 } else {
     $ConfigDir = Join-Path $env:USERPROFILE '.claude'
 }
+
+# A test install must reach the claude CLI too (install.sh exports the same).
+# Without this, Step 3 put the plugins into the real .claude while the rest
+# went to the test dir, and the installer's own reads of the plugin registry
+# looked in the test dir and found nothing. A pasted `iwr | iex` runs in the
+# builder's own window, so the variable must not outlive the script: the
+# `try` below runs to the end of the file, and its `finally` takes the variable
+# back off on every way out (the end, an early stop, an error, Ctrl+C). The body
+# is deliberately not indented under it.
+$SetConfigDirForTest = $false
+if ($Test -and -not $env:CLAUDE_CONFIG_DIR) {
+    $env:CLAUDE_CONFIG_DIR = $ConfigDir
+    $SetConfigDirForTest = $true
+}
+try {
 
 $LocalDir  = Join-Path $ConfigDir 'local-plugins'
 $PluginDir = Join-Path $LocalDir  'nsls-builder-toolkit'
@@ -495,6 +521,23 @@ if ($GwsResolved) {
     $PrereqReport += "  [warn] gws not installed - /gdoc-build & /gdoc-edit need it (see skills/gws Windows install)."
 }
 
+# --- This computer only (-MachineOnly): report and stop ---
+# Everything above set up the PC; everything below installs the toolkit itself
+# (clone, settings, tracker event, plugins, MCP servers, pointers). With the
+# toolkit delivered as a Claude plugin none of that applies, so stop here.
+if ($MachineOnly) {
+    Write-Host ""
+    Write-Host "Prerequisite check:"
+    $PrereqReport | ForEach-Object { Write-Host $_ }
+    Write-Host ""
+    Write-Host "==============================="
+    Write-Host "  This computer is set up for the NSLS toolkit."
+    Write-Host "  Any line above marked [warn] or [ACTION NEEDED] still needs attention."
+    Write-Host "==============================="
+    Write-Host ""
+    if ($RunningFromFile) { exit 0 } else { return }
+}
+
 # --- Step 1: Clone / update the org toolkit ---
 Write-Host "Step 1: Installing org skills..."
 New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null
@@ -502,7 +545,78 @@ New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null
 # A failed FETCH changes nothing on disk, so warn and carry on. A failed RESET
 # may leave files half-updated, so that one stops rather than claim "unchanged".
 $UpdateFailed = $false   # read by the closing banner, so it doesn't claim success
+
+# --- A copy that follows another repository (begin) ---
+# The update below fetches from the copy's own `origin`. A copy cloned from
+# somewhere else, most often a builder's own fork made to contribute a skill,
+# then "updates" from that fork: never NSLS's releases, and a hard reset onto a
+# main hundreds of commits old, reported as installed (a builder's Mac, 2026-11;
+# install.sh has the same check). So a copy whose origin is not $RepoUrl is
+# moved aside untouched, branches and uncommitted edits kept, and a fresh copy
+# cloned. The same repository written another way counts as the same.
+function Get-RepoKey([string]$Url) {
+    $k = "$Url".Trim().ToLowerInvariant()
+    $k = $k -replace '^[a-z][a-z0-9+.-]*://', ''
+    $k = $k -replace '^[^@/]+@', ''
+    $k = $k -replace '^([^/:]+):', '$1/'
+    $k = $k -replace '\\', '/'
+    $k = $k -replace '/+$', ''
+    $k = $k -replace '\.git$', ''
+    return ($k -replace '/+$', '')
+}
+$KeptCopy = $null
+$KeptFrom = ''
 if (Test-Path (Join-Path $PluginDir '.git')) {
+    $KeptFrom = Invoke-Native 'git' @('-C', $PluginDir, 'remote', 'get-url', 'origin')
+    if ($LASTEXITCODE -ne 0) { $KeptFrom = '' }
+    # Shown on screen, and in Claude's transcript when Claude runs this: never a
+    # sign-in. An origin like https://user:token@host/... keeps only host/path.
+    $KeptFrom = "$KeptFrom".Trim() -replace '^([A-Za-z][A-Za-z0-9+.-]*://)[^@/]*@', '$1'
+    if ((Get-RepoKey $KeptFrom) -ne (Get-RepoKey $RepoUrl)) {
+        $shownFrom = if ($KeptFrom) { $KeptFrom } else { 'nowhere' }
+        Write-Host "  The toolkit folder here updates from $shownFrom instead of NSLS, so it never got NSLS's releases."
+        Write-Host "  Downloading a fresh copy to put in its place..."
+        # Download first, swap second: a failed download must leave the old
+        # folder exactly where it was, never a toolkit that is simply gone.
+        $Staging = "$PluginDir.new-$PID"
+        $null = Invoke-Native 'git' @('clone', '--branch', $RepoBranch, $RepoUrl, $Staging, '--quiet')
+        if ($LASTEXITCODE -ne 0) {
+            Remove-Item -Recurse -Force -LiteralPath $Staging -ErrorAction SilentlyContinue
+            Write-Host "  ERROR: couldn't download a fresh copy of the toolkit. Nothing was changed:"
+            Write-Host "  your folder is exactly as it was. Check your internet connection, then re-run this installer."
+            if ($RunningFromFile) { exit 1 } else { return }
+        }
+        $KeptCopy = "$PluginDir.kept-" + (Get-Date -Format 'yyyyMMdd-HHmmss')
+        try {
+            Move-Item -LiteralPath $PluginDir -Destination $KeptCopy -ErrorAction Stop
+        } catch {
+            Remove-Item -Recurse -Force -LiteralPath $Staging -ErrorAction SilentlyContinue
+            Write-Host "  ERROR: the toolkit folder could not be moved aside to make room for the fresh copy."
+            Write-Host "  Nothing was changed. Close Claude and any editor using that folder, then re-run this installer."
+            if ($RunningFromFile) { exit 1 } else { return }
+        }
+        try {
+            Move-Item -LiteralPath $Staging -Destination $PluginDir -ErrorAction Stop
+        } catch {
+            Move-Item -LiteralPath $KeptCopy -Destination $PluginDir -ErrorAction SilentlyContinue
+            Remove-Item -Recurse -Force -LiteralPath $Staging -ErrorAction SilentlyContinue
+            Write-Host "  ERROR: the fresh copy could not be put in place, so your old folder was put back."
+            Write-Host "  Re-run this installer; if it happens again, tell the NSLS AI team."
+            if ($RunningFromFile) { exit 1 } else { return }
+        }
+        # A builder may have made extra working folders from that copy (`git
+        # worktree add`); the move broke their links to it, and this mends them.
+        $null = Invoke-Native 'git' @('-C', $KeptCopy, 'worktree', 'repair')
+        Write-Host "  Done. Your old folder is kept, untouched, at: $KeptCopy"
+    } else {
+        $KeptFrom = ''
+    }
+}
+# --- A copy that follows another repository (end) ---
+
+if ($KeptCopy) {
+    # just cloned fresh above: nothing to update
+} elseif (Test-Path (Join-Path $PluginDir '.git')) {
     Write-Host "  Updating existing installation..."
     $updOut = Invoke-Native 'git' @('-C', $PluginDir, 'fetch', 'origin', $RepoBranch, '--quiet')
     if ($LASTEXITCODE -ne 0) {
@@ -958,8 +1072,17 @@ if ($Test) {
     Write-Host "  Everything went into: $ConfigDir (your real .claude was NOT touched)."
     Write-Host "  NOTE: -Test is only usable from the terminal via CLAUDE_CONFIG_DIR; the"
     Write-Host "  desktop app always launches against your real .claude."
+    Write-Host "  Try it with: `$env:CLAUDE_CONFIG_DIR = `"$ConfigDir`"; claude"
     Write-Host "  Reset with:  Remove-Item -Recurse -Force `"$ConfigDir`""
 } else {
+    if ($KeptCopy) {
+        $shownFrom = if ($KeptFrom) { $KeptFrom } else { 'nowhere' }
+        Write-Host "=== YOUR OLD COPY IS KEPT ==="
+        Write-Host "  The toolkit folder that was here updated from $shownFrom, not NSLS,"
+        Write-Host "  so a fresh copy replaced it. Nothing in the old one was changed or deleted:"
+        Write-Host "    $KeptCopy"
+        Write-Host ""
+    }
     Write-Host "=== NEXT STEP ==="
     Write-Host "  1. Restart Claude Code (quit and reopen - a restart loads the MCP servers"
     Write-Host "     and hooks). In the desktop app, click Code (top left) when it reopens."
@@ -975,3 +1098,8 @@ Write-Host ""
 # would close the user's window, so just return.
 # A known failure exits 1, so a wrapper or CI can tell.
 if ($RunningFromFile) { if ($InstallFailed.Count) { exit 1 } else { exit 0 } } else { return }
+
+} finally {
+    # Opened right after the config dir is chosen; see the comment there.
+    if ($SetConfigDirForTest) { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue }
+}

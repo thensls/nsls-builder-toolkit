@@ -4,6 +4,7 @@
 Plain stdlib. hooks/tests/windows/pointers-after-plugin.ps1 runs the real
 functions under Windows PowerShell 5.1 in CI; this pins the wiring anywhere.
 """
+import collector_off  # noqa: F401  (first: no test may install the real collector)
 import sys
 from pathlib import Path
 
