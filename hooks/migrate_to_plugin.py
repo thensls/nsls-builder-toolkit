@@ -257,6 +257,83 @@ def _read_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8-sig"))
 
 
+def _process_path(pid):
+    """The full path of the program that process `pid` runs, or None."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return None
+    if pid <= 0:
+        return None
+    try:
+        import ctypes
+        if os.name == "nt":
+            from ctypes import wintypes
+            k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+            k32.OpenProcess.restype = wintypes.HANDLE
+            k32.QueryFullProcessImageNameW.argtypes = (
+                wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD))
+            k32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+            k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+            handle = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+            if not handle:
+                return None
+            try:
+                size = wintypes.DWORD(32768)
+                buf = ctypes.create_unicode_buffer(size.value)
+                if not k32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                    return None
+                return Path(buf.value)
+            finally:
+                k32.CloseHandle(handle)
+        if sys.platform == "darwin":
+            libproc = ctypes.CDLL("/usr/lib/libproc.dylib")
+            libproc.proc_pidpath.argtypes = (ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32)
+            libproc.proc_pidpath.restype = ctypes.c_int
+            buf = ctypes.create_string_buffer(4096)
+            if libproc.proc_pidpath(pid, buf, 4096) <= 0:
+                return None
+            return Path(os.fsdecode(buf.value))
+        return Path(os.readlink(f"/proc/{pid}/exe"))
+    except Exception:
+        return None
+
+
+def _is_claude_cli(path):
+    """True for the claude program itself, never an interpreter running it.
+
+    An npm install runs as node, which must never be handed `plugin update`.
+    The program is named claude or claude.exe, or, for the native installer on
+    a Mac or Linux, by its version inside claude/versions/ (the file that
+    ~/.local/bin/claude links to).
+    """
+    if path.name.lower() in ("claude", "claude.exe"):
+        return True
+    return path.parent.name == "versions" and path.parent.parent.name == "claude"
+
+
+def _running_claude():
+    """The claude CLI running this session, found from CLAUDE_PID, or None.
+
+    Claude Code sets CLAUDE_PID for every hook it starts (measured 2026-11-19:
+    with the variable taken out of its own environment, a SessionStart hook
+    still received the pid of the CLI that ran it). That CLI is installed,
+    current and runnable from here, wherever the desktop app keeps it, so no
+    folder layout has to be guessed. Guessing is what failed: a PC with only
+    the desktop app had no claude on PATH and none in any folder searched
+    below, so every update failed with "the claude command could not be
+    found" and the plugin sat on 3.32.3 for a month (Jeff's PC, 18 Nov 2026).
+    """
+    path = _process_path(os.environ.get("CLAUDE_PID"))
+    try:
+        if path is not None and _is_claude_cli(path) and path.is_file():
+            return path
+    except OSError:
+        pass
+    return None
+
+
 def _find_claude():
     """argv prefix that runs the claude CLI, or None (retry next session).
 
@@ -265,7 +342,9 @@ def _find_claude():
     desktop app's bundled CLI including where a Microsoft Store install really
     keeps it. This file's own copy knew none of them, so on a PC stage A found
     nothing and the plugin never installed, silently. The local fallback below
-    only serves a direct run of this script.
+    only serves a direct run of this script, and a plugin copy whose own finder
+    has gone blind: there the CLI running the session (_running_claude) comes
+    first, because this file is the only new code such a machine runs.
     """
     injected = globals().get("_NSLS_FIND_CLAUDE")
     if callable(injected):
@@ -275,6 +354,9 @@ def _find_claude():
             found = None
         if found:
             return list(found)
+    running = _running_claude()
+    if running:
+        return _cli_argv(running)
     found = shutil.which("claude")
     if found:
         return _cli_argv(Path(found))
