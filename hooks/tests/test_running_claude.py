@@ -85,7 +85,7 @@ def start(folder, name):
         src = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "PING.EXE"
         prog = folder / f"{name}.exe"
         shutil.copyfile(src, prog)
-        args = [str(prog), "-n", "60", "127.0.0.1"]
+        args = ["ping", "-n", "60", "127.0.0.1"]
     else:
         src = Path(shutil.which("sleep") or "/bin/sleep")
         prog = folder / name
@@ -98,8 +98,12 @@ def start(folder, name):
             # tied to /bin) unless the copy is signed again, ad hoc.
             subprocess.run(["codesign", "--force", "--sign", "-", str(prog)],
                            capture_output=True, check=True)
-        args = [str(prog), "60"]
-    proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Named by its original name in argv[0]: on newer Ubuntu, sleep is one
+        # program shared by every coreutils command, which picks the command
+        # from argv[0] and refuses "claude". The file it runs is still claude.
+        args = ["sleep", "60"]
+    proc = subprocess.Popen(args, executable=str(prog),
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(0.2)
     if proc.poll() is not None:
         raise RuntimeError(f"the stand-in {prog} exited at start (code {proc.returncode})")
@@ -131,6 +135,15 @@ def empty_world(t):
     return dict(HOME=str(t / "home"), USERPROFILE=str(t / "prof"),
                 APPDATA=str(t / "Roaming"), LOCALAPPDATA=str(t / "Local"),
                 PATH=str(t / "bin"))
+
+
+def stop(running):
+    for p in running:
+        try:
+            p.kill()
+            p.wait(timeout=5)
+        except Exception:
+            pass
 
 
 procs = []
@@ -239,6 +252,8 @@ try:
               len(ran) == 4 and same(ran[0], claude_prog)
               and ran[1:] == ["plugin", "update", "nsls-builder-toolkit@nsls-toolkit"], f"({ran})")
         check("and the stuck record is cleared", not status.exists())
+        # Before the folder goes: Windows will not delete a program that runs.
+        stop(procs)
 
     print("\nthe migration's copy is the same code as session-start's")
     def functions(path):
@@ -250,12 +265,7 @@ try:
     for name in ("_process_path", "_is_claude_cli", "_running_claude"):
         check(f"{name} is identical in both files", a.get(name) and a.get(name) == b.get(name))
 finally:
-    for p in procs:
-        try:
-            p.kill()
-            p.wait(timeout=5)
-        except Exception:
-            pass
+    stop(procs)
 
 print()
 if failures:

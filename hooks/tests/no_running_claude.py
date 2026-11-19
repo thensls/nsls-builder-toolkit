@@ -8,6 +8,7 @@ Importing this takes the variable out of this process and every child it
 starts. test_running_claude.py sets it on purpose, per check.
 """
 
+import collector_off  # noqa: F401  (first, like every module here)
 import os
 
 os.environ.pop("CLAUDE_PID", None)
