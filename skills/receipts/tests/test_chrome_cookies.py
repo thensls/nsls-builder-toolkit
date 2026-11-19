@@ -160,6 +160,31 @@ def test_no_chrome_at_all_says_so_and_does_not_raise(tmp_path, monkeypatch):
     assert values == [] and "no Chrome profile" in note
 
 
+def test_an_unlistable_chrome_folder_is_a_note_not_a_crash(chrome, monkeypatch):
+    """The listing sits outside the per-database handling, so an OSError there
+    used to escape claude_sessions() and skip the whole source — the stored
+    session behind it never got tried."""
+    def boom(_dir):
+        raise PermissionError("operation not permitted")
+    monkeypatch.setattr(cc, "_cookie_dbs", boom)
+    values, note = cc.claude_sessions()
+    assert values == [] and "could not be listed" in note
+
+
+def test_an_unlistable_chrome_folder_still_lets_the_stored_session_work(chrome, monkeypatch, tmp_path):
+    def boom(_dir):
+        raise PermissionError("operation not permitted")
+    monkeypatch.setattr(cc, "_cookie_dbs", boom)
+    monkeypatch.setenv("ANTHROPIC_ORG_UUID", "org-test")
+    monkeypatch.delenv("CLAUDE_SESSION_KEY", raising=False)
+    monkeypatch.setattr(anth, "SESSION_FILE", str(tmp_path / "stored"))
+    _stored(tmp_path, "STORED")
+    fake = _Listing(good={"STORED"})
+    with patch.object(anth, "_fetch_listing", fake):
+        anth.AnthropicSource()._listing()
+    assert fake.tried == ["STORED"]
+
+
 def test_a_denied_keychain_is_a_note_not_a_failure(chrome, monkeypatch):
     _profile(chrome, "Default", [(".claude.ai", "sessionKey", b"v10" + V10_PLAIN, 5)])
 

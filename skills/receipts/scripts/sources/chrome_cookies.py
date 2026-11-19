@@ -263,7 +263,13 @@ def claude_sessions() -> tuple[list[str], str | None]:
         return [], "reading the session from Chrome is only supported on macOS"
 
     chrome_dir = Path(os.path.expanduser(CHROME_DIR))
-    dbs = _cookie_dbs(chrome_dir)
+    try:
+        dbs = _cookie_dbs(chrome_dir)
+    except OSError:
+        # Unlistable (permissions, or a profile directory vanishing mid-scan).
+        # Same contract as every other failure here: a note, never a raise —
+        # the stored session is still behind this one.
+        return [], "Chrome's profile folder could not be listed"
     if not dbs:
         return [], "no Chrome profile was found on this Mac"
 
