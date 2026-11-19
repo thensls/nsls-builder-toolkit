@@ -20,3 +20,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 def _no_cloudflare_backoff(monkeypatch):
     from sources import anthropic as anth
     monkeypatch.setattr(anth, "_CF_BACKOFF_SECONDS", (0, 0, 0), raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_browser_session(monkeypatch):
+    """No test may ever reach a real Chrome profile or the macOS keychain.
+
+    The Anthropic source now reads the session from Chrome before the stored
+    file. On a builder's Mac that would make every session test depend on whoever
+    is signed in to claude.ai in their browser, and prompt the keychain mid-run.
+    Tests that exercise the Chrome path opt back in explicitly and point it at a
+    temp tree with a fake keychain.
+    """
+    monkeypatch.setenv("RECEIPTS_NO_BROWSER_SESSION", "1")

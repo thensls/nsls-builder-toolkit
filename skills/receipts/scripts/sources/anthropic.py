@@ -30,6 +30,14 @@ thing Cloudflare guards. So the cookie is captured once by hand and sent with
 stdlib urllib. No Playwright, no Chromium, no browser profile, no new pip
 dependency.
 
+WHERE THE SESSION COMES FROM NOW
+--------------------------------
+Still no browser is *driven* here. But a hand-pasted cookie goes stale on
+claude.ai's schedule, so on a Mac the session is read out of the user's own,
+already-signed-in Chrome profile first (sources/chrome_cookies.py), and the
+pasted file is the fallback. Order: CLAUDE_SESSION_KEY (alone) -> Chrome -> file.
+Only a dead session (SessionExpired) falls through to the next candidate.
+
 THE SESSION IS A CREDENTIAL
 ---------------------------
 Anyone holding it can act as the user on claude.ai. Therefore, in this module:
@@ -64,6 +72,7 @@ try:
                        StripCredentialsOnCrossOriginRedirect, UNSAFE_MODE_BITS,
                        prompt_for_secret, scrub_secret, secret_file_is_unsafe,
                        secret_file_mode, write_secret_file)
+    from .chrome_cookies import claude_sessions as _chrome_sessions
 except ImportError:
     # Running this file directly (`python3.12 sources/anthropic.py
     # --set-session`) gives it no parent package, so the relative import above
@@ -88,6 +97,19 @@ except ImportError:
                               UNSAFE_MODE_BITS, prompt_for_secret,
                               scrub_secret, secret_file_is_unsafe,
                               secret_file_mode, write_secret_file)
+    from sources.chrome_cookies import claude_sessions as _chrome_sessions
+
+
+class SessionExpired(SourceUnavailable):
+    """claude.ai rejected the session as dead (401 / logged-out / session_invalid).
+
+    A subclass, so every existing `except SourceUnavailable` and message check is
+    unchanged. It exists so `_listing` can tell "this session is dead, try the
+    next candidate" from every other failure, which must NOT fall through to
+    another credential: a Cloudflare challenge, an admin-permission 403, or a
+    network error says nothing about whether a different session would work, and
+    quietly trying more credentials would hide the real cause.
+    """
 
 LISTING = "https://claude.ai/api/stripe/{org}/invoices?limit={limit}&page={page}"
 PAGE_GUARD = 20  # pages (100 invoices/page = 2,000 invoices) — see fetch()
@@ -441,7 +463,7 @@ def _fetch_listing(org: str, session: str, page: str = "", limit: int = 100) -> 
     if (resp.status == 401
             or _looks_session_invalid(resp)
             or (resp.status == 200 and _looks_logged_out(resp.url))):
-        raise SourceUnavailable(
+        raise SessionExpired(
             f"The stored claude.ai session has expired — claude.ai no longer "
             f"accepts it for organization {org}. Sessions expire periodically; "
             f"this is normal and expected. Store a fresh one with: "
@@ -512,6 +534,42 @@ class AnthropicSource:
             })
         return rows
 
+    # The (label, value) of the session that worked, held only for the length of
+    # one fetch() so the several listing pages of a run reuse it instead of
+    # re-reading the keychain and re-trying dead candidates for every page.
+    _session: tuple[str, str] | None = None
+    # True only inside fetch(). A direct `_listing()` call (tests, smoke_live)
+    # must never leave a session behind on the module-level singleton.
+    _caching: bool = False
+    # Which credential the last successful run used: "environment", "chrome", or
+    # "stored". Read by run.py-style callers and tests; never the value itself.
+    session_source: str | None = None
+
+    @staticmethod
+    def _candidates() -> tuple[list[tuple[str, str]], str | None, SourceUnavailable | None]:
+        """Sessions to try, in order: (candidates, chrome_note, stored_error).
+
+        1. CLAUDE_SESSION_KEY — explicit, so it is used ALONE. Someone who set it
+           meant it; falling through to a browser they did not point us at would
+           be a surprise.
+        2. Chrome — signed in already and kept fresh by use, so it is tried before
+           the stored paste, which is only as fresh as the day it was copied.
+        3. The stored file — the fallback: no Chrome, no keychain access, no
+           signed-in profile, or a non-Mac.
+        """
+        env = (os.environ.get(SESSION_ENV) or "").strip()
+        if env:
+            return [("environment", env)], None, None
+        out: list[tuple[str, str]] = []
+        chrome, note = _chrome_sessions()
+        out.extend(("chrome", v) for v in chrome)
+        stored_error: SourceUnavailable | None = None
+        try:
+            out.append(("stored", _stored_session()))
+        except SourceUnavailable as exc:
+            stored_error = exc
+        return out, note, stored_error
+
     def _listing(self, page: str = "") -> dict:
         org = os.environ.get("ANTHROPIC_ORG_UUID")
         if not org:
@@ -520,7 +578,42 @@ class AnthropicSource:
                 "organization UUID (Settings > Organization) before running "
                 "the Anthropic source."
             )
-        return _fetch_listing(org, _stored_session(), page)
+        if self._caching and self._session is not None:
+            # Already proven this run. If it dies mid-run that is a real,
+            # reportable expiry — not a reason to start guessing at others.
+            return _fetch_listing(org, self._session[1], page)
+
+        candidates, chrome_note, stored_error = self._candidates()
+        if not candidates:
+            # Nothing to try at all: keep the stored-session message exactly as
+            # it always was (it carries the --set-session recovery command), and
+            # add what Chrome did say so the builder knows it was looked at.
+            assert stored_error is not None
+            if chrome_note:
+                raise SourceUnavailable(
+                    f"{stored_error} (Chrome was checked first: {chrome_note}.)"
+                ) from None
+            raise stored_error
+
+        last_expired: SessionExpired | None = None
+        for label, value in candidates:
+            try:
+                payload = _fetch_listing(org, value, page)
+            except SessionExpired as exc:
+                last_expired = exc
+                continue
+            if self._caching:
+                self._session = (label, value)
+            self.session_source = label
+            return payload
+
+        tried = ", ".join(sorted({label for label, _ in candidates}))
+        extra = f" Chrome: {chrome_note}." if chrome_note else ""
+        raise SessionExpired(
+            f"{last_expired} (Tried: {tried}.{extra} Opening claude.ai in Chrome "
+            f"and signing in refreshes the Chrome session; otherwise re-store one "
+            f"with {SET_SESSION_CMD}.)"
+        ) from None
 
     @staticmethod
     def _download(url: str) -> bytes:
@@ -535,6 +628,16 @@ class AnthropicSource:
         return data
 
     def fetch(self, since: str, until: str) -> list[Receipt]:
+        self._caching = True
+        try:
+            return self._fetch(since, until)
+        finally:
+            # A session proven in one run must not leak into the next call —
+            # the singleton outlives the run, and the next one may be hours later.
+            self._session = None
+            self._caching = False
+
+    def _fetch(self, since: str, until: str) -> list[Receipt]:
         self.truncated = None
         notes: list[str] = []
 
