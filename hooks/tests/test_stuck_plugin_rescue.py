@@ -16,6 +16,7 @@ A fake claude.exe (a script that logs its arguments) stands in for the CLI, in
 the Store layout, found through the APPDATA/LOCALAPPDATA variables on any OS.
 """
 import collector_off  # noqa: F401  (first: no test may install the real collector)
+import no_running_claude  # noqa: F401  (the session's own claude must not stand in for a test's fake)
 import json
 import os
 import stat

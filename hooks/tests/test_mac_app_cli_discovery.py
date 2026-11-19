@@ -21,6 +21,7 @@ run and nothing outside the temp dir is read.
 """
 
 import collector_off  # noqa: F401  (first: no test may install the real collector)
+import no_running_claude  # noqa: F401  (the session's own claude must not stand in for a test's fake)
 import contextlib
 import importlib.util
 import os

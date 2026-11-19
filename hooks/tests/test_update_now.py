@@ -11,6 +11,7 @@ moves the registry the way the real CLI does. No network, no real install.
 """
 
 import collector_off  # noqa: F401  (first: no test may install the real collector)
+import no_running_claude  # noqa: F401  (the session's own claude must not stand in for a test's fake)
 import json
 import os
 import subprocess
