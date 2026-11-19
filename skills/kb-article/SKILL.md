@@ -40,7 +40,7 @@ Run the script from this skill's folder, for example
 **First time on a computer: sign in.** Run `kb.py login --email THEIR@nsls.org`. It prints a
 code, and the person gets a Slack DM from **KB Publisher** with the same code and an **Allow**
 button. Tell them the code and ask them to click Allow only if it matches. The command waits
-about 90 seconds; if it says it is still waiting, run `kb.py login` again after they click. This
+about 5 minutes; if it times out, start again with `kb.py login --email THEIR@nsls.org`. This
 saves a personal key on their computer, so they never do it again there. Any command that says
 "not signed in" means: run login first.
 

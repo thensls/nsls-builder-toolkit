@@ -17,9 +17,11 @@ HubSpot key and asks for approval in Slack. Standard library only.
 Nothing goes live from here. After submit, Slack takes over: the author gets a DM with Publish (their
 own article, KB admins, small fixes), or the Owner / a KB admin gets an Approve button.
 """
-import argparse, json, os, sys, time, urllib.error, urllib.parse, urllib.request
+import argparse, json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
 
 URL = os.environ.get("KB_SUBMIT_URL", "https://kb-submit-production.up.railway.app").rstrip("/")
+if not URL.startswith("https://"):  # the bearer token must never travel over plain http
+    sys.exit(f"KB_SUBMIT_URL must start with https:// (got {URL}).")
 DIR = os.path.expanduser(os.environ.get("KB_CONFIG_DIR", "~/.config/nsls"))
 TOKEN_FILE, PENDING_FILE = os.path.join(DIR, "kb-token"), os.path.join(DIR, "kb-login-pending.json")
 
@@ -33,8 +35,23 @@ def _headers():
     return h
 
 
+def _signed_in():
+    """True when requests go out with a personal token. The service then takes the author from the token."""
+    return not os.environ.get("KB_SUBMIT_KEY") and os.path.exists(TOKEN_FILE)
+
+
+def _folder_name(art):
+    """Local folder name for `get`. The server's path is untrusted: keep only its last segment, allow only
+    safe characters, and fall back to the article id. Never absolute, never '..'."""
+    for raw in (art.get("path"), art.get("id")):
+        name = re.sub(r"[^A-Za-z0-9._-]", "-", os.path.basename(str(raw or "").strip().rstrip("/"))).strip(".-")
+        if name and ".." not in name:
+            return name
+    sys.exit("KB service returned an article with no usable path or id.")
+
+
 def _save(path, text):
-    os.makedirs(DIR, exist_ok=True)
+    os.makedirs(DIR, mode=0o700, exist_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         f.write(text)
@@ -45,7 +62,11 @@ def call(method, path, body=None):
                                  data=json.dumps(body).encode() if body is not None else None,
                                  headers=_headers())
     try:
-        return json.loads(urllib.request.urlopen(req, timeout=120).read())
+        raw = urllib.request.urlopen(req, timeout=120).read()
+        try:
+            return json.loads(raw)
+        except ValueError:
+            sys.exit(f"KB service sent an unreadable reply to {path}. Try again, or tell a KB admin.")
     except urllib.error.HTTPError as e:
         try:
             return json.loads(e.read())
@@ -74,7 +95,7 @@ def main():
     x = s.add_parser("get"); x.add_argument("ref"); x.add_argument("--out")
     x = s.add_parser("check"); x.add_argument("body"); x.add_argument("--type", choices=["sop", "resource"], required=True)
     x = s.add_parser("submit")
-    x.add_argument("--author", help="ignored when signed in"); x.add_argument("--type", choices=["sop", "resource"], required=True)
+    x.add_argument("--author", help="KB admin service-key scripts only; not sent when signed in"); x.add_argument("--type", choices=["sop", "resource"], required=True)
     x.add_argument("--body", required=True)
     for k in ("--article", "--title", "--meta", "--category", "--slug", "--subtitle", "--note"):
         x.add_argument(k)
@@ -90,7 +111,7 @@ def main():
         if not os.path.exists(PENDING_FILE):
             sys.exit("No sign-in in progress. Run: kb.py login --email you@nsls.org")
         pend = json.load(open(PENDING_FILE))
-        for _ in range(30):  # about 90 seconds; run `kb.py login` again to keep waiting
+        for _ in range(100):  # about 5 minutes
             d = call("POST", "/auth/poll", {"login": pend["login"], "secret": pend["secret"]})
             if d.get("token"):
                 _save(TOKEN_FILE, d["token"]); os.remove(PENDING_FILE)
@@ -100,8 +121,9 @@ def main():
                 os.remove(PENDING_FILE)
                 sys.exit(f"Sign-in {d.get('status') or 'failed'}. Start again with: kb.py login --email you@nsls.org")
             time.sleep(3)
-        print(f"Still waiting for Allow in Slack (code {pend['code']}). After clicking it, run: kb.py login")
-        return
+        os.remove(PENDING_FILE)
+        sys.exit(f"Timed out waiting for Allow in Slack (code {pend['code']}). If you have not clicked it yet, "
+                 "start again with: kb.py login --email you@nsls.org")
     if a.cmd == "search":
         for r in done(call("GET", "/api/search?q=" + urllib.parse.quote(" ".join(a.words))))["results"] or []:
             print(f"{r['id']}\t{r['state']}\t{r['url']}\t{r['title']}\tOwner: {r['owner'] or '(none)'}"
@@ -112,7 +134,7 @@ def main():
     elif a.cmd == "get":
         d = done(call("GET", "/api/article/" + urllib.parse.quote(a.ref)))
         art = d["article"]
-        out = a.out or os.path.join(os.getcwd(), art.get("path") or str(art["id"]))
+        out = a.out or os.path.join(os.getcwd(), _folder_name(art))
         os.makedirs(out, exist_ok=True)
         open(os.path.join(out, "body.html"), "w").write(art.pop("body") or "")
         json.dump({**art, "owner": d["owner"], "handbook": d["handbook"]}, open(os.path.join(out, "meta.json"), "w"), indent=1)
@@ -123,10 +145,12 @@ def main():
             print(f"Note: a change to this article is already waiting for approval ({d['pending_submission']}).")
     elif a.cmd == "check":
         d = call("POST", "/api/lint", {"body": open(a.body).read(), "type": a.type})
-        print("OK: passes house-style checks." if d.get("ok") else "\n".join("- " + x for x in d.get("problems", [])))
+        print("OK: passes house-style checks." if d.get("ok") else "\n".join(
+            ([d["error"]] if d.get("error") else []) + ["- " + x for x in d.get("problems", [])]))
         sys.exit(0 if d.get("ok") else 1)
     elif a.cmd == "submit":
-        body = {"author_email": a.author or "", "type": a.type, "body": open(a.body).read(), "article": a.article,
+        # Signed in: the service takes the author from the token, so never send a typed email.
+        body = {"author_email": None if _signed_in() else a.author, "type": a.type, "body": open(a.body).read(), "article": a.article,
                 "title": a.title, "meta": a.meta, "category": a.category, "slug": a.slug, "subtitle": a.subtitle,
                 "note": a.note}
         d = done(call("POST", "/api/submit", {k: v for k, v in body.items() if v}))
