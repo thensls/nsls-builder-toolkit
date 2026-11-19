@@ -86,6 +86,15 @@ def start(folder, name):
         prog = folder / f"{name}.exe"
         shutil.copyfile(src, prog)
         args = ["ping", "-n", "60", "127.0.0.1"]
+    elif sys.platform.startswith("linux"):
+        # Not sleep: on newer Ubuntu every coreutils command is one program
+        # that works out which command it is from its own file name, so a copy
+        # named claude refuses to run (seen on CI, even with argv[0] = sleep).
+        # bash runs under any name, and the loop keeps the bash process alive.
+        prog = folder / name
+        shutil.copyfile(shutil.which("bash") or "/bin/bash", prog)
+        prog.chmod(0o755)
+        args = ["bash", "-c", "while :; do sleep 1; done"]
     else:
         src = Path(shutil.which("sleep") or "/bin/sleep")
         prog = folder / name
@@ -98,9 +107,6 @@ def start(folder, name):
             # tied to /bin) unless the copy is signed again, ad hoc.
             subprocess.run(["codesign", "--force", "--sign", "-", str(prog)],
                            capture_output=True, check=True)
-        # Named by its original name in argv[0]: on newer Ubuntu, sleep is one
-        # program shared by every coreutils command, which picks the command
-        # from argv[0] and refuses "claude". The file it runs is still claude.
         args = ["sleep", "60"]
     proc = subprocess.Popen(args, executable=str(prog),
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
