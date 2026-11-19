@@ -11,6 +11,7 @@ moves the registry the way the real CLI does. No network, no real install.
 """
 
 import collector_off  # noqa: F401  (first: no test may install the real collector)
+import no_running_claude  # noqa: F401  (the session's own claude must not stand in for a test's fake)
 import json
 import os
 import subprocess
@@ -196,6 +197,40 @@ import re as _re
 stale = int(_re.search(r"^HEAL_LOCK_STALE_S = (\d+)", src, _re.M).group(1))
 upd = int(_re.search(r"^UPDATE_NOW_TIMEOUT_S = (\d+)", src, _re.M).group(1))
 check("the lock outlives the longest holder (update now + its 60s heal)", stale > upd + 60)
+
+
+def behind_on_commit(cfg, clone_version):
+    """Installed 3.6.0 at an old commit; the clone carries `clone_version`.
+    The fake update (no release set) returns 0 and moves nothing."""
+    reg = cfg / "plugins" / "installed_plugins.json"
+    d = json.loads(reg.read_text())
+    d["plugins"][PLUGIN_KEY][0]["gitCommitSha"] = OLD
+    reg.write_text(json.dumps(d))
+    market = cfg / "plugins" / "marketplaces" / "nsls-toolkit"
+    (market / ".claude-plugin").mkdir()
+    (market / ".claude-plugin" / "plugin.json").write_text(json.dumps({"version": clone_version}))
+    return reg
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    # A version gap the update did not close: never reinstall over it.
+    cfg, log, env = machine(tmp)
+    reg = behind_on_commit(cfg, "3.7.0")
+    before = reg.read_text()
+    out = run(env)
+    check("version gap: never uninstalled", "uninstall" not in log.read_text(), log.read_text())
+    check("version gap: install record untouched", reg.read_text() == before)
+    check("version gap: says it did not move and nothing was removed",
+          "did not move to the newest release" in out and "Nothing was removed" in out, out)
+    check("version gap: never 'up to date'", "up to date" not in out, out)
+
+with tempfile.TemporaryDirectory() as tmp:
+    # Same version, different commit: the case the reinstall exists for.
+    cfg, log, env = machine(tmp)
+    behind_on_commit(cfg, "3.6.0")
+    out = run(env)
+    check("same-version drift: the reinstall is reached",
+          f"plugin uninstall {PLUGIN_KEY}" in log.read_text(), log.read_text())
 
 with tempfile.TemporaryDirectory() as tmp:
     cfg, log, env = machine(tmp, installed=False)

@@ -21,6 +21,7 @@ PATH that records what it was asked. No network, no real install touched.
 """
 
 import collector_off  # noqa: F401  (first: no test may install the real collector)
+import no_running_claude  # noqa: F401  (the session's own claude must not stand in for a test's fake)
 import importlib.util
 import io
 import json

@@ -190,7 +190,25 @@ the exact command as an **absolute path** instead, resolved at runtime from
 where this skill is actually installed, so it works from whatever directory
 you're in when you see it.
 
-`--set-session` asks for your claude.ai session cookie. To find it:
+**On a Mac with Chrome, you usually don't need the paste at all.** Each run
+reads the claude.ai session straight from the Chrome you are already signed in
+with, and tries it **before** the stored one — Chrome refreshes that session
+every time you use claude.ai, so it doesn't go stale the way a copied cookie
+does. The first run, macOS asks to let `security` (the macOS keychain tool) read "Chrome Safe Storage";
+choose **Always Allow** and it never asks again. (Deny it, or have no Chrome, and
+the source quietly falls back to the stored session below and says why in the
+error if that has expired too.) Only the `sessionKey` cookie for claude.ai is
+read, from a temporary copy of Chrome's cookie file that is deleted straight
+after. Set `RECEIPTS_NO_BROWSER_SESSION=1` to turn this off.
+
+The order is: `CLAUDE_SESSION_KEY` (used alone if set) → Chrome → the stored
+file. A dead session moves on to the next; any other failure (Cloudflare, not an
+org admin, network) stops and is reported, because another credential wouldn't
+fix it.
+
+`--set-session` is the fallback — for a machine with no Chrome, a denied
+keychain prompt, or a Chrome that isn't signed in to claude.ai. It asks for
+your claude.ai session cookie. To find it:
 
 1. Open https://claude.ai in Chrome, signed in to the right account.
 2. Open DevTools (**⌥⌘I** on macOS, F12 elsewhere).
@@ -213,8 +231,9 @@ that way (from a password manager, say).
 
 **Sessions expire periodically.** That is normal, not a breakage. When it
 happens the report says so in plain words — `the stored claude.ai session has
-expired` — and the fix is to re-run `--set-session` with a freshly copied
-cookie.
+expired` — and the fix is to open claude.ai in Chrome and sign in (that refreshes
+the session this source reads first), or to re-run `--set-session` with a freshly
+copied cookie.
 
 This source is how usage-credit auto-recharge charges get a receipt at
 all — Anthropic does **not** email those (see the coverage note below). If
