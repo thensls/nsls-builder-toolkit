@@ -10,6 +10,7 @@ encrypt written beside it.
 """
 
 import hashlib
+import time
 import sqlite3
 from pathlib import Path
 from unittest.mock import patch
@@ -238,6 +239,29 @@ def test_a_busy_live_file_falls_back_to_copying_rather_than_losing_the_profile(c
         return real(target, *a, **k)
     monkeypatch.setattr(cc.sqlite3, "connect", flaky)
     assert cc.claude_sessions()[0] == [VALUE]
+
+
+def test_a_locked_cookie_file_cannot_hang_the_run(chrome, monkeypatch):
+    """backup() retries a locked source forever on its own; the deadline must
+    interrupt it and let the fallback (or the stored session) take over."""
+    import threading
+    db = _profile(chrome, "Default", [(".claude.ai", "sessionKey", b"v10" + V10_PLAIN, 5)])
+    monkeypatch.setattr(cc, "BACKUP_DEADLINE_SECONDS", 0.3)
+    holder = sqlite3.connect(db, isolation_level=None)
+    holder.execute("BEGIN EXCLUSIVE")          # Chrome mid-write: nobody else may read
+    result = {}
+
+    def run():
+        result["out"] = cc.claude_sessions()
+    t = threading.Thread(target=run, daemon=True)
+    started = time.monotonic()
+    t.start()
+    t.join(timeout=20)
+    holder.execute("ROLLBACK")
+    holder.close()
+    assert not t.is_alive(), "claude_sessions() hung on a locked cookie file"
+    assert time.monotonic() - started < 15
+    assert "out" in result       # returned (value or note), did not raise
 
 
 def test_a_path_with_a_space_like_chromes_real_one_is_readable(tmp_path, monkeypatch):

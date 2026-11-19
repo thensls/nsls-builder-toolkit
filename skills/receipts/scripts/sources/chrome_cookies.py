@@ -48,6 +48,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -62,6 +63,10 @@ KEYCHAIN_SERVICE = "Chrome Safe Storage"
 KEYCHAIN_ACCOUNT = "Chrome"
 # macOS shows a permission dialog on the first read; give a human time to answer.
 KEYCHAIN_TIMEOUT_SECONDS = 120
+# Upper bound on taking the snapshot. sqlite3's backup() retries a busy/locked
+# source FOREVER (the connection's `timeout` bounds a single lock wait, not that
+# retry loop), so without a deadline a locked cookie file hangs the whole run.
+BACKUP_DEADLINE_SECONDS = 5.0
 
 _HOSTS = ("claude.ai", ".claude.ai")
 _COOKIE = "sessionKey"
@@ -246,12 +251,20 @@ def _snapshot(db: Path, copy: Path) -> None:
     now), copy the files instead — a possibly-torn snapshot beats none, and
     anything unreadable is still reported by the caller as a note, not a crash.
     """
+    deadline = time.monotonic() + BACKUP_DEADLINE_SECONDS
+
+    def _give_up_when_late(_status, _remaining, _total):
+        # Called after every step, including the BUSY/LOCKED ones that backup()
+        # would otherwise retry without end. Raising aborts it.
+        if time.monotonic() > deadline:
+            raise sqlite3.OperationalError("backup deadline exceeded")
+
     try:
-        source = sqlite3.connect(_uri(db, "ro"), uri=True, timeout=5)
+        source = sqlite3.connect(_uri(db, "ro"), uri=True, timeout=1)
         try:
             target = sqlite3.connect(copy)
             try:
-                source.backup(target)
+                source.backup(target, progress=_give_up_when_late)
             finally:
                 target.close()
         finally:
