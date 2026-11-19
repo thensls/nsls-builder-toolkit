@@ -49,6 +49,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 
 # Opt-out. Set to anything non-empty to skip Chrome entirely (the test suite
 # sets it so no test can ever reach a real browser profile or the keychain).
@@ -225,21 +226,58 @@ def _cookie_dbs(chrome_dir: Path) -> list[Path]:
     return out
 
 
+def _uri(path: Path, mode: str) -> str:
+    # quote(): Chrome's real path contains a space ("Application Support"), which
+    # a bare `file:` URI does not reliably survive.
+    return f"file:{quote(str(path))}?mode={mode}"
+
+
+def _snapshot(db: Path, copy: Path) -> None:
+    """Make `copy` a consistent, private snapshot of Chrome's live cookie DB.
+
+    Preferred: SQLite's own backup API from a read-only connection. Chrome writes
+    and checkpoints this file while it runs, so copying the main file and its
+    -wal/-shm as three separate steps can capture a database and a log from
+    different moments — a snapshot that fails to open or reads wrong, which used
+    to discard a perfectly good signed-in profile. The backup API reads under
+    SQLite's own locking and is consistent by construction.
+
+    Fallback: if the backup itself fails (the live file is busy or locked right
+    now), copy the files instead — a possibly-torn snapshot beats none, and
+    anything unreadable is still reported by the caller as a note, not a crash.
+    """
+    try:
+        source = sqlite3.connect(_uri(db, "ro"), uri=True, timeout=5)
+        try:
+            target = sqlite3.connect(copy)
+            try:
+                source.backup(target)
+            finally:
+                target.close()
+        finally:
+            source.close()
+        return
+    except sqlite3.Error:
+        if copy.exists():
+            copy.unlink()
+    shutil.copy2(db, copy)
+    for suffix in ("-wal", "-shm", "-journal"):
+        side = Path(str(db) + suffix)
+        if side.is_file():
+            shutil.copy2(side, Path(str(copy) + suffix))
+
+
 def _read_rows(db: Path) -> list[tuple]:
     """(host_key, encrypted_value, last_access_utc) for claude.ai sessionKey rows.
 
-    Reads a COPY: Chrome keeps the live database open (and in WAL mode), and
-    opening it directly can fail or, worse, interfere with the running browser.
+    Reads a private snapshot, never the live file: Chrome keeps it open, and
+    querying it directly can fail or interfere with the running browser.
     """
     with tempfile.TemporaryDirectory(prefix="receipts-cookies-") as tmp:
         os.chmod(tmp, 0o700)
         copy = Path(tmp) / "Cookies"
-        shutil.copy2(db, copy)
-        for suffix in ("-wal", "-shm", "-journal"):
-            side = Path(str(db) + suffix)
-            if side.is_file():
-                shutil.copy2(side, Path(str(copy) + suffix))
-        conn = sqlite3.connect(f"file:{copy}?mode=ro", uri=True)
+        _snapshot(db, copy)
+        conn = sqlite3.connect(_uri(copy, "ro"), uri=True)
         try:
             return conn.execute(
                 "SELECT host_key, encrypted_value, last_access_utc FROM cookies "

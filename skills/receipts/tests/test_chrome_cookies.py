@@ -201,6 +201,56 @@ def test_a_corrupt_cookie_is_a_note_not_a_crash(chrome):
     assert values == [] and "could not be decrypted" in note
 
 
+def test_the_snapshot_is_taken_with_sqlites_backup_api_not_by_copying_files(chrome, monkeypatch):
+    """Copying the DB and its -wal/-shm as separate steps can capture them from
+    different moments while Chrome is writing."""
+    _profile(chrome, "Default", [(".claude.ai", "sessionKey", b"v10" + V10_PLAIN, 5)])
+    copied = []
+    monkeypatch.setattr(cc.shutil, "copy2", lambda *a, **k: copied.append(a))
+    assert cc.claude_sessions()[0] == [VALUE]
+    assert copied == []
+
+
+def test_a_wal_mode_database_is_read_consistently(chrome):
+    """A live Chrome DB in WAL mode keeps recent rows in the -wal file until a
+    checkpoint — the backup must include them."""
+    db = _profile(chrome, "Default", [])
+    live = sqlite3.connect(db)
+    live.execute("PRAGMA journal_mode=WAL")
+    live.execute("INSERT INTO cookies VALUES (?,?,?,?)",
+                 (".claude.ai", "sessionKey", b"v10" + V10_PLAIN, 5))
+    live.commit()          # sits in the -wal, not yet checkpointed into the main file
+    try:
+        assert cc.claude_sessions()[0] == [VALUE]
+    finally:
+        live.close()
+
+
+def test_a_busy_live_file_falls_back_to_copying_rather_than_losing_the_profile(chrome, monkeypatch):
+    _profile(chrome, "Default", [(".claude.ai", "sessionKey", b"v10" + V10_PLAIN, 5)])
+    real = sqlite3.connect
+    calls = {"n": 0}
+
+    def flaky(target, *a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:            # the read-only connection to the live file
+            raise sqlite3.OperationalError("database is locked")
+        return real(target, *a, **k)
+    monkeypatch.setattr(cc.sqlite3, "connect", flaky)
+    assert cc.claude_sessions()[0] == [VALUE]
+
+
+def test_a_path_with_a_space_like_chromes_real_one_is_readable(tmp_path, monkeypatch):
+    monkeypatch.delenv(cc.DISABLE_ENV, raising=False)
+    monkeypatch.setattr(cc.sys, "platform", "darwin")
+    root = tmp_path / "Application Support" / "Google" / "Chrome"
+    root.mkdir(parents=True)
+    monkeypatch.setattr(cc, "CHROME_DIR", str(root))
+    monkeypatch.setattr(cc, "_keychain_password", lambda: PASSWORD)
+    _profile(root, "Default", [(".claude.ai", "sessionKey", b"v10" + V10_PLAIN, 5)])
+    assert cc.claude_sessions()[0] == [VALUE]
+
+
 def test_the_notes_never_contain_a_session_value(chrome):
     _profile(chrome, "Default", [(".claude.ai", "sessionKey", b"v10" + b"\x01" * 16, 5)])
     _values, note = cc.claude_sessions()
