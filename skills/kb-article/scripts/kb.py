@@ -66,7 +66,7 @@ def call(method, path, body=None):
         try:
             return json.loads(raw)
         except ValueError:
-            sys.exit(f"KB service sent an unreadable reply to {path}. Try again, or tell a KB admin.")
+            sys.exit(f"The KB service at {URL} sent back something that isn't JSON. Try again in a minute.")
     except urllib.error.HTTPError as e:
         try:
             return json.loads(e.read())
@@ -93,9 +93,11 @@ def main():
     x = s.add_parser("search"); x.add_argument("words", nargs="+")
     s.add_parser("categories")
     x = s.add_parser("get"); x.add_argument("ref"); x.add_argument("--out")
+    x.add_argument("--force", action="store_true", help="replace body.html/meta.json already in the folder")
     x = s.add_parser("check"); x.add_argument("body"); x.add_argument("--type", choices=["sop", "resource"], required=True)
     x = s.add_parser("submit")
-    x.add_argument("--author", help="KB admin service-key scripts only; not sent when signed in"); x.add_argument("--type", choices=["sop", "resource"], required=True)
+    x.add_argument("--author", help="KB admin scripts only (KB_SUBMIT_KEY); signed-in people are always the author")
+    x.add_argument("--type", choices=["sop", "resource"], required=True)
     x.add_argument("--body", required=True)
     for k in ("--article", "--title", "--meta", "--category", "--slug", "--subtitle", "--note"):
         x.add_argument(k)
@@ -106,12 +108,17 @@ def main():
         if a.email:
             d = done(call("POST", "/auth/start", {"email": a.email}))
             _save(PENDING_FILE, json.dumps({"login": d["login"], "secret": d["secret"], "code": d["code"]}))
-            print(f"Check Slack: a DM from KB Publisher shows the code {d['code']}.\n"
-                  "Click Allow there only if the code matches. Waiting...", flush=True)
+            # Return right away so Claude can show the code; waiting here hides it until the wait ends.
+            print(f"Sign-in code: {d['code']}\nCheck Slack: a DM from KB Publisher shows the same code. "
+                  "Click Allow there only if it matches, then run: kb.py login")
+            return
         if not os.path.exists(PENDING_FILE):
-            sys.exit("No sign-in in progress. Run: kb.py login --email you@nsls.org")
+            if os.path.exists(TOKEN_FILE) and call("GET", "/api/categories").get("ok"):
+                print("Already signed in on this computer. Nothing to do.")
+                return
+            sys.exit("Not signed in yet. Run: kb.py login --email you@nsls.org")
         pend = json.load(open(PENDING_FILE))
-        for _ in range(100):  # about 5 minutes
+        for _ in range(20):  # about 60 seconds; run `kb.py login` again to keep waiting
             d = call("POST", "/auth/poll", {"login": pend["login"], "secret": pend["secret"]})
             if d.get("token"):
                 _save(TOKEN_FILE, d["token"]); os.remove(PENDING_FILE)
@@ -121,9 +128,8 @@ def main():
                 os.remove(PENDING_FILE)
                 sys.exit(f"Sign-in {d.get('status') or 'failed'}. Start again with: kb.py login --email you@nsls.org")
             time.sleep(3)
-        os.remove(PENDING_FILE)
-        sys.exit(f"Timed out waiting for Allow in Slack (code {pend['code']}). If you have not clicked it yet, "
-                 "start again with: kb.py login --email you@nsls.org")
+        print(f"Still waiting for Allow in Slack (code {pend['code']}). After clicking it, run: kb.py login")
+        return
     if a.cmd == "search":
         for r in done(call("GET", "/api/search?q=" + urllib.parse.quote(" ".join(a.words))))["results"] or []:
             print(f"{r['id']}\t{r['state']}\t{r['url']}\t{r['title']}\tOwner: {r['owner'] or '(none)'}"
@@ -135,9 +141,12 @@ def main():
         d = done(call("GET", "/api/article/" + urllib.parse.quote(a.ref)))
         art = d["article"]
         out = a.out or os.path.join(os.getcwd(), _folder_name(art))
+        body_path, meta_path = os.path.join(out, "body.html"), os.path.join(out, "meta.json")
+        if not a.force and (os.path.exists(body_path) or os.path.exists(meta_path)):
+            sys.exit(f"{out}/ already has body.html or meta.json, maybe unsaved edits. Use --out NEWDIR, or --force to replace.")
         os.makedirs(out, exist_ok=True)
-        open(os.path.join(out, "body.html"), "w").write(art.pop("body") or "")
-        json.dump({**art, "owner": d["owner"], "handbook": d["handbook"]}, open(os.path.join(out, "meta.json"), "w"), indent=1)
+        open(body_path, "w").write(art.pop("body") or "")
+        json.dump({**art, "owner": d["owner"], "handbook": d["handbook"]}, open(meta_path, "w"), indent=1)
         print(f"Saved to {out}/ (body.html, meta.json). Owner: {d['owner'] or '(none)'}.")
         if d["handbook"]:
             print("This is an Employee Handbook article. It cannot be edited; send changes to hr@nsls.org.")
@@ -145,8 +154,11 @@ def main():
             print(f"Note: a change to this article is already waiting for approval ({d['pending_submission']}).")
     elif a.cmd == "check":
         d = call("POST", "/api/lint", {"body": open(a.body).read(), "type": a.type})
-        print("OK: passes house-style checks." if d.get("ok") else "\n".join(
-            ([d["error"]] if d.get("error") else []) + ["- " + x for x in d.get("problems", [])]))
+        if d.get("ok"):
+            print("OK: passes house-style checks.")
+        else:
+            print("NOT OK" + (f": {d['error']}" if d.get("error") else ""))
+            print("\n".join("- " + x for x in d.get("problems", [])))
         sys.exit(0 if d.get("ok") else 1)
     elif a.cmd == "submit":
         # Signed in: the service takes the author from the token, so never send a typed email.

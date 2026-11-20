@@ -5,7 +5,9 @@ description: >-
   Create or edit articles in the NSLS internal Knowledge Base at info.nsls.org/internal.
   Use when someone says "create a kb article", "new knowledge base article", "write an
   SOP", "document this process for the team", "update a kb article", "edit the kb",
-  "add to the internal kb", or wants to capture a process or how-to for staff.
+  "add to the internal kb", or wants to capture a process or how-to for staff. Also use it
+  to look things up in the KB while working ("check the kb", "what's our process for",
+  "who owns", "who's the expert on").
 ---
 
 <!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
@@ -37,12 +39,21 @@ submit, Slack takes over and the right person clicks Publish or Approve.
 Run the script from this skill's folder, for example
 `python3 <skill folder>/scripts/kb.py search hubspot user`.
 
-**First time on a computer: sign in.** Run `kb.py login --email THEIR@nsls.org`. It prints a
-code, and the person gets a Slack DM from **KB Publisher** with the same code and an **Allow**
-button. Tell them the code and ask them to click Allow only if it matches. The command waits
-about 5 minutes; if it times out, start again with `kb.py login --email THEIR@nsls.org`. This
-saves a personal key on their computer, so they never do it again there. Any command that says
-"not signed in" means: run login first.
+**First time on a computer: sign in.** It takes two commands. First run `kb.py login --email
+THEIR@nsls.org`. It prints a code right away and sends them a Slack DM from **KB Publisher** with
+the same code and an **Allow** button. Show them the code and ask them to click Allow only if it
+matches. Once they say they clicked it, run `kb.py login` (no email) to finish. It saves a personal
+key on their computer, so they never do it again there. If it says it is still waiting, ask whether
+they clicked Allow, then run `kb.py login` again. Never start a new `--email` sign-in while one is
+waiting: that sends a new code and the old Allow no longer counts. If `kb.py login` says "Already
+signed in", they are done. Any command that says "not signed in" means: run login first.
+
+## Looking things up
+
+The KB is also a reference while you work. Before guessing how an NSLS process works, run
+`kb.py search` with the key words and `kb.py get` the best match, then answer from the article and
+link it. To find **who owns or knows a topic**, search it and report the Owner of the closest
+articles. If nothing matches, say so plainly; don't invent an owner.
 
 ## Commands
 
@@ -51,7 +62,7 @@ saves a personal key on their computer, so they never do it again there. Any com
 | `kb.py login --email EMAIL` | One-time sign-in, approved in Slack. |
 | `kb.py search WORDS...` | Finds existing articles by title and text, with their Owner. |
 | `kb.py categories` | Lists sections and subsections with their IDs. |
-| `kb.py get ID\|SLUG` | Saves an article's `body.html` and `meta.json` to edit. |
+| `kb.py get ID\|SLUG` | Saves an article's `body.html` and `meta.json` to edit. Won't overwrite an existing copy unless you add `--force`. |
 | `kb.py check BODY.html --type sop\|resource` | House-style check. Fix everything it reports. |
 | `kb.py submit ...` | Sends the article. See step 7. |
 | `kb.py status SUBMISSION` | Shows whether it was published, rejected or is still waiting. |
@@ -84,7 +95,9 @@ saves a personal key on their computer, so they never do it again there. Any com
      file under a subsection, pass the subsection's own ID.
 8. **Tell the author what happens next**, using the message `submit` prints:
    - Their own article, a small fix, or a KB admin: a Slack DM with a **Publish** button.
-   - Someone else's article: the Owner gets an **Approve** button in Slack.
+   - Someone else's article: the Owner gets an **Approve** button in Slack. If the Owner hasn't
+     decided after 3 business days, it also goes to #kb-submissions so a KB admin can decide (for
+     when the Owner is away). If the Owner has left NSLS, it goes straight to the KB admins.
    - A new article: a KB admin approves it in #kb-submissions.
    They get a Slack DM when it's decided. Waiting approvals get a reminder after 3 business days
    and close after 6.
