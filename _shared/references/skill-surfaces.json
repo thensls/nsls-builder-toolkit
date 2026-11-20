@@ -75,7 +75,7 @@
     "interrogate": "Reads the project folder and the toolkit's files, and runs a toolkit command.",
     "jd-builder": "Runs its own script and uploads with the Google Workspace command-line tool.",
     "job-function-audit": "Builds the sheet with its own script, signed in on the computer.",
-    "kb-article": "Uses the Google Workspace command-line tool.",
+    "kb-article": "Runs its own script to reach the KB service and keeps a Slack-approved sign-in key on the computer.",
     "macroscope": "Reads the pull request with the GitHub command-line tool.",
     "n8n": "Uses the n8n connection each person sets up on their computer.",
     "netlify-deploy": "Runs the Netlify command-line tool.",

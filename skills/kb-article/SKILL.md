@@ -2,12 +2,12 @@
 name: kb-article
 description: >-
   Claude Code only.
-  Create or update articles in the NSLS internal HubSpot Knowledge Base at
-  info.nsls.org/internal by writing the article into the master Google Sheet
-  registry and handing back the import steps. Use when the user says "create a
-  kb article", "new knowledge base article", "draft a kb article", "update a kb
-  article", "add to the internal kb", "publish to info.nsls.org", or wants to
-  capture a process / SOP / how-to into the internal KB.
+  Create or edit articles in the NSLS internal Knowledge Base at info.nsls.org/internal.
+  Use when someone says "create a kb article", "new knowledge base article", "write an
+  SOP", "document this process for the team", "update a kb article", "edit the kb",
+  "add to the internal kb", or wants to capture a process or how-to for staff. Also use it
+  to look things up in the KB while working ("check the kb", "what's our process for",
+  "who owns", "who's the expert on").
 ---
 
 <!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
@@ -27,395 +27,88 @@ description: >-
 
 # KB Article
 
-Create or update articles in the NSLS internal Knowledge Base (HubSpot Service
-Hub, at `https://info.nsls.org/internal`). The registry is a persistent **master
-Google Sheet** holding every internal article in HubSpot-import-ready form. Every
-new or edited article is written into that sheet, so at any point the sheet can be
-downloaded and re-imported to bring HubSpot fully in sync. There is no write API
-and no exporter app: publishing is always update the master sheet, download it,
-import it.
+Write and update articles on the internal Knowledge Base (`https://info.nsls.org/internal`).
+`scripts/kb.py` sends everything to the KB service. **Nothing goes live from here.** After a
+submit, Slack takes over and the right person clicks Publish or Approve.
 
-The master sheet is the **authoring source of truth**. A HubSpot **export** is
-used only to reconcile (confirm what exists, get real slugs), never edited.
+- Content rules (sections, voice, HTML): **`references/style.md`**. Read it before drafting.
+  Danielle Mariani owns it.
+- Member-facing articles for info.nsls.org/help use the `help-center-article` skill instead.
+  If a member could read it, it belongs there.
 
-The process this skill automates is itself documented as an article at
-`https://info.nsls.org/internal/creating-a-knowledge-base-article`. Keep the two
-in sync: if you change the workflow here, update that article's row too.
+Run the script from this skill's folder, for example
+`python3 <skill folder>/scripts/kb.py search hubspot user`.
 
-## Internal vs external KB (decide first)
+**First time on a computer: sign in.** It takes two commands. First run `kb.py login --email
+THEIR@nsls.org`. It prints a code right away and sends them a Slack DM from **KB Publisher** with
+the same code and an **Allow** button. Show them the code and ask them to click Allow only if it
+matches. Once they say they clicked it, run `kb.py login` (no email) to finish. It saves a personal
+key on their computer, so they never do it again there. If it says it is still waiting, ask whether
+they clicked Allow, then run `kb.py login` again. Never start a new `--email` sign-in while one is
+waiting: that sends a new code and the old Allow no longer counts. If `kb.py login` says "Already
+signed in", they are done. Any command that says "not signed in" means: run login first.
 
-- **Internal**, `info.nsls.org/internal`, staff-only, ~70 articles. Internal
-  process, system mechanics, anything naming a HubSpot field / workflow ID /
-  pipeline stage. **This skill covers internal.**
-- **External**, `info.nsls.org/help`, member and prospect facing, ~87 articles
-  across 8 categories. Different voice and review bar. Route external copy
-  through the `nsls-copywriter-skill` and treat publishing as a separate,
-  higher-care task.
+## Looking things up
 
-If a member could read it, it is external. If it only makes sense with a HubSpot
-login, it is internal.
+The KB is also a reference while you work. Before guessing how an NSLS process works, run
+`kb.py search` with the key words and `kb.py get` the best match, then answer from the article and
+link it. To find **who owns or knows a topic**, search it and report the Owner of the closest
+articles. If nothing matches, say so plainly; don't invent an owner.
 
-## How publishing works (no write API)
+## Commands
 
-HubSpot exposes **no API** for creating, updating, or deleting KB articles
-(verified: `cms/v3/knowledge-base/articles` rejects Private App tokens by design,
-on every tier and scope set). Never promise API publish. The supported paths are
-the built-in **CSV importer** (primary) and manual **in-editor paste** (one-offs).
-
-**CSV importer:** **Content → Knowledge Base → Current view dropdown → Import
-knowledge base**, upload the CSV, map columns.
-- **Create new articles:** leave "Overwrite existing content" unchecked.
-- **Update existing in place:** check **"Overwrite any existing content with
-  imported content"**. Matching is by the **Article URL** column, so the URL must
-  exactly equal the live article URL (`https://info.nsls.org/internal/<slug>`).
-- Limits: 400 articles per import; the importer **rejects `<table>`**.
-
-## The master Google Sheet (registry)
-
-- **Title:** `NSLS Internal KB — Master (HubSpot Import)`
-- **ID:** `1vJ70z_fx_SQWPrJRBUyyptOoowJ1hbpm6iTEFLNEoF8`
-- **URL:** https://docs.google.com/spreadsheets/d/1vJ70z_fx_SQWPrJRBUyyptOoowJ1hbpm6iTEFLNEoF8/edit
-- **Tabs:**
-  - `Articles` (sheetId `1111298109`) — every article whose body fits Google
-    Sheets' 50,000-char/cell limit. This tab is the **published set**: it is
-    downloaded whole only for a deliberate, reconciled mass sync. Routine
-    publishes import a changed-row CSV instead (see "Delivering and
-    publishing").
-  - `Oversized (import separately)` (sheetId `977468579`) — bodies over 50,000
-    chars. The body cell holds a pointer, not HTML; the real import-ready row
-    lives in `~/Downloads/nsls_kb_import_<slug>.csv`, imported one file at a time.
-
-**Columns (both tabs) are A:J — 8 import columns in HubSpot mapping order, then 2
-attribution columns:**
-
-| Col | Field | Notes |
-|---|---|---|
-| A | Article URL | Full live URL, single `/internal`. The import match key. |
-| B | Article title | What someone would search for; lead with the noun. |
-| C | Category | Must match an existing category string exactly (list below). |
-| D | Subcategory | Usually blank. |
-| E | Keywords | Comma-separated search terms, including acronyms and owner. |
-| F | Meta description | One sentence on what the reader can do after reading. |
-| G | Article body | Source HTML, single line, no newlines. |
-| H | Article subtitle | One line under the title; often same as F. |
-| I | User Name | Who created / last edited the row. **Not** a KB field. |
-| J | User Email | Same. |
-
-Columns I and J are sheet-only attribution. On HubSpot import, leave them
-**unmapped** (the importer ignores unmapped columns) so they never reach HubSpot.
-Every row must have them filled, or the registry loses authorship. Detect the
-current user from `git config user.name` / `git config user.email`, falling back
-to the toolkit `.env` files, or ask.
-
-## Working the sheet with `gws`
-
-Sheets access is authed via keyring. Strip the leading `Using keyring backend`
-stdout line before parsing JSON. Always write with `valueInputOption: RAW` so
-HTML bodies are stored literally and never parsed as formulas.
-
-Read:
-
-```bash
-gws sheets +read --spreadsheet 1vJ70z_fx_SQWPrJRBUyyptOoowJ1hbpm6iTEFLNEoF8 --range "Articles!A1:C200" --format json
-```
-
-Write a row (note: the request options go in `--params`, the body in `--json`;
-both `range` values must agree):
-
-```bash
-gws sheets spreadsheets values update \
-  --params '{"spreadsheetId":"1vJ70z_fx_SQWPrJRBUyyptOoowJ1hbpm6iTEFLNEoF8","range":"Articles!A72:J72","valueInputOption":"RAW"}' \
-  --json "$(cat row.json)"
-```
-
-Build `row.json` with Python (`{"range":..., "majorDimension":"ROWS","values":[[...10 cells...]]}`),
-never by hand-quoting HTML in the shell. Payloads are well under ARG_MAX.
-
-Gotchas learned the hard way:
-- `gws sheets read` is not a subcommand. It is `gws sheets +read` (helper) or
-  `gws sheets spreadsheets values get` (raw API).
-- **Collapse the body to a single line before writing.** Author the HTML in a
-  scratchpad file for readability, then join the lines with no separator (block
-  tags need no whitespace between them). Every existing row is single-line HTML;
-  matching that keeps CSV downloads clean.
-- **Verify after writing.** Read the row back and print each cell's length. A
-  silently truncated or column-shifted body is the failure mode you cannot see
-  from the write response, which reports success either way.
-
-Adding or updating one article:
-1. Detect the current user for columns I and J.
-2. **Read the URL column on both tabs.** An article lives on exactly one of
-   them, and which one is a function of its body size, not its identity:
-   ```bash
-   gws sheets +read --spreadsheet <ID> --range "Articles!A:A"
-   gws sheets +read --spreadsheet <ID> --range "'Oversized (import separately)'!A:A"
-   ```
-   Searching only `Articles!A:A` is how you get a duplicate: an existing
-   oversized article is not found, so you append a second row for a slug that
-   already has one, and the next import ships two conflicting versions of it.
-   Count rows to find the next empty row too.
-3. **Existing Article URL:** overwrite that row in place, on whichever tab holds
-   it — `Articles!A<n>:J<n>` or `'Oversized (import separately)'!A<n>:J<n>`.
-4. **New:** write the next empty row at `Articles!A<n>:J<n>` (or `values append`
-   at `Articles!A1:J1` with `{"insertDataOption":"INSERT_ROWS"}`).
-5. **Body over 50,000 chars:** put the row on the `Oversized` tab (body cell = a
-   `[Body exceeds ...]` pointer) and write the full row to the companion CSV.
-6. **Crossing the threshold means MOVING the row, not writing a second one.** An
-   edit that pushes a body past 50,000 chars, or back under it, changes which tab
-   the article belongs on. Write the row to the new tab and **delete the row from
-   the old one** (`batchUpdate` → `deleteDimension` on that row; clearing the
-   cells leaves a blank row that downloads as an empty CSV record). Leaving the
-   stale row behind puts the same slug on both tabs, and since both get imported,
-   whichever lands last wins — silently, and differently depending on import
-   order. Say out loud that you moved it.
-7. Read the row back and confirm all 10 cells landed in the right columns.
-
-## Critical gotchas of the importer
-
-- **Import resets audience access to Public.** There is no audience column, so it
-  cannot be set or preserved via CSV. After every import, bulk-select the affected
-  articles and use **More → Control audience access → Private, single sign-on
-  (SSO) required**. Tell the user this every time. This is the easiest step to
-  forget and the one that quietly exposes internal process publicly.
-- **Never re-import an export file.** Files named
-  `hubspot-knowledge-base-export-*` are the raw pull FROM HubSpot and still carry
-  the original messy markup (checkboxes, tables, cruft). Only import files you
-  built: the sheet download or a `nsls_kb_import_*` companion.
-- **Reconcile before a full re-import.** The sheet holds the body as *we* last
-  authored it. If someone edited an article directly in HubSpot, a wholesale
-  re-import overwrites their change with the sheet's older body. Before a big
-  sync, pull a fresh export, fold live changes into the sheet, then import. For a
-  single new article this does not apply.
-- **Category descriptions are not importable.** They live on the category and are
-  set manually (Content → Knowledge Base → edit category → Description). The
-  Category column only assigns an article to a category.
-- **Drafts:** keep drafts in a separate CSV (`nsls_kb_draft_<slug>.csv`) and
-  import them with "Import as draft" so an overwrite pass on published articles
-  cannot flip a draft live. **This means a draft row never goes on the `Articles`
-  tab.** That tab IS the publish set, so a draft parked there ships the next time
-  anyone imports, including a colleague syncing something unrelated.
-
-## The workflow
-
-1. **Read the `Articles` tab** — it is the running registry and the source of
-   every article's real live slug. Ask for a fresh HubSpot export only when
-   reconciling against HubSpot-side edits.
-2. **Confirm internal vs external**, then gather inputs (new: topic, audience,
-   owning team, category, slug) or identify the target row (edit).
-3. **Check for duplicates** against the Article URL and title columns.
-4. **Draft or edit the body** in the house style below. Show the user the draft
-   (new) or a change summary (edit) before writing anything.
-5. **Establish whether this is a draft or a publish, before writing anything.**
-   The two take different paths and the choice is not recoverable after an
-   import. If the user said "draft", "write it up for review", "not live yet", or
-   anything short of publish, it is a draft. Ask if it is genuinely unclear.
-   - **Publish** → write the row into the master sheet, all 10 columns:
-     overwrite in place if the Article URL already exists, append if new, route to
-     the `Oversized (import separately)` tab if the body is over 50,000 chars.
-     Read it back. This is the step that keeps the registry complete.
-   - **Draft** → **keep the row OFF the `Articles` tab.** Write the draft to a
-     standalone `nsls_kb_draft_<slug>.csv` instead (same 8 import columns) and
-     hand it over with the draft import instructions below. The registry records
-     it only when it publishes.
-6. **Write the companion vault note** (see below).
-7. **Deliver the import instructions** verbatim, including the audience reset.
-
-## House style for article bodies
-
-Allowed HTML only: `h2`, `h3`, `h4`, `p`, `ul`, `ol`, `li`, `strong`, `em`,
-`code`, `a`, `pre`. Never `<h1>` (HubSpot reserves it for the title). No
-`<table>` (importer rejects it; convert to a `<ul>`, one bullet per row, label
-bolded, meaning after). No inline `style` / `class` / `div` / `span`. Escape
-literal angle brackets as `&lt;` / `&gt;` so example markup renders.
-
-Heading hierarchy: `<h2>` top sections, `<h3>` subsections, `<h4>` deepest
-detail. Every article starts at `<h2>`. Do not skip levels.
-
-Structure most good NSLS internal articles share:
-1. **What it is** — one short paragraph, so the reader knows in two sentences
-   whether they are in the right place.
-2. **Where things live** — systems, sheets, IDs, workflow numbers, owners.
-3. **The process** — `<h2>` per major section, `<ol>` for steps (what to click,
-   what you should see), `<ul>` for properties or options.
-4. **What is automatic vs manual**, called out explicitly for any mixed process.
-5. **Gotchas** — the part people come back for.
-6. **Who to ask.**
-
-Voice: direct, declarative, operator-readable. The reader is an internal NSLS
-team member who needs to do the thing, not a customer. Name real things: field
-names, workflow IDs, pipeline stages, sheet names, owners. Vague articles do not
-get read twice. Internal how-tos are detailed rather than phone-scannable.
-
-Length: most articles are 200-600 words. Detailed runbooks run longer; do not pad
-and do not compress out the specifics.
-
-**Em dashes:** the global no-em-dash rule applies to internal KB prose. Em dashes
-are permitted only in copy produced through the `nsls-copywriter-skill` (mostly
-external/member-facing). Keep dash style consistent within an article. Literal
-proper nouns that contain one (the master sheet's own title) stay accurate.
-
-## Slugs and cross-links
-
-- The slug is the article URL, `https://info.nsls.org/internal/<slug>`, single
-  `/internal`.
-- For an **existing** article use its **real live slug** from the sheet or export,
-  never a guess, or an overwrite import will not match and you create a duplicate.
-- For a **new** article follow the live **descriptive-slug convention**: spell the
-  topic out, do not abbreviate. Live pattern:
-  `associating-contacts-to-companies` (not `associations`), `tickets-overview`
-  (not `mex-tickets`), `objects-and-records`, `email-bounce-procedure`,
-  `nco-new-joins-process`.
-- Cross-reference with the real slug:
-  `<a href="https://info.nsls.org/internal/SLUG">Article Title</a>`. Do NOT use
-  the `/article/` or doubled `/internal/internal/` path forms.
-
-## Categories (column C must match one of these strings exactly)
-
-| Category | Icon |
+| Command | What it does |
 |---|---|
-| Getting Started | 🚀 |
-| HubSpot Core | ⚙️ |
-| Program Development (PD) | 🏫 |
-| Chapter Success (CS) | 🤝 |
-| SPD & Intern Recruitment | 🎓 |
-| Member Experience (MEX) | 💬 |
-| Revenue Operations | ⚙️ |
-| Marketing | 📣 |
+| `kb.py login --email EMAIL` | One-time sign-in, approved in Slack. |
+| `kb.py search WORDS...` | Finds existing articles by title and text, with their Owner. |
+| `kb.py categories` | Lists sections and subsections with their IDs. |
+| `kb.py get ID\|SLUG` | Saves an article's `body.html` and `meta.json` to edit. Won't overwrite an existing copy unless you add `--force`. |
+| `kb.py check BODY.html --type sop\|resource` | House-style check. Fix everything it reports. |
+| `kb.py submit ...` | Sends the article. See step 7. |
+| `kb.py status SUBMISSION` | Shows whether it was published, rejected or is still waiting. |
 
-A mismatched Category string silently **auto-creates** a new, usually unwanted
-category on import. If the topic fits none, ask whether to add a category or file
-under the closest one.
+## Workflow
 
-Rough sense of the distribution (read the sheet for current counts): Chapter
-Success and Revenue Operations are the big buckets; Marketing, MEX, and SPD are
-small. Onboarding-style and cross-team references go in Getting Started.
+1. **Signed in?** The person signed in is the author: Slack messages go to them, and only they
+   can click Publish on their own change. If they are not signed in, run `kb.py login` first.
+2. **New or edit?** For an edit, find it with `kb.py search` and pull it with `kb.py get`. Use
+   its real ID or slug; never guess. If `get` says it is an Employee Handbook article, stop:
+   those cannot be edited here, and changes go to People Ops (hr@nsls.org).
+3. **Duplicate check (new articles).** Search the topic's key words, not just the title. If
+   something close exists, ask: is this the same process, an update to that article, or
+   genuinely separate?
+4. **Ask the type:** "Is this an SOP for a specific process, or a general resource?" Then apply
+   that frame from `references/style.md`.
+5. **Fill the gaps by asking.** Map what the author gave you against the required sections. For
+   each one their material does not cover, ask in one message, one question per gap, with a
+   suggested starting point. Never write filler.
+6. **Check the people, then draft.** If you can search Slack, confirm everyone named (Owner,
+   contacts) still works at NSLS; if someone seems to have left, ask who has the role now. Draft
+   the body as HTML in a file, show the author the draft (new) or a short summary of the change
+   (edit), then run `kb.py check` and fix what it reports. On an edit, older articles may already
+   miss newer sections; the service only blocks problems your edit adds, but fix what is easy.
+7. **Submit once the author says it's right.**
+   - Edit: `kb.py submit --type sop|resource --article ID --body body.html --note "why"`
+     (add `--title` or `--meta` only if they change).
+   - New: `kb.py submit --type sop|resource --body body.html --title "..." --meta "one
+     sentence on what the reader can do" --category ID --slug spelled-out-topic --note "why"`. To
+     file under a subsection, pass the subsection's own ID.
+8. **Tell the author what happens next**, using the message `submit` prints:
+   - Their own article, a small fix, or a KB admin: a Slack DM with a **Publish** button.
+   - Someone else's article: the Owner gets an **Approve** button in Slack. If the Owner hasn't
+     decided after 3 business days, it also goes to #kb-submissions so a KB admin can decide (for
+     when the Owner is away). If the Owner has left NSLS, it goes straight to the KB admins.
+   - A new article: a KB admin approves it in #kb-submissions.
+   They get a Slack DM when it's decided. Waiting approvals get a reminder after 3 business days
+   and close after 6.
 
-## Normalizing a pasted body
+If `submit` says **NOT DONE**, read the reason to the author and fix it: style problems, a slug
+that already exists, or a change already waiting on that article.
 
-Bodies are often pasted from Google Docs or a HubSpot export. Normalize with a
-script (Python + BeautifulSoup), not by hand:
-- Convert `<table>` to `<ul>` lists.
-- Strip editor cruft: remove `style` / `class` / `id` attributes, unwrap `<div>`
-  and `<span>`, replace `&nbsp;` with a space, convert `<br>` runs to paragraph
-  breaks (do not just delete them, or lines merge into run-ons), collapse
-  whitespace (skip inside `<pre>`).
-- Strip leading Markdown task-list checkboxes (`[ ]`, `[x]`) from list items only.
-  **Keep** genuine bracket content such as `[First Name]`, `[DATE]`, or
-  `[Custom language]` template placeholders.
-- Fix cross-links to `https://info.nsls.org/internal/<real-slug>`.
-- Normalize headings to h2/h3/h4; no `<h1>`; start at `<h2>`.
-- Fill the subtitle (craft a one-sentence summary in the article's voice if the
-  export has none). Default Meta description to the subtitle.
-- Remove a leading heading that just repeats the article title, or an "Owner:"
-  line (those belong to the title / owner fields).
+## Things this cannot do
 
-Any CSV you write is RFC-4180 quoted, UTF-8 with BOM (`utf-8-sig`) so accented
-characters survive.
-
-## Which file to emit
-
-Every publish produces a CSV, because the sheet is the registry and not something
-HubSpot reads. Which file depends on the case:
-
-| Case | File to emit |
-|---|---|
-| Publish, any size | `nsls_kb_import_<slug>.csv` — header + the changed row(s) |
-| Publish, body >50,000 chars | same filename; it carries the full body the `Oversized (import separately)` tab cannot hold |
-| Draft | `nsls_kb_draft_<slug>.csv`, and NO row on `Articles` (see workflow step 5) |
-| Deliberate mass sync | none — download the whole `Articles` tab, after reconciling |
-
-## Companion vault note
-
-Alongside the sheet row, write a draft note in the Obsidian vault root named
-`KB - <Title> (draft YYYY-MM-DD).md`. This is the established pattern and the
-record of what was staged. It holds:
-- **Status** line naming the tab and **row number** staged, and the date.
-- Audience, Category, URL/slug, master sheet ID, and where the HTML body source
-  file lives.
-- **Meta** block: subtitle, meta description, keywords.
-- **To publish**: the numbered import steps (below).
-- **What the article covers**: a section-by-section summary, so the note is
-  reviewable without opening the sheet.
-- **Facts verified while drafting**, with the date, for anything counted or
-  looked up (row counts, category distribution, IDs).
-
-If the article was drafted from a project doc in the vault, offer to add a stub
-link from that doc to the live article URL.
-
-## Delivering and publishing
-
-The article is already in the master sheet. **Default to shipping only the rows
-you changed.** An overwrite import matches on Article URL and rewrites the body
-of *every* row in the file, so a whole-sheet import to publish one new article
-also pushes the sheet's stored body over every other article, reverting anything
-edited in HubSpot since the sheet last saw it. That damage is silent, unrelated to
-the change being made, and invisible until someone notices their edit is gone.
-
-**Default path — one article (or the few you touched):**
-
-> 1. Build a CSV with the header row plus **only the changed article's row(s)**,
->    named `nsls_kb_import_<slug>.csv`. Same 8 import columns in the same order.
-> 2. In HubSpot: **Content → Knowledge Base → Current view dropdown → Import
->    knowledge base**, upload that CSV, map the columns. Leave **User Name** and
->    **User Email** unmapped.
->    - Check **"Overwrite any existing content with imported content"** — it
->      matches by the Article URL column, so it updates the article if the slug
->      exists and creates it if not. Rows absent from the file are untouched.
-> 3. After importing, the articles reset to **Public**. Re-select them and set
->    **Control audience access → Private, SSO required**.
-
-**Whole-sheet path — only after reconciling.** A full `Articles`-tab import is the
-right tool for a deliberate mass sync, and it is the only way to guarantee HubSpot
-matches the registry. It is not a routine publish step. Before running it, do the
-reconcile pass (see the reconcile gotcha): pull a fresh
-`hubspot-knowledge-base-export-*`, diff it against the sheet, and fold any
-HubSpot-side edits into the sheet first. Then download the `Articles` tab as CSV
-and import it with overwrite, plus each `Oversized (import separately)` article's
-companion CSV separately.
-
-If the user asks for "the usual import" and has not reconciled, say what a
-whole-sheet overwrite would do and offer the single-row path instead. Do not
-present the two as equivalent.
-
-**Draft path — never touches `Articles`:**
-
-> 1. Take the `nsls_kb_draft_<slug>.csv` produced for this draft (it is not on the
->    master sheet — that is deliberate).
-> 2. In HubSpot: **Content → Knowledge Base → Current view dropdown → Import
->    knowledge base**, upload it, map the columns, and choose **Import as draft**.
->    - Leave **"Overwrite any existing content"** UNCHECKED. Overwrite plus a slug
->      that already exists live would replace the live article with the draft body.
-> 3. Review in HubSpot and publish there when it is ready.
-
-Once a draft is published, write its row into the master sheet (the publish path
-above) so the registry stops being incomplete. An article live in HubSpot with no
-sheet row is invisible to every future reconcile.
-
-## When a build project ships
-
-For RevOps / BI build projects, a KB article is a **standard deliverable**, not
-optional. When wrapping such a project, add a KB-article task to the epic and
-draft the article rep-facing, alongside the vault docs and the Jira epic.
-
-## Gotchas recap
-
-- The master sheet is the registry and authoring source of truth. Anything
-  authored only in HubSpot gets clobbered by the next full re-import.
-- **Publish the changed rows, not the whole sheet.** A whole-sheet overwrite is a
-  mass sync gated behind a reconcile pass, never the routine path.
-- **A draft never goes on the `Articles` tab.** That tab is the publish set.
-- Check both tabs before adding a row, and move (not copy) a row that crosses the
-  50,000-char threshold.
-- Rows are 10 columns (A:J). Fill User Name / User Email; leave them unmapped on
-  import.
-- Body cell: single line, under 50,000 chars, no `<table>`, no div/span/style.
-- Verify the row after writing by reading back cell lengths.
-- No KB write API. Publish is CSV import or in-editor paste.
-- Import always resets audience to Public. Fix it after every import.
-- Overwrite matches by Article URL, so slugs must equal live slugs.
-- Never import a raw `hubspot-knowledge-base-export-*` file.
-- Keep `[Placeholder]` tokens; only strip empty `[ ]` / `[x]` checkboxes.
-- Category strings must match exactly; category descriptions are manual.
-- Slug changes, category creation, and audience settings are manual in HubSpot by
-  a CMS admin. `app.hubspot.com` is blocked to the browser tools, so hand those
-  steps to the user rather than attempting them.
+- **Delete or archive** an article, **create sections**, or **upload images**: ask a KB admin
+  (Royce Rowan, Danielle Mariani, Isaia Cirillo). Images must already be at a public URL, ideally
+  HubSpot's file manager; see style.md.
+- **Can't reach the service?** The claude.ai sandbox may block it. Save the body as an `.html`
+  file and send it with the title, category and slug to a KB admin.
