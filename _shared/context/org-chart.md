@@ -1,5 +1,5 @@
 # NSLS Org Chart
-_Last synced: 2026-11-09_
+_Last synced: 2026-11-16_
 
 ## Business Intelligence
 
@@ -57,7 +57,6 @@ _Last synced: 2026-11-09_
 
 | Name | Title | Manager | Email | Slack |
 |------|-------|---------|-------|-------|
-| Cory Capoccia | Board Member |  | ccapoccia@nsls.org | U097DDH3371 |
 | Gary Tuerack | Founder and Chief Visionary |  | gtuerack@nsls.org | U040YTX56DP |
 | Kevin Prentiss | Chief Executive Officer | Gary Tuerack | kprentiss@nsls.org | U07TS8X7T7X |
 
