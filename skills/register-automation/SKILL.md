@@ -5,7 +5,8 @@ description: >-
   Register, update, or check an NSLS automation in the Automation Tracker.
   Use when the user says "register automation", "register this", "track this
   automation", "update automation tracker", "check automation status", "list
-  automations", or is working in an NSLS automation repo and wants to record it.
+  automations", "remove the reviewer", "clear a field on my tracker record", or
+  is working in an NSLS automation repo and wants to record it.
 ---
 
 <!-- claude-code-only:start (same words in every skill that has this note; change them in _shared/references/skill-surfaces.json) -->
@@ -287,6 +288,48 @@ If the user asks "what are my automations":
 - `GET /builder-stats/{email}` to get their portfolio
 - Show automations with checklist progress
 
+## Clearing a field
+
+When a builder wants a field emptied on their own record ("remove the
+reviewer", "that review request was a mistake", "blank the design doc link"),
+send the field keys as a `clear` list. Never send `null` or `""` to do this:
+null means "not sent" and changes nothing, and an empty `reviewer_email` is
+refused.
+
+Get the record's exact name from `POST /find`, then call
+`POST /register-automation-with-builder` with only the name and the list, and
+no `previous_stage`:
+
+```json
+{
+  "automation": {
+    "name": "...",
+    "clear": ["reviewer", "review_status"]
+  },
+  "builder_email": "jdoe@nsls.org"
+}
+```
+
+The keys are the ones used to set a field, plus `reviewer` for the Reviewer
+link. A clear can travel with ordinary updates in the same call. If a review
+simply isn't needed any more, clear the reviewer and send
+`"review_status": "Not needed"` rather than clearing both.
+
+**Check the reply before saying it's done.** `cleared` lists what was emptied.
+If it doesn't name every field you asked for, nothing was emptied: say so
+plainly, never report success.
+
+When the tracker refuses, nothing on the record has changed:
+
+| Reply | What it means | What to do |
+|---|---|---|
+| `403` | The builder isn't an owner (Code Owner or Maintainer) of that record. | Tell them one of the record's owners can clear it. Don't re-register the record to get around this. |
+| `400` naming a field | `name`, `scope`, `stage` and `platform_used` can't be emptied; a checkbox isn't cleared either. | Change the field to another value; untick a checkbox by sending `false`. |
+| `404` | No record has that name. | `POST /find` again and use the exact name. |
+
+On a Tier 3 record, clear the reviewer as asked, then say once that it will
+need a reviewer named again before it ships.
+
 ## Scope Change Check — the tier gate
 
 Scope changes are how Tier 1 builds become Tier 2 and Tier 3 ones, so this is
@@ -395,7 +438,7 @@ dispute count as the system working, not failing.
 | POST | `/similar` | Rank existing registry rows by similarity to a proposed build (name + description). Top 3, score ≥ 0.5; `from_idea_backlog` flags claimable Idea rows. Read-only. |
 | POST | `/find` | Search automations by name |
 | POST | `/find-builder` | Find builder by email/Slack ID/GitHub |
-| POST | `/register-automation-with-builder` | Main smart endpoint. The reply's `ignored_keys` lists automation keys it did not save. |
+| POST | `/register-automation-with-builder` | Main smart endpoint. The reply's `ignored_keys` lists automation keys it did not save. A `clear` list inside `automation` empties fields on a record the builder owns; the reply's `cleared` lists them. |
 | GET | `/automations` | List all (optional `?stage=` or `?department=`) |
 | GET | `/builder-stats/{email}` | Builder's automation portfolio |
 | POST | `/builder` | Register a new builder |
